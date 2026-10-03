@@ -48,6 +48,20 @@ docker compose -f deploy/docker-compose.yml up -d
 cd web && npm ci && npm run dev
 ```
 
+### Aplicación completa con Docker
+
+```bash
+docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
+```
+
+| Servicio | URL | Variable para cambiar el puerto |
+|---|---|---|
+| Web (nginx; redirige `/api` y `/actuator` a la API) | http://localhost:8081 | `SKYNET_WEB_PORT` |
+| API | http://localhost:8080/actuator/health | `SKYNET_API_PORT` |
+| PostgreSQL | localhost:5432 | `SKYNET_DB_PORT` |
+
+Credenciales de la base de datos: `SKYNET_DB_USER` / `SKYNET_DB_PASSWORD` (por defecto `skynet`/`skynet`). Para parar: `docker compose -f deploy/docker-compose.yml --profile app down` (añade `-v` para borrar los datos). El runner no va en contenedor: se ejecuta en el host porque necesita `claude` y los repositorios.
+
 ### fake-claude
 
 ```bash

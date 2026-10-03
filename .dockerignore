@@ -1,0 +1,12 @@
+.git
+.github
+.gradle
+.kotlin
+**/build
+**/node_modules
+web
+docs
+deploy
+*.log
+.env
+.env.*

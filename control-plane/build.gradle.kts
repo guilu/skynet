@@ -22,3 +22,7 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
 }
+
+tasks.bootJar {
+    archiveFileName = "control-plane.jar"
+}

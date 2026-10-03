@@ -46,3 +46,19 @@ jobs:
       - run: npm run format:check
       - run: npm test
       - run: npm run build
+
+  compose:
+    name: Docker Compose (app)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build y arranque de la aplicación completa
+        run: docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait --wait-timeout 300
+      - name: La web sirve el frontend y redirige la API
+        run: |
+          curl -fsS http://localhost:8081/ | grep -q '<title>Skynet</title>'
+          curl -fsS http://localhost:8081/actuator/health | grep -q '"status":"UP"'
+      - if: failure()
+        run: docker compose -f deploy/docker-compose.yml --profile app logs
+      - if: always()
+        run: docker compose -f deploy/docker-compose.yml --profile app down -v
