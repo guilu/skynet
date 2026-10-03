@@ -20,19 +20,19 @@ Este documento traduce la especificación de [`agentic-orchestration-system.md`]
 | Repositorio | Monorepo | Contrato runner↔API compartido y versionado junto |
 | Build Java | Gradle (Kotlin DSL), multi-proyecto | Módulo `protocol` compartido entre API y runner |
 | Backend | Java 21, Spring Boot 3, Spring Modulith | Monolito modular con límites entre módulos verificados en tests |
-| Persistencia | PostgreSQL 16, Flyway, Spring Data JDBC/JPA | Estado consultable + event store append-only |
+| Persistencia | PostgreSQL 16, Flyway, Spring Data JDBC + SQL explícito (`JdbcClient`) | Sin magia de ORM; control fino para event store, outbox, `SKIP LOCKED` y bloqueo optimista |
 | Tiempo real | SSE (`text/event-stream`) con `Last-Event-ID` | Reconexión y *replay* sencillos desde el event store |
 | Runner ↔ API | HTTP saliente desde el runner (long-poll para órdenes, POST por lotes para eventos) | El runner puede estar tras NAT; no hay que exponer la máquina de desarrollo |
-| Cola local del runner | Journal append-only en disco (SQLite o fichero NDJSON) | Reenvío idempotente tras desconexión |
+| Cola local del runner | SQLite embebido (journal de eventos, órdenes y PIDs) | Transaccional; reenvío idempotente y reconciliación tras reinicio |
 | Almacenamiento de artefactos | Sistema de ficheros (volumen) detrás de una interfaz `BlobStore` | S3/MinIO más adelante sin cambiar el dominio |
 | Frontend | React + TypeScript + Vite, TanStack Query, React Flow, Monaco | Según especificación; Vite por simplicidad (SPA) |
-| Auth | Usuario único con Spring Security (form/basic) en Fase 1; OIDC después | El MVP es local; no bloquear por auth |
+| Auth | Usuario único local con Spring Security (form login) en Fase 1; OIDC después | El MVP es local; no bloquear por auth |
 | Runner auth | Token de registro + token por runner (rotable) | Mínimo razonable para un daemon |
 | Testing | JUnit 5, Testcontainers, ArchUnit/Modulith; Vitest; Playwright | Integración real con Postgres; E2E con fake Claude |
 | CI | GitHub Actions | Build + tests + lint en cada PR |
 | Despliegue | Docker Compose (`web`, `api`, `postgres`); runner nativo en el host | El runner necesita el `claude` y los repos del host |
 
-> Decisiones abiertas a validar: Gradle vs Maven, JPA vs JDBC, SQLite vs fichero para el journal del runner.
+> Decisiones cerradas (2026-10-03): Gradle Kotlin DSL, Spring Data JDBC + SQL, SQLite para el journal del runner y usuario único local en el MVP.
 
 ---
 
@@ -201,7 +201,7 @@ Cada hito incluye los criterios de éxito del MVP (§23 de la especificación) q
 - `WorkspaceManager`: `git worktree add` en `/workspaces/<workflow-run>/<agent-run>/` sobre rama `skynet/<work-item>/<agent-run>`, limpieza según política.
 - `ProcessSupervisor`: lanzamiento en grupo de procesos propio, captura de stdout/stderr, timeout, kill del árbol completo, detección de huérfanos al arrancar.
 - `ClaudeCodeProvider`: construcción del comando, filtrado de variables de entorno, herramientas permitidas, límites de turnos y presupuesto; parser NDJSON → eventos normalizados (tolerante a líneas desconocidas: se guardan como `agent.raw`).
-- Journal local + reenvío por lotes con idempotencia.
+- Journal local en SQLite + reenvío por lotes con idempotencia.
 - Ingestión en el backend: persiste eventos, actualiza `agent_run` (estado observable, `last_activity_at`, tokens, coste, session id).
 
 **Aceptación:** lanzar un run con fake-claude produce la secuencia completa de eventos en BD; matar la conexión durante el run no pierde eventos; cancelar mata todos los procesos hijos. Prueba manual con `claude` real. **MVP 3, 5, 6, 10.**
@@ -239,7 +239,7 @@ Cada hito incluye los criterios de éxito del MVP (§23 de la especificación) q
 
 ### M6 — Endurecimiento y cierre del MVP (≈1 semana)
 
-- Spring Security (usuario único), token de runner, CORS.
+- Spring Security (usuario único local, form login), token de runner, CORS.
 - Política de seguridad por agente: herramientas permitidas, `permission-mode`, filtrado de entorno, límites por defecto.
 - Recuperación: reinicio del backend y del runner durante un run sin estados inconsistentes (reconciliación de procesos vivos vs `agent_run`).
 - Limpieza de worktrees, retención de logs.
@@ -313,7 +313,7 @@ Se planificará con datos reales de las fases anteriores: descomposición dinám
 
 ## 12. Próximos pasos
 
-1. Validar las decisiones abiertas de §2.
+1. ~~Validar las decisiones abiertas de §2.~~ Hecho.
 2. Ejecutar el spike de M0 y ajustar §4.2 con el NDJSON real.
 3. Crear el backlog de Fase 1 (épicas M0–M6) como issues en GitHub.
 4. Arrancar M0.
