@@ -1,0 +1,30 @@
+# Build outputs
+build/
+target/
+dist/
+
+# Dependencies
+node_modules/
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and runtime
+*.log
+workspaces/
+
+# Java
+.gradle/
+*.class
+
+# Test output
+coverage/
+playwright-report/
+test-results/
