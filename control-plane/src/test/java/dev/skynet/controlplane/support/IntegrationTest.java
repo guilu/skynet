@@ -22,7 +22,11 @@ public abstract class IntegrationTest {
   @DynamicPropertySource
   static void database(DynamicPropertyRegistry registry) {
     TestDatabase.register(registry);
+    registry.add("skynet.runner.registration-token", () -> RUNNER_REGISTRATION_TOKEN);
+    registry.add("skynet.runner.redeliver-after", () -> "1s");
   }
+
+  protected static final String RUNNER_REGISTRATION_TOKEN = "test-registration-token";
 
   /** Secuencia del último evento registrado antes del test. */
   protected long baseline;
@@ -32,7 +36,7 @@ public abstract class IntegrationTest {
     // TRUNCATE no dispara el trigger append-only de event (es por fila). La secuencia de
     // eventos no se reinicia: igual que en producción, nunca retrocede.
     jdbc.sql(
-            "TRUNCATE event, prompt, agent_run, stage_run, workflow_run, work_item, repository,"
+            "TRUNCATE event, runner_command, prompt, agent_run, runner, stage_run, workflow_run, work_item, repository,"
                 + " project")
         .update();
     baseline =

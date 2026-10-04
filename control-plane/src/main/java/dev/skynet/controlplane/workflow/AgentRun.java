@@ -38,6 +38,9 @@ public class AgentRun {
   private BigDecimal costUsd;
   private BigDecimal costUsdCumulative;
   private String error;
+  private Instant cancelRequestedAt;
+  private String resultSubtype;
+  private Boolean resultIsError;
   @Version private Long version;
 
   @PersistenceCreator
@@ -64,6 +67,9 @@ public class AgentRun {
       BigDecimal costUsd,
       BigDecimal costUsdCumulative,
       String error,
+      Instant cancelRequestedAt,
+      String resultSubtype,
+      Boolean resultIsError,
       Long version) {
     this.id = id;
     this.stageRunId = stageRunId;
@@ -87,10 +93,18 @@ public class AgentRun {
     this.costUsd = costUsd;
     this.costUsdCumulative = costUsdCumulative;
     this.error = error;
+    this.cancelRequestedAt = cancelRequestedAt;
+    this.resultSubtype = resultSubtype;
+    this.resultIsError = resultIsError;
     this.version = version;
   }
 
-  static AgentRun queued(UUID stageRunId, UUID repositoryId, String provider, Instant now) {
+  /**
+   * Agente en cola. El id de sesión se fija aquí y el runner lo pasa al proveedor ({@code
+   * --session-id}), de modo que se conoce antes de que el proceso arranque.
+   */
+  static AgentRun queued(
+      UUID stageRunId, UUID repositoryId, String provider, UUID sessionId, Instant now) {
     return new AgentRun(
         UUID.randomUUID(),
         stageRunId,
@@ -99,11 +113,14 @@ public class AgentRun {
         AgentRunKind.START,
         AgentObservableStatus.QUEUED,
         provider,
-        null,
+        sessionId.toString(),
         null,
         null,
         null,
         now,
+        null,
+        null,
+        null,
         null,
         null,
         null,
@@ -133,6 +150,92 @@ public class AgentRun {
       finishedAt = now;
     }
     return previous;
+  }
+
+  /** Un runner ha reclamado la invocación. */
+  void assignRunner(UUID runnerId) {
+    this.runnerId = runnerId;
+  }
+
+  /** El proveedor ha confirmado la sesión. */
+  void startSession(String sessionId, String model, Instant at) {
+    if (sessionId != null) {
+      providerSessionId = sessionId;
+    }
+    if (model != null) {
+      this.model = model;
+    }
+    touch(at);
+  }
+
+  /** Registra actividad; los eventos pueden llegar desordenados, así que solo avanza. */
+  void touch(Instant at) {
+    if (lastActivityAt == null || at.isAfter(lastActivityAt)) {
+      lastActivityAt = at;
+    }
+  }
+
+  /**
+   * Registra el resultado que declara el proveedor. Claude Code informa del coste acumulado de la
+   * sesión, así que el de esta invocación es la diferencia con el de su predecesora.
+   */
+  void recordResult(
+      String subtype,
+      boolean isError,
+      Integer numTurns,
+      Long inputTokens,
+      Long outputTokens,
+      BigDecimal costCumulative,
+      BigDecimal previousCumulative,
+      String error) {
+    resultSubtype = subtype;
+    resultIsError = isError;
+    this.numTurns = numTurns;
+    this.inputTokens = inputTokens;
+    this.outputTokens = outputTokens;
+    if (costCumulative != null) {
+      costUsdCumulative = costCumulative;
+      costUsd =
+          previousCumulative == null
+              ? costCumulative
+              : costCumulative.subtract(previousCumulative).max(BigDecimal.ZERO);
+    }
+    if (isError && error != null) {
+      this.error = error;
+    }
+  }
+
+  /**
+   * Estado final al terminar el proceso: cancelado si lo pedimos nosotros; completado solo con un
+   * resultado sin error y código de salida 0; fallido en cualquier otro caso.
+   */
+  AgentObservableStatus exited(Integer exitCode, String signal) {
+    this.exitCode = exitCode;
+    if (cancelRequestedAt != null) {
+      return AgentObservableStatus.CANCELLED;
+    }
+    if (Boolean.FALSE.equals(resultIsError) && Integer.valueOf(0).equals(exitCode)) {
+      return AgentObservableStatus.COMPLETED;
+    }
+    if (error == null) {
+      error =
+          resultIsError == null
+              ? "El proceso terminó sin resultado (código "
+                  + exitCode
+                  + (signal != null ? ", señal " + signal : "")
+                  + ")"
+              : "El proceso terminó con código " + exitCode;
+    }
+    return AgentObservableStatus.FAILED;
+  }
+
+  /** Marca la cancelación pedida. Devuelve {@code false} si ya estaba pedida. */
+  boolean requestCancel(Instant now) {
+    if (cancelRequestedAt != null) {
+      return false;
+    }
+    cancelRequestedAt = now;
+    return true;
   }
 
   public UUID getId() {
@@ -221,6 +324,18 @@ public class AgentRun {
 
   public String getError() {
     return error;
+  }
+
+  public Instant getCancelRequestedAt() {
+    return cancelRequestedAt;
+  }
+
+  public String getResultSubtype() {
+    return resultSubtype;
+  }
+
+  public Boolean getResultIsError() {
+    return resultIsError;
   }
 
   public Long getVersion() {

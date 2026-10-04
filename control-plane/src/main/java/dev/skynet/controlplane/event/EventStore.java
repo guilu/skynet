@@ -43,6 +43,16 @@ public class EventStore {
    */
   @Transactional
   public StoredEvent append(EventDraft draft) {
+    return appendIfNew(draft)
+        .orElseGet(() -> events.findBySourceEventId(draft.sourceEventId()).orElseThrow());
+  }
+
+  /**
+   * Como {@link #append}, pero devuelve vacío si el evento ya estaba registrado. Permite aplicar
+   * los efectos de un evento una sola vez aunque el origen lo reenvíe.
+   */
+  @Transactional
+  public Optional<StoredEvent> appendIfNew(EventDraft draft) {
     long last =
         jdbc.sql("SELECT last_value FROM event_sequence WHERE id = 1 FOR UPDATE")
             .query(Long.class)
@@ -50,7 +60,7 @@ public class EventStore {
     if (draft.sourceEventId() != null) {
       Optional<StoredEvent> existing = events.findBySourceEventId(draft.sourceEventId());
       if (existing.isPresent()) {
-        return existing.get();
+        return Optional.empty();
       }
     }
     long sequence = last + 1;
@@ -83,7 +93,7 @@ public class EventStore {
             java.sql.Timestamp.from(event.recordedAt()))
         .update();
     notifyAfterCommit();
-    return event;
+    return Optional.of(event);
   }
 
   /** Eventos con secuencia mayor que {@code after}, en orden, filtrados y paginados. */

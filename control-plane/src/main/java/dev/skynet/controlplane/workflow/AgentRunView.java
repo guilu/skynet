@@ -24,6 +24,10 @@ record AgentRunView(
     Long inputTokens,
     Long outputTokens,
     BigDecimal costUsd,
+    BigDecimal costUsdCumulative,
+    UUID runnerId,
+    Instant cancelRequestedAt,
+    String resultSubtype,
     String error) {
 
   static AgentRunView of(AgentRun a) {
@@ -46,6 +50,10 @@ record AgentRunView(
         a.getInputTokens(),
         a.getOutputTokens(),
         a.getCostUsd(),
+        a.getCostUsdCumulative(),
+        a.getRunnerId(),
+        a.getCancelRequestedAt(),
+        a.getResultSubtype(),
         a.getError());
   }
 }
