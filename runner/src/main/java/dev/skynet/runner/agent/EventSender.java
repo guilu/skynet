@@ -36,7 +36,12 @@ public final class EventSender implements AutoCloseable {
     this.client = client;
     this.idle = idle;
     this.retry = retry;
-    this.thread = Thread.ofPlatform().daemon().name("event-sender").start(this::loop);
+    this.thread = Thread.ofPlatform().daemon().name("event-sender").unstarted(this::loop);
+  }
+
+  /** Empieza a enviar en segundo plano. */
+  public void start() {
+    thread.start();
   }
 
   /** Avisa de que hay eventos nuevos. */

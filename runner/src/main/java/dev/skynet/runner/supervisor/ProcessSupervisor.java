@@ -80,17 +80,21 @@ public class ProcessSupervisor {
    * @return {@code true} si había un proceso vivo y se ha terminado
    */
   public boolean terminateOrphan(long pid, Instant startedAt, Duration grace) {
-    Optional<ProcessHandle> handle = ProcessHandle.of(pid);
-    if (handle.isEmpty() || !handle.get().isAlive()) {
-      return false;
-    }
-    Optional<Instant> actualStart = handle.get().info().startInstant();
-    if (actualStart.isPresent()
-        && Duration.between(actualStart.get(), startedAt).abs().compareTo(Duration.ofSeconds(2))
-            > 0) {
-      return false;
-    }
-    SupervisedProcess.terminateTree(handle.get(), grace);
-    return true;
+    Optional<ProcessHandle> orphan =
+        ProcessHandle.of(pid)
+            .filter(ProcessHandle::isAlive)
+            .filter(
+                h ->
+                    h.info()
+                        .startInstant()
+                        .map(
+                            actual ->
+                                Duration.between(actual, startedAt)
+                                        .abs()
+                                        .compareTo(Duration.ofSeconds(2))
+                                    <= 0)
+                        .orElse(true));
+    orphan.ifPresent(h -> SupervisedProcess.terminateTree(h, grace));
+    return orphan.isPresent();
   }
 }

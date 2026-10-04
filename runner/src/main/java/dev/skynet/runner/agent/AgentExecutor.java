@@ -97,11 +97,7 @@ public final class AgentExecutor implements AutoCloseable {
       }
       return;
     }
-    SupervisedProcess process;
-    synchronized (execution) {
-      execution.cancelled = true;
-      process = execution.process;
-    }
+    SupervisedProcess process = execution.cancel();
     if (process != null) {
       pool.submit(() -> process.terminate(cancelGrace));
     }
@@ -130,24 +126,23 @@ public final class AgentExecutor implements AutoCloseable {
 
       ClaudeStreamParser parser = new ClaudeStreamParser();
       SupervisedProcess process;
-      synchronized (execution) {
-        if (execution.cancelled) {
-          finish(id, failure("Cancelado antes de arrancar"));
-          return;
-        }
-        try {
-          process =
-              supervisor.start(
-                  provider.command(start),
-                  workspace.path(),
-                  provider.environment(runnerEnv),
-                  logs.resolve(id + ".ndjson"),
-                  line -> parser.parse(line).forEach(e -> emit(id, e)));
-        } catch (IOException e) {
-          finish(id, failure("No se pudo lanzar el agente: " + e.getMessage()));
-          return;
-        }
-        execution.process = process;
+      try {
+        process =
+            execution.launch(
+                () ->
+                    supervisor.start(
+                        provider.command(start),
+                        workspace.path(),
+                        provider.environment(runnerEnv),
+                        logs.resolve(id + ".ndjson"),
+                        line -> parser.parse(line).forEach(e -> emit(id, e))));
+      } catch (IOException e) {
+        finish(id, failure("No se pudo lanzar el agente: " + e.getMessage()));
+        return;
+      }
+      if (process == null) {
+        finish(id, failure("Cancelado antes de arrancar"));
+        return;
       }
       journal.processStarted(id, process.pid(), process.startedAt());
 
@@ -174,7 +169,7 @@ public final class AgentExecutor implements AutoCloseable {
       }
       if (execution.stopping) {
         payload.put("error", "El runner se detuvo durante la ejecución");
-      } else if (execution.timedOut && !execution.cancelled) {
+      } else if (execution.timedOut && !execution.cancelled()) {
         payload.put("error", "Se agotó el tiempo máximo (" + timeout + ")");
       }
       if (!parser.sawResult() && exit.exitCode() != 0 && !exit.stderrTail().isBlank()) {
@@ -221,17 +216,44 @@ public final class AgentExecutor implements AutoCloseable {
     }
     pool.shutdown();
     try {
-      pool.awaitTermination(cancelGrace.multipliedBy(2).toMillis(), TimeUnit.MILLISECONDS);
+      if (!pool.awaitTermination(cancelGrace.multipliedBy(2).toMillis(), TimeUnit.MILLISECONDS)) {
+        LOG.warning("Quedan invocaciones sin terminar al parar el runner");
+      }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
     timer.shutdownNow();
   }
 
+  /** Estado de una invocación en curso. Lanzar y cancelar se excluyen mutuamente. */
   private static final class Execution {
-    volatile SupervisedProcess process;
-    volatile boolean cancelled;
+    private SupervisedProcess process;
+    private boolean cancelled;
     volatile boolean timedOut;
     volatile boolean stopping;
+
+    /** Lanza el proceso salvo que ya se haya cancelado; en ese caso devuelve {@code null}. */
+    synchronized SupervisedProcess launch(Launcher launcher) throws IOException {
+      if (cancelled) {
+        return null;
+      }
+      process = launcher.launch();
+      return process;
+    }
+
+    /** Marca la invocación como cancelada y devuelve su proceso, si ya se lanzó. */
+    synchronized SupervisedProcess cancel() {
+      cancelled = true;
+      return process;
+    }
+
+    synchronized boolean cancelled() {
+      return cancelled;
+    }
+  }
+
+  @FunctionalInterface
+  private interface Launcher {
+    SupervisedProcess launch() throws IOException;
   }
 }

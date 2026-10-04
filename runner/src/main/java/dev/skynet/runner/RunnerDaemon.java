@@ -64,6 +64,7 @@ public final class RunnerDaemon implements AutoCloseable {
   public void start() throws IOException, InterruptedException {
     authenticate();
     recoverUnfinished();
+    sender.start();
     running = true;
     heartbeats.scheduleWithFixedDelay(
         this::heartbeat, 0, config.heartbeatInterval().toMillis(), TimeUnit.MILLISECONDS);
