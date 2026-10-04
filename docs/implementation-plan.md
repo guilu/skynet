@@ -103,7 +103,7 @@ Mapeo inicial desde `claude -p --output-format stream-json`:
 
 Cada evento lleva `eventId` (UUID generado en el runner, clave de idempotencia), `agentRunId`, `seq` local y `occurredAt`. El NDJSON bruto se guarda íntegro como artefacto `LOG` para la vista "log completo".
 
-> **Spike inicial obligatorio (M0):** grabar sesiones reales con la versión actual de Claude Code y validar flags (`--session-id`, `--resume`, `--fork-session`, `--max-turns`, `--max-budget-usd`, `--include-partial-messages`, `--allowedTools`, `--permission-mode`) y la forma exacta del NDJSON. Esas grabaciones se convierten en `fixtures/claude/`.
+> **Actualizado tras el spike de M0:** la tabla anterior es la propuesta inicial. El mapeo vigente, con el formato real del NDJSON y los hallazgos que afectan al diseño (coste acumulado por sesión, stdin a `/dev/null`, presupuesto no estricto, cancelación sin `result`), está en [`claude-code-stream-json.md`](claude-code-stream-json.md).
 
 ### 4.3. Protocolo runner ↔ control plane
 
@@ -130,11 +130,25 @@ POST       /api/agent-runs/{id}/messages             # resume con mensaje
 POST       /api/agent-runs/{id}/cancel
 POST       /api/agent-runs/{id}/retry                # nuevo AgentRun
 POST       /api/agent-runs/{id}/fork
-GET        /api/agent-runs/{id}/events?after=seq
 GET        /api/agent-runs/{id}/artifacts
 GET        /api/artifacts/{id}/content
-GET        /api/stream?workflowRunId=…               # SSE
 ```
+
+Implementado en M1:
+
+```text
+GET/POST   /api/projects                     GET /api/projects/{id}
+GET/POST   /api/projects/{id}/repositories
+GET/POST   /api/projects/{id}/work-items     GET /api/work-items/{id}
+GET/POST   /api/work-items/{id}/runs         # POST lanza un WorkflowRun adhoc con su agente en cola
+GET        /api/workflow-runs/{id}           # ejecución con fases y agentes
+GET        /api/agent-runs/{id}              # agente y sus prompts
+POST       /api/agent-runs/{id}/cancel
+GET        /api/events?workflowRunId=&aggregateId=&after=&limit=
+GET        /api/events/stream?workflowRunId=&aggregateId=   # SSE; reanuda con Last-Event-ID
+```
+
+Los errores siguen RFC 9457 (`ProblemDetail`): 400 validación, 404 inexistente, 409 transición no permitida, clave duplicada o conflicto de versión.
 
 ---
 
@@ -164,9 +178,18 @@ runner_command(id, runner_id, type, payload_json, status, created_at, acked_at)
 ```
 
 - `version` → bloqueo optimista en las entidades con transiciones.
-- `event.sequence` monótona por `workflow_run_id` (para timeline y `Last-Event-ID`).
+- `event.sequence` global y monótona (para timeline y `Last-Event-ID`).
 - `source_event_id UNIQUE` → ingestión idempotente.
 - Transiciones de estado validadas en el dominio (tabla de transiciones permitidas, test exhaustivo).
+
+**Cambios al implementar M1** (`V2__core_model.sql`):
+
+- **Sin tabla `outbox`.** `event.sequence` es global, sin huecos y en orden de commit: se asigna bloqueando la fila de `event_sequence` hasta el commit. Así, leer `sequence > N` nunca se salta un evento confirmado más tarde, y la propia tabla `event` hace de outbox: un único hilo la recorre con un cursor y difunde a los clientes SSE. Un trigger impide `UPDATE`/`DELETE` sobre `event`.
+- **Un único estado en `agent_run`** (`AgentObservableStatus`), con una tabla de transiciones en `protocol`. Los estados activos (`THINKING`, `EXECUTING`, `UNRESPONSIVE`, esperas) se alternan libremente; los terminales no tienen salida.
+- **`agent_run.cost_usd_cumulative`** junto a `cost_usd`, porque Claude Code reporta el coste acumulado de la sesión.
+- **`agent_run.repository_id`** y sin `prompt_id`: el prompt referencia al agente (`prompt.agent_run_id`).
+- **`project.work_item_seq`** para numerar trabajos por proyecto (`TKM-1`, `TKM-2`…).
+- `workspace`, `artifact`, `runner` y `runner_command` se crean en las migraciones de M2 y M5, cuando se usan.
 
 ---
 
@@ -307,6 +330,7 @@ Se planificará con datos reales de las fases anteriores: descomposición dinám
 | Coste de pruebas con Claude real | fake-claude por defecto; límites de presupuesto en smoke tests |
 | Volumen de eventos de streaming parcial | Agregar deltas en el runner y persistir mensajes completos; deltas solo en vivo por SSE |
 | Procesos huérfanos tras caídas | Grupos de procesos, registro de PIDs en el journal, reconciliación al arrancar |
+| Un cliente SSE lento frena la difusión (el dispatcher envía en serie) | Aceptable con pocos clientes en el MVP; si crece, cola por suscriptor y envío asíncrono |
 | Alcance de Fase 2 crece hacia "Temporal casero" | Interfaz `WorkflowEngine` estrecha; criterio explícito para migrar (timers largos, señales complejas, volumen) |
 
 ---

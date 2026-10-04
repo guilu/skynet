@@ -1,39 +1,34 @@
-import { useEffect, useState } from 'react'
-
-type Health = 'checking' | 'up' | 'down'
+import { NavLink, Route, Routes } from 'react-router'
+import { HealthIndicator } from './HealthIndicator'
+import { ActivityPage } from './pages/ActivityPage'
+import { ProjectPage } from './pages/ProjectPage'
+import { ProjectsPage } from './pages/ProjectsPage'
+import { RunPage } from './pages/RunPage'
+import { WorkItemPage } from './pages/WorkItemPage'
 
 export default function App() {
-  const [health, setHealth] = useState<Health>('checking')
-
-  useEffect(() => {
-    const controller = new AbortController()
-    fetch('/actuator/health', { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
-      .then((body: { status?: string }) => setHealth(body.status === 'UP' ? 'up' : 'down'))
-      .catch((err: unknown) => {
-        if (!(err instanceof DOMException && err.name === 'AbortError')) setHealth('down')
-      })
-    return () => controller.abort()
-  }, [])
-
   return (
-    <main style={{ maxWidth: 720, margin: '0 auto', padding: '48px 16px' }}>
-      <h1>Skynet</h1>
-      <p style={{ color: 'var(--muted)' }}>
-        Plano de control y observabilidad para flujos agénticos de desarrollo.
-      </p>
-      <p>
-        Control plane:{' '}
-        <strong
-          data-testid="health"
-          style={{
-            color:
-              health === 'up' ? 'var(--ok)' : health === 'down' ? 'var(--bad)' : 'var(--muted)',
-          }}
-        >
-          {health === 'up' ? 'disponible' : health === 'down' ? 'no disponible' : 'comprobando…'}
-        </strong>
-      </p>
-    </main>
+    <div className="app">
+      <header className="topbar">
+        <span className="brand">Skynet</span>
+        <nav>
+          <NavLink to="/" end>
+            Proyectos
+          </NavLink>
+          <NavLink to="/activity">Actividad</NavLink>
+        </nav>
+        <HealthIndicator />
+      </header>
+      <main className="content">
+        <Routes>
+          <Route path="/" element={<ProjectsPage />} />
+          <Route path="/projects/:projectId" element={<ProjectPage />} />
+          <Route path="/work-items/:workItemId" element={<WorkItemPage />} />
+          <Route path="/runs/:runId" element={<RunPage />} />
+          <Route path="/activity" element={<ActivityPage />} />
+          <Route path="*" element={<p>Página no encontrada.</p>} />
+        </Routes>
+      </main>
+    </div>
   )
 }
