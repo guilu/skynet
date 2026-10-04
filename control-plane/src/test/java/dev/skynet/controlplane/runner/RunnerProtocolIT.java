@@ -250,7 +250,9 @@ class RunnerProtocolIT extends IntegrationTest {
             .query(String.class)
             .single();
     assertThat(stored).doesNotContain(key).contains("[REDACTED]");
-    assertThat(get("/api/agent-runs/" + run.agentId()).toString()).doesNotContain(key);
+    assertThat(get("/api/agent-runs/" + run.agentId()).toString())
+        .contains(run.agentId().toString())
+        .doesNotContain(key);
   }
 
   @Test

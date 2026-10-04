@@ -143,7 +143,7 @@ class RunnerEndToEndIT extends IntegrationTest {
     post("/api/agent-runs/" + run.agentId() + "/cancel", Map.of());
 
     await("agente cancelado", () -> "CANCELLED".equals(agentStatus(run)));
-    assertThat(tree).noneMatch(ProcessHandle::isAlive);
+    assertThat(tree).isNotEmpty().noneMatch(ProcessHandle::isAlive);
     assertThat(get("/api/workflow-runs/" + run.runId()).path("status").asString())
         .isEqualTo("CANCELLED");
     assertThat(agentEventTypes(run).getLast()).isEqualTo("agent.process.exited");

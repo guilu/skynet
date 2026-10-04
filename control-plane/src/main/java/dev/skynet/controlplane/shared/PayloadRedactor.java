@@ -77,7 +77,7 @@ public class PayloadRedactor {
   /** Claves de un payload cuyo valor de texto se oculta entero. */
   private static final Pattern SECRET_KEY =
       Pattern.compile(
-          "(?i)^(?:.*[_-])?(?:password|passwd|secret|token|api[_-]?key|apikey|authorization"
+          "(?i)^(?:.*[_-])?(?:password|passwd|secret|token|api[_-]?key|authorization"
               + "|access[_-]?key|private[_-]?key|client[_-]?secret|credentials?)$");
 
   private final List<String> secretValues;
