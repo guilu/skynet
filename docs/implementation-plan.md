@@ -124,7 +124,17 @@ Las órdenes se generan desde una tabla `runner_command` (con `FOR UPDATE SKIP L
 - `GET /api/runner/commands?waitSeconds=N` (long-poll, como mucho `skynet.runner.max-wait`, 30 s). Al lanzar un agente se crea un `START` **sin runner**; lo reclama el primer runner con capacidad libre (`capacity` menos sus agentes no terminados), y en la misma transacción el agente y su fase pasan a `STARTING`. Lo entregado y no confirmado con `ack` se vuelve a entregar al mismo runner pasado `skynet.runner.redeliver-after` (30 s).
 - Cancelar un agente en cola lo cancela en el acto y retira su `START`. Cancelar uno que ya está en un runner marca `cancel_requested_at` y crea un `CANCEL` para ese runner; el estado `CANCELLED` llega con `agent.process.exited`.
 - `POST /api/runner/events` ingiere cada evento en su propia transacción, idempotente por `eventId`, y responde `EventBatchResult` (aceptados, duplicados y rechazados con motivo: agente desconocido o de otro runner). Efectos: `session.started` → `THINKING` (y la fase a `RUNNING`); `tool.started` → `EXECUTING`; `message.received`/`tool.completed` → `THINKING`; `result` guarda turnos, tokens, subtipo y coste (`cost_usd` = acumulado menos el de la invocación padre); `process.exited` (`exitCode`, `signal`) decide el estado final: `CANCELLED` si se pidió, `COMPLETED` con resultado sin error y código 0, `FAILED` en otro caso, y cierra la fase y la ejecución `adhoc`.
-- La tabla `workspace` se crea cuando el runner gestione worktrees (paso 4).
+- `process.exited` puede traer `error` (el runner no llegó a lanzar el proceso, se agotó el tiempo, se paró o se reinició a mitad): el agente queda `FAILED` con ese error, salvo que se hubiera pedido cancelarlo.
+
+**Implementado (M2, paso 4), daemon del runner (`runner/`):**
+
+- `transport/ControlPlaneClient`: registro, heartbeat, long-poll, `ack` y lotes de eventos sobre `java.net.http`. Un 401 hace que el daemon se registre de nuevo.
+- `journal/Journal` (SQLite en `$SKYNET_RUNNER_HOME/journal.db`): credenciales, eventos pendientes con `seq` por invocación, órdenes recibidas (una orden reentregada no se ejecuta dos veces), invocaciones terminadas y PIDs. Un evento solo se borra cuando el control plane responde al lote.
+- `supervisor/ProcessSupervisor`: entorno vaciado y rellenado desde una lista permitida, stdin a `/dev/null`, stdout línea a línea al parser y al log bruto (`logs/<agentRunId>.ndjson`), últimos 8 KB de stderr. Terminar = SIGTERM a todo el árbol (descendientes tomados antes de matar al padre), gracia de 10 s y SIGKILL. Al arrancar mata los procesos que dejó vivos un runner anterior (comprobando el instante de arranque para no matar un PID reutilizado).
+- `workspace/WorkspaceManager`: `git worktree add -b skynet/<trabajo>/<agente> $SKYNET_RUNNER_HOME/workspaces/<ejecución>/<agente> <rama base>`. Emite `agent.workspace.ready` (ruta, rama, commit base). El worktree se conserva al terminar; la limpieza es de M6.
+- `provider/claude/ClaudeCodeProvider`: `claude -p … --output-format stream-json --verbose --include-partial-messages --session-id … --permission-mode … --allowedTools … [--model] [--max-turns] [--max-budget-usd]`.
+- `agent/AgentExecutor`: cada `START` termina con exactamente un `agent.process.exited`, también si falla el worktree, si se cancela antes de arrancar, si se agota `limits.timeout` o si el runner se para o se reinicia.
+- Pendiente: presupuesto propio en el runner (hace falta la tabla de precios; de momento solo `--max-budget-usd`, que no es estricto), tabla `workspace` en el control plane (el evento ya se guarda) y grupos de procesos con `setsid`.
 
 ### 4.4. API para la web (Fase 1)
 

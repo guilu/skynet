@@ -188,6 +188,48 @@ class RunnerProtocolIT extends IntegrationTest {
   }
 
   @Test
+  void aRunnerErrorFailsTheAgentWithThatError() {
+    Runner runner = register("laptop", 1);
+    Launched run = launch("x");
+    poll(runner, 1);
+
+    Events events = new Events(run.agentId());
+    events.add(
+        AgentEventType.PROCESS_EXITED,
+        Map.of(
+            "error", "No se pudo preparar el worktree: El repositorio no existe en este runner"));
+    send(runner, events.batch());
+
+    JsonNode agent = agent(run);
+    assertThat(agent.path("status").asString()).isEqualTo("FAILED");
+    assertThat(agent.path("error").asString()).startsWith("No se pudo preparar el worktree");
+    assertThat(agent.path("exitCode").isNull() || agent.path("exitCode").isMissingNode()).isTrue();
+    assertThat(stageStatus(run)).isEqualTo("FAILED");
+  }
+
+  @Test
+  void aTimeoutFailsTheAgentEvenIfItExitedCleanly() {
+    Runner runner = register("laptop", 1);
+    Launched run = launch("x");
+    poll(runner, 1);
+
+    Events events = new Events(run.agentId());
+    events.add(
+        AgentEventType.WORKSPACE_READY,
+        Map.of("path", "/w/r/a", "branch", "skynet/adhoc/abcd1234", "baseCommit", "abc"));
+    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", "s"));
+    events.add(
+        AgentEventType.PROCESS_EXITED,
+        Map.of("exitCode", 143, "signal", "SIGTERM", "error", "Se agotó el tiempo máximo (PT30M)"));
+    send(runner, events.batch());
+
+    JsonNode agent = agent(run);
+    assertThat(agent.path("status").asString()).isEqualTo("FAILED");
+    assertThat(agent.path("error").asString()).contains("tiempo máximo");
+    assertThat(eventTypes(run)).contains("agent.workspace.ready");
+  }
+
+  @Test
   void longPollReturnsAsSoonAsARunIsLaunched() throws Exception {
     Runner runner = register("laptop", 1);
     CompletableFuture<List<JsonNode>> pending =

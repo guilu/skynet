@@ -79,9 +79,39 @@ Con la aplicación levantada, abre la web y:
 
 1. **Proyectos** → crea un proyecto (p. ej. clave `TKM`).
 2. En el proyecto, **registra un repositorio** (ruta absoluta en la máquina del runner) y **crea un trabajo** (`TKM-1`).
-3. En el trabajo, **lanza un agente** con un prompt. Se crea la ejecución con su fase y el agente queda **en cola**: el control plane ya reparte la orden de arranque a los runners registrados (`/api/runner/*`); el daemon del runner que la ejecuta llega en el siguiente paso de M2.
+3. En el trabajo, **lanza un agente** con un prompt. Se crea la ejecución con su fase y el agente queda **en cola**: si hay un runner conectado (ver abajo), lo recoge, crea un worktree y ejecuta Claude Code en él. La web muestra los eventos en el timeline; la vista rica del agente llega en M3.
 4. En la ejecución verás el **timeline en vivo** (SSE). Pulsa **Cancelar** y observa las transiciones del agente, la fase y la ejecución.
 5. **Actividad** muestra todos los eventos del sistema en tiempo real. Si recargas o se corta la conexión, el stream continúa desde el último evento recibido.
+
+### Runner local
+
+El runner se ejecuta en la máquina donde están los repositorios y `claude`. Se conecta al control plane (no hace falta abrir puertos) y guarda su estado en `~/.skynet-runner` (journal SQLite, logs NDJSON y worktrees).
+
+```bash
+./gradlew :runner:installDist
+SKYNET_URL=http://localhost:8080 \
+SKYNET_RUNNER_REGISTRATION_TOKEN=<el mismo secreto que el control plane> \
+runner/build/install/skynet-runner/bin/skynet-runner
+```
+
+| Variable | Por defecto | Uso |
+|---|---|---|
+| `SKYNET_URL` | `http://localhost:8080` | URL del control plane |
+| `SKYNET_RUNNER_REGISTRATION_TOKEN` | — | Secreto de registro; solo hace falta la primera vez (luego usa el token guardado) |
+| `SKYNET_RUNNER_NAME` | nombre del host | Nombre del runner |
+| `SKYNET_RUNNER_CAPACITY` | `2` | Agentes simultáneos |
+| `SKYNET_RUNNER_HOME` | `~/.skynet-runner` | Journal, logs y worktrees |
+| `SKYNET_CLAUDE_BIN` | `claude` | Ejecutable de Claude Code (o fake-claude para probar) |
+| `SKYNET_AGENT_ENV` | — | Variables extra que hereda el agente, separadas por comas |
+
+El agente solo hereda una lista corta de variables (`PATH`, `HOME`, idioma, proxy, `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`…) más las de `SKYNET_AGENT_ENV`. Para probar sin gastar, usa fake-claude:
+
+```bash
+./gradlew :tools:fake-claude:installDist
+SKYNET_CLAUDE_BIN=$PWD/tools/fake-claude/build/install/fake-claude/bin/fake-claude \
+SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE FAKE_CLAUDE_FIXTURE=02-tools \
+SKYNET_RUNNER_REGISTRATION_TOKEN=<secreto> runner/build/install/skynet-runner/bin/skynet-runner
+```
 
 ### fake-claude
 

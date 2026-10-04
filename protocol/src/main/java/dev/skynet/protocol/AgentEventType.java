@@ -30,9 +30,12 @@ public enum AgentEventType {
   RATE_LIMIT("agent.rate_limit"),
   /** Resultado final de la invocación: turnos, tokens, coste acumulado y salida estructurada. */
   RESULT("agent.result"),
+  /** El runner ha preparado el worktree: {@code path}, {@code branch} y {@code baseCommit}. */
+  WORKSPACE_READY("agent.workspace.ready"),
   /**
    * Fin del proceso del agente, emitido por el runner: {@code exitCode} y, si lo mató una señal,
-   * {@code signal} (p. ej. {@code SIGTERM}). Es el evento que decide el estado final.
+   * {@code signal} (p. ej. {@code SIGTERM}). Si el proceso no llegó a arrancar, {@code exitCode}
+   * falta y {@code error} explica por qué. Es el evento que decide el estado final.
    */
   PROCESS_EXITED("agent.process.exited"),
   /** Línea que el adaptador no reconoce; se conserva para no perder información. */

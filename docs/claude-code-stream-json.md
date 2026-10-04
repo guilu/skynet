@@ -74,7 +74,7 @@ Todos los flags previstos en el plan existen y funcionan: `--session-id`, `--res
 | `system/vcs_state_changed` | `agent.vcs.changed` (pendiente de verificar con git) | — |
 | `rate_limit_event` | `agent.rate_limit` (solo si `status != "allowed"`) | — |
 | `result` | `agent.result` (subtype, terminal_reason, turnos, tokens, coste acumulado, structured_output, errors) | `COMPLETED` / `FAILED` |
-| fin de proceso | `agent.process.exited` (exit code, señal) | estado terminal; `CANCELLED` si lo cancelamos nosotros |
+| fin de proceso | `agent.process.exited` (exit code, señal; `error` si el runner no llegó a lanzarlo, se agotó el tiempo o se reinició) | estado terminal; `CANCELLED` si lo cancelamos nosotros |
 | línea desconocida | `agent.raw` | — |
 
 El parser que implementa este mapeo es `runner/.../provider/claude/ClaudeStreamParser`, probado con todos los fixtures. Los bloques `thinking` no producen eventos y la salida de las herramientas se trunca a 16 KB (el NDJSON completo se guarda como artefacto).

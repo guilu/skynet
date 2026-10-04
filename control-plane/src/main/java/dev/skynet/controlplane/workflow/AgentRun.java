@@ -209,10 +209,14 @@ public class AgentRun {
    * Estado final al terminar el proceso: cancelado si lo pedimos nosotros; completado solo con un
    * resultado sin error y código de salida 0; fallido en cualquier otro caso.
    */
-  AgentObservableStatus exited(Integer exitCode, String signal) {
+  AgentObservableStatus exited(Integer exitCode, String signal, String runnerError) {
     this.exitCode = exitCode;
     if (cancelRequestedAt != null) {
       return AgentObservableStatus.CANCELLED;
+    }
+    if (runnerError != null) {
+      error = runnerError;
+      return AgentObservableStatus.FAILED;
     }
     if (Boolean.FALSE.equals(resultIsError) && Integer.valueOf(0).equals(exitCode)) {
       return AgentObservableStatus.COMPLETED;
