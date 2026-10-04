@@ -115,7 +115,7 @@ public class AgentEventIngestion {
               errors(p));
       case PROCESS_EXITED -> {
         AgentObservableStatus outcome =
-            agent.exited(integer(p.get("exitCode")), string(p, "signal"));
+            agent.exited(integer(p.get("exitCode")), string(p, "signal"), string(p, "error"));
         agent = transitions.advanceAgent(agent, outcome, runId, "process-exited", now);
         transitions.finishAdhoc(stage, workflowRuns.findById(runId).orElseThrow(), outcome, now);
       }
