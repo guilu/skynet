@@ -48,6 +48,17 @@ docker compose -f deploy/docker-compose.yml up -d
 cd web && npm ci && npm run dev
 ```
 
+### Tests de integración
+
+Los tests del control plane (`*IT`) arrancan la aplicación contra PostgreSQL. Usan Testcontainers si hay Docker; si no, una base de datos existente indicada por variables de entorno (los tests **vacían sus tablas**, así que debe ser una base de datos exclusiva para tests):
+
+```bash
+SKYNET_TEST_DB_URL=jdbc:postgresql://localhost:5432/skynet_test \
+SKYNET_TEST_DB_USER=skynet SKYNET_TEST_DB_PASSWORD=skynet ./gradlew build
+```
+
+Sin Docker ni `SKYNET_TEST_DB_URL`, los tests de integración se omiten.
+
 ### Aplicación completa con Docker
 
 ```bash
@@ -61,6 +72,16 @@ docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
 | PostgreSQL | localhost:5432 | `SKYNET_DB_PORT` |
 
 Credenciales de la base de datos: `SKYNET_DB_USER` / `SKYNET_DB_PASSWORD` (por defecto `skynet`/`skynet`). Para parar: `docker compose -f deploy/docker-compose.yml --profile app down` (añade `-v` para borrar los datos). El runner no va en contenedor: se ejecuta en el host porque necesita `claude` y los repositorios.
+
+### Probar la aplicación (estado actual: M1)
+
+Con la aplicación levantada, abre la web y:
+
+1. **Proyectos** → crea un proyecto (p. ej. clave `TKM`).
+2. En el proyecto, **registra un repositorio** (ruta absoluta en la máquina del runner) y **crea un trabajo** (`TKM-1`).
+3. En el trabajo, **lanza un agente** con un prompt. Se crea la ejecución con su fase y el agente queda **en cola**: el runner que lo ejecuta llega en M2.
+4. En la ejecución verás el **timeline en vivo** (SSE). Pulsa **Cancelar** y observa las transiciones del agente, la fase y la ejecución.
+5. **Actividad** muestra todos los eventos del sistema en tiempo real. Si recargas o se corta la conexión, el stream continúa desde el último evento recibido.
 
 ### fake-claude
 
