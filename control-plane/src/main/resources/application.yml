@@ -16,3 +16,8 @@ management:
     web:
       exposure:
         include: health,info
+
+skynet:
+  runner:
+    # Secreto para registrar runners. Sin él, el registro está desactivado.
+    registration-token: ${SKYNET_RUNNER_REGISTRATION_TOKEN:}

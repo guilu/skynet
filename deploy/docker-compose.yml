@@ -32,6 +32,8 @@ services:
       SKYNET_DB_URL: jdbc:postgresql://postgres:5432/skynet
       SKYNET_DB_USER: ${SKYNET_DB_USER:-skynet}
       SKYNET_DB_PASSWORD: ${SKYNET_DB_PASSWORD:-skynet}
+      # Secreto para registrar runners; vacío desactiva el registro.
+      SKYNET_RUNNER_REGISTRATION_TOKEN: ${SKYNET_RUNNER_REGISTRATION_TOKEN:-}
     ports:
       - "${SKYNET_API_PORT:-8080}:8080"
     depends_on:

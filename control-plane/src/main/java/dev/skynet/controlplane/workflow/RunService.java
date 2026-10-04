@@ -1,7 +1,5 @@
 package dev.skynet.controlplane.workflow;
 
-import dev.skynet.controlplane.event.EventDraft;
-import dev.skynet.controlplane.event.EventStore;
 import dev.skynet.controlplane.project.CodeRepository;
 import dev.skynet.controlplane.project.ProjectService;
 import dev.skynet.controlplane.shared.ConflictException;
@@ -12,11 +10,13 @@ import dev.skynet.controlplane.workitem.WorkItemService;
 import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
+import dev.skynet.protocol.runner.AgentLimits;
+import dev.skynet.protocol.runner.StartAgent;
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,9 +36,11 @@ public class RunService {
   private final PromptRepository prompts;
   private final WorkItemService workItems;
   private final ProjectService projects;
-  private final EventStore events;
   private final TimeSource time;
   private final JdbcClient jdbc;
+  private final RunTransitions transitions;
+  private final AgentDefaults defaults;
+  private final ApplicationEventPublisher publisher;
 
   RunService(
       WorkflowRunRepository workflowRuns,
@@ -47,23 +49,27 @@ public class RunService {
       PromptRepository prompts,
       WorkItemService workItems,
       ProjectService projects,
-      EventStore events,
       TimeSource time,
-      JdbcClient jdbc) {
+      JdbcClient jdbc,
+      RunTransitions transitions,
+      AgentDefaults defaults,
+      ApplicationEventPublisher publisher) {
     this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
     this.agentRuns = agentRuns;
     this.prompts = prompts;
     this.workItems = workItems;
     this.projects = projects;
-    this.events = events;
     this.time = time;
     this.jdbc = jdbc;
+    this.transitions = transitions;
+    this.defaults = defaults;
+    this.publisher = publisher;
   }
 
   /**
    * Lanza una ejecución {@code adhoc}: un workflow con una fase y un agente en cola. El agente
-   * queda en {@code QUEUED} hasta que un runner lo reclame (M2).
+   * queda en {@code QUEUED} hasta que un runner reclame su orden de arranque.
    */
   @Transactional
   public WorkflowRun launch(UUID workItemId, UUID repositoryId, String promptText) {
@@ -97,9 +103,11 @@ public class RunService {
         Map.of("stageKey", stage.getStageKey(), "attempt", stage.getAttempt()),
         now);
 
+    UUID sessionId = UUID.randomUUID();
     AgentRun agent =
         agentRuns.save(
-            AgentRun.queued(stage.getId(), repositoryId, AgentRun.PROVIDER_CLAUDE_CODE, now));
+            AgentRun.queued(
+                stage.getId(), repositoryId, AgentRun.PROVIDER_CLAUDE_CODE, sessionId, now));
     Prompt prompt = prompts.save(Prompt.of(agent.getId(), Prompt.ROLE_USER, promptText, now));
     append(
         "agent_run",
@@ -115,12 +123,28 @@ public class RunService {
             "promptId", prompt.getId(),
             "promptSha256", prompt.getSha256()),
         now);
+    publisher.publishEvent(
+        new AgentRunQueued(
+            agent.getId(),
+            new StartAgent(
+                run.getId(),
+                workItem.getKey(),
+                repository.getLocalPath(),
+                repository.getDefaultBranch(),
+                sessionId,
+                promptText,
+                defaults.allowedTools(),
+                defaults.permissionMode(),
+                defaults.model(),
+                new AgentLimits(
+                    defaults.maxTurns(), defaults.maxBudgetUsd(), defaults.timeout()))));
     return run;
   }
 
   /**
-   * Cancela un agente y propaga la cancelación a su fase y a la ejecución. En M1 solo hay agentes
-   * en cola; a partir de M2 la cancelación de un agente activo se delega en el runner.
+   * Cancela un agente. Si sigue en cola se cancela en el acto, junto con su fase y su ejecución, y
+   * su orden de arranque se retira. Si ya está en un runner se le ordena terminar el proceso; el
+   * estado {@code CANCELLED} llega con el fin del proceso. Pedirlo dos veces no tiene efecto.
    */
   @Transactional
   public AgentRun cancelAgent(UUID agentRunId) {
@@ -129,39 +153,49 @@ public class RunService {
     WorkflowRun run = workflowRuns.findById(stage.getWorkflowRunId()).orElseThrow();
     Instant now = time.now();
 
-    AgentObservableStatus previousAgent = agent.transitionTo(AgentObservableStatus.CANCELLED, now);
-    agent = agentRuns.save(agent);
-    append(
-        "agent_run",
-        agent.getId(),
-        "agent.status.changed",
-        run.getId(),
-        statusChange(previousAgent, agent.getStatus(), "cancelled-by-user"),
-        now);
-
-    if (stage.getStatus().canTransitionTo(StageStatus.CANCELLED)) {
-      StageStatus previousStage = stage.transitionTo(StageStatus.CANCELLED, now);
-      stageRuns.save(stage);
-      append(
-          "stage_run",
-          stage.getId(),
-          "stage.status.changed",
-          run.getId(),
-          statusChange(previousStage, stage.getStatus(), "agent-cancelled"),
-          now);
+    if (agent.getStatus() == AgentObservableStatus.QUEUED) {
+      agent =
+          transitions.agent(
+              agent, AgentObservableStatus.CANCELLED, run.getId(), "cancelled-by-user", now);
+      transitions.finishAdhoc(stage, run, AgentObservableStatus.CANCELLED, now);
+      publisher.publishEvent(new AgentRunWithdrawn(agent.getId()));
+      return agent;
     }
-    if (run.getStatus().canTransitionTo(WorkflowRunStatus.CANCELLED)) {
-      WorkflowRunStatus previousRun = run.transitionTo(WorkflowRunStatus.CANCELLED, now);
-      workflowRuns.save(run);
+    if (agent.getStatus().isTerminal()) {
+      throw new ConflictException(
+          "El agente " + agentRunId + " ya ha terminado (" + agent.getStatus() + ")");
+    }
+    if (agent.requestCancel(now)) {
+      agent = agentRuns.save(agent);
       append(
-          "workflow_run",
+          "agent_run",
+          agent.getId(),
+          "agent.cancel.requested",
           run.getId(),
-          "workflow.status.changed",
-          run.getId(),
-          statusChange(previousRun, run.getStatus(), "agent-cancelled"),
+          Map.of("runnerId", agent.getRunnerId()),
           now);
+      publisher.publishEvent(new AgentCancelRequested(agent.getId(), agent.getRunnerId()));
     }
     return agent;
+  }
+
+  /**
+   * Un runner ha reclamado la orden de arranque: el agente y su fase pasan a {@code STARTING}.
+   * Devuelve {@code false} si el agente ya no está en cola, y entonces la orden no debe entregarse.
+   */
+  @Transactional
+  public boolean assignRunner(UUID agentRunId, UUID runnerId) {
+    AgentRun agent = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
+    if (agent.getStatus() != AgentObservableStatus.QUEUED) {
+      return false;
+    }
+    StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
+    Instant now = time.now();
+    agent.assignRunner(runnerId);
+    transitions.agent(
+        agent, AgentObservableStatus.STARTING, stage.getWorkflowRunId(), "assigned", now);
+    transitions.advanceStage(stage, StageStatus.STARTING, "agent-assigned", now);
+    return true;
   }
 
   @Transactional(readOnly = true)
@@ -235,16 +269,7 @@ public class RunService {
       UUID workflowRunId,
       Map<String, ?> payload,
       Instant now) {
-    events.append(EventDraft.of(aggregateType, aggregateId, type, workflowRunId, payload, now));
-  }
-
-  private static Map<String, Object> statusChange(
-      Enum<?> previous, Enum<?> current, String reason) {
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("previousStatus", previous);
-    payload.put("status", current);
-    payload.put("reason", reason);
-    return payload;
+    transitions.append(aggregateType, aggregateId, type, workflowRunId, payload, now);
   }
 
   private static NotFoundException notFound(UUID agentRunId) {

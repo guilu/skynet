@@ -118,6 +118,14 @@ POST /api/runner/commands/{id}/ack
 
 Las órdenes se generan desde una tabla `runner_command` (con `FOR UPDATE SKIP LOCKED`), de modo que si el runner se reinicia vuelve a recibir lo no confirmado.
 
+**Implementado (M2, paso 3):**
+
+- `POST /api/runner/register` exige el secreto `skynet.runner.registration-token` (`SKYNET_RUNNER_REGISTRATION_TOKEN`; vacío = registro desactivado) y devuelve un token propio del runner, que se guarda solo como sha256. Registrarse otra vez con el mismo nombre conserva el id y rota el token. El resto de rutas exige `Authorization: Bearer <token>` (401 si falta o no es válido).
+- `GET /api/runner/commands?waitSeconds=N` (long-poll, como mucho `skynet.runner.max-wait`, 30 s). Al lanzar un agente se crea un `START` **sin runner**; lo reclama el primer runner con capacidad libre (`capacity` menos sus agentes no terminados), y en la misma transacción el agente y su fase pasan a `STARTING`. Lo entregado y no confirmado con `ack` se vuelve a entregar al mismo runner pasado `skynet.runner.redeliver-after` (30 s).
+- Cancelar un agente en cola lo cancela en el acto y retira su `START`. Cancelar uno que ya está en un runner marca `cancel_requested_at` y crea un `CANCEL` para ese runner; el estado `CANCELLED` llega con `agent.process.exited`.
+- `POST /api/runner/events` ingiere cada evento en su propia transacción, idempotente por `eventId`, y responde `EventBatchResult` (aceptados, duplicados y rechazados con motivo: agente desconocido o de otro runner). Efectos: `session.started` → `THINKING` (y la fase a `RUNNING`); `tool.started` → `EXECUTING`; `message.received`/`tool.completed` → `THINKING`; `result` guarda turnos, tokens, subtipo y coste (`cost_usd` = acumulado menos el de la invocación padre); `process.exited` (`exitCode`, `signal`) decide el estado final: `CANCELLED` si se pidió, `COMPLETED` con resultado sin error y código 0, `FAILED` en otro caso, y cierra la fase y la ejecución `adhoc`.
+- La tabla `workspace` se crea cuando el runner gestione worktrees (paso 4).
+
 ### 4.4. API para la web (Fase 1)
 
 ```text
