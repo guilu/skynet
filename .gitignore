@@ -28,3 +28,6 @@ workspaces/
 coverage/
 playwright-report/
 test-results/
+
+# Kotlin (build-logic)
+.kotlin/
