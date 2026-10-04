@@ -234,20 +234,29 @@ Cada hito incluye los criterios de éxito del MVP (§23 de la especificación) q
 - `ClaudeCodeProvider`: construcción del comando, filtrado de variables de entorno, herramientas permitidas, límites de turnos y presupuesto; parser NDJSON → eventos normalizados (tolerante a líneas desconocidas: se guardan como `agent.raw`).
 - Journal local en SQLite + reenvío por lotes con idempotencia.
 - Ingestión en el backend: persiste eventos, actualiza `agent_run` (estado observable, `last_activity_at`, tokens, coste, session id).
+- Redacción de secretos en la ingestión, antes de `EventStore.append` (`PayloadRedactor`): el event store es append-only, así que un secreto persistido no se puede corregir después ([ADR-0001](adr/0001-control-plane-user-interface.md) §2.1).
 
 **Aceptación:** lanzar un run con fake-claude produce la secuencia completa de eventos en BD; matar la conexión durante el run no pierde eventos; cancelar mata todos los procesos hijos. Prueba manual con `claude` real. **MVP 3, 5, 6, 10.**
 
-### M3 — UI de observabilidad en tiempo real (≈2 semanas)
+### M3 — Control plane de observabilidad en tiempo real (≈2 semanas)
 
-- Layout, navegación: Proyectos → Trabajos → Ejecuciones.
-- Formulario para crear trabajo y lanzar un agente (repositorio, prompt, límites).
-- Vista de agente (§13.3): estado observable, actividad actual, duración, sesión, coste, "sin actividad visible durante X".
-- Timeline semántico (§13.4) con agregación de eventos (p. ej. "Read 14 files") y detalle expandible (evento original, JSON normalizado).
-- Panel de mensajes con texto en streaming y llamadas a herramientas con entrada/salida.
-- Contadores de tokens y coste en vivo.
+Implementa la Fase A de [ADR-0001](adr/0001-control-plane-user-interface.md) (§6 y la issue propuesta en §10).
+
+- Proyecciones de lectura en backend (`WorkflowRunView`, `StageRunView`, `AgentRunView`, `RunnerView`, `DashboardSummary` mínimo): actividad actual, sesión, tokens, coste y timestamps. El frontend no infiere estado.
+- `GET /api/runners`, `GET /api/events/{sequence}` (evento original) y paginación del historial de eventos.
 - Detección de `UNRESPONSIVE` en backend (job periódico sobre `last_activity_at`).
+- Shell con navegación global: Dashboard, Proyectos, Workflows (solo `adhoc`, lectura), Ejecuciones, Runners y Actividad.
+- Formulario para crear trabajo y lanzar un agente (repositorio, prompt, límites).
+- Vista de ejecución en tres paneles + timeline: cabecera operativa (estado, duración, runner, tokens, coste, estado SSE), navegación de fases/agentes, inspector contextual (Resumen, Prompt, Mensajes en streaming, Herramientas, Evento original) y timeline inferior. Las fases se muestran como lista/stepper: sin React Flow mientras el workflow sea `adhoc`.
+- Timeline semántico (§13.4) con agregación (p. ej. "Read 14 files"), filtros por fase, agente, tipo, severidad y origen, deep link por `sequence` y virtualización.
+- Selección, pestaña del inspector y filtros sincronizados con la URL.
+- Deltas SSE aplicados sin invalidar todas las queries; revisión del dispatcher SSE en serie.
+- Dashboard de excepciones: ejecuciones activas y fallidas, agentes `UNRESPONSIVE` y runners sin heartbeat, cada uno enlazado a una lista filtrada. Las métricas agregadas van en M6.
+- Accesibilidad: navegación por teclado y ningún estado comunicado solo con color; responsive básico.
 
-**Aceptación:** E2E Playwright con fake-claude: crear trabajo → lanzar → ver mensajes, herramientas y coste en vivo → estado final. **MVP 4, 5, 11.**
+Se entrega en cinco PRs: M3-A contratos y proyecciones; M3-B shell, cabecera y formulario; M3-C navegación e inspector con URL; M3-D timeline y SSE; M3-E dashboard, Runners, accesibilidad y E2E.
+
+**Aceptación:** E2E Playwright con fake-claude: crear trabajo → lanzar → ver mensajes, herramientas y coste en vivo → reconectar SSE sin perder eventos → estado final. Criterios 1–7 de ADR-0001. **MVP 4, 5, 11.**
 
 ### M4 — Interacción con sesiones (≈1 semana)
 
@@ -255,6 +264,7 @@ Cada hito incluye los criterios de éxito del MVP (§23 de la especificación) q
 - Interrumpir (cancel), reintentar (nuevo `AgentRun`, worktree nuevo), fork (`--fork-session`).
 - Bloqueo: no permitir dos invocaciones escritoras simultáneas en el mismo worktree.
 - La UI muestra la conversación completa encadenando los `AgentRun` de la misma sesión.
+- Cada acción (mensaje, cancelar, reintentar, fork) muestra su alcance e impacto y pide confirmación proporcional al riesgo; resumes, reintentos y forks aparecen como entidades enlazadas en la navegación (ADR-0001 §3.8).
 
 **Aceptación:** E2E: run completado → enviar mensaje → nueva actividad en la misma conversación; cancelar a mitad deja estado `CANCELLED` y sin procesos. **MVP 9, 10.**
 
@@ -265,6 +275,9 @@ Cada hito incluye los criterios de éxito del MVP (§23 de la especificación) q
 - Ejecución independiente de un comando de validación configurable por repositorio (p. ej. `./mvnw verify`) → código de salida + parseo de JUnit XML (total/fallidos/omitidos) → artefacto `TEST_REPORT`.
 - Prompt efectivo, NDJSON bruto y resultado final como artefactos.
 - UI de artefactos (§13.5): archivos modificados, diff con Monaco, commits, tests, logs.
+- Proyecciones `ArtifactSummary` y `VerificationResult`; pestañas Artefactos, Verificación y Coste del inspector, con contenido pesado cargado bajo demanda. La UI distingue "declarado por el agente" de "verificado por Skynet" (ADR-0001 criterio 8).
+- Acción "reejecutar solo la verificación".
+- El NDJSON bruto pasa por el mismo redactor que la ingestión antes de guardarse.
 
 **Aceptación:** tras un run que modifica código se ven archivos, diff y commits; el resultado de tests procede del comando ejecutado por el runner, no del texto del agente. **MVP 7, 8, 12.**
 
@@ -275,6 +288,8 @@ Cada hito incluye los criterios de éxito del MVP (§23 de la especificación) q
 - Recuperación: reinicio del backend y del runner durante un run sin estados inconsistentes (reconciliación de procesos vivos vs `agent_run`).
 - Limpieza de worktrees, retención de logs.
 - Docker Compose completo + guía de instalación del runner en `README`.
+- Métricas agregadas del dashboard (duración, tokens y coste por periodo), enlazadas a listas filtradas. PR y checks de CI en el dashboard quedan para cuando exista integración con GitHub.
+- Revisión de "sin secretos en el DOM" y de accesibilidad.
 - Repaso de los 12 criterios del MVP con una sesión real de Claude.
 
 **Aceptación:** checklist §23 completo en un repositorio real.
@@ -287,15 +302,16 @@ Cada hito incluye los criterios de éxito del MVP (§23 de la especificación) q
 
 | Hito | Contenido | Aceptación |
 |---|---|---|
-| W1 Definiciones | Parser YAML (§11), JSON Schema de la definición, validación de DAG (ciclos, dependencias inexistentes, `dependsOn` opcional `x?`), versionado inmutable, `AgentDefinition` (prompt template, herramientas, límites) | Definiciones inválidas rechazadas con errores claros |
+| W1 Definiciones | Parser YAML (§11), JSON Schema de la definición, validación de DAG (ciclos, dependencias inexistentes, `dependsOn` opcional `x?`), versionado inmutable, `AgentDefinition` (prompt template, herramientas, límites); `WorkflowDefinitionView` y página Workflows en lectura con estados borrador/validada/publicada | Definiciones inválidas rechazadas con errores claros |
 | W2 Motor | Tabla `job` + workers con `SKIP LOCKED`; transiciones `PENDING→READY→STARTING→RUNNING→…`; activación de fases sin dependencias; outbox; interfaz `WorkflowEngine` aislada para migrar a Temporal | Reinicio del backend a mitad de workflow lo retoma correctamente |
 | W3 Nodos | `agent`, `command`, `parallel`, `conditional` (expresiones sobre salidas estructuradas, p. ej. `review.hasBlockingFindings`) | Workflow de ejemplo con fase paralela y condicional |
-| W4 Resultado estructurado | Contrato §9.4 validado contra `outputSchema`; verificación independiente de artefactos y checks antes de completar la fase (§15) | Fase con salida inválida o artefacto inexistente no avanza |
-| W5 Human-in-the-loop | Nodo `human-approval`, `ApprovalService`, centro de aprobaciones (§13.6, §14): aprobar/rechazar/pedir cambios/comentar; evidencia y riesgo | Aprobación desbloquea dependientes; rechazo con "pedir cambios" crea ejecución correctiva |
-| W6 Retries y cancelación | Política de retry por fase, timeouts, cancelación en cascada del workflow | Fallo transitorio reintenta; cancelar workflow mata todos sus agentes |
-| W7 UI DAG | React Flow con estado, duración, agente, coste, reintentos y acciones por nodo (§13.2) | El DAG refleja el estado en tiempo real vía SSE |
+| W4 Resultado estructurado | Contrato §9.4 validado contra `outputSchema`; verificación independiente de artefactos y checks antes de completar la fase (§15), ampliando el `VerificationResult` de M5 | Fase con salida inválida o artefacto inexistente no avanza |
+| W5 Human-in-the-loop | Nodo `human-approval`, `ApprovalService`, centro de aprobaciones (§13.6, §14): aprobar una vez/rechazar/pedir cambios/comentar; acción exacta, origen, riesgo, permisos, evidencia y consecuencia (ADR-0001 §3.7); records append-only, sin "aprobar siempre" | Aprobación desbloquea dependientes; rechazo con "pedir cambios" crea ejecución correctiva |
+| W6 Retries y cancelación | Política de retry por fase, timeouts, cancelación en cascada del workflow; acciones de reintento por nodo gobernadas por el motor | Fallo transitorio reintenta; cancelar workflow mata todos sus agentes |
+| W7 UI DAG | React Flow con estado, duración, agente, coste, reintentos y acciones por nodo (§13.2); minimapa, swimlanes por macrofase, nodos tipados y accesibilidad del grafo (ADR-0001 §3.3) | El DAG representa la definición versionada y refleja el estado en tiempo real vía SSE |
+| W8 Editor de workflows | Edición visual del DAG con panel de propiedades, validación visible (ciclos, dependencias inexistentes, configuración incompleta) y publicación de versiones inmutables (ADR-0001 §3.3) | Un workflow creado en el editor se publica, se ejecuta y las ejecuciones previas no cambian |
 
-**Estimación: 8–10 semanas.**
+**Estimación: 8–10 semanas, sin contar W8.**
 
 ---
 

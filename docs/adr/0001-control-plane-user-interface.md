@@ -1,10 +1,10 @@
 # ADR-0001: Interfaz del control plane de Skynet
 
-- **Estado:** Propuesto
+- **Estado:** Aceptado (2026-10-04)
 - **Fecha:** 2026-10-04
 - **Decisores:** equipo de Skynet
 - **Ámbito:** frontend web, APIs de lectura del control plane y modelo de interacción humana
-- **Hitos relacionados:** M3, M4, M5, W5 y W7 de [`../implementation-plan.md`](../implementation-plan.md)
+- **Hitos relacionados:** M2 (redacción), M3, M4, M5, M6, W1, W4, W5, W6, W7 y W8 de [`../implementation-plan.md`](../implementation-plan.md)
 - **Especificación relacionada:** [`../agentic-orchestration-system.md`](../agentic-orchestration-system.md), especialmente §§3–6 y §13
 
 ## 1. Contexto
