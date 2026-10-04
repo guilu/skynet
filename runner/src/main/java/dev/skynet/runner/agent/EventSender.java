@@ -8,6 +8,7 @@ import dev.skynet.runner.transport.ControlPlaneClient;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -72,12 +73,16 @@ public final class EventSender implements AutoCloseable {
         continue;
       }
       synchronized (signal) {
-        if (!pending && running) {
+        long deadline = System.nanoTime() + idle.toNanos();
+        long remaining = idle.toMillis();
+        while (!pending && running && remaining > 0) {
           try {
-            signal.wait(idle.toMillis());
+            signal.wait(remaining);
           } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return;
           }
+          remaining = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
         }
         pending = false;
       }
@@ -97,6 +102,7 @@ public final class EventSender implements AutoCloseable {
     try {
       Thread.sleep(duration);
     } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
       running = false;
     }
   }

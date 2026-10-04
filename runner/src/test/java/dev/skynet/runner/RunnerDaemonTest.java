@@ -26,6 +26,8 @@ import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -217,17 +219,19 @@ class RunnerDaemonTest {
     final List<JsonNode> heartbeats = new CopyOnWriteArrayList<>();
     private final Map<UUID, JsonNode> events = new ConcurrentHashMap<>();
     private final List<UUID> order = new CopyOnWriteArrayList<>();
+    private final ExecutorService handlers = Executors.newVirtualThreadPerTaskExecutor();
     private HttpServer server;
 
     void start() throws IOException {
       server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-      server.setExecutor(java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
+      server.setExecutor(handlers);
       server.createContext("/api/runner/", this::handle);
       server.start();
     }
 
     void stop() {
       server.stop(0);
+      handlers.close();
     }
 
     URI uri() {

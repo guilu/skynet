@@ -44,8 +44,13 @@ public final class Journal implements AutoCloseable {
 
   public static Journal open(Path file) throws IOException {
     Files.createDirectories(file.toAbsolutePath().getParent());
+    Connection db;
     try {
-      Connection db = DriverManager.getConnection("jdbc:sqlite:" + file.toAbsolutePath());
+      db = DriverManager.getConnection("jdbc:sqlite:" + file.toAbsolutePath());
+    } catch (SQLException e) {
+      throw new IOException("No se pudo abrir el journal " + file, e);
+    }
+    try {
       try (Statement st = db.createStatement()) {
         st.execute("PRAGMA journal_mode=WAL");
         st.execute(
@@ -68,6 +73,11 @@ public final class Journal implements AutoCloseable {
       }
       return new Journal(db);
     } catch (SQLException e) {
+      try {
+        db.close();
+      } catch (SQLException suppressed) {
+        e.addSuppressed(suppressed);
+      }
       throw new IOException("No se pudo abrir el journal " + file, e);
     }
   }

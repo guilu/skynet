@@ -3,7 +3,9 @@ package dev.skynet.runner.supervisor;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /** Proceso lanzado por {@link ProcessSupervisor}. */
 public final class SupervisedProcess {
@@ -71,8 +73,12 @@ public final class SupervisedProcess {
         if (remaining > 0) {
           handle.onExit().get(remaining, TimeUnit.NANOSECONDS);
         }
-      } catch (Exception e) {
+      } catch (TimeoutException | ExecutionException e) {
         // Sigue vivo: se mata abajo.
+      } catch (InterruptedException e) {
+        // Sin esperar más: se mata abajo lo que siga vivo.
+        Thread.currentThread().interrupt();
+        break;
       }
     }
     boolean forced = false;

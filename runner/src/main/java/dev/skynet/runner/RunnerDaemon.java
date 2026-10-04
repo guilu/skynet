@@ -137,12 +137,14 @@ public final class RunnerDaemon implements AutoCloseable {
           LOG.log(Level.SEVERE, "No se pudo registrar el runner", ex);
           backoff = sleep(backoff);
         } catch (InterruptedException ex) {
+          Thread.currentThread().interrupt();
           return;
         }
       } catch (IOException e) {
         LOG.log(Level.FINE, "Sin conexión con el control plane", e);
         backoff = sleep(backoff);
       } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
         return;
       }
     }
@@ -174,6 +176,7 @@ public final class RunnerDaemon implements AutoCloseable {
     try {
       Thread.sleep(backoff);
     } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
       running = false;
     }
     Duration next = backoff.multipliedBy(2);
