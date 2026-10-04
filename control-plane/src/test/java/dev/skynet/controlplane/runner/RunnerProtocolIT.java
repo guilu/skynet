@@ -230,6 +230,30 @@ class RunnerProtocolIT extends IntegrationTest {
   }
 
   @Test
+  void secretsAreRedactedBeforeTheyAreStored() {
+    String key = "sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789";
+    Runner runner = register("laptop", 1);
+    Launched run = launch("x");
+    poll(runner, 1);
+
+    Events events = new Events(run.agentId());
+    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", "s"));
+    events.add(
+        AgentEventType.TOOL_COMPLETED,
+        Map.of("toolUseId", "t1", "output", "ANTHROPIC_API_KEY=" + key + "\nok"));
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 1, "stderr", "auth " + key));
+    send(runner, events.batch());
+
+    String stored =
+        jdbc.sql("SELECT string_agg(payload::text, ' ') FROM event WHERE aggregate_id = ?")
+            .param(run.agentId())
+            .query(String.class)
+            .single();
+    assertThat(stored).doesNotContain(key).contains("[REDACTED]");
+    assertThat(get("/api/agent-runs/" + run.agentId()).toString()).doesNotContain(key);
+  }
+
+  @Test
   void longPollReturnsAsSoonAsARunIsLaunched() throws Exception {
     Runner runner = register("laptop", 1);
     CompletableFuture<List<JsonNode>> pending =
