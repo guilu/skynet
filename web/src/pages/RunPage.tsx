@@ -98,7 +98,7 @@ function AgentCard({ agent, runId }: { agent: AgentRun; runId: string }) {
           </>
         )}
       </dl>
-      {agent.error && <p className="error small">{agent.error}</p>}
+      {agent.error ? <p className="error small">{agent.error}</p> : null}
       {detail.data?.prompts.map((p) => (
         <details key={p.id}>
           <summary>

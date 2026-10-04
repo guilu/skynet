@@ -18,13 +18,14 @@ import java.util.concurrent.ConcurrentHashMap;
 final class TcpProxy implements AutoCloseable {
 
   private final int targetPort;
+  private final int port;
   private final Set<Socket> sockets = ConcurrentHashMap.newKeySet();
-  private volatile ServerSocket server;
-  private int port;
+  private ServerSocket server;
 
   TcpProxy(int targetPort) throws IOException {
     this.targetPort = targetPort;
-    listen(0);
+    this.server = listen(0);
+    this.port = server.getLocalPort();
   }
 
   int port() {
@@ -40,31 +41,44 @@ final class TcpProxy implements AutoCloseable {
   }
 
   synchronized void restore() throws IOException {
-    listen(port);
+    server = listen(port);
   }
 
-  private void listen(int requestedPort) throws IOException {
+  private ServerSocket listen(int requestedPort) throws IOException {
     ServerSocket socket = new ServerSocket();
-    socket.setReuseAddress(true);
-    socket.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), requestedPort));
-    server = socket;
-    port = socket.getLocalPort();
+    try {
+      socket.setReuseAddress(true);
+      socket.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), requestedPort));
+    } catch (IOException e) {
+      socket.close();
+      throw e;
+    }
     Thread.ofVirtual().start(() -> accept(socket));
+    return socket;
   }
 
   private void accept(ServerSocket listener) {
     while (!listener.isClosed()) {
       try {
-        Socket client = listener.accept();
-        Socket upstream = new Socket(InetAddress.getLoopbackAddress(), targetPort);
-        sockets.add(client);
-        sockets.add(upstream);
-        Thread.ofVirtual().start(() -> pump(client, upstream));
-        Thread.ofVirtual().start(() -> pump(upstream, client));
+        connect(listener.accept());
       } catch (IOException e) {
         // Cerrado por cut() o close().
       }
     }
+  }
+
+  private void connect(Socket client) throws IOException {
+    sockets.add(client);
+    Socket upstream;
+    try {
+      upstream = new Socket(InetAddress.getLoopbackAddress(), targetPort);
+    } catch (IOException e) {
+      closeQuietly(client);
+      throw e;
+    }
+    sockets.add(upstream);
+    Thread.ofVirtual().start(() -> pump(client, upstream));
+    Thread.ofVirtual().start(() -> pump(upstream, client));
   }
 
   private void pump(Socket from, Socket to) {
