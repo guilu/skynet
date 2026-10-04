@@ -40,7 +40,7 @@ Todos los flags previstos en el plan existen y funcionan: `--session-id`, `--res
 6. **Las denegaciones de permisos no hacen fallar la ejecución.** En `06` el resultado es `success` con `permission_denials: [2 elementos]`. Se ven como `system/permission_denied` y como `tool_result` con `is_error: true`. Hay que mostrarlas en la UI y en los criterios de salida.
 7. **Hay un evento `assistant` por bloque de contenido, no por mensaje.** Varios `assistant` comparten `message.id`. Para agrupar mensajes, el timeline debe usar `message.id`.
 8. **`tool_use_result` trae datos estructurados útiles.** `Edit` incluye `structuredPatch`, `filePath`, `originalFile`. `Bash` incluye `stdout`, `stderr`, `interrupted` y `gitOperation`. Con `Edit` podemos generar eventos de archivo modificado sin parsear texto.
-9. **`system/vcs_state_changed`** (`kind: "commit"`, `branch`) avisa de commits hechos por el agente. Sirve de señal, pero se verifica con git (§4.5).
+9. **`system/vcs_state_changed`** (`kind: "commit"`, `branch`) avisa de commits hechos por el agente. Sirve de señal, pero se verifica con git (§4.5) Llega **antes** del `tool_result` del `Bash` que hizo el commit.
 
 ## Tipos de evento observados
 
@@ -76,6 +76,8 @@ Todos los flags previstos en el plan existen y funcionan: `--session-id`, `--res
 | `result` | `agent.result` (subtype, terminal_reason, turnos, tokens, coste acumulado, structured_output, errors) | `COMPLETED` / `FAILED` |
 | fin de proceso | `agent.process.exited` (exit code, señal) | estado terminal; `CANCELLED` si lo cancelamos nosotros |
 | línea desconocida | `agent.raw` | — |
+
+El parser que implementa este mapeo es `runner/.../provider/claude/ClaudeStreamParser`, probado con todos los fixtures. Los bloques `thinking` no producen eventos y la salida de las herramientas se trunca a 16 KB (el NDJSON completo se guarda como artefacto).
 
 ## Implicaciones para M2
 
