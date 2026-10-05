@@ -94,14 +94,7 @@ public class RunService {
     return spawn(
         workItem,
         repository,
-        AgentRunKind.START,
-        null,
-        UUID.randomUUID(),
-        promptText,
-        withDefaults(limits),
-        null,
-        null,
-        null);
+        Invocation.fresh(AgentRunKind.START, null, promptText, withDefaults(limits)));
   }
 
   /**
@@ -145,14 +138,7 @@ public class RunService {
     return spawn(
         workItemOf(parent),
         projects.getRepository(parent.getRepositoryId()),
-        AgentRunKind.RETRY,
-        parent,
-        UUID.randomUUID(),
-        promptText,
-        withDefaults(parent.limits()),
-        null,
-        null,
-        null);
+        Invocation.fresh(AgentRunKind.RETRY, parent, promptText, withDefaults(parent.limits())));
   }
 
   private WorkflowRun continueSession(UUID agentRunId, String text, boolean fork) {
@@ -184,14 +170,16 @@ public class RunService {
     return spawn(
         workItemOf(parent),
         projects.getRepository(parent.getRepositoryId()),
-        fork ? AgentRunKind.FORK : AgentRunKind.RESUME,
-        parent,
-        sessionId,
-        text,
-        withDefaults(parent.limits()),
-        fork ? null : workspace.id(),
-        new ResumeFrom(parent.getProviderSessionId(), fork, workspace.path(), workspace.branch()),
-        parent.getRunnerId());
+        new Invocation(
+            fork ? AgentRunKind.FORK : AgentRunKind.RESUME,
+            parent,
+            sessionId,
+            text,
+            withDefaults(parent.limits()),
+            fork ? null : workspace.id(),
+            new ResumeFrom(
+                parent.getProviderSessionId(), fork, workspace.path(), workspace.branch()),
+            parent.getRunnerId()));
   }
 
   /**
@@ -232,21 +220,33 @@ public class RunService {
   }
 
   /**
-   * Crea la ejecución {@code adhoc} con su fase y su agente en cola, y publica la orden. Con {@code
-   * resume}, la orden va al runner del padre.
+   * Invocación por crear.
+   *
+   * @param parent invocación de la que parte, o {@code null} en un lanzamiento
+   * @param workspaceId worktree que reutiliza (solo al reanudar)
+   * @param resume sesión y worktree de partida (reanudar y bifurcar)
+   * @param runnerId runner que debe ejecutarla, o {@code null} si vale cualquiera
    */
-  private WorkflowRun spawn(
-      WorkItem workItem,
-      CodeRepository repository,
+  private record Invocation(
       AgentRunKind kind,
       AgentRun parent,
       UUID sessionId,
-      String promptText,
+      String prompt,
       AgentLimits limits,
       UUID workspaceId,
       ResumeFrom resume,
       UUID runnerId) {
+
+    /** Invocación con sesión y worktree nuevos, en cualquier runner. */
+    static Invocation fresh(AgentRunKind kind, AgentRun parent, String prompt, AgentLimits limits) {
+      return new Invocation(kind, parent, UUID.randomUUID(), prompt, limits, null, null, null);
+    }
+  }
+
+  /** Crea la ejecución {@code adhoc} con su fase y su agente en cola, y publica la orden. */
+  private WorkflowRun spawn(WorkItem workItem, CodeRepository repository, Invocation invocation) {
     Instant now = time.now();
+    AgentRun parent = invocation.parent();
 
     WorkflowRun run = WorkflowRun.create(workItem.getId(), adhocDefinitionId(), now);
     run.transitionTo(WorkflowRunStatus.RUNNING, now);
@@ -273,17 +273,24 @@ public class RunService {
 
     AgentRun agent =
         agentRuns.save(
-            AgentRun.queued(
-                stage.getId(),
-                parent == null ? null : parent.getId(),
-                repository.getId(),
-                kind,
-                AgentRun.PROVIDER_CLAUDE_CODE,
-                sessionId,
-                workspaceId,
-                limits,
-                now));
-    Prompt prompt = prompts.save(Prompt.of(agent.getId(), Prompt.ROLE_USER, promptText, now));
+            parent == null
+                ? AgentRun.queued(
+                    stage.getId(),
+                    repository.getId(),
+                    AgentRun.PROVIDER_CLAUDE_CODE,
+                    invocation.sessionId(),
+                    invocation.limits(),
+                    now)
+                : AgentRun.queued(
+                    stage.getId(),
+                    parent,
+                    invocation.kind(),
+                    invocation.sessionId(),
+                    invocation.workspaceId(),
+                    invocation.limits(),
+                    now));
+    Prompt prompt =
+        prompts.save(Prompt.of(agent.getId(), Prompt.ROLE_USER, invocation.prompt(), now));
     Map<String, Object> spawned = new LinkedHashMap<>();
     spawned.put("stageRunId", stage.getId());
     spawned.put("repositoryId", repository.getId());
@@ -304,14 +311,14 @@ public class RunService {
                 workItem.getKey(),
                 repository.getLocalPath(),
                 repository.getDefaultBranch(),
-                sessionId,
-                promptText,
+                invocation.sessionId(),
+                invocation.prompt(),
                 defaults.allowedTools(),
                 defaults.permissionMode(),
                 defaults.model(),
-                limits,
-                resume),
-            runnerId));
+                invocation.limits(),
+                invocation.resume()),
+            invocation.runnerId()));
     return run;
   }
 

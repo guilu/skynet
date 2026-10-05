@@ -136,20 +136,44 @@ public class AgentRun {
       UUID sessionId,
       AgentLimits limits,
       Instant now) {
-    return queued(
-        stageRunId, null, repositoryId, AgentRunKind.START, provider, sessionId, null, limits, now);
+    return create(
+        stageRunId,
+        new Origin(null, repositoryId, AgentRunKind.START, provider),
+        sessionId,
+        null,
+        limits,
+        now);
   }
 
   /**
-   * Invocación en cola que parte de otra: una reanudación (misma sesión y worktree), un fork
-   * (sesión nueva bifurcada) o un reintento (sesión y worktree nuevos).
+   * Invocación en cola que parte de {@code parent}, con su repositorio y su proveedor: una
+   * reanudación (misma sesión y worktree), un fork (sesión nueva bifurcada) o un reintento (sesión
+   * y worktree nuevos).
    */
   static AgentRun queued(
       UUID stageRunId,
-      UUID parentAgentRunId,
-      UUID repositoryId,
+      AgentRun parent,
       AgentRunKind kind,
-      String provider,
+      UUID sessionId,
+      UUID workspaceId,
+      AgentLimits limits,
+      Instant now) {
+    return create(
+        stageRunId,
+        new Origin(parent.getId(), parent.getRepositoryId(), kind, parent.getProvider()),
+        sessionId,
+        workspaceId,
+        limits,
+        now);
+  }
+
+  /** De dónde sale una invocación nueva. */
+  private record Origin(
+      UUID parentAgentRunId, UUID repositoryId, AgentRunKind kind, String provider) {}
+
+  private static AgentRun create(
+      UUID stageRunId,
+      Origin origin,
       UUID sessionId,
       UUID workspaceId,
       AgentLimits limits,
@@ -157,11 +181,11 @@ public class AgentRun {
     return new AgentRun(
         UUID.randomUUID(),
         stageRunId,
-        parentAgentRunId,
-        repositoryId,
-        kind,
+        origin.parentAgentRunId(),
+        origin.repositoryId(),
+        origin.kind(),
         AgentObservableStatus.QUEUED,
-        provider,
+        origin.provider(),
         sessionId.toString(),
         null,
         null,
