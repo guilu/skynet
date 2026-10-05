@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArraySet;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,11 +27,16 @@ class EventController {
 
   private final EventRepository events;
   private final EventDispatcher dispatcher;
+  private final int queueCapacity;
   private final Set<SseSubscription> subscriptions = new CopyOnWriteArraySet<>();
 
-  EventController(EventRepository events, EventDispatcher dispatcher) {
+  EventController(
+      EventRepository events,
+      EventDispatcher dispatcher,
+      @Value("${skynet.events.subscriber-queue:1000}") int queueCapacity) {
     this.events = events;
     this.dispatcher = dispatcher;
+    this.queueCapacity = queueCapacity;
   }
 
   /**
@@ -72,7 +78,8 @@ class EventController {
         new SseSubscription(
             emitter,
             new EventFilter(workflowRunId, aggregateId),
-            lastEventId != null ? lastEventId : after);
+            lastEventId != null ? lastEventId : after,
+            queueCapacity);
     Runnable cleanup =
         () -> {
           subscription.close();
@@ -85,7 +92,7 @@ class EventController {
 
     dispatcher.subscribe(subscription);
     subscriptions.add(subscription);
-    subscription.replay(events);
+    subscription.start(events::list);
     return emitter;
   }
 

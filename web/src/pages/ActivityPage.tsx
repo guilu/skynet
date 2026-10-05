@@ -1,22 +1,30 @@
 import { useNavigate } from 'react-router'
-import { EventTimeline } from '../components/EventTimeline'
+import { useMemo } from 'react'
 import { eventLink } from '../components/run/eventLink'
+import { Timeline } from '../components/timeline/Timeline'
+import { aggregateTimeline } from '../components/timeline/timeline'
 import { useEventStream } from '../useEventStream'
 
-/** Todos los eventos del sistema en tiempo real; los de una ejecución abren su inspector. */
+/**
+ * Todos los eventos del sistema en tiempo real, los últimos abajo; los de una ejecución abren su
+ * inspector.
+ */
 export function ActivityPage() {
   const navigate = useNavigate()
   const { events, state } = useEventStream({})
+  const entries = useMemo(() => aggregateTimeline(events), [events])
   return (
     <>
       <h1>
         Actividad <span className="muted small">({state === 'open' ? 'en vivo' : state})</span>
       </h1>
-      <EventTimeline
-        events={[...events].reverse()}
+      <Timeline
+        entries={entries}
         selected={null}
-        canSelect={(e) => eventLink(e) != null}
-        onSelect={(e) => void navigate(eventLink(e)!)}
+        onSelect={(e) => {
+          const link = eventLink(e)
+          if (link) void navigate(link)
+        }}
       />
     </>
   )
