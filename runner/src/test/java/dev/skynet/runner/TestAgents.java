@@ -46,7 +46,8 @@ public final class TestAgents {
             List.of("Read", "Edit"),
             "dontAsk",
             null,
-            new AgentLimits(null, null, timeout));
+            new AgentLimits(null, null, timeout),
+            null);
     return new RunnerCommand(
         UUID.randomUUID(), RunnerCommandType.START, agentRunId, Instant.now(), start);
   }

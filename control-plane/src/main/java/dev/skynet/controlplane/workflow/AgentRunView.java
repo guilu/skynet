@@ -11,6 +11,9 @@ import java.util.UUID;
  *
  * @param lastEventType tipo del último evento del agente (p. ej. {@code agent.tool.started})
  * @param currentTool herramienta en curso, o {@code null} si no hay ninguna
+ * @param workspace worktree de la invocación, cuando el runner lo ha preparado
+ * @param kind cómo se originó: lanzamiento, reanudación, reintento o fork de {@code
+ *     parentAgentRunId}
  */
 public record AgentRunView(
     UUID id,
@@ -39,9 +42,10 @@ public record AgentRunView(
     String resultSubtype,
     String error,
     String lastEventType,
-    String currentTool) {
+    String currentTool,
+    WorkspaceView workspace) {
 
-  static AgentRunView of(AgentRun a) {
+  static AgentRunView of(AgentRun a, WorkspaceView workspace) {
     return new AgentRunView(
         a.getId(),
         a.getStageRunId(),
@@ -69,6 +73,7 @@ public record AgentRunView(
         a.getResultSubtype(),
         a.getError(),
         a.getLastEventType(),
-        a.getCurrentTool());
+        a.getCurrentTool(),
+        workspace);
   }
 }

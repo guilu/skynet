@@ -9,6 +9,7 @@ import dev.skynet.controlplane.support.IntegrationTest;
 import dev.skynet.controlplane.workflow.AgentRunDetail;
 import dev.skynet.controlplane.workflow.AgentRunKind;
 import dev.skynet.controlplane.workflow.AgentRunView;
+import dev.skynet.controlplane.workflow.ConversationView;
 import dev.skynet.controlplane.workflow.PromptView;
 import dev.skynet.controlplane.workflow.RunPage;
 import dev.skynet.controlplane.workflow.RunTotals;
@@ -16,6 +17,7 @@ import dev.skynet.controlplane.workflow.RunView;
 import dev.skynet.controlplane.workflow.StageRunView;
 import dev.skynet.controlplane.workflow.UnresponsiveAgent;
 import dev.skynet.controlplane.workflow.WorkflowDefinitionView;
+import dev.skynet.controlplane.workflow.WorkspaceView;
 import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
@@ -60,7 +62,8 @@ class ContractIT extends IntegrationTest {
         Arguments.of("runners", List.of(Samples.onlineRunner(), Samples.staleRunner())),
         Arguments.of("dashboard-summary", Samples.dashboard()),
         Arguments.of("stored-event", Samples.toolStartedEvent()),
-        Arguments.of("workflow-definitions", List.of(Samples.adhocDefinition())));
+        Arguments.of("workflow-definitions", List.of(Samples.adhocDefinition())),
+        Arguments.of("conversation", Samples.conversation()));
   }
 
   @ParameterizedTest(name = "{0}")
@@ -92,6 +95,10 @@ class ContractIT extends IntegrationTest {
     static final UUID PROMPT = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a09");
     static final UUID EVENT = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0a");
     static final UUID ADHOC = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    static final UUID WORKSPACE = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0b");
+    static final UUID RESUMED_RUN = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0c");
+    static final UUID RESUMED_STAGE = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0d");
+    static final UUID RESUMED_AGENT = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0e");
     static final String SESSION = "e1e75e9c-2b3a-4287-ae55-186ae1babc98";
 
     static final Instant T0 = Instant.parse("2026-10-05T09:00:00Z");
@@ -128,7 +135,8 @@ class ContractIT extends IntegrationTest {
           "success",
           null,
           "agent.process.exited",
-          null);
+          null,
+          worktree());
     }
 
     static AgentRunView workingAgent() {
@@ -159,7 +167,69 @@ class ContractIT extends IntegrationTest {
           null,
           null,
           "agent.tool.started",
-          "Read");
+          "Read",
+          worktree());
+    }
+
+    static WorkspaceView worktree() {
+      return new WorkspaceView(
+          WORKSPACE,
+          RUNNER,
+          "/home/dev/.skynet/worktrees/" + RUN + "/" + AGENT,
+          "skynet/tkm-1/0b6a3c1e",
+          "9f2c1d07a4e3b1c5d6e7f8091a2b3c4d5e6f7a8b");
+    }
+
+    /** Reanudación de {@link #completedAgent()}: misma sesión y worktree, en otra ejecución. */
+    static AgentRunView resumedAgent() {
+      return new AgentRunView(
+          RESUMED_AGENT,
+          RESUMED_STAGE,
+          AGENT,
+          REPOSITORY,
+          AgentRunKind.RESUME,
+          AgentObservableStatus.COMPLETED,
+          "claude-code",
+          SESSION,
+          "claude-opus-5-5",
+          at(120),
+          at(121),
+          at(150),
+          at(151),
+          0,
+          2,
+          4L,
+          410L,
+          52_300L,
+          1_120L,
+          new BigDecimal("0.0241000000"),
+          new BigDecimal("0.0815210000"),
+          RUNNER,
+          null,
+          "success",
+          null,
+          "agent.process.exited",
+          null,
+          worktree());
+    }
+
+    static ConversationView conversation() {
+      return new ConversationView(
+          List.of(
+              new ConversationView.Turn(
+                  RUN,
+                  completedAgent(),
+                  "Implementa el importador de precios de modelos",
+                  List.of(
+                      new ConversationView.Message(
+                          1050, at(40), "He añadido `PricingImporter` y sus tests."))),
+              new ConversationView.Turn(
+                  RESUMED_RUN,
+                  resumedAgent(),
+                  "Añade también los precios de caché",
+                  List.of(
+                      new ConversationView.Message(
+                          1102, at(149), "Hecho: los precios de caché ya se importan.")))));
     }
 
     static RunView completedRun() {

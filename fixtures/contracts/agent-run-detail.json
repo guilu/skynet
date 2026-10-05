@@ -26,7 +26,14 @@
     "resultSubtype" : "success",
     "error" : null,
     "lastEventType" : "agent.process.exited",
-    "currentTool" : null
+    "currentTool" : null,
+    "workspace" : {
+      "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0b",
+      "runnerId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a07",
+      "path" : "/home/dev/.skynet/worktrees/0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04/0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a06",
+      "branch" : "skynet/tkm-1/0b6a3c1e",
+      "baseCommit" : "9f2c1d07a4e3b1c5d6e7f8091a2b3c4d5e6f7a8b"
+    }
   },
   "workflowRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04",
   "prompts" : [ {

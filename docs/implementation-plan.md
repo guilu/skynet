@@ -172,6 +172,15 @@ GET        /api/events?workflowRunId=&aggregateId=&after=&limit=
 GET        /api/events/stream?workflowRunId=&aggregateId=   # SSE; reanuda con Last-Event-ID
 ```
 
+Añadido en M4-A (cada acción crea una ejecución `adhoc` nueva enlazada al agente padre; la terminada no se modifica):
+
+```text
+POST       /api/agent-runs/{id}/messages     # {text}: reanuda la sesión (RESUME) en el mismo worktree y runner
+POST       /api/agent-runs/{id}/fork         # {text}: bifurca la sesión (--fork-session) en un worktree nuevo del mismo runner
+POST       /api/agent-runs/{id}/retry        # mismo prompt y límites, sesión y worktree nuevos, cualquier runner
+GET        /api/agent-runs/{id}/conversation # invocaciones encadenadas de la sesión con sus prompts y mensajes
+```
+
 Los errores siguen RFC 9457 (`ProblemDetail`): 400 validación, 404 inexistente, 409 transición no permitida, clave duplicada o conflicto de versión.
 
 ---

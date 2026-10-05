@@ -27,7 +27,8 @@ class ClaudeCodeProviderTest {
             List.of("Read", "Edit"),
             "dontAsk",
             null,
-            new AgentLimits(5, new BigDecimal("2.00"), Duration.ofMinutes(30)));
+            new AgentLimits(5, new BigDecimal("2.00"), Duration.ofMinutes(30)),
+            null);
 
     assertThat(new ClaudeCodeProvider("claude", List.of()).command(start))
         .containsExactly(

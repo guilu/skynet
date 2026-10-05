@@ -33,8 +33,30 @@ class RunnerMessagesJsonTest {
             List.of("Read", "Edit"),
             "dontAsk",
             null,
-            new AgentLimits(10, new BigDecimal("0.50"), Duration.ofMinutes(30)));
+            new AgentLimits(10, new BigDecimal("0.50"), Duration.ofMinutes(30)),
+            null);
     RunnerCommand command = RunnerCommand.start(UUID.randomUUID(), UUID.randomUUID(), NOW, start);
+
+    assertThat(roundTrip(command, RunnerCommand.class)).isEqualTo(command);
+  }
+
+  @Test
+  void resumeCommandRoundTrip() {
+    StartAgent start =
+        new StartAgent(
+            UUID.randomUUID(),
+            "TKM-1",
+            "/home/dev/demo",
+            "main",
+            UUID.randomUUID(),
+            "Ahora añade un test",
+            List.of("Read"),
+            "dontAsk",
+            null,
+            AgentLimits.none(),
+            new ResumeFrom(
+                UUID.randomUUID().toString(), true, "/w/run/agent", "skynet/tkm-1/abcd1234"));
+    RunnerCommand command = RunnerCommand.resume(UUID.randomUUID(), UUID.randomUUID(), NOW, start);
 
     assertThat(roundTrip(command, RunnerCommand.class)).isEqualTo(command);
   }
@@ -52,6 +74,28 @@ class RunnerMessagesJsonTest {
             () ->
                 new RunnerCommand(
                     UUID.randomUUID(), RunnerCommandType.START, UUID.randomUUID(), NOW, null))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void resumePayloadOnlyInResumeCommands() {
+    StartAgent plain =
+        new StartAgent(
+            UUID.randomUUID(),
+            null,
+            "/r",
+            null,
+            UUID.randomUUID(),
+            "p",
+            null,
+            null,
+            null,
+            null,
+            null);
+    assertThatThrownBy(
+            () ->
+                new RunnerCommand(
+                    UUID.randomUUID(), RunnerCommandType.RESUME, UUID.randomUUID(), NOW, plain))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

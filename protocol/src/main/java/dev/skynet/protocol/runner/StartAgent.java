@@ -5,17 +5,20 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Datos de una orden {@link RunnerCommandType#START}.
+ * Datos de una invocación del agente: una orden {@link RunnerCommandType#START} o, con {@code
+ * resume}, una {@link RunnerCommandType#RESUME}.
  *
  * @param workflowRunId ejecución a la que pertenece el agente; forma parte de la ruta del worktree
  * @param workItemKey clave del trabajo (p. ej. {@code TKM-1}); forma parte del nombre de la rama
  * @param repositoryPath ruta del repositorio en la máquina del runner
  * @param baseBranch rama de partida del worktree
- * @param sessionId id de sesión que el runner fija con {@code --session-id}
+ * @param sessionId id de sesión que el runner fija con {@code --session-id}; al reanudar sin
+ *     bifurcar es la sesión que se reanuda
  * @param prompt prompt efectivo
  * @param allowedTools herramientas permitidas; el resto se deniega
  * @param permissionMode modo de permisos del proveedor (p. ej. {@code dontAsk})
  * @param model modelo, o {@code null} para el predeterminado del proveedor
+ * @param resume sesión y worktree de partida; solo en {@link RunnerCommandType#RESUME}
  */
 public record StartAgent(
     UUID workflowRunId,
@@ -27,7 +30,8 @@ public record StartAgent(
     List<String> allowedTools,
     String permissionMode,
     String model,
-    AgentLimits limits) {
+    AgentLimits limits,
+    ResumeFrom resume) {
 
   public StartAgent {
     Objects.requireNonNull(workflowRunId, "workflowRunId");
