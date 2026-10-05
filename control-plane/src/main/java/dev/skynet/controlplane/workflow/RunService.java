@@ -100,6 +100,7 @@ public class RunService {
         promptText,
         withDefaults(limits),
         null,
+        null,
         null);
   }
 
@@ -150,6 +151,7 @@ public class RunService {
         promptText,
         withDefaults(parent.limits()),
         null,
+        null,
         null);
   }
 
@@ -188,7 +190,8 @@ public class RunService {
         text,
         withDefaults(parent.limits()),
         fork ? null : workspace.id(),
-        new ResumeFrom(parent.getProviderSessionId(), fork, workspace.path(), workspace.branch()));
+        new ResumeFrom(parent.getProviderSessionId(), fork, workspace.path(), workspace.branch()),
+        parent.getRunnerId());
   }
 
   /**
@@ -241,7 +244,8 @@ public class RunService {
       String promptText,
       AgentLimits limits,
       UUID workspaceId,
-      ResumeFrom resume) {
+      ResumeFrom resume,
+      UUID runnerId) {
     Instant now = time.now();
 
     WorkflowRun run = WorkflowRun.create(workItem.getId(), adhocDefinitionId(), now);
@@ -307,7 +311,7 @@ public class RunService {
                 defaults.model(),
                 limits,
                 resume),
-            resume == null ? null : parent.getRunnerId()));
+            runnerId));
     return run;
   }
 
