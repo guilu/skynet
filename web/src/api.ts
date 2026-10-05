@@ -204,6 +204,15 @@ export interface StoredEvent {
   recordedAt: string
 }
 
+/** Lanzamiento de un agente; los límites que falten usan los valores por defecto del servidor. */
+export interface LaunchRequest {
+  repositoryId: string
+  prompt: string
+  maxTurns?: number
+  maxBudgetUsd?: number
+  timeoutMinutes?: number
+}
+
 export class ApiError extends Error {
   readonly status: number
 
@@ -260,7 +269,7 @@ export const api = {
     if (query.size !== undefined) params.set('size', String(query.size))
     return request<RunPage>('GET', `/api/workflow-runs?${params}`)
   },
-  launchRun: (workItemId: string, body: { repositoryId: string; prompt: string }) =>
+  launchRun: (workItemId: string, body: LaunchRequest) =>
     request<Run>('POST', `/api/work-items/${workItemId}/runs`, body),
   agent: (id: string) => request<AgentRunDetail>('GET', `/api/agent-runs/${id}`),
   cancelAgent: (id: string) => request<AgentRunDetail>('POST', `/api/agent-runs/${id}/cancel`),

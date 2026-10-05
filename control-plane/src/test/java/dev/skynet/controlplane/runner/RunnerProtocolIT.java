@@ -256,6 +256,26 @@ class RunnerProtocolIT extends IntegrationTest {
   }
 
   @Test
+  void limitsChosenAtLaunchReachTheRunnerAndTheRestUseTheDefaults() {
+    Runner runner = register("laptop", 2);
+    launch("con límites", Map.of("maxTurns", 7, "maxBudgetUsd", new BigDecimal("0.5")));
+    launch("sin límites", Map.of("timeoutMinutes", 5));
+
+    List<JsonNode> commands = poll(runner, 1);
+    assertThat(commands).hasSize(2);
+    JsonNode custom = commands.get(0).path("start").path("limits");
+    assertThat(custom.path("maxTurns").asInt()).isEqualTo(7);
+    assertThat(custom.path("maxBudgetUsd").decimalValue()).isEqualByComparingTo("0.5");
+    assertThat(custom.path("timeout").asString()).isEqualTo("PT30M");
+    JsonNode defaults = commands.get(1).path("start").path("limits");
+    assertThat(defaults.path("maxBudgetUsd").decimalValue()).isEqualByComparingTo("2.00");
+    assertThat(defaults.path("timeout").asString()).isEqualTo("PT5M");
+
+    assertStatus(HttpStatus.BAD_REQUEST, () -> launch("mal", Map.of("maxTurns", 0)));
+    assertStatus(HttpStatus.BAD_REQUEST, () -> launch("mal", Map.of("maxBudgetUsd", -1)));
+  }
+
+  @Test
   void longPollReturnsAsSoonAsARunIsLaunched() throws Exception {
     Runner runner = register("laptop", 1);
     CompletableFuture<List<JsonNode>> pending =
@@ -415,6 +435,10 @@ class RunnerProtocolIT extends IntegrationTest {
   private int launches;
 
   private Launched launch(String prompt) {
+    return launch(prompt, Map.of());
+  }
+
+  private Launched launch(String prompt, Map<String, ?> limits) {
     if (launches++ == 0) {
       String projectId =
           post("/api/projects", Map.of("key", "RUN", "name", "Runs")).path("id").asString();
@@ -429,10 +453,7 @@ class RunnerProtocolIT extends IntegrationTest {
               .path("id")
               .asString();
     }
-    JsonNode run =
-        post(
-            "/api/work-items/" + workItemId + "/runs",
-            Map.of("repositoryId", repositoryId, "prompt", prompt));
+    JsonNode run = post("/api/work-items/" + workItemId + "/runs", body(prompt, limits));
     return new Launched(
         UUID.fromString(run.path("id").asString()),
         UUID.fromString(run.path("stages").get(0).path("agents").get(0).path("id").asString()));
@@ -440,6 +461,13 @@ class RunnerProtocolIT extends IntegrationTest {
 
   private String repositoryId;
   private String workItemId;
+
+  private Map<String, Object> body(String prompt, Map<String, ?> limits) {
+    Map<String, Object> body = new LinkedHashMap<>(limits);
+    body.put("repositoryId", repositoryId);
+    body.put("prompt", prompt);
+    return body;
+  }
 
   private Runner register(String name, int capacity) {
     JsonNode registered =

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeEvent, statusTone } from './format'
+import { describeEvent, formatDuration, statusTone } from './format'
 
 describe('describeEvent', () => {
   it('resume los cambios de estado', () => {
@@ -32,5 +32,14 @@ describe('statusTone', () => {
     expect(statusTone('THINKING')).toBe('active')
     expect(statusTone('UNRESPONSIVE')).toBe('warn')
     expect(statusTone('QUEUED')).toBe('neutral')
+  })
+})
+
+describe('formatDuration', () => {
+  it('escala de segundos a horas', () => {
+    expect(formatDuration(null)).toBe('—')
+    expect(formatDuration(45_000)).toBe('45 s')
+    expect(formatDuration(185_000)).toBe('3 min 05 s')
+    expect(formatDuration(3_720_000)).toBe('1 h 02 min')
   })
 })

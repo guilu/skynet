@@ -1,10 +1,16 @@
 package dev.skynet.controlplane.workflow;
 
 import dev.skynet.protocol.WorkflowRunStatus;
+import dev.skynet.protocol.runner.AgentLimits;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -28,13 +34,32 @@ class RunController {
     this.service = service;
   }
 
-  record LaunchRun(@NotNull UUID repositoryId, @NotBlank @Size(max = 100_000) String prompt) {}
+  /**
+   * Lanzamiento de un agente. Los límites son opcionales: sin ellos se aplican los de {@code
+   * skynet.agent}.
+   */
+  record LaunchRun(
+      @NotNull UUID repositoryId,
+      @NotBlank @Size(max = 100_000) String prompt,
+      @Positive @Max(1_000) Integer maxTurns,
+      @Positive @DecimalMax("1000") BigDecimal maxBudgetUsd,
+      @Positive @Max(24 * 60) Integer timeoutMinutes) {
+
+    AgentLimits limits() {
+      return new AgentLimits(
+          maxTurns,
+          maxBudgetUsd,
+          timeoutMinutes == null ? null : Duration.ofMinutes(timeoutMinutes));
+    }
+  }
 
   @PostMapping("/api/work-items/{workItemId}/runs")
   @ResponseStatus(HttpStatus.CREATED)
   RunView launch(@PathVariable UUID workItemId, @Valid @RequestBody LaunchRun request) {
     return service.run(
-        service.launch(workItemId, request.repositoryId(), request.prompt()).getId());
+        service
+            .launch(workItemId, request.repositoryId(), request.prompt(), request.limits())
+            .getId());
   }
 
   @GetMapping("/api/work-items/{workItemId}/runs")
