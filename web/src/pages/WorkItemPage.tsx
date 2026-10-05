@@ -93,7 +93,8 @@ export function WorkItemPage() {
             Lanzar
           </button>
           <p className="muted">
-            En esta versión el agente queda en cola: el runner que lo ejecuta llega en M2.
+            El agente queda en cola hasta que un runner conectado lo recoge (ver README, «Runner
+            local»).
           </p>
           <ErrorMessage error={launch.error} />
         </form>

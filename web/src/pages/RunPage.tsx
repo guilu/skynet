@@ -4,7 +4,7 @@ import { api, type AgentRun } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { EventTimeline } from '../components/EventTimeline'
 import { StatusBadge } from '../components/StatusBadge'
-import { formatDateTime } from '../format'
+import { formatCost, formatDateTime, formatNumber } from '../format'
 import { useEventStream } from '../useEventStream'
 
 export function RunPage() {
@@ -78,6 +78,27 @@ function AgentCard({ agent, runId }: { agent: AgentRun; runId: string }) {
           {agent.kind} · creado {formatDateTime(agent.createdAt)}
         </span>
       </p>
+      <dl className="agent-facts small">
+        <dt>Modelo</dt>
+        <dd>{agent.model ?? '—'}</dd>
+        <dt>Última actividad</dt>
+        <dd>{formatDateTime(agent.lastActivityAt)}</dd>
+        <dt>Turnos</dt>
+        <dd>{formatNumber(agent.numTurns)}</dd>
+        <dt>Tokens</dt>
+        <dd>
+          {formatNumber(agent.inputTokens)} entrada · {formatNumber(agent.outputTokens)} salida
+        </dd>
+        <dt>Coste</dt>
+        <dd>{formatCost(agent.costUsd)}</dd>
+        {agent.exitCode != null && (
+          <>
+            <dt>Código de salida</dt>
+            <dd>{agent.exitCode}</dd>
+          </>
+        )}
+      </dl>
+      {agent.error ? <p className="error small">{agent.error}</p> : null}
       {detail.data?.prompts.map((p) => (
         <details key={p.id}>
           <summary>

@@ -2,6 +2,7 @@ package dev.skynet.controlplane.workflow;
 
 import dev.skynet.controlplane.event.EventDraft;
 import dev.skynet.controlplane.event.EventStore;
+import dev.skynet.controlplane.shared.PayloadRedactor;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.NormalizedEvent;
@@ -39,6 +40,7 @@ public class AgentEventIngestion {
   private final WorkflowRunRepository workflowRuns;
   private final RunTransitions transitions;
   private final EventStore events;
+  private final PayloadRedactor redactor;
   private final TimeSource time;
 
   AgentEventIngestion(
@@ -47,12 +49,14 @@ public class AgentEventIngestion {
       WorkflowRunRepository workflowRuns,
       RunTransitions transitions,
       EventStore events,
+      PayloadRedactor redactor,
       TimeSource time) {
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
     this.workflowRuns = workflowRuns;
     this.transitions = transitions;
     this.events = events;
+    this.redactor = redactor;
     this.time = time;
   }
 
@@ -66,7 +70,9 @@ public class AgentEventIngestion {
       return Outcome.NOT_ASSIGNED_TO_RUNNER;
     }
     StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
-    Map<String, Object> payload = new LinkedHashMap<>(event.payload());
+    // Los secretos se ocultan antes de guardar nada: ni el event store ni agent_run los ven.
+    Map<String, Object> redacted = redactor.redact(event.payload());
+    Map<String, Object> payload = new LinkedHashMap<>(redacted);
     payload.put("runnerSeq", event.seq());
     boolean isNew =
         events
@@ -84,15 +90,14 @@ public class AgentEventIngestion {
       return Outcome.DUPLICATE;
     }
     if (!agent.getStatus().isTerminal()) {
-      apply(agent, stage, event);
+      apply(agent, stage, event, redacted);
     }
     return Outcome.ACCEPTED;
   }
 
-  private void apply(AgentRun agent, StageRun stage, NormalizedEvent event) {
+  private void apply(AgentRun agent, StageRun stage, NormalizedEvent event, Map<String, Object> p) {
     Instant now = time.now();
     UUID runId = stage.getWorkflowRunId();
-    Map<String, Object> p = event.payload();
     agent.touch(event.occurredAt());
     switch (event.type()) {
       case SESSION_STARTED -> {

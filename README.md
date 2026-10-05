@@ -73,14 +73,14 @@ docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
 
 Credenciales de la base de datos: `SKYNET_DB_USER` / `SKYNET_DB_PASSWORD` (por defecto `skynet`/`skynet`). Para que un runner pueda registrarse, define `SKYNET_RUNNER_REGISTRATION_TOKEN` con un secreto compartido; sin él, el registro de runners está desactivado. Para parar: `docker compose -f deploy/docker-compose.yml --profile app down` (añade `-v` para borrar los datos). El runner no va en contenedor: se ejecuta en el host porque necesita `claude` y los repositorios.
 
-### Probar la aplicación (estado actual: M1)
+### Probar la aplicación (estado actual: M2)
 
 Con la aplicación levantada, abre la web y:
 
 1. **Proyectos** → crea un proyecto (p. ej. clave `TKM`).
 2. En el proyecto, **registra un repositorio** (ruta absoluta en la máquina del runner) y **crea un trabajo** (`TKM-1`).
-3. En el trabajo, **lanza un agente** con un prompt. Se crea la ejecución con su fase y el agente queda **en cola**: si hay un runner conectado (ver abajo), lo recoge, crea un worktree y ejecuta Claude Code en él. La web muestra los eventos en el timeline; la vista rica del agente llega en M3.
-4. En la ejecución verás el **timeline en vivo** (SSE). Pulsa **Cancelar** y observa las transiciones del agente, la fase y la ejecución.
+3. En el trabajo, **lanza un agente** con un prompt. Se crea la ejecución con su fase y el agente queda **en cola** hasta que un runner conectado (ver abajo) lo recoge, crea un worktree y ejecuta Claude Code en él. La tarjeta del agente muestra modelo, turnos, tokens, coste y el error si falla; la vista rica del agente llega en M3.
+4. En la ejecución verás el **timeline en vivo** (SSE): sesión, herramientas, ficheros modificados, resultado y fin del proceso. Pulsa **Cancelar** para matar el agente y todos sus procesos. Los secretos reconocibles (claves de API, tokens, contraseñas) se guardan como `[REDACTED]`.
 5. **Actividad** muestra todos los eventos del sistema en tiempo real. Si recargas o se corta la conexión, el stream continúa desde el último evento recibido.
 
 ### Runner local

@@ -269,3 +269,18 @@ button:disabled {
     display: none;
   }
 }
+
+.agent-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.15rem 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.agent-facts dt {
+  color: var(--muted);
+}
+
+.agent-facts dd {
+  margin: 0;
+}

@@ -136,6 +136,12 @@ Las órdenes se generan desde una tabla `runner_command` (con `FOR UPDATE SKIP L
 - `agent/AgentExecutor`: cada `START` termina con exactamente un `agent.process.exited`, también si falla el worktree, si se cancela antes de arrancar, si se agota `limits.timeout` o si el runner se para o se reinicia.
 - Pendiente: presupuesto propio en el runner (hace falta la tabla de precios; de momento solo `--max-budget-usd`, que no es estricto), tabla `workspace` en el control plane (el evento ya se guarda) y grupos de procesos con `setsid`.
 
+**Implementado (M2, paso 5):**
+
+- `shared/PayloadRedactor`: la ingestión de `POST /api/runner/events` oculta los secretos (`[REDACTED]`) antes de `EventStore.append` y antes de actualizar `agent_run`. Detecta los valores de las variables de entorno del control plane listadas en `skynet.redaction.secret-env` (`SKYNET_REDACTION_SECRET_ENV`; por defecto `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `SKYNET_RUNNER_REGISTRATION_TOKEN`, `SKYNET_DB_PASSWORD`, `GITHUB_TOKEN`, `GH_TOKEN`), formatos de clave conocidos (Anthropic/OpenAI, GitHub, AWS, Slack, Google, JWT, PEM), cabeceras `Authorization`, credenciales en URLs, asignaciones `*_TOKEN=…`/`password: …` y claves del payload con nombre de secreto. Es una red de seguridad: un secreto sin formato reconocible que no esté en el entorno del control plane no se detecta. El prompt que escribe el usuario no se redacta (el agente lo necesita tal cual) y el NDJSON bruto que guarda el runner en disco tampoco (pasará por el redactor cuando se suba como artefacto en M5).
+- `RunnerEndToEndIT`: control plane real, runner real en el mismo proceso y fake-claude. Lanzar desde la API deja la secuencia completa en BD (con `runnerSeq` consecutivo) y por SSE hasta `SUCCEEDED`; un corte de red a mitad (proxy TCP) no pierde ni duplica eventos; cancelar desde la API deja `CANCELLED` y ningún proceso del árbol vivo.
+- Web: la tarjeta del agente muestra modelo, última actividad, turnos, tokens, coste, código de salida y error, y el timeline resume los eventos `agent.*`.
+
 ### 4.4. API para la web (Fase 1)
 
 ```text

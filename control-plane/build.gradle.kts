@@ -27,3 +27,18 @@ dependencies {
 tasks.bootJar {
     archiveFileName = "control-plane.jar"
 }
+
+// Las pruebas de extremo a extremo arrancan un runner real en el mismo proceso, con fake-claude
+// como agente.
+dependencies {
+    testImplementation(project(":runner"))
+}
+
+val fakeClaude = project(":tools:fake-claude")
+tasks.test {
+    dependsOn(fakeClaude.tasks.named("installDist"))
+    systemProperty(
+        "skynet.fakeClaude",
+        fakeClaude.layout.buildDirectory.file("install/fake-claude/bin/fake-claude").get().asFile.path,
+    )
+}

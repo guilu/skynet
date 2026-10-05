@@ -9,7 +9,19 @@ describe('describeEvent', () => {
   })
 
   it('usa el tipo para eventos desconocidos', () => {
-    expect(describeEvent('agent.tool.started', {})).toBe('agent.tool.started')
+    expect(describeEvent('agent.raw', {})).toBe('agent.raw')
+  })
+
+  it('resume los eventos del agente', () => {
+    expect(
+      describeEvent('agent.tool.started', { name: 'Bash', input: { command: 'pytest -q' } }),
+    ).toBe('Herramienta Bash: pytest -q')
+    expect(describeEvent('agent.process.exited', { exitCode: 143, signal: 'SIGTERM' })).toBe(
+      'Proceso terminado (código 143, SIGTERM)',
+    )
+    expect(describeEvent('agent.process.exited', { error: 'Se agotó el tiempo máximo' })).toBe(
+      'Proceso terminado: Se agotó el tiempo máximo',
+    )
   })
 })
 
