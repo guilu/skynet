@@ -132,16 +132,16 @@ function single(event: StoredEvent, ctx: TimelineContext): TimelineEntry {
     severity: severityOf(event),
     origin: originOf(event),
     agentId,
-    stageId:
-      event.aggregateType === 'stage_run'
-        ? event.aggregateId
-        : agentId
-          ? (ctx.stageOfAgent?.(agentId) ?? null)
-          : null,
+    stageId: stageOf(event, agentId, ctx),
     title: describeEvent(event.type, event.payload),
     events: [event],
     children: [],
   }
+}
+
+function stageOf(event: StoredEvent, agentId: string | null, ctx: TimelineContext): string | null {
+  if (event.aggregateType === 'stage_run') return event.aggregateId
+  return agentId ? (ctx.stageOfAgent?.(agentId) ?? null) : null
 }
 
 function toolTitle(entry: TimelineEntry): string {

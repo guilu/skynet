@@ -37,11 +37,9 @@ export function applyEvent(run: Run, event: StoredEvent): { run: Run; refetch: R
   const found = run.stages.some((s) => s.agents.some((a) => a.id === event.aggregateId))
   if (!found) return { run, refetch: 'now' }
 
-  let refetch: Refetch = FINISHING.includes(event.type)
-    ? 'now'
-    : WITH_USAGE.includes(event.type) && p.usage != null
-      ? 'soon'
-      : 'none'
+  let refetch: Refetch = 'none'
+  if (FINISHING.includes(event.type)) refetch = 'now'
+  else if (WITH_USAGE.includes(event.type) && p.usage != null) refetch = 'soon'
   const patch = (agent: AgentRun): AgentRun => {
     if (event.type === 'agent.status.changed') {
       const status = p.status as AgentRun['status']

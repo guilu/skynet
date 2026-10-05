@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -74,7 +75,7 @@ class SseSubscriptionTest {
     subscription.onEvent(event(3));
 
     emitter.awaitSent(3);
-    Thread.sleep(100);
+    assertThat(emitter.sentMoreWithin(Duration.ofMillis(200))).isFalse();
     assertThat(emitter.sent).hasSize(3);
   }
 
@@ -95,6 +96,7 @@ class SseSubscriptionTest {
   private static final class RecordingEmitter extends SseEmitter {
     final List<Set<DataWithMediaType>> sent = new CopyOnWriteArrayList<>();
     final CountDownLatch sendStarted = new CountDownLatch(1);
+    private final Semaphore sends = new Semaphore(0);
     private final CountDownLatch release;
     volatile boolean completed;
 
@@ -114,6 +116,7 @@ class SseSubscriptionTest {
         }
       }
       sent.add(builder.build());
+      sends.release();
     }
 
     @Override
@@ -125,12 +128,13 @@ class SseSubscriptionTest {
       assertThat(sendStarted.await(5, TimeUnit.SECONDS)).isTrue();
     }
 
+    /** Espera a que se hayan enviado {@code count} eventos más desde la última espera. */
     void awaitSent(int count) throws InterruptedException {
-      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-      while (sent.size() < count && System.nanoTime() < deadline) {
-        Thread.sleep(10);
-      }
-      assertThat(sent).hasSizeGreaterThanOrEqualTo(count);
+      assertThat(sends.tryAcquire(count, 5, TimeUnit.SECONDS)).isTrue();
+    }
+
+    boolean sentMoreWithin(Duration wait) throws InterruptedException {
+      return sends.tryAcquire(wait.toMillis(), TimeUnit.MILLISECONDS);
     }
   }
 }
