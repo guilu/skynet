@@ -42,12 +42,39 @@ export interface WorkItem {
   createdAt: string
 }
 
+export type AgentStatus =
+  | 'QUEUED'
+  | 'STARTING'
+  | 'THINKING'
+  | 'EXECUTING'
+  | 'WAITING_FOR_INPUT'
+  | 'WAITING_FOR_APPROVAL'
+  | 'UNRESPONSIVE'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED'
+
+export type StageStatus =
+  | 'PENDING'
+  | 'READY'
+  | 'STARTING'
+  | 'RUNNING'
+  | 'WAITING_FOR_INPUT'
+  | 'WAITING_FOR_APPROVAL'
+  | 'SUCCEEDED'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'SKIPPED'
+
+export type RunStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
+
 export interface AgentRun {
   id: string
   stageRunId: string
+  parentAgentRunId: string | null
   repositoryId: string
   kind: 'START' | 'RESUME' | 'RETRY' | 'FORK'
-  status: string
+  status: AgentStatus
   provider: string
   providerSessionId: string | null
   model: string | null
@@ -59,28 +86,96 @@ export interface AgentRun {
   numTurns: number | null
   inputTokens: number | null
   outputTokens: number | null
+  cacheReadTokens: number | null
+  cacheCreationTokens: number | null
   costUsd: number | null
+  costUsdCumulative: number | null
+  runnerId: string | null
+  cancelRequestedAt: string | null
+  resultSubtype: string | null
   error: string | null
+  /** Tipo del último evento del agente, p. ej. `agent.tool.started`. */
+  lastEventType: string | null
+  /** Herramienta en curso, o null si no hay ninguna. */
+  currentTool: string | null
 }
 
 export interface StageRun {
   id: string
   stageKey: string
-  status: string
+  status: StageStatus
   attempt: number
   startedAt: string | null
   finishedAt: string | null
   agents: AgentRun[]
 }
 
+export interface RunTotals {
+  inputTokens: number | null
+  outputTokens: number | null
+  cacheReadTokens: number | null
+  cacheCreationTokens: number | null
+  costUsd: number | null
+}
+
 export interface Run {
   id: string
   workItemId: string
-  status: string
+  workItemKey: string | null
+  workItemTitle: string | null
+  projectId: string | null
+  status: RunStatus
   createdAt: string
   startedAt: string | null
   finishedAt: string | null
+  /** Fase y agente que aún no han terminado; null cuando todo ha terminado. */
+  currentStageRunId: string | null
+  currentAgentRunId: string | null
+  totals: RunTotals
   stages: StageRun[]
+}
+
+export interface RunPage {
+  items: Run[]
+  page: number
+  size: number
+  total: number
+}
+
+export interface Runner {
+  id: string
+  name: string
+  capacity: number
+  activeAgents: number
+  runnerVersion: string | null
+  providerVersion: string | null
+  registeredAt: string
+  lastHeartbeatAt: string | null
+  status: 'ONLINE' | 'STALE'
+}
+
+export interface UnresponsiveAgent {
+  agentRunId: string
+  workflowRunId: string
+  workItemKey: string | null
+  lastActivityAt: string | null
+}
+
+export interface DashboardSummary {
+  activeRuns: Run[]
+  activeRunsTotal: number
+  recentFailures: Run[]
+  unresponsiveAgents: UnresponsiveAgent[]
+  staleRunners: Runner[]
+  generatedAt: string
+}
+
+export interface WorkflowDefinition {
+  id: string
+  key: string
+  version: number
+  sourceYaml: string
+  createdAt: string
 }
 
 export interface Prompt {
@@ -157,8 +252,26 @@ export const api = {
   ) => request<WorkItem>('POST', `/api/projects/${projectId}/work-items`, body),
   runs: (workItemId: string) => request<Run[]>('GET', `/api/work-items/${workItemId}/runs`),
   run: (id: string) => request<Run>('GET', `/api/workflow-runs/${id}`),
+  listRuns: (query: { status?: RunStatus[]; projectId?: string; page?: number; size?: number }) => {
+    const params = new URLSearchParams()
+    query.status?.forEach((s) => params.append('status', s))
+    if (query.projectId) params.set('projectId', query.projectId)
+    if (query.page !== undefined) params.set('page', String(query.page))
+    if (query.size !== undefined) params.set('size', String(query.size))
+    return request<RunPage>('GET', `/api/workflow-runs?${params}`)
+  },
   launchRun: (workItemId: string, body: { repositoryId: string; prompt: string }) =>
     request<Run>('POST', `/api/work-items/${workItemId}/runs`, body),
   agent: (id: string) => request<AgentRunDetail>('GET', `/api/agent-runs/${id}`),
   cancelAgent: (id: string) => request<AgentRunDetail>('POST', `/api/agent-runs/${id}/cancel`),
+  runners: () => request<Runner[]>('GET', '/api/runners'),
+  dashboard: () => request<DashboardSummary>('GET', '/api/dashboard'),
+  workflowDefinitions: () => request<WorkflowDefinition[]>('GET', '/api/workflow-definitions'),
+  event: (sequence: number) => request<StoredEvent>('GET', `/api/events/${sequence}`),
+  eventsBefore: (query: { workflowRunId?: string; before: number; limit?: number }) => {
+    const params = new URLSearchParams({ before: String(query.before) })
+    if (query.workflowRunId) params.set('workflowRunId', query.workflowRunId)
+    if (query.limit !== undefined) params.set('limit', String(query.limit))
+    return request<StoredEvent[]>('GET', `/api/events?${params}`)
+  },
 }

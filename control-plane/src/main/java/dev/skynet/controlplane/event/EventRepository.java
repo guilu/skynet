@@ -2,6 +2,8 @@ package dev.skynet.controlplane.event;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,6 +41,34 @@ class EventRepository {
         .param("limit", limit)
         .query(this::map)
         .list();
+  }
+
+  /** Los {@code limit} eventos inmediatamente anteriores a {@code before}, en orden ascendente. */
+  List<StoredEvent> listBefore(long before, EventFilter filter, int limit) {
+    List<StoredEvent> page =
+        new ArrayList<>(
+            jdbc.sql(
+                    "SELECT "
+                        + COLUMNS
+                        + " FROM event WHERE sequence < :before"
+                        + " AND (CAST(:run AS uuid) IS NULL OR workflow_run_id = :run)"
+                        + " AND (CAST(:aggregate AS uuid) IS NULL OR aggregate_id = :aggregate)"
+                        + " ORDER BY sequence DESC LIMIT :limit")
+                .param("before", before)
+                .param("run", filter.workflowRunId())
+                .param("aggregate", filter.aggregateId())
+                .param("limit", limit)
+                .query(this::map)
+                .list());
+    Collections.reverse(page);
+    return page;
+  }
+
+  Optional<StoredEvent> find(long sequence) {
+    return jdbc.sql("SELECT " + COLUMNS + " FROM event WHERE sequence = ?")
+        .param(sequence)
+        .query(this::map)
+        .optional();
   }
 
   Optional<StoredEvent> findBySourceEventId(String sourceEventId) {

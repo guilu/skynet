@@ -1,5 +1,6 @@
 package dev.skynet.controlplane.event;
 
+import dev.skynet.controlplane.shared.NotFoundException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
@@ -8,6 +9,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -31,14 +33,28 @@ class EventController {
     this.dispatcher = dispatcher;
   }
 
+  /**
+   * Historial en orden de secuencia. Con {@code after} avanza desde una secuencia; con {@code
+   * before}, los {@code limit} eventos anteriores a ella (para cargar historial hacia atrás).
+   */
   @GetMapping
   List<StoredEvent> list(
       @RequestParam(required = false) UUID workflowRunId,
       @RequestParam(required = false) UUID aggregateId,
       @RequestParam(defaultValue = "0") long after,
+      @RequestParam(required = false) Long before,
       @RequestParam(defaultValue = "200") int limit) {
-    return events.list(
-        after, new EventFilter(workflowRunId, aggregateId), Math.clamp(limit, 1, MAX_PAGE));
+    EventFilter filter = new EventFilter(workflowRunId, aggregateId);
+    int size = Math.clamp(limit, 1, MAX_PAGE);
+    return before != null
+        ? events.listBefore(before, filter, size)
+        : events.list(after, filter, size);
+  }
+
+  /** Un evento concreto, con su payload completo (ya redactado al ingerirlo). */
+  @GetMapping("/{sequence}")
+  StoredEvent get(@PathVariable long sequence) {
+    return events.find(sequence).orElseThrow(() -> new NotFoundException("Evento", sequence));
   }
 
   /**

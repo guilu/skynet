@@ -21,3 +21,6 @@ skynet:
   runner:
     # Secreto para registrar runners. Sin él, el registro está desactivado.
     registration-token: ${SKYNET_RUNNER_REGISTRATION_TOKEN:}
+  monitoring:
+    # Tiempo sin actividad tras el que un agente activo pasa a UNRESPONSIVE.
+    unresponsive-after: ${SKYNET_UNRESPONSIVE_AFTER:5m}

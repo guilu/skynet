@@ -12,9 +12,12 @@ import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
 import dev.skynet.protocol.runner.AgentLimits;
 import dev.skynet.protocol.runner.StartAgent;
+import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -198,6 +201,31 @@ public class RunService {
     return true;
   }
 
+  /**
+   * Marca el agente como {@code UNRESPONSIVE} si sigue activo y sin actividad desde {@code before}.
+   * Devuelve si lo ha marcado. La siguiente actividad lo devuelve a un estado activo.
+   */
+  @Transactional
+  boolean markUnresponsive(UUID agentRunId, Instant before) {
+    AgentRun agent = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
+    boolean silent =
+        (agent.getStatus() == AgentObservableStatus.THINKING
+                || agent.getStatus() == AgentObservableStatus.EXECUTING)
+            && agent.getLastActivityAt() != null
+            && agent.getLastActivityAt().isBefore(before);
+    if (!silent) {
+      return false;
+    }
+    StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
+    transitions.agent(
+        agent,
+        AgentObservableStatus.UNRESPONSIVE,
+        stage.getWorkflowRunId(),
+        "no-activity",
+        time.now());
+    return true;
+  }
+
   @Transactional(readOnly = true)
   public List<RunView> runsOf(UUID workItemId) {
     workItems.get(workItemId);
@@ -225,6 +253,84 @@ public class RunService {
             .toList());
   }
 
+  /**
+   * Ejecuciones de más reciente a más antigua, filtradas por estado y proyecto (vacío o {@code
+   * null}: sin filtro).
+   */
+  @Transactional(readOnly = true)
+  public RunPage list(Set<WorkflowRunStatus> statuses, UUID projectId, int page, int size) {
+    String where =
+        " FROM workflow_run r JOIN work_item w ON w.id = r.work_item_id"
+            + " WHERE (CAST(:project AS uuid) IS NULL OR w.project_id = :project)"
+            + (statuses == null || statuses.isEmpty() ? "" : " AND r.status IN (:statuses)");
+    Map<String, Object> params = new HashMap<>();
+    params.put("project", projectId);
+    if (statuses != null && !statuses.isEmpty()) {
+      params.put("statuses", statuses.stream().map(Enum::name).toList());
+    }
+    long total = jdbc.sql("SELECT count(*)" + where).params(params).query(Long.class).single();
+    List<UUID> ids =
+        jdbc.sql(
+                "SELECT r.id"
+                    + where
+                    + " ORDER BY r.created_at DESC, r.id LIMIT :limit OFFSET :offset")
+            .params(params)
+            .param("limit", size)
+            .param("offset", (long) page * size)
+            .query(UUID.class)
+            .list();
+    Map<UUID, WorkflowRun> byId = new HashMap<>();
+    workflowRuns.findAllById(ids).forEach(r -> byId.put(r.getId(), r));
+    return new RunPage(views(ids.stream().map(byId::get).toList()), page, size, total);
+  }
+
+  /** Definiciones de workflow, de la más reciente a la más antigua (en la Fase 1, solo adhoc). */
+  @Transactional(readOnly = true)
+  public List<WorkflowDefinitionView> definitions() {
+    return jdbc.sql(
+            "SELECT id, key, version, source_yaml, created_at FROM workflow_definition"
+                + " ORDER BY key, version DESC")
+        .query(
+            (rs, row) ->
+                new WorkflowDefinitionView(
+                    rs.getObject("id", UUID.class),
+                    rs.getString("key"),
+                    rs.getInt("version"),
+                    rs.getString("source_yaml"),
+                    rs.getTimestamp("created_at").toInstant()))
+        .list();
+  }
+
+  /** Agentes activos sin actividad desde {@code before}, candidatos a {@code UNRESPONSIVE}. */
+  @Transactional(readOnly = true)
+  List<UUID> silentAgents(Instant before) {
+    return jdbc.sql(
+            "SELECT id FROM agent_run WHERE status IN ('THINKING', 'EXECUTING')"
+                + " AND last_activity_at < ? ORDER BY last_activity_at")
+        .param(Timestamp.from(before))
+        .query(UUID.class)
+        .list();
+  }
+
+  /** Agentes en {@code UNRESPONSIVE}, con su ejecución y su trabajo. */
+  @Transactional(readOnly = true)
+  public List<UnresponsiveAgent> unresponsiveAgents() {
+    return jdbc.sql(
+            "SELECT a.id, s.workflow_run_id, w.key, a.last_activity_at FROM agent_run a"
+                + " JOIN stage_run s ON s.id = a.stage_run_id"
+                + " JOIN workflow_run r ON r.id = s.workflow_run_id"
+                + " JOIN work_item w ON w.id = r.work_item_id"
+                + " WHERE a.status = 'UNRESPONSIVE' ORDER BY a.last_activity_at")
+        .query(
+            (rs, row) ->
+                new UnresponsiveAgent(
+                    rs.getObject(1, UUID.class),
+                    rs.getObject(2, UUID.class),
+                    rs.getString(3),
+                    rs.getTimestamp(4) == null ? null : rs.getTimestamp(4).toInstant()))
+        .list();
+  }
+
   private List<RunView> views(List<WorkflowRun> runs) {
     if (runs.isEmpty()) {
       return List.of();
@@ -237,11 +343,16 @@ public class RunService {
             ? List.of()
             : agentRuns.findByStageRunIdInOrderByCreatedAtAsc(
                 stages.stream().map(StageRun::getId).toList());
+    Map<UUID, WorkItem> items = new HashMap<>();
+    workItems
+        .getAll(runs.stream().map(WorkflowRun::getWorkItemId).distinct().toList())
+        .forEach(w -> items.put(w.getId(), w));
     return runs.stream()
         .map(
             run ->
                 RunView.of(
                     run,
+                    items.get(run.getWorkItemId()),
                     stages.stream()
                         .filter(s -> s.getWorkflowRunId().equals(run.getId()))
                         .map(

@@ -7,6 +7,7 @@ import dev.skynet.controlplane.project.ProjectService;
 import dev.skynet.controlplane.shared.NotFoundException;
 import dev.skynet.controlplane.shared.TimeSource;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -60,5 +61,11 @@ public class WorkItemService {
   @Transactional(readOnly = true)
   public WorkItem get(UUID id) {
     return workItems.findById(id).orElseThrow(() -> new NotFoundException("Trabajo", id));
+  }
+
+  /** Trabajos por id; los que no existen se omiten. */
+  @Transactional(readOnly = true)
+  public List<WorkItem> getAll(Collection<UUID> ids) {
+    return workItems.findAllById(ids);
   }
 }

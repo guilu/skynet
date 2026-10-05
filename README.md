@@ -59,6 +59,14 @@ SKYNET_TEST_DB_USER=skynet SKYNET_TEST_DB_PASSWORD=skynet ./gradlew build
 
 Sin Docker ni `SKYNET_TEST_DB_URL`, los tests de integración se omiten.
 
+### Contratos entre backend y web
+
+`fixtures/contracts/` guarda el JSON de referencia de cada vista de lectura de la API. `ContractIT` comprueba que el backend lo produce tal cual y `web/src/contracts.test.ts` que los tipos de `web/src/api.ts` tienen las mismas claves. Tras un cambio intencionado de una vista, regenera los ficheros y actualiza los tipos:
+
+```bash
+./gradlew :control-plane:test --tests '*ContractIT' -Dskynet.contracts.update=true
+```
+
 ### Aplicación completa con Docker
 
 ```bash

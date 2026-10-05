@@ -65,8 +65,8 @@ Todos los flags previstos en el plan existen y funcionan: `--session-id`, `--res
 | `system/status` (`requesting`) | — (solo actualiza `last_activity_at`) | `THINKING` |
 | `system/thinking_tokens` | — (agregado en vivo por SSE) | `THINKING` |
 | `stream_event` (deltas de texto) | `agent.message.delta`, solo en vivo; no se persiste uno a uno | `THINKING` |
-| `stream_event/message_delta` | actualiza tokens en vivo | — |
-| `assistant` con `text` | `agent.message.received` (agrupado por `message.id`) | `THINKING` |
+| `stream_event/message_delta` | — (los tokens en vivo llegan con el `usage` de cada `assistant`) | — |
+| `assistant` con `text` | `agent.message.received` (agrupado por `message.id`; el primer evento de cada mensaje lleva su `usage`, que el control plane suma hasta que llega el `result`) | `THINKING` |
 | `assistant` con `tool_use` | `agent.tool.started` | `EXECUTING` |
 | `user` con `tool_result` | `agent.tool.completed` (`is_error`, resumen de `tool_use_result`) | `THINKING` |
 | `user` con `tool_result` de `Edit`/`Write` | además `agent.file.changed` (ruta, patch) | — |
