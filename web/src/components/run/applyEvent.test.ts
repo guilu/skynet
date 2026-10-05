@@ -46,6 +46,8 @@ describe('applyEvent', () => {
     expect(agentOf(thinking.run).currentTool).toBe(agent.currentTool)
     expect(thinking.refetch).toBe('none')
 
+    expect(applyEvent(run, ev('agent.status.changed', { status: 'STARTING' })).refetch).toBe('now')
+
     const failed = applyEvent(run, ev('agent.status.changed', { status: 'FAILED' }))
     expect(agentOf(failed.run).status).toBe('FAILED')
     expect(agentOf(failed.run).currentTool).toBeNull()

@@ -7,6 +7,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArraySet;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,7 +21,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 /** Histórico paginado de eventos y streaming en tiempo real por SSE. */
 @RestController
 @RequestMapping("/api/events")
-class EventController {
+class EventController implements SmartLifecycle {
 
   private static final int MAX_PAGE = 1000;
   private static final Duration STREAM_TIMEOUT = Duration.ofMinutes(30);
@@ -29,6 +30,7 @@ class EventController {
   private final EventDispatcher dispatcher;
   private final int queueCapacity;
   private final Set<SseSubscription> subscriptions = new CopyOnWriteArraySet<>();
+  private volatile boolean running;
 
   EventController(
       EventRepository events,
@@ -105,5 +107,30 @@ class EventController {
         subscriptions.remove(subscription);
       }
     }
+  }
+
+  @Override
+  public void start() {
+    running = true;
+  }
+
+  /**
+   * Al apagar, cierra los streams antes del apagado ordenado del servidor web (fase mayor, se para
+   * antes): si no, este esperaría a que acabaran las peticiones SSE, que no acaban nunca.
+   */
+  @Override
+  public void stop() {
+    running = false;
+    subscriptions.forEach(SseSubscription::complete);
+  }
+
+  @Override
+  public boolean isRunning() {
+    return running;
+  }
+
+  @Override
+  public int getPhase() {
+    return Integer.MAX_VALUE;
   }
 }

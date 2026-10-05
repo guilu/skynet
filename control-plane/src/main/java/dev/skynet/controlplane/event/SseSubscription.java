@@ -84,8 +84,7 @@ final class SseSubscription implements EventListener {
     }
     if (!queue.offer(event)) {
       // Cliente demasiado lento: se corta y, al reconectar, se pone al día desde el histórico.
-      close();
-      emitter.complete();
+      complete();
     }
   }
 
@@ -112,6 +111,12 @@ final class SseSubscription implements EventListener {
     if (writer != null) {
       writer.interrupt();
     }
+  }
+
+  /** Cierra la conexión desde el servidor; el navegador reconectará con {@code Last-Event-ID}. */
+  void complete() {
+    close();
+    emitter.complete();
   }
 
   private boolean send(StoredEvent event) {

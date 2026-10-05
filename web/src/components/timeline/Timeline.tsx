@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { StoredEvent } from '../../api'
 import { describeEvent, formatTime, TONE_ICONS } from '../../format'
 import { indexOfSequence, type TimelineEntry } from './timeline'
@@ -33,6 +33,12 @@ export function Timeline({
   const selectedIndex = selected == null ? -1 : indexOfSequence(entries, selected)
   const autoOpen = selectedIndex >= 0 ? entries[selectedIndex].id : null
   const isOpen = (id: string) => toggled.has(id) !== (id === autoOpen)
+  const toggle = (id: string) =>
+    setToggled((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
 
   const rows: Row[] = []
   for (const entry of entries) {
@@ -74,13 +80,40 @@ export function Timeline({
     return <p className="muted">Sin eventos que mostrar.</p>
   }
 
+  // Teclado: ↑/↓ recorren las filas (aunque aún no estén pintadas), → abre y ← cierra una entrada.
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const item = (e.target as HTMLElement).closest<HTMLElement>('[data-index]')
+    if (!item) return
+    const index = Number(item.dataset.index)
+    const row = rows[index]
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      const next = Math.min(rows.length - 1, Math.max(0, index + (e.key === 'ArrowDown' ? 1 : -1)))
+      followRef.current = next === rows.length - 1
+      virtualizer.scrollToIndex(next)
+      requestAnimationFrame(() =>
+        scrollRef.current
+          ?.querySelector<HTMLElement>(`[data-index="${next}"] .timeline-row`)
+          ?.focus(),
+      )
+    } else if (
+      row.kind === 'entry' &&
+      row.depth === 0 &&
+      (e.key === 'ArrowRight' || e.key === 'ArrowLeft') &&
+      isOpen(row.entry.id) !== (e.key === 'ArrowRight')
+    ) {
+      e.preventDefault()
+      toggle(row.entry.id)
+    }
+  }
+
   const onScroll = () => {
     const el = scrollRef.current
     if (el) followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
   }
 
   return (
-    <div ref={scrollRef} className="timeline-scroll" onScroll={onScroll}>
+    <div ref={scrollRef} className="timeline-scroll" onScroll={onScroll} onKeyDown={onKeyDown}>
       <ol className="timeline" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((item) => {
           const row = rows[item.index]
@@ -98,13 +131,7 @@ export function Timeline({
                   depth={row.depth}
                   current={item.index === selectedRow}
                   open={row.depth === 0 && isOpen(row.entry.id)}
-                  onToggle={() =>
-                    setToggled((prev) => {
-                      const next = new Set(prev)
-                      if (!next.delete(row.entry.id)) next.add(row.entry.id)
-                      return next
-                    })
-                  }
+                  onToggle={() => toggle(row.entry.id)}
                   onSelect={() => onSelect(row.entry.events[0])}
                 />
               ) : (

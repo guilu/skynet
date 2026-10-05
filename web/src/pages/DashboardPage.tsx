@@ -38,7 +38,9 @@ export function DashboardPage() {
             {data.unresponsiveAgents.map((a) => (
               <li key={a.agentRunId}>
                 <StatusBadge status="UNRESPONSIVE" />{' '}
-                <Link to={`/runs/${a.workflowRunId}`}>{a.workItemKey ?? a.workflowRunId}</Link>{' '}
+                <Link to={`/runs/${a.workflowRunId}?agent=${a.agentRunId}`}>
+                  {a.workItemKey ?? a.workflowRunId}
+                </Link>{' '}
                 <span className="muted small">
                   última actividad {formatDateTime(a.lastActivityAt)}
                 </span>

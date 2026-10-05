@@ -59,6 +59,18 @@ SKYNET_TEST_DB_USER=skynet SKYNET_TEST_DB_PASSWORD=skynet ./gradlew build
 
 Sin Docker ni `SKYNET_TEST_DB_URL`, los tests de integración se omiten.
 
+### E2E
+
+`scripts/e2e.sh` compila y arranca el control plane y un runner con fake-claude, sirve la web con `vite preview` y ejecuta Playwright (`web/e2e/`): crea proyecto, repositorio y trabajo, lanza un agente, sigue herramientas y mensajes en vivo, corta la conexión del navegador y comprueba que al reconectar no se pierde ni se repite nada, y que termina con coste. Necesita un PostgreSQL en `localhost:5432` (el de `docker compose`) y Chromium para Playwright:
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d
+(cd web && npm ci && npx playwright install chromium)
+./scripts/e2e.sh                    # logs en build/e2e/
+```
+
+En CI corre como job propio, con PostgreSQL como servicio.
+
 ### Contratos entre backend y web
 
 `fixtures/contracts/` guarda el JSON de referencia de cada vista de lectura de la API. `ContractIT` comprueba que el backend lo produce tal cual y `web/src/contracts.test.ts` que los tipos de `web/src/api.ts` tienen las mismas claves. Tras un cambio intencionado de una vista, regenera los ficheros y actualiza los tipos:
@@ -81,7 +93,7 @@ docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
 
 Credenciales de la base de datos: `SKYNET_DB_USER` / `SKYNET_DB_PASSWORD` (por defecto `skynet`/`skynet`). Para que un runner pueda registrarse, define `SKYNET_RUNNER_REGISTRATION_TOKEN` con un secreto compartido; sin él, el registro de runners está desactivado. Para parar: `docker compose -f deploy/docker-compose.yml --profile app down` (añade `-v` para borrar los datos). El runner no va en contenedor: se ejecuta en el host porque necesita `claude` y los repositorios.
 
-### Probar la aplicación (estado actual: M3-D)
+### Probar la aplicación (estado actual: M3)
 
 Con la aplicación levantada, abre la web. La navegación lateral da acceso al **Dashboard** (solo lo que requiere atención: ejecuciones activas, fallos recientes, agentes sin actividad y runners sin latido), **Proyectos**, **Workflows**, **Ejecuciones** (filtrables por estado), **Runners** y **Actividad**. El tema claro/oscuro sigue al sistema o se elige arriba a la derecha.
 
@@ -92,6 +104,8 @@ Con la aplicación levantada, abre la web. La navegación lateral da acceso al *
    - **Fases** y sus agentes; al elegir uno se abre en el inspector (por defecto, el que está en curso).
    - **Inspector** con pestañas: Resumen (modelo, sesión, rama, tokens, coste y respuesta final), Prompt, Mensajes, Herramientas (cada llamada con su entrada, su salida y su duración) y Evento original (el evento guardado, leído de la API). Los textos largos salen recortados con «Ver completo». Las flechas recorren las pestañas.
    - **Timeline en vivo** (SSE), agrupado: cada herramienta es una entrada con su inicio y su fin, y las llamadas seguidas a la misma herramienta se agrupan («Leídos 14 ficheros»). Cada entrada se abre para ver sus eventos originales, y al elegir uno se abre en el inspector. Se filtra por fase, agente, tipo, severidad y origen, y sigue lo último que llega salvo que hayas elegido un evento.
+
+   Con el teclado: ↑/↓ recorren los agentes y las filas del timeline, → y ← abren y cierran una entrada, y las flechas cambian de pestaña en el inspector.
 
    El agente, la pestaña, el evento elegido y los filtros van en la URL (`?agent=…&tab=tools&seq=123&f.kind=tool`), así que se puede compartir el enlace o recargar sin perder la vista. Los secretos reconocibles (claves de API, tokens, contraseñas) se guardan como `[REDACTED]`.
 5. **Actividad** muestra todos los eventos del sistema en tiempo real; los de una ejecución abren su inspector. Si recargas o se corta la conexión, el stream continúa desde el último evento recibido. Cada cliente del stream tiene su propia cola (`skynet.events.subscriber-queue`, 1000 eventos): si se queda atrás, el servidor cierra su conexión y el navegador se pone al día desde el histórico, sin frenar a los demás.

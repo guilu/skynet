@@ -90,6 +90,11 @@ describe('App', () => {
     expect(
       await screen.findByRole('heading', { name: 'Agentes sin actividad (1)' }),
     ).toBeInTheDocument()
+    const stuck = dashboardSummary.unresponsiveAgents[0]
+    expect(screen.getByRole('link', { name: stuck.workItemKey! })).toHaveAttribute(
+      'href',
+      `/runs/${stuck.workflowRunId}?agent=${stuck.agentRunId}`,
+    )
     expect(screen.getByRole('heading', { name: 'Runners sin latido (1)' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Ejecuciones activas (1)' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Ver todas las activas' })).toHaveAttribute(
@@ -380,6 +385,26 @@ describe('App', () => {
       fireEvent.click(completed)
       expect(completed).toHaveAttribute('aria-current', 'true')
       expect(await screen.findByText(/"type": "agent.tool.completed"/)).toBeInTheDocument()
+    })
+
+    it('el timeline se recorre con el teclado', async () => {
+      openRun()
+      await screen.findByRole('tab', { name: 'Resumen' })
+      FakeEventSource.last!.emit(message, toolStarted, toolCompleted)
+      const timeline = within(screen.getByRole('region', { name: 'Timeline' }))
+      const first = timeline.getByRole('button', { name: /Mensaje: / })
+      first.focus()
+      fireEvent.keyDown(first, { key: 'ArrowDown' })
+      const tool = timeline.getByRole('button', { name: /agent\.tool\.started.*Read: / })
+      await waitFor(() => expect(tool).toHaveFocus())
+
+      fireEvent.keyDown(tool, { key: 'ArrowRight' })
+      expect(timeline.getByRole('button', { name: /Cerrar: Read/ })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      )
+      fireEvent.keyDown(tool, { key: 'ArrowLeft' })
+      expect(timeline.queryByRole('button', { name: /#1043/ })).not.toBeInTheDocument()
     })
 
     it('los filtros salen de la URL y avisan si ocultan el evento elegido', async () => {

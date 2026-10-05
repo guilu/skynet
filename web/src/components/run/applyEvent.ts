@@ -43,7 +43,8 @@ export function applyEvent(run: Run, event: StoredEvent): { run: Run; refetch: R
   const patch = (agent: AgentRun): AgentRun => {
     if (event.type === 'agent.status.changed') {
       const status = p.status as AgentRun['status']
-      if (isTerminal(status)) refetch = 'now'
+      // Al arrancar se asigna el runner, que el evento no trae.
+      if (isTerminal(status) || status === 'STARTING') refetch = 'now'
       return { ...agent, status, currentTool: isTerminal(status) ? null : agent.currentTool }
     }
     const next: AgentRun = {
