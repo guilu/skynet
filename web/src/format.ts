@@ -130,11 +130,11 @@ export const formatCost = (usd: number | null) =>
 
 export const formatNumber = (n: number | null) => (n == null ? '—' : n.toLocaleString('es-ES'))
 
-const truncate = (text: string, max: number) =>
+export const truncate = (text: string, max: number) =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text
 
 /** Lo más útil de la entrada de una herramienta: el comando, el fichero o el patrón. */
-function toolSummary(input: unknown): string {
+export function toolSummary(input: unknown): string {
   if (input == null || typeof input !== 'object') return ''
   const i = input as Record<string, unknown>
   const value = i.command ?? i.file_path ?? i.pattern ?? i.path ?? i.url

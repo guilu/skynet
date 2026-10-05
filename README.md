@@ -81,15 +81,20 @@ docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
 
 Credenciales de la base de datos: `SKYNET_DB_USER` / `SKYNET_DB_PASSWORD` (por defecto `skynet`/`skynet`). Para que un runner pueda registrarse, define `SKYNET_RUNNER_REGISTRATION_TOKEN` con un secreto compartido; sin él, el registro de runners está desactivado. Para parar: `docker compose -f deploy/docker-compose.yml --profile app down` (añade `-v` para borrar los datos). El runner no va en contenedor: se ejecuta en el host porque necesita `claude` y los repositorios.
 
-### Probar la aplicación (estado actual: M3-B)
+### Probar la aplicación (estado actual: M3-C)
 
 Con la aplicación levantada, abre la web. La navegación lateral da acceso al **Dashboard** (solo lo que requiere atención: ejecuciones activas, fallos recientes, agentes sin actividad y runners sin latido), **Proyectos**, **Workflows**, **Ejecuciones** (filtrables por estado), **Runners** y **Actividad**. El tema claro/oscuro sigue al sistema o se elige arriba a la derecha.
 
 1. **Proyectos** → crea un proyecto (p. ej. clave `TKM`).
 2. En el proyecto, **registra un repositorio** (ruta absoluta en la máquina del runner) y **crea un trabajo** (`TKM-1`).
-3. En el trabajo, **lanza un agente** con un prompt y, si quieres, límites de turnos, presupuesto o tiempo (vacíos = valores por defecto). Se crea la ejecución con su fase y el agente queda **en cola** hasta que un runner conectado (ver abajo) lo recoge, crea un worktree y ejecuta Claude Code en él. La tarjeta del agente muestra modelo, turnos, tokens, coste y el error si falla; la vista rica del agente llega en M3.
-4. La ejecución abre con una **cabecera operativa**: estado, duración, agente y herramienta en curso, runner, tokens (con caché), coste y estado de la conexión en vivo, con el botón **Cancelar agente**. Debajo, el **timeline en vivo** (SSE): sesión, herramientas, ficheros modificados, resultado y fin del proceso. Cancelar mata el agente y todos sus procesos. Los secretos reconocibles (claves de API, tokens, contraseñas) se guardan como `[REDACTED]`.
-5. **Actividad** muestra todos los eventos del sistema en tiempo real. Si recargas o se corta la conexión, el stream continúa desde el último evento recibido.
+3. En el trabajo, **lanza un agente** con un prompt y, si quieres, límites de turnos, presupuesto o tiempo (vacíos = valores por defecto). Se crea la ejecución con su fase y el agente queda **en cola** hasta que un runner conectado (ver abajo) lo recoge, crea un worktree y ejecuta Claude Code en él.
+4. La ejecución abre con una **cabecera operativa**: estado, duración, agente y herramienta en curso, runner, tokens (con caché), coste y estado de la conexión en vivo, con el botón **Cancelar agente**. Cancelar mata el agente y todos sus procesos. Debajo hay tres paneles:
+   - **Fases** y sus agentes; al elegir uno se abre en el inspector (por defecto, el que está en curso).
+   - **Inspector** con pestañas: Resumen (modelo, sesión, rama, tokens, coste y respuesta final), Prompt, Mensajes, Herramientas (cada llamada con su entrada, su salida y su duración) y Evento original (el evento guardado, leído de la API). Los textos largos salen recortados con «Ver completo». Las flechas recorren las pestañas.
+   - **Timeline en vivo** (SSE); al elegir un evento se abre en el inspector.
+
+   El agente, la pestaña y el evento elegidos van en la URL (`?agent=…&tab=tools&seq=123`), así que se puede compartir el enlace o recargar sin perder la vista. Los secretos reconocibles (claves de API, tokens, contraseñas) se guardan como `[REDACTED]`.
+5. **Actividad** muestra todos los eventos del sistema en tiempo real; los de una ejecución abren su inspector. Si recargas o se corta la conexión, el stream continúa desde el último evento recibido.
 
 ### Runner local
 

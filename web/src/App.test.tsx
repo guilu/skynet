@@ -1,17 +1,30 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import agentRunDetail from '../../fixtures/contracts/agent-run-detail.json'
 import dashboardSummary from '../../fixtures/contracts/dashboard-summary.json'
 import runPage from '../../fixtures/contracts/run-page.json'
 import runView from '../../fixtures/contracts/run-view.json'
 import runners from '../../fixtures/contracts/runners.json'
+import storedEvent from '../../fixtures/contracts/stored-event.json'
+import type { StoredEvent } from './api'
 import App from './App'
 import { mockFetch, renderAt } from './test/render'
 
 class FakeEventSource {
+  static last: FakeEventSource | null = null
   onopen: (() => void) | null = null
   onerror: (() => void) | null = null
   onmessage: ((m: MessageEvent) => void) | null = null
+  constructor() {
+    FakeEventSource.last = this
+  }
   close() {}
+  /** Entrega eventos como si llegaran por el stream. */
+  emit(...events: StoredEvent[]) {
+    act(() => {
+      for (const e of events) this.onmessage?.({ data: JSON.stringify(e) } as MessageEvent)
+    })
+  }
 }
 
 // Las vistas de ejemplo son las mismas que valida ContractIT en el backend.
@@ -151,17 +164,19 @@ describe('App', () => {
     })
     renderAt(`/runs/${runningRun.id}`, <App />)
 
-    expect(
-      await screen.findByRole('heading', { level: 1, name: /Add model pricing importer/ }),
-    ).toBeInTheDocument()
-    expect(await screen.findByText('runner-01')).toBeInTheDocument()
-    expect(screen.getByText('4 entrada · 32 salida', { exact: false })).toBeInTheDocument()
-    expect(screen.getByText('caché: 28.437 leídos · 4256 escritos')).toBeInTheDocument()
-    expect(screen.getByText('(llega al terminar)')).toBeInTheDocument()
-    expect(screen.getByText('Conectando…')).toBeInTheDocument()
+    const title = await screen.findByRole('heading', {
+      level: 1,
+      name: /Add model pricing importer/,
+    })
+    const header = within(title.closest('header')!)
+    expect(await header.findByText('runner-01')).toBeInTheDocument()
+    expect(header.getByText('4 entrada · 32 salida', { exact: false })).toBeInTheDocument()
+    expect(header.getByText('caché: 28.437 leídos · 4256 escritos')).toBeInTheDocument()
+    expect(header.getByText('(llega al terminar)')).toBeInTheDocument()
+    expect(header.getByText('Conectando…')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancelar agente' }))
-    expect(await screen.findByText(/Cancelación solicitada/)).toBeInTheDocument()
+    fireEvent.click(header.getByRole('button', { name: 'Cancelar agente' }))
+    expect(await header.findByText(/Cancelación solicitada/)).toBeInTheDocument()
   })
 
   it('una ejecución terminada muestra el coste y no ofrece cancelar', async () => {
@@ -238,5 +253,133 @@ describe('App', () => {
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
     fireEvent.change(screen.getByLabelText('Tema'), { target: { value: 'system' } })
     expect(document.documentElement).not.toHaveAttribute('data-theme')
+  })
+  describe('inspector de la ejecución', () => {
+    const runId = runView.id
+    const agent = runView.stages[0].agents[0]
+    const toolStarted = storedEvent as StoredEvent
+    const at = (sequence: number, type: string, payload: Record<string, unknown>) => ({
+      ...toolStarted,
+      sequence,
+      eventId: `e${sequence}`,
+      type,
+      payload,
+    })
+    const toolCompleted = at(1043, 'agent.tool.completed', {
+      toolUseId: 'toolu_01A',
+      name: 'Read',
+      isError: false,
+      output: 'x'.repeat(2500),
+    })
+    const message = at(1044, 'agent.message.received', { text: '<img src=x onerror=alert(1)>' })
+
+    function openRun(query = '') {
+      vi.stubGlobal('EventSource', FakeEventSource)
+      stubApi({
+        [`/api/workflow-runs/${runId}`]: runView,
+        [`/api/agent-runs/${agent.id}`]: agentRunDetail,
+        '/api/runners': runners,
+        [`/api/events/${toolCompleted.sequence}`]: toolCompleted,
+      })
+      renderAt(`/runs/${runId}${query}`, <App />)
+    }
+
+    it('elige por defecto el agente de la cabecera y muestra su resumen', async () => {
+      openRun()
+      const nav = await screen.findByRole('navigation', { name: 'Fases y agentes' })
+      expect(within(nav).getByRole('button', { name: /claude-code/ })).toHaveAttribute(
+        'aria-current',
+        'true',
+      )
+      expect(screen.getByRole('tab', { name: 'Resumen' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByText('claude-opus-5-5')).toBeInTheDocument()
+    })
+
+    it('abre la pestaña de la URL y empareja cada herramienta con su resultado', async () => {
+      openRun(`?agent=${agent.id}&tab=tools`)
+      expect(await screen.findByRole('tab', { name: 'Herramientas' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
+      FakeEventSource.last!.emit(toolStarted, toolCompleted)
+      expect(await screen.findByText('Read')).toBeInTheDocument()
+      expect(screen.getByText(': /w/README.md')).toBeInTheDocument()
+      expect(screen.getByText('Hecha')).toBeInTheDocument()
+
+      // La salida larga sale recortada hasta pedirla entera.
+      expect(screen.getByText(/x{2000}…/)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: /Ver completo/ }))
+      expect(screen.getByText('x'.repeat(2500))).toBeInTheDocument()
+
+      // El evento original se lee de la API.
+      fireEvent.click(screen.getByRole('button', { name: 'Evento de resultado #1043' }))
+      expect(screen.getByRole('tab', { name: 'Evento original' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
+      expect(await screen.findByText(/"type": "agent.tool.completed"/)).toBeInTheDocument()
+    })
+
+    it('pinta los mensajes del agente como texto, nunca como HTML', async () => {
+      openRun('?tab=messages')
+      await screen.findByRole('tab', { name: 'Mensajes' })
+      FakeEventSource.last!.emit(message)
+      expect(await screen.findByText('<img src=x onerror=alert(1)>')).toBeInTheDocument()
+      expect(document.querySelector('.run-inspector img')).toBeNull()
+    })
+
+    it('muestra el prompt con el que se lanzó el agente', async () => {
+      openRun('?tab=prompt')
+      expect(
+        await screen.findByText('Implementa el importador de precios de modelos'),
+      ).toBeInTheDocument()
+    })
+
+    it('las flechas recorren las pestañas', async () => {
+      openRun()
+      const summary = await screen.findByRole('tab', { name: 'Resumen' })
+      fireEvent.keyDown(summary, { key: 'ArrowRight' })
+      expect(screen.getByRole('tab', { name: 'Prompt' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('tab', { name: 'Prompt' })).toHaveFocus()
+      fireEvent.keyDown(screen.getByRole('tab', { name: 'Prompt' }), { key: 'End' })
+      expect(screen.getByRole('tab', { name: 'Evento original' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
+      fireEvent.keyDown(screen.getByRole('tab', { name: 'Evento original' }), {
+        key: 'ArrowRight',
+      })
+      expect(screen.getByRole('tab', { name: 'Resumen' })).toHaveAttribute('aria-selected', 'true')
+    })
+
+    it('elegir un evento del timeline lo abre en el inspector', async () => {
+      openRun()
+      await screen.findByRole('tab', { name: 'Resumen' })
+      FakeEventSource.last!.emit(toolStarted, toolCompleted)
+      const timeline = screen.getByRole('region', { name: 'Timeline' })
+      const row = within(timeline).getByRole('button', { name: /Herramienta Read terminada/ })
+      fireEvent.click(row)
+      expect(row).toHaveAttribute('aria-current', 'true')
+      expect(await screen.findByText(/"type": "agent.tool.completed"/)).toBeInTheDocument()
+    })
+  })
+
+  it('la actividad enlaza cada evento con el inspector de su ejecución', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    stubApi({
+      [`/api/workflow-runs/${runView.id}`]: runView,
+      [`/api/agent-runs/${runView.stages[0].agents[0].id}`]: agentRunDetail,
+      '/api/runners': runners,
+      [`/api/events/${storedEvent.sequence}`]: storedEvent,
+    })
+    renderAt('/activity', <App />)
+    await screen.findByRole('heading', { name: /Actividad/ })
+    FakeEventSource.last!.emit(storedEvent as StoredEvent)
+    fireEvent.click(await screen.findByRole('button', { name: /Herramienta Read/ }))
+    expect(await screen.findByRole('tab', { name: 'Evento original' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(await screen.findByText(/"sequence": 1042/)).toBeInTheDocument()
   })
 })
