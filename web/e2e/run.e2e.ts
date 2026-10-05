@@ -27,6 +27,9 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     await page.getByLabel('Nombre').fill('E2E')
     await page.getByRole('button', { name: 'Crear proyecto' }).click()
     await page.getByRole('link', { name: new RegExp(key) }).click()
+    // Sin esperar a la página del proyecto, «Nombre» puede resolverse aún en el formulario de
+    // proyectos y el repositorio se envía sin nombre.
+    await expect(page.getByRole('heading', { level: 1, name: new RegExp(key) })).toBeVisible()
   })
 
   await test.step('registrar repositorio y crear trabajo', async () => {
