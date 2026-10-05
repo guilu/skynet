@@ -3,6 +3,7 @@ package dev.skynet.runner.workspace;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -74,19 +75,37 @@ public class WorkspaceManager {
     String branch = branchName(workItemKey, agentRunId);
     String head = git(source, List.of("rev-parse", "HEAD")).trim();
     git(source, List.of("worktree", "add", "-b", branch, path.toString(), head));
-    String diff = git(source, List.of("diff", "--binary", "HEAD"));
-    if (!diff.isEmpty()) {
-      git(path, List.of("apply", "--binary", "-"), diff);
+    try {
+      copyUncommitted(source, path);
+    } catch (IOException e) {
+      // Sin worktree a medias: se quita junto con su rama.
+      git(source, List.of("worktree", "remove", "--force", path.toString()));
+      git(source, List.of("branch", "-D", branch));
+      throw e;
+    }
+    return new Workspace(path, branch, head);
+  }
+
+  /** Lleva a {@code target} los cambios sin confirmar de {@code source}. */
+  private static void copyUncommitted(Path source, Path target)
+      throws IOException, InterruptedException {
+    byte[] diff = git(source, List.of("diff", "--binary", "HEAD"), new byte[0]);
+    if (diff.length > 0) {
+      git(target, List.of("apply", "--binary", "-"), diff);
     }
     for (String file :
         git(source, List.of("ls-files", "--others", "--exclude-standard", "-z")).split("\0")) {
       if (!file.isEmpty()) {
-        Path target = path.resolve(file);
-        Files.createDirectories(target.getParent());
-        Files.copy(source.resolve(file), target, StandardCopyOption.COPY_ATTRIBUTES);
+        Path copy = target.resolve(file);
+        Files.createDirectories(copy.getParent());
+        // Un enlace simbólico se copia como enlace: seguirlo podría copiar ficheros de fuera.
+        Files.copy(
+            source.resolve(file),
+            copy,
+            StandardCopyOption.COPY_ATTRIBUTES,
+            LinkOption.NOFOLLOW_LINKS);
       }
     }
-    return new Workspace(path, branch, head);
   }
 
   private Path owned(Path path) throws IOException {
@@ -107,10 +126,11 @@ public class WorkspaceManager {
 
   private static String git(Path directory, List<String> args)
       throws IOException, InterruptedException {
-    return git(directory, args, "");
+    return new String(git(directory, args, new byte[0]), StandardCharsets.UTF_8);
   }
 
-  private static String git(Path directory, List<String> args, String input)
+  /** Entrada y salida en bytes: un diff lleva el contenido de los ficheros tal cual. */
+  private static byte[] git(Path directory, List<String> args, byte[] input)
       throws IOException, InterruptedException {
     List<String> command = new ArrayList<>(List.of("git", "-C", directory.toString()));
     command.addAll(args);
@@ -118,18 +138,17 @@ public class WorkspaceManager {
     Process process = new ProcessBuilder(command).start();
     StderrCollector stderr = new StderrCollector(process);
     try (var stdin = process.getOutputStream()) {
-      stdin.write(input.getBytes(StandardCharsets.UTF_8));
+      stdin.write(input);
     }
     byte[] output = process.getInputStream().readAllBytes();
     if (!process.waitFor(GIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
       process.destroyForcibly();
       throw new IOException("git " + String.join(" ", args) + ": tiempo agotado");
     }
-    String text = new String(output, StandardCharsets.UTF_8);
     if (process.exitValue() != 0) {
       throw new IOException("git " + String.join(" ", args) + " falló: " + stderr.text().trim());
     }
-    return text;
+    return output;
   }
 
   /** Lee stderr en paralelo para que git no se bloquee si escribe mucho. */

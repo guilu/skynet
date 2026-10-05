@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.skynet.runner.TestRepos;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -65,23 +66,33 @@ class WorkspaceManagerTest {
         parent.path(), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "fix");
     Files.writeString(
         parent.path().resolve("calc.py"), "# sin confirmar\n", StandardOpenOption.APPEND);
+    // Texto que no es UTF-8: el diff tiene que llegar byte a byte.
+    byte[] latin1 = "# año\n".getBytes(StandardCharsets.ISO_8859_1);
+    Files.write(parent.path().resolve("calc.py"), latin1, StandardOpenOption.APPEND);
     Files.createDirectories(parent.path().resolve("tests"));
     Files.writeString(parent.path().resolve("tests/test_calc.py"), "nuevo\n");
     Files.writeString(parent.path().resolve(".gitignore"), "*.log\n");
     Files.writeString(parent.path().resolve("debug.log"), "ignorado\n");
+    Path outside = Files.writeString(dir.resolve("secreto.txt"), "fuera\n");
+    Files.createSymbolicLink(parent.path().resolve("enlace"), outside);
 
     Workspace fork = manager.fork(parent.path(), UUID.randomUUID(), "TKM-1", UUID.randomUUID());
 
     assertThat(fork.baseCommit()).isEqualTo(TestRepos.git(parent.path(), "rev-parse", "HEAD"));
     assertThat(fork.branch()).isNotEqualTo(parent.branch());
     assertThat(TestRepos.git(fork.path(), "branch", "--show-current")).isEqualTo(fork.branch());
-    assertThat(Files.readString(fork.path().resolve("calc.py")))
+    assertThat(Files.readString(fork.path().resolve("calc.py"), StandardCharsets.ISO_8859_1))
         .contains("return a + b")
         .contains("# sin confirmar");
     assertThat(fork.path().resolve("tests/test_calc.py")).hasContent("nuevo");
+    assertThat(fork.path().resolve("calc.py"))
+        .hasSameBinaryContentAs(parent.path().resolve("calc.py"));
     assertThat(fork.path().resolve("debug.log")).doesNotExist();
+    assertThat(fork.path().resolve("enlace")).isSymbolicLink();
+    assertThat(Files.readSymbolicLink(fork.path().resolve("enlace"))).isEqualTo(outside);
     // El worktree del padre no cambia.
-    assertThat(Files.readString(parent.path().resolve("calc.py"))).contains("# sin confirmar");
+    assertThat(Files.readString(parent.path().resolve("calc.py"), StandardCharsets.ISO_8859_1))
+        .contains("# sin confirmar");
   }
 
   @Test
