@@ -111,22 +111,9 @@ public final class AgentExecutor implements AutoCloseable {
 
   private void run(UUID id, StartAgent start, Execution execution) {
     try {
-      Workspace workspace;
-      try {
-        workspace = prepare(id, start);
-      } catch (IOException e) {
-        finish(id, failure("No se pudo preparar el worktree: " + e.getMessage()));
-        return;
-      }
-      // Un solo escritor por worktree, aunque el control plane ya lo garantiza.
-      if (busyWorkspaces.putIfAbsent(workspace.path(), id) != null) {
-        finish(id, failure("Ya hay otra invocación en curso en el worktree " + workspace.path()));
-        return;
-      }
-      try {
-        run(id, start, execution, workspace);
-      } finally {
-        busyWorkspaces.remove(workspace.path(), id);
+      Workspace workspace = prepareOrFinish(id, start);
+      if (workspace != null) {
+        runExclusively(id, start, execution, workspace);
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -135,6 +122,30 @@ public final class AgentExecutor implements AutoCloseable {
       finish(id, failure("Fallo interno del runner: " + e));
     } finally {
       executions.remove(id);
+    }
+  }
+
+  /** Prepara el worktree; si no se puede, registra el fin de la invocación y devuelve null. */
+  private Workspace prepareOrFinish(UUID id, StartAgent start) throws InterruptedException {
+    try {
+      return prepare(id, start);
+    } catch (IOException e) {
+      finish(id, failure("No se pudo preparar el worktree: " + e.getMessage()));
+      return null;
+    }
+  }
+
+  /** Un solo escritor por worktree, aunque el control plane ya lo garantiza. */
+  private void runExclusively(UUID id, StartAgent start, Execution execution, Workspace workspace)
+      throws InterruptedException {
+    if (busyWorkspaces.putIfAbsent(workspace.path(), id) != null) {
+      finish(id, failure("Ya hay otra invocación en curso en el worktree " + workspace.path()));
+      return;
+    }
+    try {
+      run(id, start, execution, workspace);
+    } finally {
+      busyWorkspaces.remove(workspace.path(), id);
     }
   }
 

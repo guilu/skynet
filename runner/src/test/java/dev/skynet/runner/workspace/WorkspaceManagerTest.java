@@ -97,9 +97,9 @@ class WorkspaceManagerTest {
     assertThatThrownBy(() -> manager.existing(repo))
         .isInstanceOf(IOException.class)
         .hasMessageContaining("no existe en este runner");
-    assertThatThrownBy(() -> manager.existing(dir.resolve("workspaces/../repo")))
-        .isInstanceOf(IOException.class);
-    assertThatThrownBy(() -> manager.existing(dir.resolve("workspaces/nope")))
-        .isInstanceOf(IOException.class);
+    Path escaping = dir.resolve("workspaces/../repo");
+    assertThatThrownBy(() -> manager.existing(escaping)).isInstanceOf(IOException.class);
+    Path missing = dir.resolve("workspaces/nope");
+    assertThatThrownBy(() -> manager.existing(missing)).isInstanceOf(IOException.class);
   }
 }
