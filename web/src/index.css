@@ -637,6 +637,54 @@ button.link {
   text-decoration: underline;
 }
 
+.timeline-scroll {
+  max-height: 60vh;
+  min-height: 160px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.timeline {
+  position: relative;
+}
+
+.timeline-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
+.timeline-entry {
+  display: flex;
+  align-items: stretch;
+}
+
+.timeline-entry.depth-1 {
+  padding-left: var(--space-6);
+}
+
+.timeline-row.depth-2 {
+  padding-left: calc(var(--space-6) * 2);
+}
+
+.timeline-toggle {
+  flex: 0 0 1.75rem;
+  background: none;
+  color: var(--muted);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0;
+}
+
+.timeline-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-4);
+  align-items: center;
+}
+
 .timeline-row[aria-current='true'] {
   background: var(--surface-2);
   box-shadow: inset 3px 0 0 var(--accent);

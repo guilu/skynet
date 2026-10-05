@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { useSearchParams } from 'react-router'
+import type { TimelineFilters } from '../timeline/timeline'
 
 export const INSPECTOR_TABS = [
   { id: 'summary', label: 'Resumen' },
@@ -19,11 +20,16 @@ export interface RunSelection {
   tab: InspectorTab
   /** Secuencia del evento elegido, para la pestaña Evento original. */
   sequence: number | null
+  /** Filtros del timeline. */
+  filters: TimelineFilters
 }
+
+const FILTER_KEYS = ['stage', 'agent', 'kind', 'severity', 'origin'] as const
+const filterParam = (key: (typeof FILTER_KEYS)[number]) => `f.${key}`
 
 /**
  * Selección de la página de una ejecución, guardada en la query string
- * (`?agent=…&tab=tools&seq=123`) para que se pueda enlazar y sobreviva a una recarga.
+ * (`?agent=…&tab=tools&seq=123&f.kind=tool`) para que se pueda enlazar y sobreviva a una recarga.
  */
 export function useRunSelection(): [RunSelection, (change: Partial<RunSelection>) => void] {
   const [params, setParams] = useSearchParams()
@@ -33,6 +39,12 @@ export function useRunSelection(): [RunSelection, (change: Partial<RunSelection>
     agentId: params.get('agent'),
     tab: isTab(tab) ? tab : 'summary',
     sequence: Number.isInteger(seq) && seq > 0 ? seq : null,
+    filters: Object.fromEntries(
+      FILTER_KEYS.flatMap((k) => {
+        const v = params.get(filterParam(k))
+        return v ? [[k, v]] : []
+      }),
+    ) as TimelineFilters,
   }
 
   const select = useCallback(
@@ -48,6 +60,9 @@ export function useRunSelection(): [RunSelection, (change: Partial<RunSelection>
           put('agent', change.agentId)
           put('tab', change.tab === 'summary' ? null : change.tab)
           put('seq', change.sequence)
+          if (change.filters) {
+            for (const k of FILTER_KEYS) put(filterParam(k), change.filters[k] ?? null)
+          }
           return next
         },
         { replace: true },

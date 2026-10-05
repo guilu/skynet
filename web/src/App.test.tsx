@@ -225,6 +225,7 @@ describe('App', () => {
       ],
       'GET /api/work-items/w1/runs': [],
       'POST /api/work-items/w1/runs': runningRun,
+      [`/api/workflow-runs/${runningRun.id}`]: runningRun,
     })
     renderAt('/work-items/w1', <App />)
     fireEvent.change(await screen.findByLabelText('Prompt'), { target: { value: 'Haz X' } })
@@ -244,6 +245,10 @@ describe('App', () => {
       prompt: 'Haz X',
       maxTurns: 7,
     })
+    // Termina en la página de la ejecución lanzada.
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /Add model pricing importer/ }),
+    ).toBeInTheDocument()
   })
 
   it('el selector de tema fija data-theme en el documento', async () => {
@@ -280,6 +285,7 @@ describe('App', () => {
         [`/api/agent-runs/${agent.id}`]: agentRunDetail,
         '/api/runners': runners,
         [`/api/events/${toolCompleted.sequence}`]: toolCompleted,
+        [`/api/events/${toolStarted.sequence}`]: toolStarted,
       })
       renderAt(`/runs/${runId}${query}`, <App />)
     }
@@ -352,16 +358,87 @@ describe('App', () => {
       expect(screen.getByRole('tab', { name: 'Resumen' })).toHaveAttribute('aria-selected', 'true')
     })
 
-    it('elegir un evento del timeline lo abre en el inspector', async () => {
+    it('elegir una entrada del timeline la abre y enseña sus eventos originales', async () => {
       openRun()
       await screen.findByRole('tab', { name: 'Resumen' })
       FakeEventSource.last!.emit(toolStarted, toolCompleted)
-      const timeline = screen.getByRole('region', { name: 'Timeline' })
-      const row = within(timeline).getByRole('button', { name: /Herramienta Read terminada/ })
-      fireEvent.click(row)
-      expect(row).toHaveAttribute('aria-current', 'true')
+      const timeline = within(screen.getByRole('region', { name: 'Timeline' }))
+      // Inicio y fin de la herramienta forman una sola entrada.
+      const entry = timeline.getByRole('button', {
+        name: /agent\.tool\.started.*Read: \/w\/README\.md/,
+      })
+      expect(timeline.queryByRole('button', { name: /#1043/ })).not.toBeInTheDocument()
+      fireEvent.click(entry)
+      expect(await screen.findByText(/"type": "agent.tool.started"/)).toBeInTheDocument()
+
+      // La entrada elegida se abre: cada evento original se puede abrir por separado.
+      expect(timeline.getByRole('button', { name: /Abrir|Cerrar/ })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      )
+      const completed = timeline.getByRole('button', { name: /#1043/ })
+      fireEvent.click(completed)
+      expect(completed).toHaveAttribute('aria-current', 'true')
       expect(await screen.findByText(/"type": "agent.tool.completed"/)).toBeInTheDocument()
     })
+
+    it('los filtros salen de la URL y avisan si ocultan el evento elegido', async () => {
+      openRun(`?tab=event&seq=${toolCompleted.sequence}&f.kind=message`)
+      await screen.findByRole('tab', { name: 'Evento original' })
+      FakeEventSource.last!.emit(toolStarted, toolCompleted, message)
+      const timeline = within(screen.getByRole('region', { name: 'Timeline' }))
+      expect(timeline.getByLabelText('Tipo')).toHaveDisplayValue('Mensajes')
+      expect(timeline.getByRole('button', { name: /Mensaje: <img/ })).toBeInTheDocument()
+      expect(timeline.queryByRole('button', { name: /Read: / })).not.toBeInTheDocument()
+      expect(timeline.getByText(/no se ve con estos filtros/)).toBeInTheDocument()
+
+      fireEvent.click(timeline.getByRole('button', { name: 'Quitar filtros' }))
+      expect(timeline.getByLabelText('Tipo')).toHaveDisplayValue('Todos')
+      expect(timeline.getByRole('button', { name: /#1043/ })).toHaveAttribute(
+        'aria-current',
+        'true',
+      )
+    })
+  })
+
+  it('aplica los eventos en vivo a la cabecera sin volver a pedir la ejecución', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const fetch = stubApi({
+      [`/api/workflow-runs/${runningRun.id}`]: runningRun,
+      [`/api/agent-runs/${agentId}`]: agentRunDetail,
+      '/api/runners': runners,
+    })
+    renderAt(`/runs/${runningRun.id}`, <App />)
+    const title = await screen.findByRole('heading', { level: 1, name: /Add model pricing/ })
+    FakeEventSource.last!.emit({
+      ...(storedEvent as StoredEvent),
+      workflowRunId: runningRun.id,
+      aggregateId: agentId,
+      sequence: 2000,
+      payload: { toolUseId: 'g', name: 'Grep', input: { pattern: 'price' } },
+    })
+    expect(await within(title.closest('header')!).findByText(/Grep/)).toBeInTheDocument()
+    const runFetches = fetch.mock.calls.filter(
+      ([url]) => url === `/api/workflow-runs/${runningRun.id}`,
+    )
+    expect(runFetches).toHaveLength(1)
+  })
+
+  it('el timeline solo pinta las filas visibles', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    stubApi({})
+    renderAt('/activity', <App />)
+    await screen.findByRole('heading', { name: /Actividad/ })
+    FakeEventSource.last!.emit(
+      ...Array.from({ length: 2000 }, (_, i) => ({
+        ...(storedEvent as StoredEvent),
+        sequence: i + 1,
+        type: 'agent.message.received',
+        payload: { text: `mensaje ${i + 1}` },
+      })),
+    )
+    expect(await screen.findByText('Mensaje: mensaje 1')).toBeInTheDocument()
+    expect(document.querySelectorAll('.timeline-item').length).toBeLessThan(100)
   })
 
   it('la actividad enlaza cada evento con el inspector de su ejecución', async () => {
@@ -375,7 +452,7 @@ describe('App', () => {
     renderAt('/activity', <App />)
     await screen.findByRole('heading', { name: /Actividad/ })
     FakeEventSource.last!.emit(storedEvent as StoredEvent)
-    fireEvent.click(await screen.findByRole('button', { name: /Herramienta Read/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Read: \/w\/README.md/ }))
     expect(await screen.findByRole('tab', { name: 'Evento original' })).toHaveAttribute(
       'aria-selected',
       'true',
