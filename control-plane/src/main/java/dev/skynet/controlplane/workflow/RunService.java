@@ -11,12 +11,16 @@ import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
 import dev.skynet.protocol.runner.AgentLimits;
+import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.StartAgent;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
@@ -43,6 +47,7 @@ public class RunService {
   private final JdbcClient jdbc;
   private final RunTransitions transitions;
   private final AgentDefaults defaults;
+  private final Workspaces workspaces;
   private final ApplicationEventPublisher publisher;
 
   RunService(
@@ -56,6 +61,7 @@ public class RunService {
       JdbcClient jdbc,
       RunTransitions transitions,
       AgentDefaults defaults,
+      Workspaces workspaces,
       ApplicationEventPublisher publisher) {
     this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
@@ -67,6 +73,7 @@ public class RunService {
     this.jdbc = jdbc;
     this.transitions = transitions;
     this.defaults = defaults;
+    this.workspaces = workspaces;
     this.publisher = publisher;
   }
 
@@ -84,18 +91,174 @@ public class RunService {
       throw new ConflictException(
           "El repositorio " + repository.getName() + " no pertenece al proyecto del trabajo");
     }
-    Instant now = time.now();
+    return spawn(
+        workItem,
+        repository,
+        Invocation.fresh(AgentRunKind.START, null, promptText, withDefaults(limits)));
+  }
 
-    WorkflowRun run = WorkflowRun.create(workItemId, adhocDefinitionId(), now);
+  /**
+   * Envía un mensaje al agente: reanuda su sesión ({@code --resume}) en el mismo worktree y el
+   * mismo runner, como una invocación hija en una ejecución nueva; la terminada no se modifica. Si
+   * la sesión ya continuó, el mensaje sigue a su última invocación.
+   */
+  @Transactional
+  public WorkflowRun sendMessage(UUID agentRunId, String text) {
+    return continueSession(agentRunId, text, false);
+  }
+
+  /**
+   * Bifurca la sesión del agente ({@code --fork-session}) con un mensaje: una sesión nueva que
+   * parte de la conversación, en un worktree nuevo creado desde el suyo, en el mismo runner.
+   */
+  @Transactional
+  public WorkflowRun fork(UUID agentRunId, String text) {
+    return continueSession(agentRunId, text, true);
+  }
+
+  /**
+   * Reintenta un lanzamiento: el mismo prompt y los mismos límites, con sesión y worktree nuevos,
+   * en cualquier runner. Para repetir un mensaje basta con enviarlo otra vez.
+   */
+  @Transactional
+  public WorkflowRun retry(UUID agentRunId) {
+    AgentRun parent = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
+    requireFinished(parent);
+    if (parent.getKind() != AgentRunKind.START && parent.getKind() != AgentRunKind.RETRY) {
+      throw new ConflictException(
+          "Solo se puede reintentar un lanzamiento; para repetir un mensaje, envíalo de nuevo");
+    }
+    String promptText =
+        prompts.findByAgentRunIdOrderByCreatedAtAsc(agentRunId).stream()
+            .filter(p -> Prompt.ROLE_USER.equals(p.getRole()))
+            .findFirst()
+            .orElseThrow(
+                () -> new ConflictException("El agente " + agentRunId + " no tiene prompt"))
+            .getContent();
+    return spawn(
+        workItemOf(parent),
+        projects.getRepository(parent.getRepositoryId()),
+        Invocation.fresh(AgentRunKind.RETRY, parent, promptText, withDefaults(parent.limits())));
+  }
+
+  private WorkflowRun continueSession(UUID agentRunId, String text, boolean fork) {
+    AgentRun requested = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
+    WorkspaceView workspace =
+        workspaces
+            .find(requested.getWorkspaceId())
+            .orElseThrow(
+                () ->
+                    new ConflictException(
+                        "La sesión del agente "
+                            + agentRunId
+                            + " no llegó a arrancar: no se puede continuar"));
+    // Con el worktree bloqueado, la última invocación y el bloqueo de escritores no cambian hasta
+    // el commit.
+    workspaces.lock(workspace.id());
+    AgentRun parent = lastOfSession(requested);
+    if (workspaces.hasLiveInvocation(workspace.id())) {
+      throw new ConflictException(
+          "Ya hay una invocación en curso en el worktree "
+              + workspace.path()
+              + ": espera a que termine o cancélala");
+    }
+    if (!sessionStarted(parent)) {
+      throw new ConflictException(
+          "La sesión del agente " + parent.getId() + " no llegó a arrancar: no se puede continuar");
+    }
+    UUID sessionId = fork ? UUID.randomUUID() : UUID.fromString(parent.getProviderSessionId());
+    return spawn(
+        workItemOf(parent),
+        projects.getRepository(parent.getRepositoryId()),
+        new Invocation(
+            fork ? AgentRunKind.FORK : AgentRunKind.RESUME,
+            parent,
+            sessionId,
+            text,
+            withDefaults(parent.limits()),
+            fork ? null : workspace.id(),
+            new ResumeFrom(
+                parent.getProviderSessionId(), fork, workspace.path(), workspace.branch()),
+            parent.getRunnerId()));
+  }
+
+  /**
+   * Última invocación de la sesión a partir de {@code agent}: sigue sus reanudaciones mientras las
+   * haya. Los forks y reintentos abren sesiones nuevas y no cuentan.
+   */
+  private AgentRun lastOfSession(AgentRun agent) {
+    AgentRun current = agent;
+    for (AgentRun next = lastStep(current); next != null; next = lastStep(current)) {
+      current = next;
+    }
+    return current;
+  }
+
+  /** El proveedor confirmó la sesión: sin eso no hay nada que reanudar. */
+  private boolean sessionStarted(AgentRun agent) {
+    StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
+    return jdbc.sql(
+                "SELECT count(*) FROM event WHERE workflow_run_id = ? AND aggregate_id = ?"
+                    + " AND event_type = 'agent.session.started'")
+            .params(stage.getWorkflowRunId(), agent.getId())
+            .query(Integer.class)
+            .single()
+        > 0;
+  }
+
+  private static void requireFinished(AgentRun agent) {
+    if (!agent.getStatus().isTerminal()) {
+      throw new ConflictException(
+          "El agente " + agent.getId() + " sigue en curso (" + agent.getStatus() + ")");
+    }
+  }
+
+  private WorkItem workItemOf(AgentRun agent) {
+    StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
+    WorkflowRun run = workflowRuns.findById(stage.getWorkflowRunId()).orElseThrow();
+    return workItems.get(run.getWorkItemId());
+  }
+
+  /**
+   * Invocación por crear.
+   *
+   * @param parent invocación de la que parte, o {@code null} en un lanzamiento
+   * @param workspaceId worktree que reutiliza (solo al reanudar)
+   * @param resume sesión y worktree de partida (reanudar y bifurcar)
+   * @param runnerId runner que debe ejecutarla, o {@code null} si vale cualquiera
+   */
+  private record Invocation(
+      AgentRunKind kind,
+      AgentRun parent,
+      UUID sessionId,
+      String prompt,
+      AgentLimits limits,
+      UUID workspaceId,
+      ResumeFrom resume,
+      UUID runnerId) {
+
+    /** Invocación con sesión y worktree nuevos, en cualquier runner. */
+    static Invocation fresh(AgentRunKind kind, AgentRun parent, String prompt, AgentLimits limits) {
+      return new Invocation(kind, parent, UUID.randomUUID(), prompt, limits, null, null, null);
+    }
+  }
+
+  /** Crea la ejecución {@code adhoc} con su fase y su agente en cola, y publica la orden. */
+  private WorkflowRun spawn(WorkItem workItem, CodeRepository repository, Invocation invocation) {
+    Instant now = time.now();
+    AgentRun parent = invocation.parent();
+
+    WorkflowRun run = WorkflowRun.create(workItem.getId(), adhocDefinitionId(), now);
     run.transitionTo(WorkflowRunStatus.RUNNING, now);
     run = workflowRuns.save(run);
-    append(
-        "workflow_run",
-        run.getId(),
-        "workflow.started",
-        run.getId(),
-        Map.of("workItemId", workItemId, "definition", "adhoc", "status", run.getStatus()),
-        now);
+    Map<String, Object> started = new LinkedHashMap<>();
+    started.put("workItemId", workItem.getId());
+    started.put("definition", "adhoc");
+    started.put("status", run.getStatus());
+    if (parent != null) {
+      started.put("parentAgentRunId", parent.getId());
+    }
+    append("workflow_run", run.getId(), "workflow.started", run.getId(), started, now);
 
     StageRun stage = StageRun.create(run.getId(), ADHOC_STAGE, now);
     stage.transitionTo(StageStatus.READY, now);
@@ -108,26 +271,38 @@ public class RunService {
         Map.of("stageKey", stage.getStageKey(), "attempt", stage.getAttempt()),
         now);
 
-    UUID sessionId = UUID.randomUUID();
     AgentRun agent =
         agentRuns.save(
-            AgentRun.queued(
-                stage.getId(), repositoryId, AgentRun.PROVIDER_CLAUDE_CODE, sessionId, now));
-    Prompt prompt = prompts.save(Prompt.of(agent.getId(), Prompt.ROLE_USER, promptText, now));
-    append(
-        "agent_run",
-        agent.getId(),
-        "agent.spawned",
-        run.getId(),
-        Map.of(
-            "stageRunId", stage.getId(),
-            "repositoryId", repositoryId,
-            "provider", agent.getProvider(),
-            "kind", agent.getKind(),
-            "status", agent.getStatus(),
-            "promptId", prompt.getId(),
-            "promptSha256", prompt.getSha256()),
-        now);
+            parent == null
+                ? AgentRun.queued(
+                    stage.getId(),
+                    repository.getId(),
+                    AgentRun.PROVIDER_CLAUDE_CODE,
+                    invocation.sessionId(),
+                    invocation.limits(),
+                    now)
+                : AgentRun.queued(
+                    stage.getId(),
+                    parent,
+                    invocation.kind(),
+                    invocation.sessionId(),
+                    invocation.workspaceId(),
+                    invocation.limits(),
+                    now));
+    Prompt prompt =
+        prompts.save(Prompt.of(agent.getId(), Prompt.ROLE_USER, invocation.prompt(), now));
+    Map<String, Object> spawned = new LinkedHashMap<>();
+    spawned.put("stageRunId", stage.getId());
+    spawned.put("repositoryId", repository.getId());
+    spawned.put("provider", agent.getProvider());
+    spawned.put("kind", agent.getKind());
+    spawned.put("status", agent.getStatus());
+    spawned.put("promptId", prompt.getId());
+    spawned.put("promptSha256", prompt.getSha256());
+    if (parent != null) {
+      spawned.put("parentAgentRunId", parent.getId());
+    }
+    append("agent_run", agent.getId(), "agent.spawned", run.getId(), spawned, now);
     publisher.publishEvent(
         new AgentRunQueued(
             agent.getId(),
@@ -136,12 +311,14 @@ public class RunService {
                 workItem.getKey(),
                 repository.getLocalPath(),
                 repository.getDefaultBranch(),
-                sessionId,
-                promptText,
+                invocation.sessionId(),
+                invocation.prompt(),
                 defaults.allowedTools(),
                 defaults.permissionMode(),
                 defaults.model(),
-                withDefaults(limits))));
+                invocation.limits(),
+                invocation.resume()),
+            invocation.runnerId()));
     return run;
   }
 
@@ -247,11 +424,89 @@ public class RunService {
     AgentRun agent = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
     StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
     return new AgentRunDetail(
-        AgentRunView.of(agent),
+        AgentRunView.of(agent, workspaces.find(agent.getWorkspaceId()).orElse(null)),
         stage.getWorkflowRunId(),
         prompts.findByAgentRunIdOrderByCreatedAtAsc(agentRunId).stream()
             .map(PromptView::of)
             .toList());
+  }
+
+  /**
+   * Conversación a la que pertenece el agente: sube por reanudaciones y forks hasta el lanzamiento
+   * que la empezó y baja por las reanudaciones hasta la última invocación.
+   */
+  @Transactional(readOnly = true)
+  public ConversationView conversation(UUID agentRunId) {
+    AgentRun agent = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
+    LinkedList<AgentRun> chain = new LinkedList<>();
+    AgentRun current = agent;
+    while (current.getParentAgentRunId() != null
+        && (current.getKind() == AgentRunKind.RESUME || current.getKind() == AgentRunKind.FORK)) {
+      current = agentRuns.findById(current.getParentAgentRunId()).orElseThrow();
+      chain.addFirst(current);
+    }
+    chain.add(agent);
+    AgentRun last = agent;
+    for (AgentRun next = lastStep(last); next != null; next = lastStep(last)) {
+      chain.add(next);
+      last = next;
+    }
+    Map<UUID, WorkspaceView> worktrees = new HashMap<>();
+    workspaces
+        .findAll(
+            chain.stream()
+                .map(AgentRun::getWorkspaceId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList())
+        .forEach(w -> worktrees.put(w.id(), w));
+    return new ConversationView(
+        chain.stream()
+            .map(
+                a -> {
+                  UUID runId =
+                      stageRuns.findById(a.getStageRunId()).orElseThrow().getWorkflowRunId();
+                  String promptText =
+                      prompts.findByAgentRunIdOrderByCreatedAtAsc(a.getId()).stream()
+                          .filter(p -> Prompt.ROLE_USER.equals(p.getRole()))
+                          .map(Prompt::getContent)
+                          .findFirst()
+                          .orElse(null);
+                  return new ConversationView.Turn(
+                      runId,
+                      AgentRunView.of(a, worktrees.get(a.getWorkspaceId())),
+                      promptText,
+                      messages(runId, a.getId()));
+                })
+            .toList());
+  }
+
+  /** Reanudación más reciente de {@code agent}, o {@code null} si no la hay. */
+  private AgentRun lastStep(AgentRun agent) {
+    return jdbc.sql(
+            "SELECT id FROM agent_run WHERE parent_agent_run_id = ? AND kind = ?"
+                + " ORDER BY created_at DESC LIMIT 1")
+        .params(agent.getId(), AgentRunKind.RESUME.name())
+        .query(UUID.class)
+        .optional()
+        .flatMap(agentRuns::findById)
+        .orElse(null);
+  }
+
+  private List<ConversationView.Message> messages(UUID workflowRunId, UUID agentRunId) {
+    return jdbc.sql(
+            "SELECT sequence, occurred_at, payload ->> 'text' AS text FROM event"
+                + " WHERE workflow_run_id = ? AND aggregate_id = ?"
+                + " AND event_type = 'agent.message.received'"
+                + " AND payload ->> 'parentToolUseId' IS NULL ORDER BY sequence")
+        .params(workflowRunId, agentRunId)
+        .query(
+            (rs, row) ->
+                new ConversationView.Message(
+                    rs.getLong("sequence"),
+                    rs.getTimestamp("occurred_at").toInstant(),
+                    rs.getString("text")))
+        .list();
   }
 
   /**
@@ -344,6 +599,15 @@ public class RunService {
             ? List.of()
             : agentRuns.findByStageRunIdInOrderByCreatedAtAsc(
                 stages.stream().map(StageRun::getId).toList());
+    Map<UUID, WorkspaceView> worktrees = new HashMap<>();
+    workspaces
+        .findAll(
+            agents.stream()
+                .map(AgentRun::getWorkspaceId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList())
+        .forEach(w -> worktrees.put(w.id(), w));
     Map<UUID, WorkItem> items = new HashMap<>();
     workItems
         .getAll(runs.stream().map(WorkflowRun::getWorkItemId).distinct().toList())
@@ -362,7 +626,10 @@ public class RunService {
                                     s,
                                     agents.stream()
                                         .filter(a -> a.getStageRunId().equals(s.getId()))
-                                        .map(AgentRunView::of)
+                                        .map(
+                                            a ->
+                                                AgentRunView.of(
+                                                    a, worktrees.get(a.getWorkspaceId())))
                                         .toList()))
                         .toList()))
         .toList();

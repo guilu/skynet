@@ -401,6 +401,220 @@ class RunnerProtocolIT extends IntegrationTest {
     assertThat(agent(run).path("status").asString()).isEqualTo("STARTING");
   }
 
+  // --- M4: reanudar, bifurcar y reintentar ---
+
+  @Test
+  void aMessageResumesTheSessionOnTheSameRunnerAndWorktree() {
+    Runner owner = register("owner", 1);
+    Launched run = launch("Arregla add()", Map.of("maxTurns", 7));
+    JsonNode start = poll(owner, 0).getFirst();
+    ack(owner, start);
+    String session = start.path("start").path("sessionId").asString();
+    completed(owner, run.agentId(), session, "/w/run/a1", "0.0574");
+    Runner other = register("other", 1);
+
+    JsonNode agentView = agent(run);
+    assertThat(agentView.path("workspace").path("path").asString()).isEqualTo("/w/run/a1");
+    assertThat(agentView.path("workspace").path("branch").asString()).isEqualTo("skynet/run-1/a1");
+
+    Launched resumed = continueWith(run.agentId(), "messages", "Añade un test");
+    assertThat(resumed.runId()).isNotEqualTo(run.runId());
+    JsonNode child = agent(resumed);
+    assertThat(child.path("kind").asString()).isEqualTo("RESUME");
+    assertThat(child.path("parentAgentRunId").asString()).isEqualTo(run.agentId().toString());
+    assertThat(child.path("status").asString()).isEqualTo("QUEUED");
+    assertThat(child.path("providerSessionId").asString()).isEqualTo(session);
+    assertThat(child.path("workspace").path("path").asString()).isEqualTo("/w/run/a1");
+    // La ejecución terminada no cambia.
+    assertThat(get("/api/workflow-runs/" + run.runId()).path("status").asString())
+        .isEqualTo("SUCCEEDED");
+
+    assertThat(poll(other, 0)).isEmpty();
+    List<JsonNode> commands = poll(owner, 0);
+    assertThat(commands).hasSize(1);
+    JsonNode resume = commands.getFirst();
+    assertThat(resume.path("type").asString()).isEqualTo("RESUME");
+    JsonNode payload = resume.path("start");
+    assertThat(payload.path("prompt").asString()).isEqualTo("Añade un test");
+    assertThat(payload.path("sessionId").asString()).isEqualTo(session);
+    assertThat(payload.path("workflowRunId").asString()).isEqualTo(resumed.runId().toString());
+    assertThat(payload.path("limits").path("maxTurns").asInt()).isEqualTo(7);
+    assertThat(payload.path("resume").path("sessionId").asString()).isEqualTo(session);
+    assertThat(payload.path("resume").path("fork").asBoolean()).isFalse();
+    assertThat(payload.path("resume").path("workspacePath").asString()).isEqualTo("/w/run/a1");
+    assertThat(payload.path("resume").path("workspaceBranch").asString())
+        .isEqualTo("skynet/run-1/a1");
+    assertThat(agent(resumed).path("status").asString()).isEqualTo("STARTING");
+    ack(owner, resume);
+
+    // Un solo escritor por worktree, se pida sobre el padre o sobre el hijo.
+    assertStatus(HttpStatus.CONFLICT, () -> continueWith(run.agentId(), "messages", "Y otro"));
+    assertStatus(HttpStatus.CONFLICT, () -> continueWith(resumed.agentId(), "fork", "Y otro"));
+
+    completed(owner, resumed.agentId(), session, "/w/run/a1", "0.0815");
+    child = agent(resumed);
+    assertThat(child.path("status").asString()).isEqualTo("COMPLETED");
+    assertThat(child.path("costUsd").decimalValue()).isEqualByComparingTo("0.0241");
+    assertThat(jdbc.sql("SELECT count(*) FROM workspace").query(Integer.class).single())
+        .isEqualTo(1);
+
+    // Un mensaje sobre una invocación antigua sigue a la última de la sesión.
+    Launched third = continueWith(run.agentId(), "messages", "Ahora documenta");
+    assertThat(agent(third).path("parentAgentRunId").asString())
+        .isEqualTo(resumed.agentId().toString());
+
+    JsonNode turns = get("/api/agent-runs/" + resumed.agentId() + "/conversation").path("turns");
+    assertThat(turns)
+        .extracting(t -> t.path("prompt").asString())
+        .containsExactly("Arregla add()", "Añade un test", "Ahora documenta");
+    assertThat(turns)
+        .extracting(t -> t.path("workflowRunId").asString())
+        .containsExactly(
+            run.runId().toString(), resumed.runId().toString(), third.runId().toString());
+    assertThat(turns.get(0).path("messages"))
+        .extracting(m -> m.path("text").asString())
+        .containsExactly("Hecho");
+  }
+
+  @Test
+  void aForkStartsANewSessionFromTheConversationAndARetryStartsOver() {
+    Runner owner = register("owner", 1);
+    Launched run = launch("Arregla add()");
+    JsonNode start = poll(owner, 0).getFirst();
+    ack(owner, start);
+    String session = start.path("start").path("sessionId").asString();
+    completed(owner, run.agentId(), session, "/w/run/a1", "0.0574");
+
+    Launched forked = continueWith(run.agentId(), "fork", "Prueba otra solución");
+    JsonNode fork = agent(forked);
+    assertThat(fork.path("kind").asString()).isEqualTo("FORK");
+    assertThat(fork.path("providerSessionId").asString()).isNotEqualTo(session);
+    assertThat(fork.path("workspace").isNull()).isTrue();
+    JsonNode command = poll(owner, 0).getFirst();
+    assertThat(command.path("type").asString()).isEqualTo("RESUME");
+    assertThat(command.path("start").path("sessionId").asString())
+        .isEqualTo(fork.path("providerSessionId").asString());
+    assertThat(command.path("start").path("resume").path("sessionId").asString())
+        .isEqualTo(session);
+    assertThat(command.path("start").path("resume").path("fork").asBoolean()).isTrue();
+    ack(owner, command);
+    completed(
+        owner, forked.agentId(), fork.path("providerSessionId").asString(), "/w/run/f1", "0.0867");
+    fork = agent(forked);
+    // El fork hereda el coste acumulado de la sesión de la que parte.
+    assertThat(fork.path("costUsd").decimalValue()).isEqualByComparingTo("0.0293");
+    assertThat(fork.path("workspace").path("path").asString()).isEqualTo("/w/run/f1");
+    assertThat(
+            get("/api/agent-runs/" + forked.agentId() + "/conversation")
+                .path("turns")
+                .findValuesAsString("prompt"))
+        .containsExactly("Arregla add()", "Prueba otra solución");
+
+    Launched retried = launched(post("/api/agent-runs/" + run.agentId() + "/retry", Map.of()));
+    JsonNode retry = agent(retried);
+    assertThat(retry.path("kind").asString()).isEqualTo("RETRY");
+    assertThat(retry.path("parentAgentRunId").asString()).isEqualTo(run.agentId().toString());
+    assertThat(retry.path("providerSessionId").asString()).isNotEqualTo(session);
+    command = poll(owner, 0).getFirst();
+    assertThat(command.path("type").asString()).isEqualTo("START");
+    assertThat(command.path("start").path("prompt").asString()).isEqualTo("Arregla add()");
+    assertThat(command.path("start").path("resume").isNull()).isTrue();
+    ack(owner, command);
+    completed(
+        owner, retried.agentId(), retry.path("providerSessionId").asString(), "/w/run/r1", "0.05");
+    // Un reintento es una sesión nueva: no se le resta el coste del original.
+    assertThat(agent(retried).path("costUsd").decimalValue()).isEqualByComparingTo("0.05");
+    assertThat(get("/api/agent-runs/" + retried.agentId() + "/conversation").path("turns"))
+        .hasSize(1);
+
+    assertStatus(
+        HttpStatus.CONFLICT,
+        () -> post("/api/agent-runs/" + forked.agentId() + "/retry", Map.of()));
+  }
+
+  @Test
+  void onlyFinishedAgentsWithAStartedSessionCanContinue() {
+    Runner runner = register("laptop", 1);
+    Launched run = launch("x");
+    ack(runner, poll(runner, 0).getFirst());
+    assertStatus(
+        HttpStatus.CONFLICT, () -> post("/api/agent-runs/" + run.agentId() + "/retry", Map.of()));
+
+    Events events = new Events(run.agentId());
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 1, "error", "sin worktree"));
+    send(runner, events.batch());
+    assertThat(agent(run).path("status").asString()).isEqualTo("FAILED");
+    assertStatus(HttpStatus.CONFLICT, () -> continueWith(run.agentId(), "messages", "hola"));
+    assertStatus(HttpStatus.CONFLICT, () -> continueWith(run.agentId(), "fork", "hola"));
+    assertStatus(
+        HttpStatus.BAD_REQUEST,
+        () -> post("/api/agent-runs/" + run.agentId() + "/messages", Map.of("text", " ")));
+  }
+
+  @Test
+  void aResumeWaitsForCapacityOnItsRunnerAndCanBeCancelledWhileQueued() {
+    Runner runner = register("laptop", 1);
+    Launched run = launch("uno");
+    JsonNode start = poll(runner, 0).getFirst();
+    ack(runner, start);
+    completed(
+        runner, run.agentId(), start.path("start").path("sessionId").asString(), "/w/a", "0.01");
+
+    Launched busy = launch("ocupa el runner");
+    ack(runner, poll(runner, 0).getFirst());
+    Launched resumed = continueWith(run.agentId(), "messages", "sigue");
+    assertThat(poll(runner, 0)).isEmpty();
+    assertThat(agent(resumed).path("status").asString()).isEqualTo("QUEUED");
+
+    post("/api/agent-runs/" + resumed.agentId() + "/cancel", Map.of());
+    assertThat(agent(resumed).path("status").asString()).isEqualTo("CANCELLED");
+    Events events = new Events(busy.agentId());
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 1));
+    send(runner, events.batch());
+    assertThat(poll(runner, 0)).isEmpty();
+  }
+
+  /** Recorre una invocación completa: worktree, sesión, un mensaje, resultado y salida limpia. */
+  private void completed(
+      Runner runner, UUID agentRunId, String session, String worktree, String cumulativeCost) {
+    Events events = new Events(agentRunId);
+    events.add(
+        AgentEventType.WORKSPACE_READY,
+        Map.of(
+            "path",
+            worktree,
+            "branch",
+            "skynet/run-1/" + worktree.substring(worktree.lastIndexOf('/') + 1),
+            "baseCommit",
+            "abc"));
+    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", session));
+    events.add(AgentEventType.MESSAGE_RECEIVED, Map.of("text", "Hecho"));
+    events.add(
+        AgentEventType.RESULT,
+        Map.of(
+            "subtype",
+            "success",
+            "isError",
+            false,
+            "costUsdCumulative",
+            new BigDecimal(cumulativeCost)));
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 0));
+    send(runner, events.batch());
+    assertThat(get("/api/agent-runs/" + agentRunId).path("agent").path("status").asString())
+        .isEqualTo("COMPLETED");
+  }
+
+  /** Reanuda ({@code messages}) o bifurca ({@code fork}) la sesión de un agente. */
+  private Launched continueWith(UUID agentRunId, String action, String text) {
+    return launched(post("/api/agent-runs/" + agentRunId + "/" + action, Map.of("text", text)));
+  }
+
+  private static Launched launched(JsonNode run) {
+    return new Launched(
+        UUID.fromString(run.path("id").asString()),
+        UUID.fromString(run.path("stages").get(0).path("agents").get(0).path("id").asString()));
+  }
+
   // --- utilidades ---
 
   private record Runner(UUID id, String token) {}

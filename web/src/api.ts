@@ -98,6 +98,34 @@ export interface AgentRun {
   lastEventType: string | null
   /** Herramienta en curso, o null si no hay ninguna. */
   currentTool: string | null
+  /** Worktree de la invocación, cuando el runner lo ha preparado. */
+  workspace: Workspace | null
+}
+
+export interface Workspace {
+  id: string
+  runnerId: string
+  path: string
+  branch: string
+  baseCommit: string | null
+}
+
+/** Invocaciones encadenadas de una sesión, de la primera a la última. */
+export interface Conversation {
+  turns: ConversationTurn[]
+}
+
+export interface ConversationTurn {
+  workflowRunId: string
+  agent: AgentRun
+  prompt: string | null
+  messages: ConversationMessage[]
+}
+
+export interface ConversationMessage {
+  sequence: number
+  occurredAt: string
+  text: string
 }
 
 export interface StageRun {
@@ -273,6 +301,15 @@ export const api = {
     request<Run>('POST', `/api/work-items/${workItemId}/runs`, body),
   agent: (id: string) => request<AgentRunDetail>('GET', `/api/agent-runs/${id}`),
   cancelAgent: (id: string) => request<AgentRunDetail>('POST', `/api/agent-runs/${id}/cancel`),
+  conversation: (id: string) => request<Conversation>('GET', `/api/agent-runs/${id}/conversation`),
+  /** Reanuda la sesión con un mensaje; devuelve la ejecución nueva. */
+  sendMessage: (id: string, text: string) =>
+    request<Run>('POST', `/api/agent-runs/${id}/messages`, { text }),
+  /** Bifurca la sesión con un mensaje; devuelve la ejecución nueva. */
+  forkAgent: (id: string, text: string) =>
+    request<Run>('POST', `/api/agent-runs/${id}/fork`, { text }),
+  /** Repite el lanzamiento con el mismo prompt y límites; devuelve la ejecución nueva. */
+  retryAgent: (id: string) => request<Run>('POST', `/api/agent-runs/${id}/retry`),
   runners: () => request<Runner[]>('GET', '/api/runners'),
   dashboard: () => request<DashboardSummary>('GET', '/api/dashboard'),
   workflowDefinitions: () => request<WorkflowDefinition[]>('GET', '/api/workflow-definitions'),

@@ -2,7 +2,9 @@ package dev.skynet.controlplane.workflow;
 
 import dev.skynet.controlplane.shared.ConflictException;
 import dev.skynet.protocol.AgentObservableStatus;
+import dev.skynet.protocol.runner.AgentLimits;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.data.annotation.Id;
@@ -45,6 +47,10 @@ public class AgentRun {
   private Long cacheCreationTokens;
   private String lastEventType;
   private String currentTool;
+  private UUID workspaceId;
+  private final Integer maxTurns;
+  private final BigDecimal maxBudgetUsd;
+  private final Long timeoutSeconds;
   @Version private Long version;
 
   @PersistenceCreator
@@ -78,6 +84,10 @@ public class AgentRun {
       Long cacheCreationTokens,
       String lastEventType,
       String currentTool,
+      UUID workspaceId,
+      Integer maxTurns,
+      BigDecimal maxBudgetUsd,
+      Long timeoutSeconds,
       Long version) {
     this.id = id;
     this.stageRunId = stageRunId;
@@ -108,6 +118,10 @@ public class AgentRun {
     this.cacheCreationTokens = cacheCreationTokens;
     this.lastEventType = lastEventType;
     this.currentTool = currentTool;
+    this.workspaceId = workspaceId;
+    this.maxTurns = maxTurns;
+    this.maxBudgetUsd = maxBudgetUsd;
+    this.timeoutSeconds = timeoutSeconds;
     this.version = version;
   }
 
@@ -116,15 +130,62 @@ public class AgentRun {
    * --session-id}), de modo que se conoce antes de que el proceso arranque.
    */
   static AgentRun queued(
-      UUID stageRunId, UUID repositoryId, String provider, UUID sessionId, Instant now) {
+      UUID stageRunId,
+      UUID repositoryId,
+      String provider,
+      UUID sessionId,
+      AgentLimits limits,
+      Instant now) {
+    return create(
+        stageRunId,
+        new Origin(null, repositoryId, AgentRunKind.START, provider),
+        sessionId,
+        null,
+        limits,
+        now);
+  }
+
+  /**
+   * Invocación en cola que parte de {@code parent}, con su repositorio y su proveedor: una
+   * reanudación (misma sesión y worktree), un fork (sesión nueva bifurcada) o un reintento (sesión
+   * y worktree nuevos).
+   */
+  static AgentRun queued(
+      UUID stageRunId,
+      AgentRun parent,
+      AgentRunKind kind,
+      UUID sessionId,
+      UUID workspaceId,
+      AgentLimits limits,
+      Instant now) {
+    return create(
+        stageRunId,
+        new Origin(parent.getId(), parent.getRepositoryId(), kind, parent.getProvider()),
+        sessionId,
+        workspaceId,
+        limits,
+        now);
+  }
+
+  /** De dónde sale una invocación nueva. */
+  private record Origin(
+      UUID parentAgentRunId, UUID repositoryId, AgentRunKind kind, String provider) {}
+
+  private static AgentRun create(
+      UUID stageRunId,
+      Origin origin,
+      UUID sessionId,
+      UUID workspaceId,
+      AgentLimits limits,
+      Instant now) {
     return new AgentRun(
         UUID.randomUUID(),
         stageRunId,
-        null,
-        repositoryId,
-        AgentRunKind.START,
+        origin.parentAgentRunId(),
+        origin.repositoryId(),
+        origin.kind(),
         AgentObservableStatus.QUEUED,
-        provider,
+        origin.provider(),
         sessionId.toString(),
         null,
         null,
@@ -147,6 +208,10 @@ public class AgentRun {
         null,
         null,
         null,
+        workspaceId,
+        limits.maxTurns(),
+        limits.maxBudgetUsd(),
+        limits.timeout() == null ? null : limits.timeout().toSeconds(),
         null);
   }
 
@@ -284,6 +349,17 @@ public class AgentRun {
     return AgentObservableStatus.FAILED;
   }
 
+  /** El runner ha preparado el worktree de la invocación. */
+  void useWorkspace(UUID workspaceId) {
+    this.workspaceId = workspaceId;
+  }
+
+  /** Límites efectivos con los que se lanzó la invocación. */
+  AgentLimits limits() {
+    return new AgentLimits(
+        maxTurns, maxBudgetUsd, timeoutSeconds == null ? null : Duration.ofSeconds(timeoutSeconds));
+  }
+
   /** Marca la cancelación pedida. Devuelve {@code false} si ya estaba pedida. */
   boolean requestCancel(Instant now) {
     if (cancelRequestedAt != null) {
@@ -407,6 +483,22 @@ public class AgentRun {
 
   public String getCurrentTool() {
     return currentTool;
+  }
+
+  public UUID getWorkspaceId() {
+    return workspaceId;
+  }
+
+  public Integer getMaxTurns() {
+    return maxTurns;
+  }
+
+  public BigDecimal getMaxBudgetUsd() {
+    return maxBudgetUsd;
+  }
+
+  public Long getTimeoutSeconds() {
+    return timeoutSeconds;
   }
 
   public Long getVersion() {

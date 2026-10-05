@@ -42,6 +42,7 @@ public class AgentEventIngestion {
   private final RunTransitions transitions;
   private final EventStore events;
   private final PayloadRedactor redactor;
+  private final Workspaces workspaces;
   private final TimeSource time;
 
   AgentEventIngestion(
@@ -51,6 +52,7 @@ public class AgentEventIngestion {
       RunTransitions transitions,
       EventStore events,
       PayloadRedactor redactor,
+      Workspaces workspaces,
       TimeSource time) {
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
@@ -58,6 +60,7 @@ public class AgentEventIngestion {
     this.transitions = transitions;
     this.events = events;
     this.redactor = redactor;
+    this.workspaces = workspaces;
     this.time = time;
   }
 
@@ -109,6 +112,20 @@ public class AgentEventIngestion {
       agent = active(agent, stage, AgentObservableStatus.THINKING, "activity-resumed", now);
     }
     switch (event.type()) {
+      case WORKSPACE_READY -> {
+        String path = string(p, "path");
+        String branch = string(p, "branch");
+        if (path != null && branch != null) {
+          agent.useWorkspace(
+              workspaces.register(
+                  agent.getRepositoryId(),
+                  agent.getRunnerId(),
+                  path,
+                  branch,
+                  string(p, "baseCommit"),
+                  now));
+        }
+      }
       case SESSION_STARTED -> {
         agent.startSession(string(p, "sessionId"), string(p, "model"), event.occurredAt());
         agent = active(agent, stage, AgentObservableStatus.THINKING, "session-started", now);
@@ -152,9 +169,13 @@ public class AgentEventIngestion {
     return agent;
   }
 
-  /** Coste acumulado de la invocación anterior en el linaje de la sesión (reanudar, fork: M4). */
+  /**
+   * Coste acumulado de la invocación anterior en el linaje de la sesión. Solo reanudar y bifurcar
+   * continúan la sesión del padre; un reintento empieza una sesión nueva.
+   */
   private BigDecimal previousCumulativeCost(AgentRun agent) {
-    if (agent.getParentAgentRunId() == null) {
+    if (agent.getParentAgentRunId() == null
+        || (agent.getKind() != AgentRunKind.RESUME && agent.getKind() != AgentRunKind.FORK)) {
       return null;
     }
     return agentRuns

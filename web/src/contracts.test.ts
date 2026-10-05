@@ -3,6 +3,7 @@
 // añade, quita o renombra un campo, este test falla hasta que se actualicen los tipos.
 import { describe, expect, it } from 'vitest'
 import agentRunDetail from '../../fixtures/contracts/agent-run-detail.json'
+import conversation from '../../fixtures/contracts/conversation.json'
 import dashboardSummary from '../../fixtures/contracts/dashboard-summary.json'
 import runPage from '../../fixtures/contracts/run-page.json'
 import runView from '../../fixtures/contracts/run-view.json'
@@ -12,6 +13,9 @@ import workflowDefinitions from '../../fixtures/contracts/workflow-definitions.j
 import type {
   AgentRun,
   AgentRunDetail,
+  Conversation,
+  ConversationMessage,
+  ConversationTurn,
   DashboardSummary,
   Prompt,
   Run,
@@ -22,6 +26,7 @@ import type {
   StoredEvent,
   UnresponsiveAgent,
   WorkflowDefinition,
+  Workspace,
 } from './api'
 
 // Record<keyof T, true> obliga a listar todas las claves de T y solo esas.
@@ -55,6 +60,26 @@ const AGENT_RUN: Keys<AgentRun> = {
   error: true,
   lastEventType: true,
   currentTool: true,
+  workspace: true,
+}
+const WORKSPACE: Keys<Workspace> = {
+  id: true,
+  runnerId: true,
+  path: true,
+  branch: true,
+  baseCommit: true,
+}
+const CONVERSATION: Keys<Conversation> = { turns: true }
+const CONVERSATION_TURN: Keys<ConversationTurn> = {
+  workflowRunId: true,
+  agent: true,
+  prompt: true,
+  messages: true,
+}
+const CONVERSATION_MESSAGE: Keys<ConversationMessage> = {
+  sequence: true,
+  occurredAt: true,
+  text: true,
 }
 const STAGE_RUN: Keys<StageRun> = {
   id: true,
@@ -137,12 +162,17 @@ const WORKFLOW_DEFINITION: Keys<WorkflowDefinition> = {
 const keysOf = (value: object) => Object.keys(value).sort()
 const expectShape = (value: object, shape: object) => expect(keysOf(value)).toEqual(keysOf(shape))
 
+function expectAgent(agent: AgentRun) {
+  expectShape(agent, AGENT_RUN)
+  if (agent.workspace) expectShape(agent.workspace, WORKSPACE)
+}
+
 function expectRun(run: Run) {
   expectShape(run, RUN)
   expectShape(run.totals, RUN_TOTALS)
   for (const stage of run.stages) {
     expectShape(stage, STAGE_RUN)
-    stage.agents.forEach((agent) => expectShape(agent, AGENT_RUN))
+    stage.agents.forEach(expectAgent)
   }
 }
 
@@ -159,7 +189,7 @@ describe('contratos con el backend', () => {
 
   it('detalle de agente', () => {
     expectShape(agentRunDetail, AGENT_RUN_DETAIL)
-    expectShape(agentRunDetail.agent, AGENT_RUN)
+    expectAgent(agentRunDetail.agent as AgentRun)
     agentRunDetail.prompts.forEach((p) => expectShape(p, PROMPT))
   })
 
@@ -177,6 +207,16 @@ describe('contratos con el backend', () => {
 
   it('evento', () => {
     expectShape(storedEvent, STORED_EVENT)
+  })
+
+  it('conversación', () => {
+    expectShape(conversation, CONVERSATION)
+    expect(conversation.turns.map((t) => t.agent.kind)).toEqual(['START', 'RESUME'])
+    for (const turn of conversation.turns) {
+      expectShape(turn, CONVERSATION_TURN)
+      expectAgent(turn.agent as AgentRun)
+      turn.messages.forEach((m) => expectShape(m, CONVERSATION_MESSAGE))
+    }
   })
 
   it('definiciones de workflow', () => {

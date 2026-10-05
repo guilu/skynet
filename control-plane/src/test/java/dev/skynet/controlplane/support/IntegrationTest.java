@@ -36,7 +36,7 @@ public abstract class IntegrationTest {
     // TRUNCATE no dispara el trigger append-only de event (es por fila). La secuencia de
     // eventos no se reinicia: igual que en producción, nunca retrocede.
     jdbc.sql(
-            "TRUNCATE event, runner_command, prompt, agent_run, runner, stage_run, workflow_run, work_item, repository,"
+            "TRUNCATE event, runner_command, prompt, agent_run, workspace, runner, stage_run, workflow_run, work_item, repository,"
                 + " project")
         .update();
     baseline =

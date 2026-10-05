@@ -103,6 +103,13 @@ public final class AgentExecutor implements AutoCloseable {
     }
   }
 
+  /** Registra el fin de una invocación que este runner no puede ejecutar. */
+  public void reject(UUID agentRunId, String reason) {
+    if (!journal.isFinished(agentRunId) && !executions.containsKey(agentRunId)) {
+      finish(agentRunId, failure(reason));
+    }
+  }
+
   private void run(UUID id, StartAgent start, Execution execution) {
     try {
       Workspace workspace;

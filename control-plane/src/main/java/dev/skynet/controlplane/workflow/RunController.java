@@ -92,6 +92,35 @@ class RunController {
     return service.agent(id);
   }
 
+  @GetMapping("/api/agent-runs/{id}/conversation")
+  ConversationView conversation(@PathVariable UUID id) {
+    return service.conversation(id);
+  }
+
+  /** Mensaje para continuar o bifurcar la sesión de un agente. */
+  record SessionMessage(@NotBlank @Size(max = 100_000) String text) {}
+
+  /** Reanuda la sesión con un mensaje; devuelve la ejecución nueva. */
+  @PostMapping("/api/agent-runs/{id}/messages")
+  @ResponseStatus(HttpStatus.CREATED)
+  RunView sendMessage(@PathVariable UUID id, @Valid @RequestBody SessionMessage request) {
+    return service.run(service.sendMessage(id, request.text()).getId());
+  }
+
+  /** Bifurca la sesión con un mensaje; devuelve la ejecución nueva. */
+  @PostMapping("/api/agent-runs/{id}/fork")
+  @ResponseStatus(HttpStatus.CREATED)
+  RunView fork(@PathVariable UUID id, @Valid @RequestBody SessionMessage request) {
+    return service.run(service.fork(id, request.text()).getId());
+  }
+
+  /** Repite el lanzamiento con el mismo prompt y límites; devuelve la ejecución nueva. */
+  @PostMapping("/api/agent-runs/{id}/retry")
+  @ResponseStatus(HttpStatus.CREATED)
+  RunView retry(@PathVariable UUID id) {
+    return service.run(service.retry(id).getId());
+  }
+
   @PostMapping("/api/agent-runs/{id}/cancel")
   AgentRunDetail cancel(@PathVariable UUID id) {
     service.cancelAgent(id);

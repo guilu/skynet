@@ -61,13 +61,16 @@ class CommandQueue {
     this.signal = signal;
   }
 
-  /** Orden de arranque sin runner: la reclamará el primero con capacidad libre. */
+  /**
+   * Orden de arranque: sin runner, la reclamará el primero con capacidad libre; una reanudación va
+   * al runner de la invocación anterior, que la recibirá cuando tenga capacidad.
+   */
   @EventListener
   void on(AgentRunQueued queued) {
     insert(
-        null,
+        queued.runnerId(),
         queued.agentRunId(),
-        RunnerCommandType.START,
+        queued.isResume() ? RunnerCommandType.RESUME : RunnerCommandType.START,
         json.writeValueAsString(queued.start()));
   }
 
@@ -81,35 +84,49 @@ class CommandQueue {
   @EventListener
   void on(AgentRunWithdrawn withdrawn) {
     jdbc.sql(
-            "UPDATE runner_command SET status = ? WHERE agent_run_id = ? AND type = ?"
+            "UPDATE runner_command SET status = ? WHERE agent_run_id = ? AND type IN (?, ?)"
                 + " AND status = ?")
-        .params(CANCELLED, withdrawn.agentRunId(), RunnerCommandType.START.name(), PENDING)
+        .params(
+            CANCELLED,
+            withdrawn.agentRunId(),
+            RunnerCommandType.START.name(),
+            RunnerCommandType.RESUME.name(),
+            PENDING)
         .update();
   }
 
   /**
    * Reclama las órdenes que corresponden al runner: las suyas pendientes, las entregadas hace más
-   * de {@code redeliverAfter} sin confirmar y, mientras tenga capacidad libre, arranques sin
-   * asignar. Un arranque reclamado pasa el agente a {@code STARTING} en la misma transacción.
+   * de {@code redeliverAfter} sin confirmar y, mientras tenga capacidad libre, sus reanudaciones
+   * pendientes y arranques sin asignar. Una invocación reclamada pasa el agente a {@code STARTING}
+   * en la misma transacción.
    */
   @Transactional
   List<RunnerCommand> claim(UUID runnerId) {
     Instant now = time.now();
-    // Un arranque sin confirmar cuyo agente ya terminó no debe volver a entregarse.
+    // Una invocación sin confirmar cuyo agente ya terminó no debe volver a entregarse.
     jdbc.sql(
-            "UPDATE runner_command SET status = ? WHERE runner_id = ? AND status = ? AND type = ?"
-                + " AND agent_run_id IN (SELECT id FROM agent_run"
+            "UPDATE runner_command SET status = ? WHERE runner_id = ? AND status = ?"
+                + " AND type IN (?, ?) AND agent_run_id IN (SELECT id FROM agent_run"
                 + " WHERE status IN ('COMPLETED', 'FAILED', 'CANCELLED'))")
-        .params(CANCELLED, runnerId, DELIVERED, RunnerCommandType.START.name())
+        .params(
+            CANCELLED,
+            runnerId,
+            DELIVERED,
+            RunnerCommandType.START.name(),
+            RunnerCommandType.RESUME.name())
         .update();
     List<Row> claimed = new ArrayList<>();
+    // Las reanudaciones aún no entregadas esperan a que haya capacidad, como los arranques.
     claimed.addAll(
         jdbc.sql(
-                "SELECT * FROM runner_command WHERE runner_id = ? AND ((status = ?) OR (status = ?"
-                    + " AND delivered_at < ?)) ORDER BY created_at FOR UPDATE SKIP LOCKED")
+                "SELECT * FROM runner_command WHERE runner_id = ? AND ((status = ? AND NOT"
+                    + " (type = ? AND delivery_count = 0)) OR (status = ? AND delivered_at < ?))"
+                    + " ORDER BY created_at FOR UPDATE SKIP LOCKED")
             .params(
                 runnerId,
                 PENDING,
+                RunnerCommandType.RESUME.name(),
                 DELIVERED,
                 Timestamp.from(now.minus(properties.redeliverAfter())))
             .query(this::row)
@@ -117,22 +134,28 @@ class CommandQueue {
 
     int free = registry.capacity(runnerId) - activeAgents(runnerId);
     if (free > 0) {
-      List<Row> starts =
+      List<Row> invocations =
           jdbc.sql(
-                  "SELECT * FROM runner_command WHERE runner_id IS NULL AND status = ? AND type = ?"
+                  "SELECT * FROM runner_command WHERE status = ? AND ((runner_id IS NULL AND type"
+                      + " = ?) OR (runner_id = ? AND type = ? AND delivery_count = 0))"
                       + " ORDER BY created_at LIMIT ? FOR UPDATE SKIP LOCKED")
-              .params(PENDING, RunnerCommandType.START.name(), free)
+              .params(
+                  PENDING,
+                  RunnerCommandType.START.name(),
+                  runnerId,
+                  RunnerCommandType.RESUME.name(),
+                  free)
               .query(this::row)
               .list();
-      for (Row start : starts) {
-        if (runs.assignRunner(start.agentRunId(), runnerId)) {
+      for (Row invocation : invocations) {
+        if (runs.assignRunner(invocation.agentRunId(), runnerId)) {
           jdbc.sql("UPDATE runner_command SET runner_id = ? WHERE id = ?")
-              .params(runnerId, start.id())
+              .params(runnerId, invocation.id())
               .update();
-          claimed.add(start);
+          claimed.add(invocation);
         } else {
           jdbc.sql("UPDATE runner_command SET status = ? WHERE id = ?")
-              .params(CANCELLED, start.id())
+              .params(CANCELLED, invocation.id())
               .update();
         }
       }
