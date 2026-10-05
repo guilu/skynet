@@ -1,0 +1,21 @@
+[ {
+  "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a07",
+  "name" : "runner-01",
+  "capacity" : 2,
+  "activeAgents" : 1,
+  "runnerVersion" : "0.1.0",
+  "providerVersion" : "2.1.288",
+  "registeredAt" : "2026-10-05T08:00:00Z",
+  "lastHeartbeatAt" : "2026-10-05T09:00:30Z",
+  "status" : "ONLINE"
+}, {
+  "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a08",
+  "name" : "runner-02",
+  "capacity" : 1,
+  "activeAgents" : 0,
+  "runnerVersion" : "0.1.0",
+  "providerVersion" : "2.1.288",
+  "registeredAt" : "2026-10-05T07:00:00Z",
+  "lastHeartbeatAt" : "2026-10-05T08:50:00Z",
+  "status" : "STALE"
+} ]

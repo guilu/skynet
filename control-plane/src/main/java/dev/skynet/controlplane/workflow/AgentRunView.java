@@ -5,7 +5,14 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-record AgentRunView(
+/**
+ * Proyección de una invocación de agente: estado, actividad actual, sesión, tokens, coste y
+ * timestamps. La web la muestra tal cual, sin deducir estado de los eventos.
+ *
+ * @param lastEventType tipo del último evento del agente (p. ej. {@code agent.tool.started})
+ * @param currentTool herramienta en curso, o {@code null} si no hay ninguna
+ */
+public record AgentRunView(
     UUID id,
     UUID stageRunId,
     UUID parentAgentRunId,
@@ -23,12 +30,16 @@ record AgentRunView(
     Integer numTurns,
     Long inputTokens,
     Long outputTokens,
+    Long cacheReadTokens,
+    Long cacheCreationTokens,
     BigDecimal costUsd,
     BigDecimal costUsdCumulative,
     UUID runnerId,
     Instant cancelRequestedAt,
     String resultSubtype,
-    String error) {
+    String error,
+    String lastEventType,
+    String currentTool) {
 
   static AgentRunView of(AgentRun a) {
     return new AgentRunView(
@@ -49,11 +60,15 @@ record AgentRunView(
         a.getNumTurns(),
         a.getInputTokens(),
         a.getOutputTokens(),
+        a.getCacheReadTokens(),
+        a.getCacheCreationTokens(),
         a.getCostUsd(),
         a.getCostUsdCumulative(),
         a.getRunnerId(),
         a.getCancelRequestedAt(),
         a.getResultSubtype(),
-        a.getError());
+        a.getError(),
+        a.getLastEventType(),
+        a.getCurrentTool());
   }
 }

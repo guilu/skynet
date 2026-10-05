@@ -4,6 +4,7 @@ import dev.skynet.controlplane.event.EventDraft;
 import dev.skynet.controlplane.event.EventStore;
 import dev.skynet.controlplane.shared.PayloadRedactor;
 import dev.skynet.controlplane.shared.TimeSource;
+import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.StageStatus;
@@ -99,22 +100,35 @@ public class AgentEventIngestion {
     Instant now = time.now();
     UUID runId = stage.getWorkflowRunId();
     agent.touch(event.occurredAt());
+    agent.recordActivity(
+        event.type().wireName(),
+        event.type() == AgentEventType.TOOL_STARTED ? string(p, "name") : null,
+        event.type() == AgentEventType.TOOL_COMPLETED);
+    if (agent.getStatus() == AgentObservableStatus.UNRESPONSIVE
+        && event.type() != AgentEventType.PROCESS_EXITED) {
+      agent = active(agent, stage, AgentObservableStatus.THINKING, "activity-resumed", now);
+    }
     switch (event.type()) {
       case SESSION_STARTED -> {
         agent.startSession(string(p, "sessionId"), string(p, "model"), event.occurredAt());
         agent = active(agent, stage, AgentObservableStatus.THINKING, "session-started", now);
       }
-      case MESSAGE_RECEIVED, TOOL_COMPLETED ->
+      case MESSAGE_RECEIVED -> {
+        agent.addUsage(TokenUsage.of(p.get("usage")));
+        agent = active(agent, stage, AgentObservableStatus.THINKING, "agent-thinking", now);
+      }
+      case TOOL_COMPLETED ->
           agent = active(agent, stage, AgentObservableStatus.THINKING, "agent-thinking", now);
-      case TOOL_STARTED ->
-          agent = active(agent, stage, AgentObservableStatus.EXECUTING, "tool-started", now);
+      case TOOL_STARTED -> {
+        agent.addUsage(TokenUsage.of(p.get("usage")));
+        agent = active(agent, stage, AgentObservableStatus.EXECUTING, "tool-started", now);
+      }
       case RESULT ->
           agent.recordResult(
               string(p, "subtype"),
               Boolean.TRUE.equals(p.get("isError")),
               integer(p.get("numTurns")),
-              longValue(usage(p).get("input")),
-              longValue(usage(p).get("output")),
+              TokenUsage.of(p.get("usage")),
               decimal(p.get("costUsdCumulative")),
               previousCumulativeCost(agent),
               errors(p));
@@ -149,11 +163,6 @@ public class AgentEventIngestion {
         .orElse(null);
   }
 
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> usage(Map<String, Object> p) {
-    return p.get("usage") instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
-  }
-
   private static String errors(Map<String, Object> p) {
     if (p.get("errors") instanceof List<?> list && !list.isEmpty()) {
       return String.join("; ", list.stream().map(String::valueOf).toList());
@@ -168,10 +177,6 @@ public class AgentEventIngestion {
 
   private static Integer integer(Object value) {
     return value instanceof Number n ? n.intValue() : null;
-  }
-
-  private static Long longValue(Object value) {
-    return value instanceof Number n ? n.longValue() : null;
   }
 
   private static BigDecimal decimal(Object value) {

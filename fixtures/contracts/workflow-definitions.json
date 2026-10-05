@@ -1,0 +1,7 @@
+[ {
+  "id" : "00000000-0000-0000-0000-000000000001",
+  "key" : "adhoc",
+  "version" : 1,
+  "sourceYaml" : "id: adhoc\nversion: 1\nstages:\n  - id: agent\n    type: agent\n",
+  "createdAt" : "2026-10-05T09:00:00Z"
+} ]

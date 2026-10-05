@@ -1,0 +1,79 @@
+{
+  "activeRuns" : [ {
+    "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04",
+    "workItemId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a02",
+    "workItemKey" : "TKM-1",
+    "workItemTitle" : "Add model pricing importer",
+    "projectId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a01",
+    "status" : "RUNNING",
+    "createdAt" : "2026-10-05T09:00:00Z",
+    "startedAt" : "2026-10-05T09:00:00Z",
+    "finishedAt" : null,
+    "currentStageRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a05",
+    "currentAgentRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a06",
+    "totals" : {
+      "inputTokens" : 4,
+      "outputTokens" : 32,
+      "cacheReadTokens" : 28437,
+      "cacheCreationTokens" : 4256,
+      "costUsd" : null
+    },
+    "stages" : [ {
+      "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a05",
+      "stageKey" : "agent",
+      "status" : "RUNNING",
+      "attempt" : 1,
+      "startedAt" : "2026-10-05T09:00:02Z",
+      "finishedAt" : null,
+      "agents" : [ {
+        "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a06",
+        "stageRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a05",
+        "parentAgentRunId" : null,
+        "repositoryId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a03",
+        "kind" : "START",
+        "status" : "EXECUTING",
+        "provider" : "claude-code",
+        "providerSessionId" : "e1e75e9c-2b3a-4287-ae55-186ae1babc98",
+        "model" : "claude-opus-5-5",
+        "createdAt" : "2026-10-05T09:00:00Z",
+        "startedAt" : "2026-10-05T09:00:02Z",
+        "lastActivityAt" : "2026-10-05T09:00:17Z",
+        "finishedAt" : null,
+        "exitCode" : null,
+        "numTurns" : null,
+        "inputTokens" : 4,
+        "outputTokens" : 32,
+        "cacheReadTokens" : 28437,
+        "cacheCreationTokens" : 4256,
+        "costUsd" : null,
+        "costUsdCumulative" : null,
+        "runnerId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a07",
+        "cancelRequestedAt" : null,
+        "resultSubtype" : null,
+        "error" : null,
+        "lastEventType" : "agent.tool.started",
+        "currentTool" : "Read"
+      } ]
+    } ]
+  } ],
+  "activeRunsTotal" : 1,
+  "recentFailures" : [ ],
+  "unresponsiveAgents" : [ {
+    "agentRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a06",
+    "workflowRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04",
+    "workItemKey" : "TKM-1",
+    "lastActivityAt" : "2026-10-05T09:00:17Z"
+  } ],
+  "staleRunners" : [ {
+    "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a08",
+    "name" : "runner-02",
+    "capacity" : 1,
+    "activeAgents" : 0,
+    "runnerVersion" : "0.1.0",
+    "providerVersion" : "2.1.288",
+    "registeredAt" : "2026-10-05T07:00:00Z",
+    "lastHeartbeatAt" : "2026-10-05T08:50:00Z",
+    "status" : "STALE"
+  } ],
+  "generatedAt" : "2026-10-05T09:10:00Z"
+}

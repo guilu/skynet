@@ -41,6 +41,10 @@ public class AgentRun {
   private Instant cancelRequestedAt;
   private String resultSubtype;
   private Boolean resultIsError;
+  private Long cacheReadTokens;
+  private Long cacheCreationTokens;
+  private String lastEventType;
+  private String currentTool;
   @Version private Long version;
 
   @PersistenceCreator
@@ -70,6 +74,10 @@ public class AgentRun {
       Instant cancelRequestedAt,
       String resultSubtype,
       Boolean resultIsError,
+      Long cacheReadTokens,
+      Long cacheCreationTokens,
+      String lastEventType,
+      String currentTool,
       Long version) {
     this.id = id;
     this.stageRunId = stageRunId;
@@ -96,6 +104,10 @@ public class AgentRun {
     this.cancelRequestedAt = cancelRequestedAt;
     this.resultSubtype = resultSubtype;
     this.resultIsError = resultIsError;
+    this.cacheReadTokens = cacheReadTokens;
+    this.cacheCreationTokens = cacheCreationTokens;
+    this.lastEventType = lastEventType;
+    this.currentTool = currentTool;
     this.version = version;
   }
 
@@ -131,6 +143,10 @@ public class AgentRun {
         null,
         null,
         null,
+        null,
+        null,
+        null,
+        null,
         null);
   }
 
@@ -148,6 +164,7 @@ public class AgentRun {
     }
     if (next.isTerminal()) {
       finishedAt = now;
+      currentTool = null;
     }
     return previous;
   }
@@ -176,6 +193,37 @@ public class AgentRun {
   }
 
   /**
+   * Registra la actividad actual: el tipo del último evento y la herramienta en curso, que se abre
+   * con {@code agent.tool.started} y se cierra con su resultado.
+   */
+  void recordActivity(String eventType, String toolStarted, boolean toolCompleted) {
+    lastEventType = eventType;
+    if (toolStarted != null) {
+      currentTool = toolStarted;
+    } else if (toolCompleted) {
+      currentTool = null;
+    }
+  }
+
+  /**
+   * Suma los tokens de un mensaje del asistente, para verlos en vivo. El resultado final los
+   * sustituye por los totales que declara el proveedor.
+   */
+  void addUsage(TokenUsage usage) {
+    inputTokens = sum(inputTokens, usage.input());
+    outputTokens = sum(outputTokens, usage.output());
+    cacheReadTokens = sum(cacheReadTokens, usage.cacheRead());
+    cacheCreationTokens = sum(cacheCreationTokens, usage.cacheCreation());
+  }
+
+  private static Long sum(Long total, Long value) {
+    if (value == null) {
+      return total;
+    }
+    return total == null ? value : total + value;
+  }
+
+  /**
    * Registra el resultado que declara el proveedor. Claude Code informa del coste acumulado de la
    * sesión, así que el de esta invocación es la diferencia con el de su predecesora.
    */
@@ -183,16 +231,19 @@ public class AgentRun {
       String subtype,
       boolean isError,
       Integer numTurns,
-      Long inputTokens,
-      Long outputTokens,
+      TokenUsage usage,
       BigDecimal costCumulative,
       BigDecimal previousCumulative,
       String error) {
     resultSubtype = subtype;
     resultIsError = isError;
     this.numTurns = numTurns;
-    this.inputTokens = inputTokens;
-    this.outputTokens = outputTokens;
+    if (usage.input() != null || usage.output() != null) {
+      inputTokens = usage.input();
+      outputTokens = usage.output();
+      cacheReadTokens = usage.cacheRead();
+      cacheCreationTokens = usage.cacheCreation();
+    }
     if (costCumulative != null) {
       costUsdCumulative = costCumulative;
       costUsd =
@@ -340,6 +391,22 @@ public class AgentRun {
 
   public Boolean getResultIsError() {
     return resultIsError;
+  }
+
+  public Long getCacheReadTokens() {
+    return cacheReadTokens;
+  }
+
+  public Long getCacheCreationTokens() {
+    return cacheCreationTokens;
+  }
+
+  public String getLastEventType() {
+    return lastEventType;
+  }
+
+  public String getCurrentTool() {
+    return currentTool;
   }
 
   public Long getVersion() {

@@ -4,6 +4,7 @@ import dev.skynet.protocol.AgentEventType;
 import dev.skynet.runner.provider.ParsedEvent;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +26,8 @@ import tools.jackson.databind.json.JsonMapper;
  *       completo llega después como {@code assistant}.
  *   <li>Cada bloque {@code assistant} produce su evento; los bloques de un mismo mensaje comparten
  *       {@code messageId}, que es lo que usa el timeline para agruparlos. Los bloques {@code
- *       thinking} se omiten.
+ *       thinking} se omiten. El primer evento de cada mensaje lleva su {@code usage}, de modo que
+ *       el control plane puede mostrar los tokens en vivo antes del {@code result}.
  *   <li>{@code system/status}, {@code system/thinking_tokens} y los {@code rate_limit_event} con
  *       estado {@code allowed} no producen eventos.
  *   <li>Todo lo que no se reconoce (tipo, subtipo, bloque o JSON inválido) se conserva como {@link
@@ -49,6 +51,7 @@ public final class ClaudeStreamParser {
       JsonMapper.builder().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).build();
 
   private final Map<String, String> toolNames = new HashMap<>();
+  private final Set<String> usageSeen = new HashSet<>();
   private String sessionId;
   private boolean sawResult;
 
@@ -134,37 +137,53 @@ public final class ClaudeStreamParser {
     JsonNode message = node.path("message");
     String messageId = text(message, "id");
     String parentToolUseId = text(node, "parent_tool_use_id");
+    // El CLI repite el mensaje (y su usage) en una línea por bloque: los tokens viajan solo con el
+    // primer evento de cada mensaje, para que sumarlos no los cuente dos veces.
+    Map<String, Object> usage =
+        message.has("usage") && (messageId == null || usageSeen.add(messageId))
+            ? tokens(message.path("usage")).map()
+            : null;
     List<ParsedEvent> events = new ArrayList<>();
     for (JsonNode block : message.path("content")) {
-      switch (text(block, "type")) {
-        case "text" ->
-            events.add(
-                event(
-                    AgentEventType.MESSAGE_RECEIVED,
-                    payload()
-                        .put("messageId", messageId)
-                        .put("model", text(message, "model"))
-                        .put("text", text(block, "text"))
-                        .put("parentToolUseId", parentToolUseId)));
-        case "tool_use" -> {
-          String toolUseId = text(block, "id");
-          String name = text(block, "name");
-          if (toolUseId != null) {
-            toolNames.put(toolUseId, name);
-          }
-          events.add(
-              event(
-                  AgentEventType.TOOL_STARTED,
-                  payload()
-                      .put("messageId", messageId)
-                      .put("toolUseId", toolUseId)
-                      .put("name", name)
-                      .put("input", value(block.get("input")))
-                      .put("parentToolUseId", parentToolUseId)));
-        }
-        case "thinking", "redacted_thinking" -> {}
-        case null, default -> events.add(raw(node));
+      Payload payload =
+          switch (text(block, "type")) {
+            case "text" ->
+                payload()
+                    .put("messageId", messageId)
+                    .put("model", text(message, "model"))
+                    .put("text", text(block, "text"))
+                    .put("parentToolUseId", parentToolUseId);
+            case "tool_use" -> {
+              String toolUseId = text(block, "id");
+              String name = text(block, "name");
+              if (toolUseId != null) {
+                toolNames.put(toolUseId, name);
+              }
+              yield payload()
+                  .put("messageId", messageId)
+                  .put("toolUseId", toolUseId)
+                  .put("name", name)
+                  .put("input", value(block.get("input")))
+                  .put("parentToolUseId", parentToolUseId);
+            }
+            case "thinking", "redacted_thinking" -> null;
+            case null, default -> {
+              events.add(raw(node));
+              yield null;
+            }
+          };
+      if (payload == null) {
+        continue;
       }
+      if (usage != null) {
+        payload.put("usage", usage);
+        usage = null;
+      }
+      AgentEventType type =
+          "tool_use".equals(text(block, "type"))
+              ? AgentEventType.TOOL_STARTED
+              : AgentEventType.MESSAGE_RECEIVED;
+      events.add(event(type, payload));
     }
     return events;
   }
@@ -249,13 +268,7 @@ public final class ClaudeStreamParser {
 
   private ParsedEvent result(JsonNode node) {
     sawResult = true;
-    JsonNode usage = node.path("usage");
-    Payload tokens =
-        payload()
-            .put("input", longValue(usage, "input_tokens"))
-            .put("output", longValue(usage, "output_tokens"))
-            .put("cacheRead", longValue(usage, "cache_read_input_tokens"))
-            .put("cacheCreation", longValue(usage, "cache_creation_input_tokens"));
+    Payload tokens = tokens(node.path("usage"));
     return event(
         AgentEventType.RESULT,
         payload()
@@ -313,6 +326,15 @@ public final class ClaudeStreamParser {
 
   private static String truncate(String s) {
     return s == null || s.length() <= MAX_TOOL_OUTPUT ? s : s.substring(0, MAX_TOOL_OUTPUT);
+  }
+
+  /** Tokens de un bloque {@code usage}: entrada, salida y caché (lectura y escritura). */
+  private static Payload tokens(JsonNode usage) {
+    return payload()
+        .put("input", longValue(usage, "input_tokens"))
+        .put("output", longValue(usage, "output_tokens"))
+        .put("cacheRead", longValue(usage, "cache_read_input_tokens"))
+        .put("cacheCreation", longValue(usage, "cache_creation_input_tokens"));
   }
 
   private static ParsedEvent raw(JsonNode node) {

@@ -281,6 +281,25 @@ class ClaudeStreamParserTest {
         .containsEntry("change", "created");
   }
 
+  @Test
+  void eachMessageCarriesItsUsageOnce() {
+    Parsed p = parse("02-tools");
+
+    // msg_…zpTJ llega en dos líneas (dos tool_use) con el mismo usage: solo lo lleva la primera.
+    List<ParsedEvent> withUsage =
+        p.events().stream().filter(e -> e.payload().containsKey("usage")).toList();
+    assertThat(withUsage)
+        .extracting(e -> e.payload().get("messageId"))
+        .containsExactly(
+            "msg_011CffQQpkipdwPCmeefQ9xY",
+            "msg_011CffQQzpTJSdHBmfZSudJf",
+            "msg_011CffQRHzp1riYwduNCvEv2",
+            null);
+    assertThat(withUsage.get(1).payload().get("usage"))
+        .isEqualTo(Map.of("input", 2L, "output", 16L, "cacheRead", 16254L, "cacheCreation", 185L));
+    assertThat(withUsage.getLast().type()).isEqualTo(RESULT);
+  }
+
   @SuppressWarnings("unchecked")
   private static Map<String, Object> details(ParsedEvent e) {
     return (Map<String, Object>) e.payload().get("details");
