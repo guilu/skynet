@@ -24,9 +24,18 @@ export function WorkItemPage() {
 
   const [repositoryId, setRepositoryId] = useState('')
   const [prompt, setPrompt] = useState('')
+  const [maxTurns, setMaxTurns] = useState('')
+  const [maxBudgetUsd, setMaxBudgetUsd] = useState('')
+  const [timeoutMinutes, setTimeoutMinutes] = useState('')
   const launch = useMutation({
     mutationFn: () =>
-      api.launchRun(workItemId, { repositoryId: repositoryId || repos.data![0].id, prompt }),
+      api.launchRun(workItemId, {
+        repositoryId: repositoryId || repos.data![0].id,
+        prompt,
+        maxTurns: optionalNumber(maxTurns),
+        maxBudgetUsd: optionalNumber(maxBudgetUsd),
+        timeoutMinutes: optionalNumber(timeoutMinutes),
+      }),
     onSuccess: (run) => {
       void queryClient.invalidateQueries({ queryKey: ['runs', workItemId] })
       void navigate(`/runs/${run.id}`)
@@ -40,7 +49,7 @@ export function WorkItemPage() {
   return (
     <>
       <p className="breadcrumbs">
-        <Link to="/">Proyectos</Link> /{' '}
+        <Link to="/projects">Proyectos</Link> /{' '}
         {projectId && <Link to={`/projects/${projectId}`}>proyecto</Link>} /
       </p>
       <ErrorMessage error={item.error} />
@@ -89,6 +98,42 @@ export function WorkItemPage() {
               required
             />
           </label>
+          <fieldset className="limits">
+            <legend>Límites (opcionales; vacío = valor por defecto del servidor)</legend>
+            <label>
+              Turnos máximos
+              <input
+                type="number"
+                min={1}
+                max={1000}
+                step={1}
+                value={maxTurns}
+                onChange={(e) => setMaxTurns(e.target.value)}
+              />
+            </label>
+            <label>
+              Presupuesto (US$)
+              <input
+                type="number"
+                min={0.01}
+                max={1000}
+                step={0.01}
+                value={maxBudgetUsd}
+                onChange={(e) => setMaxBudgetUsd(e.target.value)}
+              />
+            </label>
+            <label>
+              Tiempo máximo (min)
+              <input
+                type="number"
+                min={1}
+                max={1440}
+                step={1}
+                value={timeoutMinutes}
+                onChange={(e) => setTimeoutMinutes(e.target.value)}
+              />
+            </label>
+          </fieldset>
           <button type="submit" disabled={launch.isPending || !repos.data?.length}>
             Lanzar
           </button>
@@ -102,3 +147,5 @@ export function WorkItemPage() {
     </>
   )
 }
+
+const optionalNumber = (value: string) => (value.trim() === '' ? undefined : Number(value))

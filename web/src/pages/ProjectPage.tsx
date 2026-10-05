@@ -15,7 +15,7 @@ export function ProjectPage() {
   return (
     <>
       <p className="breadcrumbs">
-        <Link to="/">Proyectos</Link> /
+        <Link to="/projects">Proyectos</Link> /
       </p>
       <ErrorMessage error={project.error} />
       {project.data && (

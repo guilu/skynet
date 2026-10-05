@@ -25,6 +25,8 @@ const STATUS_LABELS: Record<string, string> = {
   SKIPPED: 'Omitida',
   OPEN: 'Abierto',
   CLOSED: 'Cerrado',
+  ONLINE: 'En línea',
+  STALE: 'Sin latido',
 }
 
 export const statusLabel = (status: string) => STATUS_LABELS[status] ?? status
@@ -32,11 +34,42 @@ export const statusLabel = (status: string) => STATUS_LABELS[status] ?? status
 export type StatusTone = 'neutral' | 'active' | 'ok' | 'bad' | 'warn'
 
 export function statusTone(status: string): StatusTone {
-  if (['SUCCEEDED', 'COMPLETED'].includes(status)) return 'ok'
+  if (['SUCCEEDED', 'COMPLETED', 'ONLINE'].includes(status)) return 'ok'
   if (['FAILED'].includes(status)) return 'bad'
-  if (['WAITING_FOR_INPUT', 'WAITING_FOR_APPROVAL', 'UNRESPONSIVE'].includes(status)) return 'warn'
+  if (['WAITING_FOR_INPUT', 'WAITING_FOR_APPROVAL', 'UNRESPONSIVE', 'STALE'].includes(status))
+    return 'warn'
   if (['RUNNING', 'STARTING', 'THINKING', 'EXECUTING'].includes(status)) return 'active'
   return 'neutral'
+}
+
+/** Icono de cada tono: el estado nunca se comunica solo con el color. */
+export const TONE_ICONS: Record<StatusTone, string> = {
+  neutral: '○',
+  active: '●',
+  ok: '✓',
+  bad: '✕',
+  warn: '!',
+}
+
+const TERMINAL = ['SUCCEEDED', 'COMPLETED', 'FAILED', 'CANCELLED', 'SKIPPED']
+export const isTerminal = (status: string) => TERMINAL.includes(status)
+
+/** Duración legible: «45 s», «3 min 05 s», «1 h 02 min». */
+export function formatDuration(ms: number | null): string {
+  if (ms == null || ms < 0) return '—'
+  const total = Math.floor(ms / 1000)
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  if (h > 0) return `${h} h ${String(m).padStart(2, '0')} min`
+  if (m > 0) return `${m} min ${String(s).padStart(2, '0')} s`
+  return `${s} s`
+}
+
+/** Tiempo entre dos instantes; sin fin, hasta `now`. */
+export function elapsed(start: string | null, end: string | null, now: number): number | null {
+  if (!start) return null
+  return (end ? new Date(end).getTime() : now) - new Date(start).getTime()
 }
 
 /** Resumen legible de un evento para el timeline. */

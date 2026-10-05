@@ -72,10 +72,12 @@ public class RunService {
 
   /**
    * Lanza una ejecución {@code adhoc}: un workflow con una fase y un agente en cola. El agente
-   * queda en {@code QUEUED} hasta que un runner reclame su orden de arranque.
+   * queda en {@code QUEUED} hasta que un runner reclame su orden de arranque. Los límites que
+   * falten (o todos, con {@code null}) se toman de {@link AgentDefaults}.
    */
   @Transactional
-  public WorkflowRun launch(UUID workItemId, UUID repositoryId, String promptText) {
+  public WorkflowRun launch(
+      UUID workItemId, UUID repositoryId, String promptText, AgentLimits limits) {
     WorkItem workItem = workItems.get(workItemId);
     CodeRepository repository = projects.getRepository(repositoryId);
     if (!repository.getProjectId().equals(workItem.getProjectId())) {
@@ -139,8 +141,7 @@ public class RunService {
                 defaults.allowedTools(),
                 defaults.permissionMode(),
                 defaults.model(),
-                new AgentLimits(
-                    defaults.maxTurns(), defaults.maxBudgetUsd(), defaults.timeout()))));
+                withDefaults(limits))));
     return run;
   }
 
@@ -365,6 +366,14 @@ public class RunService {
                                         .toList()))
                         .toList()))
         .toList();
+  }
+
+  private AgentLimits withDefaults(AgentLimits limits) {
+    AgentLimits l = limits == null ? AgentLimits.none() : limits;
+    return new AgentLimits(
+        l.maxTurns() != null ? l.maxTurns() : defaults.maxTurns(),
+        l.maxBudgetUsd() != null ? l.maxBudgetUsd() : defaults.maxBudgetUsd(),
+        l.timeout() != null ? l.timeout() : defaults.timeout());
   }
 
   private UUID adhocDefinitionId() {
