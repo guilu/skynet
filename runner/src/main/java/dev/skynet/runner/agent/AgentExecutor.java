@@ -1,11 +1,13 @@
 package dev.skynet.runner.agent;
 
 import dev.skynet.protocol.AgentEventType;
+import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.StartAgent;
 import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.provider.ParsedEvent;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
+import dev.skynet.runner.provider.claude.ClaudeSessions;
 import dev.skynet.runner.provider.claude.ClaudeStreamParser;
 import dev.skynet.runner.supervisor.ProcessExit;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
@@ -30,9 +32,10 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Ejecuta las invocaciones: prepara el worktree, lanza Claude Code, traduce su salida a eventos en
- * el journal y registra el fin del proceso. Toda invocación que recibe termina con un único evento
- * {@code agent.process.exited}, también si no llega a arrancar.
+ * Ejecuta las invocaciones (arranques, reanudaciones y forks): prepara el worktree, lanza Claude
+ * Code, traduce su salida a eventos en el journal y registra el fin del proceso. Toda invocación
+ * que recibe termina con un único evento {@code agent.process.exited}, también si no llega a
+ * arrancar.
  */
 public final class AgentExecutor implements AutoCloseable {
 
@@ -50,6 +53,8 @@ public final class AgentExecutor implements AutoCloseable {
   private final ScheduledExecutorService timer =
       Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon().factory());
   private final Map<UUID, Execution> executions = new ConcurrentHashMap<>();
+  private final Map<Path, UUID> busyWorkspaces = new ConcurrentHashMap<>();
+  private final ClaudeSessions sessions;
 
   public AgentExecutor(
       Journal journal,
@@ -68,6 +73,7 @@ public final class AgentExecutor implements AutoCloseable {
     this.logs = logs;
     this.cancelGrace = cancelGrace;
     this.eventsAvailable = eventsAvailable;
+    this.sessions = ClaudeSessions.of(runnerEnv).orElse(null);
   }
 
   /** Invocaciones en curso en este runner. */
@@ -103,86 +109,25 @@ public final class AgentExecutor implements AutoCloseable {
     }
   }
 
-  /** Registra el fin de una invocación que este runner no puede ejecutar. */
-  public void reject(UUID agentRunId, String reason) {
-    if (!journal.isFinished(agentRunId) && !executions.containsKey(agentRunId)) {
-      finish(agentRunId, failure(reason));
-    }
-  }
-
   private void run(UUID id, StartAgent start, Execution execution) {
     try {
       Workspace workspace;
       try {
-        workspace =
-            workspaces.create(
-                Path.of(start.repositoryPath()),
-                start.baseBranch(),
-                start.workflowRunId(),
-                start.workItemKey(),
-                id);
+        workspace = prepare(id, start);
       } catch (IOException e) {
         finish(id, failure("No se pudo preparar el worktree: " + e.getMessage()));
         return;
       }
-      Map<String, Object> ready = new LinkedHashMap<>();
-      ready.put("path", workspace.path().toString());
-      ready.put("branch", workspace.branch());
-      ready.put("baseCommit", workspace.baseCommit());
-      emit(id, AgentEventType.WORKSPACE_READY, ready);
-
-      ClaudeStreamParser parser = new ClaudeStreamParser();
-      SupervisedProcess process;
+      // Un solo escritor por worktree, aunque el control plane ya lo garantiza.
+      if (busyWorkspaces.putIfAbsent(workspace.path(), id) != null) {
+        finish(id, failure("Ya hay otra invocación en curso en el worktree " + workspace.path()));
+        return;
+      }
       try {
-        process =
-            execution.launch(
-                () ->
-                    supervisor.start(
-                        provider.command(start),
-                        workspace.path(),
-                        provider.environment(runnerEnv),
-                        logs.resolve(id + ".ndjson"),
-                        line -> parser.parse(line).forEach(e -> emit(id, e))));
-      } catch (IOException e) {
-        finish(id, failure("No se pudo lanzar el agente: " + e.getMessage()));
-        return;
+        run(id, start, execution, workspace);
+      } finally {
+        busyWorkspaces.remove(workspace.path(), id);
       }
-      if (process == null) {
-        finish(id, failure("Cancelado antes de arrancar"));
-        return;
-      }
-      journal.processStarted(id, process.pid(), process.startedAt());
-
-      Duration timeout = start.limits().timeout();
-      ScheduledFuture<?> deadline =
-          timeout == null
-              ? null
-              : timer.schedule(
-                  () -> {
-                    execution.timedOut = true;
-                    process.terminate(cancelGrace);
-                  },
-                  timeout.toMillis(),
-                  TimeUnit.MILLISECONDS);
-      ProcessExit exit = process.awaitExit();
-      if (deadline != null) {
-        deadline.cancel(false);
-      }
-
-      Map<String, Object> payload = new LinkedHashMap<>();
-      payload.put("exitCode", exit.exitCode());
-      if (exit.signal() != null) {
-        payload.put("signal", exit.signal());
-      }
-      if (execution.stopping) {
-        payload.put("error", "El runner se detuvo durante la ejecución");
-      } else if (execution.timedOut && !execution.cancelled()) {
-        payload.put("error", "Se agotó el tiempo máximo (" + timeout + ")");
-      }
-      if (!parser.sawResult() && exit.exitCode() != 0 && !exit.stderrTail().isBlank()) {
-        payload.put("stderr", exit.stderrTail());
-      }
-      finish(id, payload);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     } catch (RuntimeException e) {
@@ -191,6 +136,95 @@ public final class AgentExecutor implements AutoCloseable {
     } finally {
       executions.remove(id);
     }
+  }
+
+  /**
+   * Worktree de la invocación: uno nuevo para un arranque, el de la invocación anterior para
+   * reanudar y uno nuevo desde ese para bifurcar, con la sesión copiada para que {@code --resume}
+   * la encuentre desde allí.
+   */
+  private Workspace prepare(UUID id, StartAgent start) throws IOException, InterruptedException {
+    ResumeFrom resume = start.resume();
+    if (resume == null) {
+      return workspaces.create(
+          Path.of(start.repositoryPath()),
+          start.baseBranch(),
+          start.workflowRunId(),
+          start.workItemKey(),
+          id);
+    }
+    Path parent = Path.of(resume.workspacePath());
+    if (!resume.fork()) {
+      return workspaces.existing(parent);
+    }
+    Workspace fork = workspaces.fork(parent, start.workflowRunId(), start.workItemKey(), id);
+    if (sessions == null || !sessions.copy(resume.sessionId(), parent, fork.path())) {
+      LOG.warning(
+          "No se encontró la sesión " + resume.sessionId() + " de " + parent + " para copiarla");
+    }
+    return fork;
+  }
+
+  private void run(UUID id, StartAgent start, Execution execution, Workspace workspace)
+      throws InterruptedException {
+    Map<String, Object> ready = new LinkedHashMap<>();
+    ready.put("path", workspace.path().toString());
+    ready.put("branch", workspace.branch());
+    ready.put("baseCommit", workspace.baseCommit());
+    emit(id, AgentEventType.WORKSPACE_READY, ready);
+
+    ClaudeStreamParser parser = new ClaudeStreamParser();
+    SupervisedProcess process;
+    try {
+      process =
+          execution.launch(
+              () ->
+                  supervisor.start(
+                      provider.command(start),
+                      workspace.path(),
+                      provider.environment(runnerEnv),
+                      logs.resolve(id + ".ndjson"),
+                      line -> parser.parse(line).forEach(e -> emit(id, e))));
+    } catch (IOException e) {
+      finish(id, failure("No se pudo lanzar el agente: " + e.getMessage()));
+      return;
+    }
+    if (process == null) {
+      finish(id, failure("Cancelado antes de arrancar"));
+      return;
+    }
+    journal.processStarted(id, process.pid(), process.startedAt());
+
+    Duration timeout = start.limits().timeout();
+    ScheduledFuture<?> deadline =
+        timeout == null
+            ? null
+            : timer.schedule(
+                () -> {
+                  execution.timedOut = true;
+                  process.terminate(cancelGrace);
+                },
+                timeout.toMillis(),
+                TimeUnit.MILLISECONDS);
+    ProcessExit exit = process.awaitExit(cancelGrace);
+    if (deadline != null) {
+      deadline.cancel(false);
+    }
+
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("exitCode", exit.exitCode());
+    if (exit.signal() != null) {
+      payload.put("signal", exit.signal());
+    }
+    if (execution.stopping) {
+      payload.put("error", "El runner se detuvo durante la ejecución");
+    } else if (execution.timedOut && !execution.cancelled()) {
+      payload.put("error", "Se agotó el tiempo máximo (" + timeout + ")");
+    }
+    if (!parser.sawResult() && exit.exitCode() != 0 && !exit.stderrTail().isBlank()) {
+      payload.put("stderr", exit.stderrTail());
+    }
+    finish(id, payload);
   }
 
   private void emit(UUID id, ParsedEvent event) {

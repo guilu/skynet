@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.NormalizedEvent;
+import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.runner.TestAgents;
 import dev.skynet.runner.TestRepos;
 import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.workspace.WorkspaceManager;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -51,7 +53,7 @@ class AgentExecutorTest {
             new ProcessSupervisor(),
             new WorkspaceManager(dir.resolve("workspaces")),
             TestAgents.fakeClaude(),
-            TestAgents.fakeClaudeEnv(fixture),
+            TestAgents.fakeClaudeEnv(fixture, dir.resolve("claude")),
             dir.resolve("logs"),
             Duration.ofSeconds(2),
             () -> {});
@@ -172,5 +174,113 @@ class AgentExecutorTest {
 
     assertThat(eventsOf(id)).hasSize(1);
     assertThat((String) exit.payload().get("error")).startsWith("No se pudo preparar el worktree");
+  }
+
+  @Test
+  void resumeContinuesTheSessionInTheSameWorktree() throws Exception {
+    UUID first = UUID.randomUUID();
+    RunnerCommand start = TestAgents.start(first, repo.toString(), null);
+    executor("02-tools").start(start);
+    awaitExit(first);
+    Map<String, Object> ready = eventsOf(first).getFirst().payload();
+    UUID session = start.start().sessionId();
+
+    UUID resumed = UUID.randomUUID();
+    executor.start(
+        TestAgents.resume(
+            resumed,
+            repo.toString(),
+            session,
+            new ResumeFrom(
+                session.toString(),
+                false,
+                (String) ready.get("path"),
+                (String) ready.get("branch"))));
+    NormalizedEvent exit = awaitExit(resumed);
+
+    assertThat(exit.payload()).containsEntry("exitCode", 0).doesNotContainKey("error");
+    List<NormalizedEvent> events = eventsOf(resumed);
+    assertThat(events.getFirst().payload())
+        .containsEntry("path", ready.get("path"))
+        .containsEntry("branch", ready.get("branch"));
+    assertThat(events.get(1).type()).isEqualTo(AgentEventType.SESSION_STARTED);
+    assertThat(events.get(1).payload()).containsEntry("sessionId", session.toString());
+  }
+
+  @Test
+  void forkContinuesACopyOfTheSessionInANewWorktree() throws Exception {
+    UUID first = UUID.randomUUID();
+    RunnerCommand start = TestAgents.start(first, repo.toString(), null);
+    executor("02-tools").start(start);
+    awaitExit(first);
+    Map<String, Object> ready = eventsOf(first).getFirst().payload();
+    Path parent = Path.of((String) ready.get("path"));
+    Files.writeString(parent.resolve("notas.txt"), "sin confirmar\n");
+    String session = start.start().sessionId().toString();
+
+    UUID forked = UUID.randomUUID();
+    UUID forkSession = UUID.randomUUID();
+    executor.start(
+        TestAgents.resume(
+            forked,
+            repo.toString(),
+            forkSession,
+            new ResumeFrom(session, true, parent.toString(), (String) ready.get("branch"))));
+    NormalizedEvent exit = awaitExit(forked);
+
+    assertThat(exit.payload()).containsEntry("exitCode", 0).doesNotContainKey("error");
+    List<NormalizedEvent> events = eventsOf(forked);
+    Path worktree = Path.of((String) events.getFirst().payload().get("path"));
+    assertThat(worktree).isNotEqualTo(parent);
+    assertThat(worktree.resolve("notas.txt")).hasContent("sin confirmar");
+    assertThat(events.get(1).payload()).containsEntry("sessionId", forkSession.toString());
+    // fake-claude, como el CLI, solo encuentra la sesión en el directorio de su cwd.
+    Path projects = dir.resolve("claude/projects");
+    String project = worktree.toRealPath().toString().replaceAll("[^A-Za-z0-9]", "-");
+    assertThat(projects.resolve(project).resolve(session + ".jsonl")).isRegularFile();
+    assertThat(projects.resolve(project).resolve(forkSession + ".jsonl")).isRegularFile();
+  }
+
+  @Test
+  void resumeOnlyAcceptsWorktreesOfThisRunner() throws Exception {
+    UUID id = UUID.randomUUID();
+    executor("01-simple-text")
+        .start(
+            TestAgents.resume(
+                id,
+                repo.toString(),
+                UUID.randomUUID(),
+                new ResumeFrom(UUID.randomUUID().toString(), false, repo.toString(), "main")));
+
+    NormalizedEvent exit = awaitExit(id);
+
+    assertThat((String) exit.payload().get("error"))
+        .startsWith("No se pudo preparar el worktree")
+        .contains("no existe en este runner");
+  }
+
+  @Test
+  void aWorktreeOnlyRunsOneInvocationAtATime() throws Exception {
+    UUID running = UUID.randomUUID();
+    RunnerCommand start = TestAgents.start(running, repo.toString(), null);
+    executor("07-cancelled").start(start);
+    awaitRunning(running);
+    Map<String, Object> ready = eventsOf(running).getFirst().payload();
+    String session = start.start().sessionId().toString();
+
+    UUID second = UUID.randomUUID();
+    executor.start(
+        TestAgents.resume(
+            second,
+            repo.toString(),
+            UUID.fromString(session),
+            new ResumeFrom(
+                session, false, (String) ready.get("path"), (String) ready.get("branch"))));
+    NormalizedEvent rejected = awaitExit(second);
+
+    assertThat((String) rejected.payload().get("error")).contains("Ya hay otra invocación");
+    assertThat(executor.running()).containsExactly(running);
+    executor.cancel(running);
+    awaitExit(running);
   }
 }

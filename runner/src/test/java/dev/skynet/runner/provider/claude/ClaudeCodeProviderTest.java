@@ -3,6 +3,7 @@ package dev.skynet.runner.provider.claude;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.skynet.protocol.runner.AgentLimits;
+import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.StartAgent;
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -49,6 +50,36 @@ class ClaudeCodeProviderTest {
             "5",
             "--max-budget-usd",
             "2.00");
+  }
+
+  @Test
+  void resumesTheSessionAndForksWithANewId() {
+    UUID parent = UUID.randomUUID();
+    UUID forked = UUID.randomUUID();
+    ClaudeCodeProvider provider = new ClaudeCodeProvider("claude", List.of());
+
+    assertThat(
+            provider.command(resume(parent, new ResumeFrom(parent.toString(), false, "/w", "b"))))
+        .containsSubsequence("-p", "Añade un test", "--resume", parent.toString())
+        .doesNotContain("--session-id", "--fork-session");
+    assertThat(provider.command(resume(forked, new ResumeFrom(parent.toString(), true, "/w", "b"))))
+        .containsSubsequence(
+            "--resume", parent.toString(), "--fork-session", "--session-id", forked.toString());
+  }
+
+  private static StartAgent resume(UUID session, ResumeFrom from) {
+    return new StartAgent(
+        UUID.randomUUID(),
+        "TKM-1",
+        "/repo",
+        "main",
+        session,
+        "Añade un test",
+        List.of(),
+        null,
+        null,
+        null,
+        from);
   }
 
   @Test

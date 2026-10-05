@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import tools.jackson.databind.JsonNode;
@@ -65,6 +66,23 @@ class FakeClaudeTest {
   }
 
   @Test
+  void withConfigDirStoresSessionsAndResumeNeedsThemInTheSameDirectory(@TempDir Path config)
+      throws Exception {
+    Map<String, String> env =
+        Map.of("CLAUDE_CONFIG_DIR", config.toString(), "FAKE_CLAUDE_DELAY_MS", "0");
+    String[] start = {"-p", "x", "--output-format", "stream-json", "--session-id", SESSION};
+    String[] resume = {"-p", "y", "--output-format", "stream-json", "--resume", SESSION};
+
+    assertThat(run(env, CWD, start).exitCode).isZero();
+    Path stored = FakeClaude.sessionFile(env, CWD, SESSION);
+    assertThat(stored).isRegularFile();
+    assertThat(stored.getParent().getFileName()).hasToString("-workspaces-wr-1-ar-1");
+
+    assertThat(run(env, CWD, resume).exitCode).isZero();
+    assertThat(run(env, Path.of("/otro"), resume).exitCode).isEqualTo(1);
+  }
+
+  @Test
   void rejectsNonStreamJsonOutput() throws Exception {
     assertThat(run("01-simple-text", "-p", "x").exitCode).isEqualTo(2);
   }
@@ -72,11 +90,14 @@ class FakeClaudeTest {
   private record Result(int exitCode, List<JsonNode> lines) {}
 
   private static Result run(String fixture, String... args) throws Exception {
+    return run(Map.of("FAKE_CLAUDE_FIXTURE", fixture, "FAKE_CLAUDE_DELAY_MS", "0"), CWD, args);
+  }
+
+  private static Result run(Map<String, String> env, Path cwd, String... args) throws Exception {
     var buffer = new ByteArrayOutputStream();
     var out = new PrintStream(buffer, true, StandardCharsets.UTF_8);
     var err = new PrintStream(new ByteArrayOutputStream(), true, StandardCharsets.UTF_8);
-    Map<String, String> env = Map.of("FAKE_CLAUDE_FIXTURE", fixture, "FAKE_CLAUDE_DELAY_MS", "0");
-    int code = FakeClaude.run(args, env, CWD, out, err);
+    int code = FakeClaude.run(args, env, cwd, out, err);
     var mapper = JsonMapper.builder().build();
     List<JsonNode> lines =
         buffer.toString(StandardCharsets.UTF_8).lines().map(mapper::readTree).toList();
