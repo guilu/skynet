@@ -8,7 +8,10 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -85,13 +88,12 @@ class ProcessSupervisorTest {
   @Test
   void launchesTheAgentAsTheLeaderOfItsOwnProcessGroup() throws Exception {
     assumeTrue(supervisor.usesProcessGroups(), "setsid no está disponible");
-    List<String> lines = new CopyOnWriteArrayList<>();
+    BlockingQueue<String> lines = new LinkedBlockingQueue<>();
     SupervisedProcess p =
         supervisor.start(
             List.of("sh", "-c", "echo $$; sleep 60"), dir, ENV, dir.resolve("raw"), lines::add);
-    awaitLines(lines, 1);
 
-    assertThat(Long.parseLong(lines.getFirst())).isEqualTo(p.pid());
+    assertThat(Long.parseLong(firstLine(lines))).isEqualTo(p.pid());
     assertThat(ProcessGroups.groupOf(p.pid())).hasValue(p.pid());
     p.terminate(GRACE);
     p.awaitExit(GRACE);
@@ -100,7 +102,7 @@ class ProcessSupervisorTest {
   @Test
   void terminateAlsoKillsADescendantThatDetachedFromTheTree() throws Exception {
     assumeTrue(supervisor.usesProcessGroups(), "setsid no está disponible");
-    List<String> lines = new CopyOnWriteArrayList<>();
+    BlockingQueue<String> lines = new LinkedBlockingQueue<>();
     // El subshell termina en cuanto lanza sleep: el nieto queda colgando de init, fuera del árbol.
     SupervisedProcess p =
         supervisor.start(
@@ -109,8 +111,7 @@ class ProcessSupervisorTest {
             ENV,
             dir.resolve("raw"),
             lines::add);
-    awaitLines(lines, 1);
-    long grandchild = Long.parseLong(lines.getFirst());
+    long grandchild = Long.parseLong(firstLine(lines));
     assertThat(ProcessHandle.current().descendants().map(ProcessHandle::pid))
         .doesNotContain(grandchild);
 
@@ -123,7 +124,7 @@ class ProcessSupervisorTest {
   @Test
   void whenTheAgentExitsItsBackgroundProcessesAreTerminated() throws Exception {
     assumeTrue(supervisor.usesProcessGroups(), "setsid no está disponible");
-    List<String> lines = new CopyOnWriteArrayList<>();
+    BlockingQueue<String> lines = new LinkedBlockingQueue<>();
     // El proceso en segundo plano hereda stdout: sin matarlo, la lectura no terminaría nunca.
     SupervisedProcess p =
         supervisor.start(
@@ -132,14 +133,14 @@ class ProcessSupervisorTest {
     ProcessExit exit = p.awaitExit(GRACE);
 
     assertThat(exit.exitCode()).isZero();
-    long background = Long.parseLong(lines.getFirst());
+    long background = Long.parseLong(firstLine(lines));
     assertThat(running(background)).isFalse();
   }
 
   @Test
   void withoutSetsidItStillKillsTheTree() throws Exception {
     ProcessSupervisor plain = new ProcessSupervisor(null);
-    List<String> lines = new CopyOnWriteArrayList<>();
+    BlockingQueue<String> lines = new LinkedBlockingQueue<>();
     SupervisedProcess p =
         plain.start(
             List.of("sh", "-c", "sleep 60 & echo $!; wait"),
@@ -147,13 +148,13 @@ class ProcessSupervisorTest {
             ENV,
             dir.resolve("raw"),
             lines::add);
-    awaitLines(lines, 1);
+    long child = Long.parseLong(firstLine(lines));
     assertThat(ProcessGroups.groupOf(p.pid())).isNotEqualTo(java.util.OptionalLong.of(p.pid()));
 
     p.terminate(GRACE);
     p.awaitExit(GRACE);
 
-    assertThat(running(Long.parseLong(lines.getFirst()))).isFalse();
+    assertThat(running(child)).isFalse();
   }
 
   /** Vivo y no zombi: en el contenedor de CI nadie recoge a los huérfanos ya muertos. */
@@ -161,12 +162,11 @@ class ProcessSupervisorTest {
     return ProcessHandle.of(pid).filter(ProcessGroups::isRunning).isPresent();
   }
 
-  private static void awaitLines(List<String> lines, int count) throws InterruptedException {
-    long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-    while (lines.size() < count && System.nanoTime() < deadline) {
-      Thread.sleep(20);
-    }
-    assertThat(lines).hasSizeGreaterThanOrEqualTo(count);
+  /** Primera línea de stdout, sin esperar más de 5 s. */
+  private static String firstLine(BlockingQueue<String> lines) throws InterruptedException {
+    String line = lines.poll(5, TimeUnit.SECONDS);
+    assertThat(line).as("primera línea de stdout").isNotNull();
+    return line;
   }
 
   @Test

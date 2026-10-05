@@ -118,7 +118,7 @@ public final class AgentExecutor implements AutoCloseable {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     } catch (RuntimeException e) {
-      LOG.log(Level.SEVERE, "Fallo inesperado en la invocación " + id, e);
+      LOG.log(Level.SEVERE, e, () -> "Fallo inesperado en la invocación " + id);
       finish(id, failure("Fallo interno del runner: " + e));
     } finally {
       executions.remove(id);
@@ -171,7 +171,12 @@ public final class AgentExecutor implements AutoCloseable {
     Workspace fork = workspaces.fork(parent, start.workflowRunId(), start.workItemKey(), id);
     if (sessions == null || !sessions.copy(resume.sessionId(), parent, fork.path())) {
       LOG.warning(
-          "No se encontró la sesión " + resume.sessionId() + " de " + parent + " para copiarla");
+          () ->
+              "No se encontró la sesión "
+                  + resume.sessionId()
+                  + " de "
+                  + parent
+                  + " para copiarla");
     }
     return fork;
   }

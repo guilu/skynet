@@ -15,7 +15,7 @@ import java.util.OptionalLong;
  */
 final class ProcessGroups {
 
-  private static final Path PROC = Path.of("/proc");
+  private static final Path PROC = Path.of("/", "proc");
 
   private ProcessGroups() {}
 
