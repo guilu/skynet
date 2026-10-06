@@ -38,6 +38,17 @@ public enum AgentEventType {
    * falta y {@code error} explica por qué. Es el evento que decide el estado final.
    */
   PROCESS_EXITED("agent.process.exited"),
+  /**
+   * El runner ha empezado a ejecutar el comando de verificación de un worktree: {@code
+   * verificationRunId}. No cambia el estado del agente.
+   */
+  VERIFICATION_STARTED("agent.verification.started"),
+  /**
+   * Fin de la verificación: {@code verificationRunId}, {@code exitCode} (o {@code signal}), {@code
+   * tests} ({@code total}, {@code failed}, {@code errors}, {@code skipped}) si se encontraron
+   * informes JUnit, y {@code error} si el comando no se pudo ejecutar o se agotó su tiempo.
+   */
+  VERIFICATION_COMPLETED("agent.verification.completed"),
   /** Línea que el adaptador no reconoce; se conserva para no perder información. */
   RAW("agent.raw");
 
@@ -52,6 +63,11 @@ public enum AgentEventType {
 
   public String wireName() {
     return wireName;
+  }
+
+  /** Eventos de una verificación: se registran aunque el agente haya terminado. */
+  public boolean isVerification() {
+    return this == VERIFICATION_STARTED || this == VERIFICATION_COMPLETED;
   }
 
   public static AgentEventType fromWireName(String wireName) {

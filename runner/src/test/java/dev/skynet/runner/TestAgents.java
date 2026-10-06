@@ -50,7 +50,8 @@ public final class TestAgents {
         RunnerCommandType.START,
         agentRunId,
         Instant.now(),
-        invocation(repository, UUID.randomUUID(), "Arregla add", timeout, null));
+        invocation(repository, UUID.randomUUID(), "Arregla add", timeout, null),
+        null);
   }
 
   /** Orden RESUME que continúa ({@code fork=false}) o bifurca la sesión de {@code from}. */
@@ -61,7 +62,8 @@ public final class TestAgents {
         RunnerCommandType.RESUME,
         agentRunId,
         Instant.now(),
-        invocation(repository, sessionId, "Añade un test", null, from));
+        invocation(repository, sessionId, "Añade un test", null, from),
+        null);
   }
 
   private static StartAgent invocation(

@@ -34,6 +34,9 @@ services:
       SKYNET_DB_PASSWORD: ${SKYNET_DB_PASSWORD:-skynet}
       # Secreto para registrar runners; vacío desactiva el registro.
       SKYNET_RUNNER_REGISTRATION_TOKEN: ${SKYNET_RUNNER_REGISTRATION_TOKEN:-}
+      SKYNET_ARTIFACTS_DIR: /data/artifacts
+    volumes:
+      - artifacts-data:/data/artifacts
     ports:
       - "${SKYNET_API_PORT:-8080}:8080"
     depends_on:
@@ -54,3 +57,4 @@ services:
 
 volumes:
   postgres-data:
+  artifacts-data:

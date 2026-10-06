@@ -24,9 +24,22 @@ public abstract class IntegrationTest {
     TestDatabase.register(registry);
     registry.add("skynet.runner.registration-token", () -> RUNNER_REGISTRATION_TOKEN);
     registry.add("skynet.runner.redeliver-after", () -> "1s");
+    registry.add("skynet.artifacts.root", () -> ARTIFACTS.toString());
+    registry.add("skynet.artifacts.max-size", () -> "64KB");
   }
 
   protected static final String RUNNER_REGISTRATION_TOKEN = "test-registration-token";
+
+  /** Blobs de los artefactos, compartidos por todos los tests de la JVM. */
+  protected static final java.nio.file.Path ARTIFACTS = createArtifactsDir();
+
+  private static java.nio.file.Path createArtifactsDir() {
+    try {
+      return java.nio.file.Files.createTempDirectory("skynet-artifacts");
+    } catch (java.io.IOException e) {
+      throw new java.io.UncheckedIOException(e);
+    }
+  }
 
   /** Secuencia del último evento registrado antes del test. */
   protected long baseline;
@@ -36,7 +49,7 @@ public abstract class IntegrationTest {
     // TRUNCATE no dispara el trigger append-only de event (es por fila). La secuencia de
     // eventos no se reinicia: igual que en producción, nunca retrocede.
     jdbc.sql(
-            "TRUNCATE event, runner_command, prompt, agent_run, workspace, runner, stage_run, workflow_run, work_item, repository,"
+            "TRUNCATE event, runner_command, artifact, verification_run, prompt, agent_run, workspace, runner, stage_run, workflow_run, work_item, repository,"
                 + " project")
         .update();
     baseline =

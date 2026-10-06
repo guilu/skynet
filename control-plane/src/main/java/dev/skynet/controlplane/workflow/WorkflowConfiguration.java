@@ -4,5 +4,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({AgentDefaults.class, MonitoringProperties.class})
+@EnableConfigurationProperties({
+  AgentDefaults.class,
+  MonitoringProperties.class,
+  VerificationProperties.class
+})
 class WorkflowConfiguration {}

@@ -33,7 +33,8 @@ public class AgentEventIngestion {
     ACCEPTED,
     DUPLICATE,
     UNKNOWN_AGENT_RUN,
-    NOT_ASSIGNED_TO_RUNNER
+    NOT_ASSIGNED_TO_RUNNER,
+    UNKNOWN_VERIFICATION_RUN
   }
 
   private final AgentRunRepository agentRuns;
@@ -43,6 +44,7 @@ public class AgentEventIngestion {
   private final EventStore events;
   private final PayloadRedactor redactor;
   private final Workspaces workspaces;
+  private final VerificationService verifications;
   private final TimeSource time;
 
   AgentEventIngestion(
@@ -53,6 +55,7 @@ public class AgentEventIngestion {
       EventStore events,
       PayloadRedactor redactor,
       Workspaces workspaces,
+      VerificationService verifications,
       TimeSource time) {
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
@@ -61,6 +64,7 @@ public class AgentEventIngestion {
     this.events = events;
     this.redactor = redactor;
     this.workspaces = workspaces;
+    this.verifications = verifications;
     this.time = time;
   }
 
@@ -78,12 +82,19 @@ public class AgentEventIngestion {
     Map<String, Object> redacted = redactor.redact(event.payload());
     Map<String, Object> payload = new LinkedHashMap<>(redacted);
     payload.put("runnerSeq", event.seq());
+    UUID verificationRunId = null;
+    if (event.type().isVerification()) {
+      verificationRunId = uuid(redacted.get("verificationRunId"));
+      if (!verifications.belongsTo(verificationRunId, agent.getId())) {
+        return Outcome.UNKNOWN_VERIFICATION_RUN;
+      }
+    }
     boolean isNew =
         events
             .appendIfNew(
                 new EventDraft(
-                    "agent_run",
-                    agent.getId(),
+                    verificationRunId == null ? "agent_run" : "verification_run",
+                    verificationRunId == null ? agent.getId() : verificationRunId,
                     event.type().wireName(),
                     stage.getWorkflowRunId(),
                     payload,
@@ -93,7 +104,10 @@ public class AgentEventIngestion {
     if (!isNew) {
       return Outcome.DUPLICATE;
     }
-    if (!agent.getStatus().isTerminal()) {
+    if (verificationRunId != null) {
+      // La verificación llega cuando el agente ya ha terminado y no cambia su estado.
+      verifications.apply(verificationRunId, event.type(), redacted, event.occurredAt());
+    } else if (!agent.getStatus().isTerminal()) {
       apply(agent, stage, event, redacted);
     }
     return Outcome.ACCEPTED;
@@ -154,6 +168,9 @@ public class AgentEventIngestion {
             agent.exited(integer(p.get("exitCode")), string(p, "signal"), string(p, "error"));
         agent = transitions.advanceAgent(agent, outcome, runId, "process-exited", now);
         transitions.finishAdhoc(stage, workflowRuns.findById(runId).orElseThrow(), outcome, now);
+        if (agent.getStatus() == AgentObservableStatus.COMPLETED) {
+          verifications.afterCompletion(agent, now);
+        }
       }
       default -> {}
     }
@@ -189,6 +206,17 @@ public class AgentEventIngestion {
       return String.join("; ", list.stream().map(String::valueOf).toList());
     }
     return string(p, "subtype");
+  }
+
+  private static UUID uuid(Object value) {
+    if (value == null) {
+      return null;
+    }
+    try {
+      return UUID.fromString(value.toString());
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
   }
 
   private static String string(Map<String, Object> p, String key) {

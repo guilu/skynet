@@ -74,12 +74,17 @@ class Workspaces {
     jdbc.sql("SELECT id FROM workspace WHERE id = ? FOR UPDATE").param(id).query(UUID.class).list();
   }
 
-  /** Alguna invocación del worktree sigue sin terminar. */
+  /**
+   * Alguna invocación del worktree sigue sin terminar, o alguna verificación sigue en cola o en
+   * curso: las dos escriben en él.
+   */
   boolean hasLiveInvocation(UUID id) {
     return jdbc.sql(
-                "SELECT count(*) FROM agent_run WHERE workspace_id = ?"
-                    + " AND status NOT IN ('COMPLETED', 'FAILED', 'CANCELLED')")
-            .param(id)
+                "SELECT (SELECT count(*) FROM agent_run WHERE workspace_id = :id"
+                    + " AND status NOT IN ('COMPLETED', 'FAILED', 'CANCELLED'))"
+                    + " + (SELECT count(*) FROM verification_run WHERE workspace_id = :id"
+                    + " AND status IN ('QUEUED', 'RUNNING'))")
+            .param("id", id)
             .query(Integer.class)
             .single()
         > 0;

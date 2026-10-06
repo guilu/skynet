@@ -91,6 +91,17 @@ public final class AgentExecutor implements AutoCloseable {
   }
 
   /**
+   * Verifica el worktree de un agente. Todavía no está implementado (M5-B): responde con un error
+   * para que la verificación no quede en cola y no bloquee el worktree.
+   */
+  public void verify(RunnerCommand command) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("verificationRunId", command.verify().verificationRunId().toString());
+    payload.put("error", "Este runner todavía no sabe ejecutar verificaciones");
+    emit(command.agentRunId(), AgentEventType.VERIFICATION_COMPLETED, payload);
+  }
+
+  /**
    * Cancela una invocación: termina su árbol de procesos. Si no se está ejecutando aquí (no llegó a
    * arrancar, o se perdió en un reinicio), registra directamente su fin para que el control plane
    * la cierre.

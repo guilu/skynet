@@ -158,7 +158,7 @@ public class RunService {
     AgentRun parent = lastOfSession(requested);
     if (workspaces.hasLiveInvocation(workspace.id())) {
       throw new ConflictException(
-          "Ya hay una invocación en curso en el worktree "
+          "Ya hay una invocación o una verificación en curso en el worktree "
               + workspace.path()
               + ": espera a que termine o cancélala");
     }

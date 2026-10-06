@@ -1,6 +1,7 @@
 package dev.skynet.controlplane.project;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.PersistenceCreator;
@@ -20,6 +21,8 @@ public class CodeRepository {
   private String localPath;
   private String remoteUrl;
   private String defaultBranch;
+  private String validationCommand;
+  private List<String> testReportPaths;
   private final Instant createdAt;
   @Version private Long version;
 
@@ -31,6 +34,8 @@ public class CodeRepository {
       String localPath,
       String remoteUrl,
       String defaultBranch,
+      String validationCommand,
+      List<String> testReportPaths,
       Instant createdAt,
       Long version) {
     this.id = id;
@@ -39,6 +44,8 @@ public class CodeRepository {
     this.localPath = localPath;
     this.remoteUrl = remoteUrl;
     this.defaultBranch = defaultBranch;
+    this.validationCommand = validationCommand;
+    this.testReportPaths = testReportPaths == null ? List.of() : List.copyOf(testReportPaths);
     this.createdAt = createdAt;
     this.version = version;
   }
@@ -51,7 +58,32 @@ public class CodeRepository {
       String defaultBranch,
       Instant now) {
     return new CodeRepository(
-        UUID.randomUUID(), projectId, name, localPath, remoteUrl, defaultBranch, now, null);
+        UUID.randomUUID(),
+        projectId,
+        name,
+        localPath,
+        remoteUrl,
+        defaultBranch,
+        null,
+        DEFAULT_TEST_REPORT_PATHS,
+        now,
+        null);
+  }
+
+  /** Informes JUnit de Gradle y de Maven (Surefire). */
+  public static final List<String> DEFAULT_TEST_REPORT_PATHS =
+      List.of("**/build/test-results/**/*.xml", "**/target/surefire-reports/*.xml");
+
+  /**
+   * Comando de validación que el runner ejecuta en el worktree tras cada invocación completada, y
+   * dónde deja sus informes JUnit. Sin comando, no hay verificación.
+   */
+  void configureVerification(String command, List<String> reportPaths) {
+    this.validationCommand = command == null || command.isBlank() ? null : command.strip();
+    this.testReportPaths =
+        reportPaths == null
+            ? DEFAULT_TEST_REPORT_PATHS
+            : reportPaths.stream().map(String::strip).filter(p -> !p.isEmpty()).toList();
   }
 
   public UUID getId() {
@@ -76,6 +108,14 @@ public class CodeRepository {
 
   public String getDefaultBranch() {
     return defaultBranch;
+  }
+
+  public String getValidationCommand() {
+    return validationCommand;
+  }
+
+  public List<String> getTestReportPaths() {
+    return testReportPaths;
   }
 
   public Instant getCreatedAt() {

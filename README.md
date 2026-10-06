@@ -91,7 +91,7 @@ docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
 | API | http://localhost:8080/actuator/health | `SKYNET_API_PORT` |
 | PostgreSQL | localhost:5432 | `SKYNET_DB_PORT` |
 
-Credenciales de la base de datos: `SKYNET_DB_USER` / `SKYNET_DB_PASSWORD` (por defecto `skynet`/`skynet`). Para que un runner pueda registrarse, define `SKYNET_RUNNER_REGISTRATION_TOKEN` con un secreto compartido; sin él, el registro de runners está desactivado. Para parar: `docker compose -f deploy/docker-compose.yml --profile app down` (añade `-v` para borrar los datos). El runner no va en contenedor: se ejecuta en el host porque necesita `claude` y los repositorios.
+Credenciales de la base de datos: `SKYNET_DB_USER` / `SKYNET_DB_PASSWORD` (por defecto `skynet`/`skynet`). Los artefactos (diff, logs, informes de tests) se guardan en el volumen `artifacts-data`; fuera de Docker, en `SKYNET_ARTIFACTS_DIR` (por defecto `data/artifacts`), con un máximo por artefacto de `SKYNET_ARTIFACT_MAX_SIZE` (20 MB). El comando de verificación tiene un tiempo máximo de `SKYNET_VERIFICATION_TIMEOUT` (30 min). Para que un runner pueda registrarse, define `SKYNET_RUNNER_REGISTRATION_TOKEN` con un secreto compartido; sin él, el registro de runners está desactivado. Para parar: `docker compose -f deploy/docker-compose.yml --profile app down` (añade `-v` para borrar los datos). El runner no va en contenedor: se ejecuta en el host porque necesita `claude` y los repositorios.
 
 ### Probar la aplicación (estado actual: M4)
 

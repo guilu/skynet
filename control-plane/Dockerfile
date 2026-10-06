@@ -14,7 +14,8 @@ RUN --mount=type=cache,target=/root/.gradle \
  && cp control-plane/build/libs/control-plane.jar /app.jar
 
 FROM eclipse-temurin:21-jre
-RUN useradd --system --uid 10001 skynet
+RUN useradd --system --uid 10001 skynet \
+ && mkdir -p /data/artifacts && chown skynet /data/artifacts
 COPY --from=build /app.jar /app/app.jar
 USER skynet
 EXPOSE 8080
