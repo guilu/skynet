@@ -133,7 +133,7 @@ runner/build/install/skynet-runner/bin/skynet-runner
 | `SKYNET_CLAUDE_BIN` | `claude` | Ejecutable de Claude Code (o fake-claude para probar) |
 | `SKYNET_AGENT_ENV` | — | Variables extra que hereda el agente, separadas por comas |
 
-El agente solo hereda una lista corta de variables (`PATH`, `HOME`, idioma, proxy, `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`…) más las de `SKYNET_AGENT_ENV`. Para probar sin gastar, usa fake-claude:
+El agente solo hereda una lista corta de variables (`PATH`, `HOME`, idioma, proxy, `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`…) más las de `SKYNET_AGENT_ENV`. El comando de verificación del repositorio se ejecuta con ese mismo entorno: si necesita `JAVA_HOME`, `GRADLE_USER_HOME` o similares, añádelas a `SKYNET_AGENT_ENV`. Los artefactos pendientes de subir se guardan en `SKYNET_RUNNER_HOME/artifacts`. Para probar sin gastar, usa fake-claude:
 
 ```bash
 ./gradlew :tools:fake-claude:installDist
@@ -150,4 +150,4 @@ FAKE_CLAUDE_FIXTURE=02-tools tools/fake-claude/build/install/fake-claude/bin/fak
   -p "..." --output-format stream-json --session-id <uuid>
 ```
 
-Variables: `FAKE_CLAUDE_FIXTURE` (nombre de fixture o ruta), `FAKE_CLAUDE_RESUME_FIXTURE` y `FAKE_CLAUDE_FORK_FIXTURE` (con `--resume`, por defecto `03-resume` y `04-fork`), `FAKE_CLAUDE_DELAY_MS` (pausa entre líneas) y `FAKE_CLAUDE_HANG` (`false` para no quedarse esperando en fixtures sin `result`). Con `CLAUDE_CONFIG_DIR` guarda las sesiones como el CLI real y `--resume` falla si no encuentra la sesión. El formato del stream está documentado en [`docs/claude-code-stream-json.md`](docs/claude-code-stream-json.md).
+Variables: `FAKE_CLAUDE_FIXTURE` (nombre de fixture o ruta), `FAKE_CLAUDE_RESUME_FIXTURE` y `FAKE_CLAUDE_FORK_FIXTURE` (con `--resume`, por defecto `03-resume` y `04-fork`), `FAKE_CLAUDE_DELAY_MS` (pausa entre líneas), `FAKE_CLAUDE_APPLY` (`1` para aplicar de verdad los `Edit`, `Write` y `Bash` de la fixture en el directorio de trabajo) y `FAKE_CLAUDE_HANG` (`false` para no quedarse esperando en fixtures sin `result`). Con `CLAUDE_CONFIG_DIR` guarda las sesiones como el CLI real y `--resume` falla si no encuentra la sesión. El formato del stream está documentado en [`docs/claude-code-stream-json.md`](docs/claude-code-stream-json.md).

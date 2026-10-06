@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -80,6 +81,54 @@ class FakeClaudeTest {
 
     assertThat(run(env, CWD, resume).exitCode).isZero();
     assertThat(run(env, Path.of("/otro"), resume).exitCode).isEqualTo(1);
+  }
+
+  @Test
+  void withApplyEditsTheFilesAndRunsTheCommandsOfTheFixture(@TempDir Path repo) throws Exception {
+    git(repo, "init", "-q", "-b", "main");
+    Files.writeString(repo.resolve("calc.py"), "def add(a, b):\n    return a - b\n");
+    git(repo, "add", ".");
+    git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init");
+
+    Map<String, String> env =
+        Map.of(
+            "FAKE_CLAUDE_FIXTURE",
+            "02-tools",
+            "FAKE_CLAUDE_DELAY_MS",
+            "0",
+            "FAKE_CLAUDE_APPLY",
+            "1");
+    Result r = run(env, repo, "-p", "x", "--output-format", "stream-json");
+
+    assertThat(r.exitCode).isZero();
+    assertThat(Files.readString(repo.resolve("calc.py"))).contains("return a + b");
+    // El Bash del fixture confirma el cambio.
+    assertThat(git(repo, "log", "--format=%s", "-1")).isEqualTo("fix add");
+    assertThat(git(repo, "status", "--porcelain")).isEmpty();
+  }
+
+  @Test
+  void withoutApplyTheWorktreeIsUntouched(@TempDir Path repo) throws Exception {
+    Files.writeString(repo.resolve("calc.py"), "def add(a, b):\n    return a - b\n");
+
+    run(
+        Map.of("FAKE_CLAUDE_FIXTURE", "02-tools", "FAKE_CLAUDE_DELAY_MS", "0"),
+        repo,
+        "-p",
+        "x",
+        "--output-format",
+        "stream-json");
+
+    assertThat(Files.readString(repo.resolve("calc.py"))).contains("return a - b");
+  }
+
+  private static String git(Path dir, String... args) throws Exception {
+    List<String> command = new java.util.ArrayList<>(List.of("git", "-C", dir.toString()));
+    command.addAll(List.of(args));
+    Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+    String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+    assertThat(process.waitFor()).as(output).isZero();
+    return output.trim();
   }
 
   @Test

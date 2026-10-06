@@ -45,6 +45,11 @@ public record RunnerConfig(
     return home.resolve("logs");
   }
 
+  /** Artefactos pendientes de subir. */
+  public Path artifactsDir() {
+    return home.resolve("artifacts");
+  }
+
   public static RunnerConfig fromEnvironment(Map<String, String> env) {
     return new RunnerConfig(
         URI.create(env.getOrDefault("SKYNET_URL", "http://localhost:8080")),

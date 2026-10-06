@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.NormalizedEvent;
+import dev.skynet.protocol.runner.ArtifactType;
 import dev.skynet.protocol.runner.ResumeFrom;
+import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.runner.TestAgents;
 import dev.skynet.runner.TestRepos;
@@ -14,6 +16,8 @@ import dev.skynet.runner.workspace.WorkspaceManager;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -47,16 +51,24 @@ class AgentExecutorTest {
   }
 
   private AgentExecutor executor(String fixture) {
+    return executor(fixture, Map.of());
+  }
+
+  private AgentExecutor executor(String fixture, Map<String, String> extraEnv) {
+    Map<String, String> env =
+        new HashMap<>(TestAgents.fakeClaudeEnv(fixture, dir.resolve("claude")));
+    env.putAll(extraEnv);
     executor =
         new AgentExecutor(
             journal,
             new ProcessSupervisor(),
             new WorkspaceManager(dir.resolve("workspaces")),
             TestAgents.fakeClaude(),
-            TestAgents.fakeClaudeEnv(fixture, dir.resolve("claude")),
+            env,
             dir.resolve("logs"),
             Duration.ofSeconds(2),
-            () -> {});
+            () -> {},
+            new ArtifactSpool(journal, dir.resolve("artifacts"), () -> {}));
     return executor;
   }
 
@@ -282,5 +294,161 @@ class AgentExecutorTest {
     assertThat(executor.running()).containsExactly(running);
     executor.cancel(running);
     awaitExit(running);
+  }
+
+  @Test
+  void collectsThePromptTheLogTheResultAndTheChangesOfTheInvocation() throws Exception {
+    UUID id = UUID.randomUUID();
+    executor("02-tools", Map.of("FAKE_CLAUDE_APPLY", "1"))
+        .start(TestAgents.start(id, repo.toString(), null));
+    awaitExit(id);
+
+    Map<ArtifactType, Journal.PendingArtifact> artifacts = artifactsOf(id);
+    assertThat(artifacts)
+        .containsOnlyKeys(
+            ArtifactType.PROMPT,
+            ArtifactType.LOG,
+            ArtifactType.RESULT,
+            ArtifactType.GIT_CHANGES,
+            ArtifactType.DIFF);
+    assertThat(artifacts.values())
+        .allSatisfy(
+            a -> {
+              assertThat(a.upload().agentRunId()).isEqualTo(id);
+              assertThat(a.upload().verificationRunId()).isNull();
+              assertThat(a.file()).exists();
+            });
+    assertThat(artifacts.get(ArtifactType.PROMPT).file()).hasContent("Arregla add");
+    assertThat(Files.readString(artifacts.get(ArtifactType.RESULT).file())).contains("fix add");
+    assertThat(Files.readString(artifacts.get(ArtifactType.GIT_CHANGES).file()))
+        .contains("\"subject\":\"fix add\"")
+        .contains("\"path\":\"calc.py\"");
+    assertThat(artifacts.get(ArtifactType.GIT_CHANGES).upload().metadata())
+        .containsEntry("commits", 1)
+        .containsEntry("files", 1);
+    assertThat(Files.readString(artifacts.get(ArtifactType.DIFF).file()))
+        .contains("-    return a - b")
+        .contains("+    return a + b");
+  }
+
+  @Test
+  void verifyRunsTheCommandInTheWorktreeAndReadsItsTestReports() throws Exception {
+    Path worktree = finishedWorktree();
+    UUID agent = UUID.randomUUID();
+    String command =
+        """
+        mkdir -p build/test-results/test
+        cat > build/test-results/test/TEST-Calc.xml <<'XML'
+        <testsuite name="Calc"><testcase name="ok"/><testcase name="ko"><failure message="no"/></testcase></testsuite>
+        XML
+        echo salida; echo error >&2; exit 3
+        """;
+    RunnerCommand verify = verify(agent, worktree, command, Duration.ofSeconds(30));
+
+    executor.verify(verify);
+    NormalizedEvent completed = awaitVerification(agent);
+
+    List<NormalizedEvent> events = eventsOf(agent);
+    assertThat(events)
+        .extracting(NormalizedEvent::type)
+        .containsExactly(
+            AgentEventType.VERIFICATION_STARTED, AgentEventType.VERIFICATION_COMPLETED);
+    assertThat(completed.payload())
+        .containsEntry("verificationRunId", verify.verify().verificationRunId().toString())
+        .containsEntry("exitCode", 3)
+        .containsEntry("tests", Map.of("total", 2, "failed", 1, "errors", 0, "skipped", 0))
+        .doesNotContainKey("error");
+    Map<ArtifactType, Journal.PendingArtifact> artifacts = artifactsOf(agent);
+    assertThat(artifacts).containsOnlyKeys(ArtifactType.VERIFICATION_LOG, ArtifactType.TEST_REPORT);
+    assertThat(artifacts.get(ArtifactType.VERIFICATION_LOG).file()).hasContent("salida\nerror");
+    assertThat(artifacts.get(ArtifactType.TEST_REPORT).upload().verificationRunId())
+        .isEqualTo(verify.verify().verificationRunId());
+    assertThat(journal.processes()).isEmpty();
+
+    executor.verify(verify);
+    Thread.sleep(300);
+    assertThat(eventsOf(agent)).hasSize(2);
+  }
+
+  @Test
+  void aVerificationThatRunsTooLongIsTerminated() throws Exception {
+    Path worktree = finishedWorktree();
+    UUID agent = UUID.randomUUID();
+
+    executor.verify(verify(agent, worktree, "sleep 30", Duration.ofMillis(300)));
+    NormalizedEvent completed = awaitVerification(agent);
+
+    assertThat((String) completed.payload().get("error")).startsWith("Se agotó el tiempo máximo");
+    assertThat(completed.payload().get("signal")).isIn("SIGTERM", "SIGKILL");
+  }
+
+  @Test
+  void aVerificationDoesNotRunWhileTheWorktreeIsBusyOrUnknown() throws Exception {
+    UUID running = UUID.randomUUID();
+    executor("07-cancelled").start(TestAgents.start(running, repo.toString(), null));
+    awaitRunning(running);
+    Path worktree = Path.of((String) eventsOf(running).getFirst().payload().get("path"));
+
+    UUID busy = UUID.randomUUID();
+    executor.verify(verify(busy, worktree, "true", Duration.ofSeconds(30)));
+    assertThat((String) awaitVerification(busy).payload().get("error"))
+        .contains("Hay una invocación en curso");
+
+    UUID unknown = UUID.randomUUID();
+    executor.verify(verify(unknown, repo, "true", Duration.ofSeconds(30)));
+    assertThat((String) awaitVerification(unknown).payload().get("error"))
+        .startsWith("No se pudo verificar el worktree");
+    assertThat(eventsOf(unknown))
+        .extracting(NormalizedEvent::type)
+        .containsExactly(AgentEventType.VERIFICATION_COMPLETED);
+
+    executor.cancel(running);
+    awaitExit(running);
+  }
+
+  /** Worktree de una invocación ya terminada. */
+  private Path finishedWorktree() throws InterruptedException {
+    UUID id = UUID.randomUUID();
+    executor("01-simple-text").start(TestAgents.start(id, repo.toString(), null));
+    awaitExit(id);
+    return Path.of((String) eventsOf(id).getFirst().payload().get("path"));
+  }
+
+  private static RunnerCommand verify(
+      UUID agentRunId, Path worktree, String command, Duration timeout) {
+    return RunnerCommand.verify(
+        UUID.randomUUID(),
+        agentRunId,
+        Instant.now(),
+        new RunVerification(
+            UUID.randomUUID(),
+            worktree.toString(),
+            command,
+            List.of("**/build/test-results/**/*.xml"),
+            timeout));
+  }
+
+  private NormalizedEvent awaitVerification(UUID agentRunId) throws InterruptedException {
+    long deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos();
+    while (System.nanoTime() < deadline) {
+      List<NormalizedEvent> events = eventsOf(agentRunId);
+      if (!events.isEmpty()
+          && events.getLast().type() == AgentEventType.VERIFICATION_COMPLETED
+          && journal.unfinishedVerifications().isEmpty()) {
+        return events.getLast();
+      }
+      Thread.sleep(50);
+    }
+    throw new AssertionError("La verificación no terminó: " + eventsOf(agentRunId));
+  }
+
+  private Map<ArtifactType, Journal.PendingArtifact> artifactsOf(UUID agentRunId) {
+    Map<ArtifactType, Journal.PendingArtifact> artifacts = new HashMap<>();
+    for (Journal.PendingArtifact artifact : journal.pendingArtifacts(1000)) {
+      if (artifact.upload().agentRunId().equals(agentRunId)) {
+        artifacts.put(artifact.upload().type(), artifact);
+      }
+    }
+    return artifacts;
   }
 }

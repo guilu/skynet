@@ -2,6 +2,7 @@ package dev.skynet.runner.journal;
 
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.NormalizedEvent;
+import dev.skynet.protocol.runner.ArtifactUpload;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -70,6 +71,14 @@ public final class Journal implements AutoCloseable {
         st.execute(
             "CREATE TABLE IF NOT EXISTS process (agent_run_id TEXT PRIMARY KEY, pid INTEGER NOT"
                 + " NULL, started_at TEXT NOT NULL)");
+        // Artefactos pendientes de subir: metadatos y fichero con el contenido.
+        st.execute(
+            "CREATE TABLE IF NOT EXISTS artifact (id TEXT PRIMARY KEY, json TEXT NOT NULL,"
+                + " file TEXT NOT NULL)");
+        // Verificaciones recibidas; finished = 1 cuando su evento de fin ya está en el journal.
+        st.execute(
+            "CREATE TABLE IF NOT EXISTS verification (id TEXT PRIMARY KEY, agent_run_id TEXT NOT"
+                + " NULL, finished INTEGER NOT NULL DEFAULT 0)");
       }
       return new Journal(db);
     } catch (SQLException e) {
@@ -223,10 +232,93 @@ public final class Journal implements AutoCloseable {
         .isEmpty();
   }
 
+  // --- artefactos ---
+
+  /** Artefacto pendiente de subir. */
+  public record PendingArtifact(UUID id, ArtifactUpload upload, Path file) {}
+
+  /** Encola un artefacto cuyo contenido ya está en {@code file}. */
+  public synchronized void queueArtifact(UUID id, ArtifactUpload upload, Path file) {
+    update(
+        "INSERT OR REPLACE INTO artifact (id, json, file) VALUES (?, ?, ?)",
+        ps -> {
+          ps.setString(1, id.toString());
+          ps.setString(2, JSON.writeValueAsString(upload));
+          ps.setString(3, file.toString());
+        });
+  }
+
+  /** Artefactos pendientes, en el orden en que se encolaron. */
+  public synchronized List<PendingArtifact> pendingArtifacts(int limit) {
+    return query(
+        "SELECT id, json, file FROM artifact ORDER BY rowid LIMIT ?",
+        ps -> ps.setInt(1, limit),
+        rs ->
+            new PendingArtifact(
+                UUID.fromString(rs.getString(1)),
+                JSON.readValue(rs.getString(2), ArtifactUpload.class),
+                Path.of(rs.getString(3))));
+  }
+
+  /** Olvida un artefacto que el control plane ya tiene (o rechazó). */
+  public synchronized void artifactDelivered(UUID id) {
+    update("DELETE FROM artifact WHERE id = ?", ps -> ps.setString(1, id.toString()));
+  }
+
+  // --- verificaciones ---
+
+  /** Verificación recibida y aún sin evento de fin. */
+  public record PendingVerification(UUID verificationRunId, UUID agentRunId) {}
+
+  /**
+   * Registra una verificación. Devuelve {@code false} si ya se había recibido: no se ejecuta dos
+   * veces.
+   */
+  public synchronized boolean firstVerification(UUID verificationRunId, UUID agentRunId) {
+    return update(
+            "INSERT OR IGNORE INTO verification (id, agent_run_id) VALUES (?, ?)",
+            ps -> {
+              ps.setString(1, verificationRunId.toString());
+              ps.setString(2, agentRunId.toString());
+            })
+        == 1;
+  }
+
+  /** Registra el evento de fin de una verificación y la marca como terminada, en un solo paso. */
+  public synchronized NormalizedEvent finishVerification(
+      UUID verificationRunId, UUID agentRunId, Map<String, Object> payload, Instant occurredAt) {
+    return inTransaction(
+        () -> {
+          NormalizedEvent event =
+              append(agentRunId, AgentEventType.VERIFICATION_COMPLETED, payload, occurredAt);
+          update(
+              "UPDATE verification SET finished = 1 WHERE id = ?",
+              ps -> ps.setString(1, verificationRunId.toString()));
+          update(
+              "DELETE FROM process WHERE agent_run_id = ?",
+              ps -> ps.setString(1, verificationRunId.toString()));
+          return event;
+        });
+  }
+
+  /** Verificaciones que el runner dejó a medias en una ejecución anterior. */
+  public synchronized List<PendingVerification> unfinishedVerifications() {
+    return query(
+        "SELECT id, agent_run_id FROM verification WHERE finished = 0 ORDER BY rowid",
+        ps -> {},
+        rs ->
+            new PendingVerification(
+                UUID.fromString(rs.getString(1)), UUID.fromString(rs.getString(2))));
+  }
+
   // --- procesos ---
 
   public record TrackedProcess(UUID agentRunId, long pid, Instant startedAt) {}
 
+  /**
+   * Proceso vivo de una invocación o de una verificación (por su id), para matarlo tras un
+   * reinicio.
+   */
   public synchronized void processStarted(UUID agentRunId, long pid, Instant startedAt) {
     update(
         "INSERT OR REPLACE INTO process (agent_run_id, pid, started_at) VALUES (?, ?, ?)",

@@ -5,6 +5,7 @@ import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
 import dev.skynet.protocol.runner.RunnerRegistration;
 import dev.skynet.runner.agent.AgentExecutor;
+import dev.skynet.runner.agent.ArtifactSender;
 import dev.skynet.runner.agent.EventSender;
 import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
@@ -37,6 +38,7 @@ public final class RunnerDaemon implements AutoCloseable {
   private final Journal journal;
   private final AgentExecutor executor;
   private final EventSender sender;
+  private final ArtifactSender artifactSender;
   private final ProcessSupervisor supervisor;
   private final String providerVersion;
   private final ScheduledExecutorService heartbeats =
@@ -50,6 +52,7 @@ public final class RunnerDaemon implements AutoCloseable {
       Journal journal,
       AgentExecutor executor,
       EventSender sender,
+      ArtifactSender artifactSender,
       ProcessSupervisor supervisor,
       String providerVersion) {
     this.config = config;
@@ -57,6 +60,7 @@ public final class RunnerDaemon implements AutoCloseable {
     this.journal = journal;
     this.executor = executor;
     this.sender = sender;
+    this.artifactSender = artifactSender;
     this.supervisor = supervisor;
     this.providerVersion = providerVersion;
   }
@@ -65,6 +69,7 @@ public final class RunnerDaemon implements AutoCloseable {
     authenticate();
     recoverUnfinished();
     sender.start();
+    artifactSender.start();
     running = true;
     heartbeats.scheduleWithFixedDelay(
         this::heartbeat, 0, config.heartbeatInterval().toMillis(), TimeUnit.MILLISECONDS);
@@ -86,6 +91,21 @@ public final class RunnerDaemon implements AutoCloseable {
       }
       journal.finish(
           agentRunId, Map.of("error", "El runner se reinició durante la ejecución"), Instant.now());
+    }
+    for (Journal.PendingVerification verification : journal.unfinishedVerifications()) {
+      Journal.TrackedProcess process = processes.get(verification.verificationRunId());
+      if (process != null) {
+        supervisor.terminateOrphan(process.pid(), process.startedAt(), config.cancelGrace());
+      }
+      journal.finishVerification(
+          verification.verificationRunId(),
+          verification.agentRunId(),
+          Map.of(
+              "verificationRunId",
+              verification.verificationRunId().toString(),
+              "error",
+              "El runner se reinició durante la verificación"),
+          Instant.now());
     }
     sender.wakeUp();
   }
@@ -194,5 +214,7 @@ public final class RunnerDaemon implements AutoCloseable {
     heartbeats.shutdownNow();
     executor.close();
     sender.flush();
+    artifactSender.flush();
+    artifactSender.close();
   }
 }

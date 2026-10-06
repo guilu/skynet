@@ -356,6 +356,22 @@ Se entrega en tres PRs (plan aprobado: verificación aparte del agente, comando 
   - La web lee el contenido por trozos (como mucho 8 MiB por petición); lo que es texto se sirve como `text/plain` o JSON, nunca como HTML.
 - El runner de esta PR todavía no verifica: responde a `VERIFY` con un `error` para que la verificación no quede en cola. Llega en M5-B.
 
+**Implementado (M5-B), runner:**
+
+- Al terminar cada invocación, antes de `agent.process.exited`, el runner sube como artefactos:
+  - `PROMPT` (`prompt.txt`), `LOG` (el NDJSON bruto) y `RESULT` (la última línea `result`).
+  - `GIT_CHANGES` (`changes.json`): rama, commit base y final, commits nuevos (`base..HEAD`, hasta 500), archivos con estado, líneas añadidas y borradas y la posición de su trozo en el diff (`diffOffset`, `diffLength`). El resumen va en `metadata`.
+  - `DIFF` (`changes.diff`): diff contra el commit base, con los cambios sin confirmar y los archivos nuevos no ignorados. Se calcula con un índice temporal (`GIT_INDEX_FILE`), sin tocar el del worktree. Sin cambios no hay diff.
+- La base es el `HEAD` al empezar la invocación: el diff de una reanudación cubre solo esa invocación.
+- Los artefactos se copian a `~/.skynet-runner/artifacts` y quedan en el journal hasta que el control plane los acepta, así que sobreviven a un corte o a un reinicio. Uno que el control plane rechaza (400, 404, 409, 413) se descarta. Cada copia se recorta a 48 MB; el control plane recorta después a su máximo.
+- Orden `VERIFY`:
+  - Ejecuta `sh -c` con el comando en el worktree, con el mismo entorno filtrado que el agente, `stderr` junto a `stdout` y el tiempo máximo de la orden.
+  - Lee los informes JUnit XML de los globs escritos durante la verificación (Gradle, Surefire y compatibles; sin DTD ni entidades externas).
+  - Sube `VERIFICATION_LOG` (`verification.log`) y, si hay informes, `TEST_REPORT` (`tests.json`, con totales y hasta 200 casos fallidos).
+  - Termina siempre con un único `agent.verification.completed` (código de salida, señal, totales o `error`). Una orden repetida no se ejecuta dos veces, y un worktree con una invocación en curso o que no es de este runner da `error`.
+  - Si el runner se reinicia a mitad, mata el proceso y cierra la verificación con un `error`.
+- fake-claude con `FAKE_CLAUDE_APPLY=1` aplica de verdad los `Edit`, `Write` y `Bash` de la fixture en su directorio de trabajo, para que haya diff y commits que indexar.
+
 ### M6 — Endurecimiento y cierre del MVP (≈1 semana)
 
 - Spring Security (usuario único local, form login), token de runner, CORS.

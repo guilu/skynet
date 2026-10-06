@@ -1,6 +1,8 @@
 package dev.skynet.runner;
 
 import dev.skynet.runner.agent.AgentExecutor;
+import dev.skynet.runner.agent.ArtifactSender;
+import dev.skynet.runner.agent.ArtifactSpool;
 import dev.skynet.runner.agent.EventSender;
 import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
@@ -53,6 +55,8 @@ public final class RunnerMain {
         new ClaudeCodeProvider(config.claudeExecutable(), config.extraEnv());
     try (EventSender sender =
             new EventSender(journal, client, Duration.ofMillis(500), Duration.ofSeconds(2));
+        ArtifactSender artifactSender =
+            new ArtifactSender(journal, client, Duration.ofSeconds(1), Duration.ofSeconds(5));
         AgentExecutor executor =
             new AgentExecutor(
                 journal,
@@ -62,7 +66,8 @@ public final class RunnerMain {
                 System.getenv(),
                 config.logsDir(),
                 config.cancelGrace(),
-                sender::wakeUp);
+                sender::wakeUp,
+                new ArtifactSpool(journal, config.artifactsDir(), artifactSender::wakeUp));
         RunnerDaemon daemon =
             new RunnerDaemon(
                 config,
@@ -70,6 +75,7 @@ public final class RunnerMain {
                 journal,
                 executor,
                 sender,
+                artifactSender,
                 supervisor,
                 provider.version(System.getenv()).orElse(null))) {
       daemon.start();

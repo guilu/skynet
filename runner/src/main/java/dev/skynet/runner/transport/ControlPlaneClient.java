@@ -1,5 +1,7 @@
 package dev.skynet.runner.transport;
 
+import dev.skynet.protocol.runner.ArtifactStored;
+import dev.skynet.protocol.runner.ArtifactUpload;
 import dev.skynet.protocol.runner.EventBatch;
 import dev.skynet.protocol.runner.EventBatchResult;
 import dev.skynet.protocol.runner.RunnerCommand;
@@ -11,7 +13,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 import tools.jackson.core.type.TypeReference;
@@ -26,6 +30,8 @@ public class ControlPlaneClient {
 
   private static final ObjectMapper JSON = JsonMapper.builder().build();
   private static final Duration TIMEOUT = Duration.ofSeconds(15);
+  private static final Duration UPLOAD_TIMEOUT = Duration.ofMinutes(2);
+  private static final java.util.Set<Integer> REJECTED = java.util.Set.of(400, 404, 409, 413);
 
   private final URI base;
   private final HttpClient http;
@@ -69,6 +75,30 @@ public class ControlPlaneClient {
     return send(post("/api/runner/events", batch, true), EventBatchResult.class, TIMEOUT);
   }
 
+  /**
+   * Sube un artefacto (multipart). Si el control plane lo rechaza por algo que no cambiará al
+   * reintentar (400, 404, 409, 413), lanza {@link ArtifactRejectedException}.
+   */
+  public ArtifactStored uploadArtifact(ArtifactUpload upload, Path content)
+      throws IOException, InterruptedException {
+    String metadata = Base64.getUrlEncoder().encodeToString(JSON.writeValueAsBytes(upload));
+    HttpRequest request =
+        authorized(
+                HttpRequest.newBuilder(base.resolve("/api/runner/artifacts"))
+                    .header("Content-Type", "application/octet-stream")
+                    .header(ArtifactUpload.HEADER, metadata)
+                    .POST(HttpRequest.BodyPublishers.ofFile(content)))
+            .build();
+    try {
+      return send(request, ArtifactStored.class, UPLOAD_TIMEOUT);
+    } catch (StatusException e) {
+      if (REJECTED.contains(e.status())) {
+        throw new ArtifactRejectedException(e.getMessage());
+      }
+      throw e;
+    }
+  }
+
   private HttpRequest post(String path, Object body, boolean auth) {
     HttpRequest.Builder builder =
         HttpRequest.newBuilder(base.resolve(path))
@@ -95,7 +125,8 @@ public class ControlPlaneClient {
       throw new UnauthorizedException(request.uri().getPath() + ": " + response.body());
     }
     if (status < 200 || status >= 300) {
-      throw new IOException(
+      throw new StatusException(
+          status,
           request.method()
               + " "
               + request.uri().getPath()
@@ -111,5 +142,20 @@ public class ControlPlaneClient {
       return type.cast(response.body());
     }
     return JSON.readValue(response.body(), type);
+  }
+
+  /** Respuesta HTTP fuera de 2xx. */
+  static class StatusException extends IOException {
+    private static final long serialVersionUID = 1L;
+    private final int status;
+
+    StatusException(int status, String message) {
+      super(message);
+      this.status = status;
+    }
+
+    int status() {
+      return status;
+    }
   }
 }

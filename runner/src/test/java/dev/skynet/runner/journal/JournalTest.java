@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.NormalizedEvent;
+import dev.skynet.protocol.runner.ArtifactType;
+import dev.skynet.protocol.runner.ArtifactUpload;
 import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -84,6 +86,62 @@ class JournalTest {
       journal.saveCredentials(new Journal.Credentials("http://cp", id, "t1"));
       journal.saveCredentials(new Journal.Credentials("http://cp", id, "t2"));
       assertThat(journal.credentials()).contains(new Journal.Credentials("http://cp", id, "t2"));
+    }
+  }
+
+  @Test
+  void artifactsWaitInOrderUntilDeliveredAcrossAReopen() throws Exception {
+    UUID agent = UUID.randomUUID();
+    UUID first = UUID.randomUUID();
+    UUID second = UUID.randomUUID();
+    ArtifactUpload prompt =
+        new ArtifactUpload(
+            agent, null, ArtifactType.PROMPT, "prompt.txt", "text/plain", "abc", Map.of());
+    ArtifactUpload diff =
+        new ArtifactUpload(
+            agent,
+            null,
+            ArtifactType.DIFF,
+            "changes.diff",
+            "text/x-diff",
+            "def",
+            Map.of("files", 1));
+    try (Journal journal = Journal.open(dir.resolve("j.db"))) {
+      journal.queueArtifact(first, prompt, dir.resolve("a"));
+      journal.queueArtifact(second, diff, dir.resolve("b"));
+    }
+    try (Journal journal = Journal.open(dir.resolve("j.db"))) {
+      assertThat(journal.pendingArtifacts(10))
+          .extracting(Journal.PendingArtifact::id, Journal.PendingArtifact::upload)
+          .containsExactly(
+              org.assertj.core.groups.Tuple.tuple(first, prompt),
+              org.assertj.core.groups.Tuple.tuple(second, diff));
+      journal.artifactDelivered(first);
+      assertThat(journal.pendingArtifacts(10))
+          .extracting(Journal.PendingArtifact::file)
+          .containsExactly(dir.resolve("b"));
+    }
+  }
+
+  @Test
+  void verificationsRunOnceAndTheirEndIsJournaledWithTheEvent() throws Exception {
+    try (Journal journal = Journal.open(dir.resolve("j.db"))) {
+      UUID verification = UUID.randomUUID();
+      UUID agent = UUID.randomUUID();
+      assertThat(journal.firstVerification(verification, agent)).isTrue();
+      assertThat(journal.firstVerification(verification, agent)).isFalse();
+      journal.processStarted(verification, 42, Instant.now());
+      assertThat(journal.unfinishedVerifications())
+          .containsExactly(new Journal.PendingVerification(verification, agent));
+
+      NormalizedEvent event =
+          journal.finishVerification(verification, agent, Map.of("exitCode", 0), Instant.now());
+
+      assertThat(event.type()).isEqualTo(AgentEventType.VERIFICATION_COMPLETED);
+      assertThat(event.agentRunId()).isEqualTo(agent);
+      assertThat(journal.unfinishedVerifications()).isEmpty();
+      assertThat(journal.processes()).isEmpty();
+      assertThat(journal.firstVerification(verification, agent)).isFalse();
     }
   }
 }
