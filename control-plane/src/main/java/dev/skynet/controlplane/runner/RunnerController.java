@@ -1,6 +1,7 @@
 package dev.skynet.controlplane.runner;
 
 import dev.skynet.controlplane.artifact.ArtifactService;
+import dev.skynet.controlplane.artifact.ArtifactTooLargeException;
 import dev.skynet.controlplane.artifact.InvalidArtifactException;
 import dev.skynet.controlplane.workflow.AgentEventIngestion;
 import dev.skynet.protocol.NormalizedEvent;
@@ -13,6 +14,7 @@ import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
 import dev.skynet.protocol.runner.RunnerRegistration;
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,10 +34,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 /** API del runner. Todo salvo el registro exige {@code Authorization: Bearer <token>}. */
 @RestController
@@ -143,17 +143,19 @@ class RunnerController {
   }
 
   /**
-   * Subida de un artefacto (multipart: {@code metadata} en JSON y {@code content}). Idempotente:
-   * reenviarlo devuelve el ya guardado con {@code duplicate=true}.
+   * Subida de un artefacto: el contenido en el cuerpo y los metadatos en {@link
+   * ArtifactUpload#HEADER} (JSON en base64url). El cuerpo se lee con el límite de {@code
+   * skynet.artifacts.max-upload}. Idempotente: reenviarlo devuelve el ya guardado con {@code
+   * duplicate=true}.
    */
-  @PostMapping(path = "/artifacts", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PostMapping(path = "/artifacts", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
   ArtifactStored artifact(
       @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
-      @RequestPart("metadata") ArtifactUpload metadata,
-      @RequestPart("content") MultipartFile content)
+      @RequestHeader(ArtifactUpload.HEADER) String metadata,
+      InputStream body)
       throws IOException {
     UUID runnerId = registry.authenticate(authorization);
-    return artifacts.store(runnerId, metadata, content.getBytes());
+    return artifacts.store(runnerId, artifacts.metadata(metadata), artifacts.content(body));
   }
 
   private List<RunnerCommand> claim(UUID runnerId) {
@@ -181,6 +183,11 @@ class RunnerController {
   @ExceptionHandler(InvalidArtifactException.class)
   ProblemDetail invalidArtifact(InvalidArtifactException e) {
     return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+  }
+
+  @ExceptionHandler(ArtifactTooLargeException.class)
+  ProblemDetail artifactTooLarge(ArtifactTooLargeException e) {
+    return ProblemDetail.forStatusAndDetail(HttpStatus.CONTENT_TOO_LARGE, e.getMessage());
   }
 
   @ExceptionHandler(UnauthorizedRunnerException.class)

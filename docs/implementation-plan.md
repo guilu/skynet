@@ -112,7 +112,7 @@ POST /api/runner/register            → runnerId, token
 POST /api/runner/heartbeat           → capacidad, procesos vivos
 GET  /api/runner/commands?wait=30s   → long-poll: START / RESUME / CANCEL / VERIFY
 POST /api/runner/events              → lote de eventos (idempotente por eventId)
-POST /api/runner/artifacts           → subida multipart con sha256
+POST /api/runner/artifacts           → subida del contenido con sha256 (metadatos en cabecera)
 POST /api/runner/commands/{id}/ack
 ```
 
@@ -189,7 +189,7 @@ GET        /api/agent-runs/{id}/verifications # de la más reciente a la más an
 POST       /api/agent-runs/{id}/verifications # reejecuta la verificación (409 si el worktree está ocupado o no hay comando)
 GET        /api/agent-runs/{id}/artifacts     # ArtifactSummary, sin contenido
 GET        /api/artifacts/{id}/content?offset=&limit=   # trozo del contenido; X-Artifact-Size con el total
-POST       /api/runner/artifacts              # runner: multipart metadata (JSON) + content, idempotente
+POST       /api/runner/artifacts              # runner: contenido en el cuerpo, metadatos en X-Artifact-Metadata (JSON en base64url), idempotente
 ```
 
 Los errores siguen RFC 9457 (`ProblemDetail`): 400 validación, 404 inexistente, 409 transición no permitida, clave duplicada o conflicto de versión.
@@ -349,7 +349,7 @@ Se entrega en tres PRs (plan aprobado: verificación aparte del agente, comando 
   - Fallar los tests es `FAILED`; no poder ejecutar el comando o agotar el tiempo (`error`) es `ERROR`.
   - Una verificación viva ocupa el worktree igual que una invocación: reanudar, bifurcar o reejecutar responde 409.
 - Artefactos:
-  - `POST /api/runner/artifacts` comprueba el sha256 recibido y que el agente (y la verificación, si la hay) sea de ese runner.
+  - `POST /api/runner/artifacts` recibe el contenido en el cuerpo (como mucho `skynet.artifacts.max-upload`, 64 MB; si no, 413) y los metadatos en la cabecera `X-Artifact-Metadata`. Comprueba el sha256 recibido y que el agente (y la verificación, si la hay) sea de ese runner.
   - Los de texto pasan por el `PayloadRedactor`; lo que supere `skynet.artifacts.max-size` (20 MB) se recorta con una marca.
   - El contenido se guarda en un `BlobStore` de ficheros (`skynet.artifacts.root`) direccionado por su sha256; el original queda en `metadata.originalSha256` si cambió.
   - Cada artefacto nuevo registra `artifact.created`.

@@ -5,9 +5,10 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Metadatos de un artefacto que sube el runner ({@code POST /api/runner/artifacts}, parte {@code
- * metadata}; el contenido va en la parte {@code content}). Un artefacto se identifica por
- * (invocación, verificación, tipo, nombre): reenviarlo no lo duplica.
+ * Metadatos de un artefacto que sube el runner ({@code POST /api/runner/artifacts}): van en la
+ * cabecera {@link #HEADER} como JSON en base64url, y el contenido en el cuerpo ({@code
+ * application/octet-stream}). Un artefacto se identifica por (invocación, verificación, tipo,
+ * nombre): reenviarlo no lo duplica.
  *
  * @param verificationRunId verificación que lo produjo, o {@code null} si es de la invocación
  * @param mediaType tipo MIME del contenido (p. ej. {@code text/x-diff}, {@code application/json})
@@ -22,6 +23,9 @@ public record ArtifactUpload(
     String mediaType,
     String sha256,
     Map<String, Object> metadata) {
+
+  /** Cabecera con los metadatos de la subida. */
+  public static final String HEADER = "X-Artifact-Metadata";
 
   public ArtifactUpload {
     Objects.requireNonNull(agentRunId, "agentRunId");

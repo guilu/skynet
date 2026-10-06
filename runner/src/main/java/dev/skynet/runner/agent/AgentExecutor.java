@@ -39,6 +39,8 @@ import java.util.logging.Logger;
  */
 public final class AgentExecutor implements AutoCloseable {
 
+  private static final String ERROR = "error";
+
   private static final Logger LOG = Logger.getLogger(AgentExecutor.class.getName());
 
   private final Journal journal;
@@ -97,7 +99,7 @@ public final class AgentExecutor implements AutoCloseable {
   public void verify(RunnerCommand command) {
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("verificationRunId", command.verify().verificationRunId().toString());
-    payload.put("error", "Este runner todavía no sabe ejecutar verificaciones");
+    payload.put(ERROR, "Este runner todavía no sabe ejecutar verificaciones");
     emit(command.agentRunId(), AgentEventType.VERIFICATION_COMPLETED, payload);
   }
 
@@ -244,9 +246,9 @@ public final class AgentExecutor implements AutoCloseable {
       payload.put("signal", exit.signal());
     }
     if (execution.stopping) {
-      payload.put("error", "El runner se detuvo durante la ejecución");
+      payload.put(ERROR, "El runner se detuvo durante la ejecución");
     } else if (execution.timedOut && !execution.cancelled()) {
-      payload.put("error", "Se agotó el tiempo máximo (" + timeout + ")");
+      payload.put(ERROR, "Se agotó el tiempo máximo (" + timeout + ")");
     }
     if (!parser.sawResult() && exit.exitCode() != 0 && !exit.stderrTail().isBlank()) {
       payload.put("stderr", exit.stderrTail());
@@ -269,7 +271,7 @@ public final class AgentExecutor implements AutoCloseable {
   }
 
   private static Map<String, Object> failure(String error) {
-    return Map.of("error", error);
+    return Map.of(ERROR, error);
   }
 
   /** Termina todas las invocaciones en curso (al parar el runner) y espera su evento de fin. */

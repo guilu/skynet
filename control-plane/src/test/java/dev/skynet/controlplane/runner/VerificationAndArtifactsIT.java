@@ -21,18 +21,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Verificación de los worktrees y artefactos que suben los runners (M5-A). */
 class VerificationAndArtifactsIT extends IntegrationTest {
+
+  private static final ObjectMapper JSON = JsonMapper.builder().build();
 
   @Test
   void aCompletedInvocationIsVerifiedOnItsRunnerWithoutChangingTheAgent() {
@@ -292,6 +293,22 @@ class VerificationAndArtifactsIT extends IntegrationTest {
                     sha256(other),
                     Map.of()),
                 other));
+    // Una subida mayor que el máximo (512 KB en los tests) se rechaza sin leerla entera.
+    byte[] huge = new byte[600 * 1024];
+    assertStatus(
+        HttpStatus.CONTENT_TOO_LARGE,
+        () ->
+            upload(
+                runner,
+                new ArtifactUpload(
+                    run.agentId(),
+                    null,
+                    ArtifactType.DIFF,
+                    "changes.diff",
+                    "text/x-diff",
+                    sha256(huge),
+                    Map.of()),
+                huge));
     Runner stranger = register("stranger");
     assertStatus(
         HttpStatus.CONFLICT,
@@ -391,23 +408,14 @@ class VerificationAndArtifactsIT extends IntegrationTest {
   }
 
   private JsonNode upload(Runner runner, ArtifactUpload metadata, byte[] content) {
-    MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
-    HttpHeaders jsonHeaders = new HttpHeaders();
-    jsonHeaders.setContentType(MediaType.APPLICATION_JSON);
-    parts.add("metadata", new org.springframework.http.HttpEntity<>(metadata, jsonHeaders));
-    parts.add(
-        "content",
-        new ByteArrayResource(content) {
-          @Override
-          public String getFilename() {
-            return metadata.name();
-          }
-        });
+    String header =
+        java.util.Base64.getUrlEncoder().encodeToString(JSON.writeValueAsBytes(metadata));
     return http.post()
         .uri("/api/runner/artifacts")
         .header(HttpHeaders.AUTHORIZATION, "Bearer " + runner.token())
-        .contentType(MediaType.MULTIPART_FORM_DATA)
-        .body(parts)
+        .header(ArtifactUpload.HEADER, header)
+        .contentType(MediaType.APPLICATION_OCTET_STREAM)
+        .body(content)
         .retrieve()
         .body(JsonNode.class);
   }

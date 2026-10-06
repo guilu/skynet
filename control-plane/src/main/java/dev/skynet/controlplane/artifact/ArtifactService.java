@@ -9,6 +9,7 @@ import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.protocol.runner.ArtifactStored;
 import dev.skynet.protocol.runner.ArtifactUpload;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -18,6 +19,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,6 +30,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
@@ -65,6 +68,29 @@ public class ArtifactService {
     this.json = json;
     this.properties = properties;
     this.time = time;
+  }
+
+  /** Metadatos de una subida: el JSON de {@link ArtifactUpload} en base64url. */
+  public ArtifactUpload metadata(String header) {
+    try {
+      return json.readValue(Base64.getUrlDecoder().decode(header.strip()), ArtifactUpload.class);
+    } catch (IllegalArgumentException | JacksonException e) {
+      throw new InvalidArtifactException("Metadatos del artefacto no válidos: " + e.getMessage());
+    }
+  }
+
+  /**
+   * Contenido de una subida. Se lee como mucho {@code skynet.artifacts.max-upload}: lo que pase se
+   * rechaza sin seguir leyendo.
+   */
+  public byte[] content(InputStream body) throws IOException {
+    long max = properties.maxUpload().toBytes();
+    byte[] content = body.readNBytes(Math.toIntExact(Math.min(max + 1, Integer.MAX_VALUE - 8)));
+    if (content.length > max) {
+      throw new ArtifactTooLargeException(
+          "El artefacto supera el máximo de " + properties.maxUpload().toMegabytes() + " MB");
+    }
+    return content;
   }
 
   /**

@@ -7,11 +7,6 @@ spring:
     password: ${SKYNET_DB_PASSWORD:skynet}
   flyway:
     locations: classpath:db/migration
-  servlet:
-    multipart:
-      # Artefactos de los runners: el control plane los recorta luego a skynet.artifacts.max-size.
-      max-file-size: 64MB
-      max-request-size: 65MB
 
 server:
   port: ${SKYNET_PORT:8080}
@@ -37,3 +32,5 @@ skynet:
     root: ${SKYNET_ARTIFACTS_DIR:data/artifacts}
     # Tamaño máximo de un artefacto; lo que pase se recorta con una marca visible.
     max-size: ${SKYNET_ARTIFACT_MAX_SIZE:20MB}
+    # Lo más que se acepta en una subida del runner, antes de redactar y recortar.
+    max-upload: ${SKYNET_ARTIFACT_MAX_UPLOAD:64MB}
