@@ -56,6 +56,11 @@ class JournalTest {
       UUID agent = UUID.randomUUID();
       assertThat(journal.firstDelivery(command, agent, "START")).isTrue();
       assertThat(journal.firstDelivery(command, agent, "START")).isFalse();
+      UUID resumed = UUID.randomUUID();
+      assertThat(journal.firstDelivery(UUID.randomUUID(), resumed, "RESUME")).isTrue();
+      assertThat(journal.firstDelivery(UUID.randomUUID(), agent, "CANCEL")).isTrue();
+      assertThat(journal.unfinishedStarts()).containsExactlyInAnyOrder(agent, resumed);
+      journal.finish(resumed, Map.of("exitCode", 0), Instant.now());
       assertThat(journal.unfinishedStarts()).containsExactly(agent);
 
       journal.processStarted(agent, 1234, Instant.now());

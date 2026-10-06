@@ -1,6 +1,7 @@
 package dev.skynet.runner.provider.claude;
 
 import dev.skynet.protocol.runner.AgentLimits;
+import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.StartAgent;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -9,9 +10,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Construye la invocación de {@code claude -p} para una orden de arranque (ver {@code
- * docs/claude-code-stream-json.md}): salida {@code stream-json} completa, id de sesión fijado por
- * el control plane, herramientas permitidas y límites.
+ * Construye la invocación de {@code claude -p} para una orden de arranque o de reanudación (ver
+ * {@code docs/claude-code-stream-json.md}): salida {@code stream-json} completa, id de sesión
+ * fijado por el control plane o sesión que se reanuda, herramientas permitidas y límites.
  */
 public class ClaudeCodeProvider {
 
@@ -60,13 +61,23 @@ public class ClaudeCodeProvider {
     command.add("-p");
     command.add(start.prompt());
     command.addAll(
-        List.of(
-            "--output-format",
-            "stream-json",
-            "--verbose",
-            "--include-partial-messages",
-            "--session-id",
-            start.sessionId().toString()));
+        List.of("--output-format", "stream-json", "--verbose", "--include-partial-messages"));
+    ResumeFrom resume = start.resume();
+    if (resume == null) {
+      command.addAll(List.of("--session-id", start.sessionId().toString()));
+    } else if (resume.fork()) {
+      // El CLI solo admite --session-id junto a --resume si se bifurca: fija el id de la rama
+      // nueva.
+      command.addAll(
+          List.of(
+              "--resume",
+              resume.sessionId(),
+              "--fork-session",
+              "--session-id",
+              start.sessionId().toString()));
+    } else {
+      command.addAll(List.of("--resume", resume.sessionId()));
+    }
     if (start.permissionMode() != null) {
       command.addAll(List.of("--permission-mode", start.permissionMode()));
     }

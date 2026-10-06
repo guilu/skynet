@@ -192,7 +192,7 @@ public final class Journal implements AutoCloseable {
    */
   public synchronized List<UUID> unfinishedStarts() {
     return query(
-        "SELECT agent_run_id FROM command WHERE type = 'START'"
+        "SELECT agent_run_id FROM command WHERE type IN ('START', 'RESUME')"
             + " AND agent_run_id NOT IN (SELECT agent_run_id FROM finished) ORDER BY received_at",
         ps -> {},
         rs -> UUID.fromString(rs.getString(1)));

@@ -6,6 +6,8 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -23,9 +25,15 @@ import tools.jackson.databind.node.ObjectNode;
  * <ul>
  *   <li>{@code FAKE_CLAUDE_FIXTURE}: nombre de un fixture empaquetado (p. ej. {@code 02-tools}) o
  *       ruta a un fichero NDJSON. Por defecto {@code 01-simple-text}.
+ *   <li>{@code FAKE_CLAUDE_RESUME_FIXTURE} y {@code FAKE_CLAUDE_FORK_FIXTURE}: el fixture con
+ *       {@code --resume} y con {@code --resume --fork-session}. Por defecto {@code 03-resume} y
+ *       {@code 04-fork}.
  *   <li>{@code FAKE_CLAUDE_DELAY_MS}: pausa entre líneas. Por defecto 10.
  *   <li>{@code FAKE_CLAUDE_HANG}: si el fixture no tiene línea {@code result} (sesión cortada), el
  *       proceso se queda esperando hasta que lo maten. {@code false} para terminar con código 143.
+ *   <li>{@code CLAUDE_CONFIG_DIR}: si está definida, guarda cada sesión en {@code
+ *       <dir>/projects/<cwd>/<sesión>.jsonl}, como el CLI real, y {@code --resume} falla si no
+ *       encuentra la sesión en el directorio de trabajo actual. Sin ella no comprueba nada.
  * </ul>
  */
 public final class FakeClaude {
@@ -53,11 +61,23 @@ public final class FakeClaude {
       return 2;
     }
     String sessionId = inv.effectiveSessionId();
+    Path sessionFile = sessionFile(env, cwd, sessionId);
+    if (inv.resume() != null && sessionFile != null) {
+      Path resumed = sessionFile(env, cwd, inv.resume());
+      if (!Files.isRegularFile(resumed)) {
+        err.println("No conversation found with session ID: " + inv.resume());
+        return 1;
+      }
+      if (inv.forkSession()) {
+        Files.createDirectories(sessionFile.getParent());
+        Files.copy(resumed, sessionFile, StandardCopyOption.REPLACE_EXISTING);
+      }
+    }
     long delayMs = Long.parseLong(env.getOrDefault("FAKE_CLAUDE_DELAY_MS", "10"));
     boolean sawResult = false;
     boolean isError = false;
 
-    for (String line : loadFixture(env.getOrDefault("FAKE_CLAUDE_FIXTURE", DEFAULT_FIXTURE))) {
+    for (String line : loadFixture(inv.fixture(env))) {
       if (line.isBlank()) {
         continue;
       }
@@ -73,8 +93,18 @@ public final class FakeClaude {
         sawResult = true;
         isError = node.path("is_error").asBoolean(false);
       }
-      out.println(JSON.writeValueAsString(node));
+      String json = JSON.writeValueAsString(node);
+      out.println(json);
       out.flush();
+      if (sessionFile != null) {
+        Files.createDirectories(sessionFile.getParent());
+        Files.writeString(
+            sessionFile,
+            json + "\n",
+            StandardCharsets.UTF_8,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.APPEND);
+      }
       if (delayMs > 0) {
         Thread.sleep(delayMs);
       }
@@ -97,6 +127,20 @@ public final class FakeClaude {
       }
       return new String(in.readAllBytes(), StandardCharsets.UTF_8).lines().toList();
     }
+  }
+
+  /**
+   * Fichero de la sesión, como lo guarda el CLI real; {@code null} sin {@code CLAUDE_CONFIG_DIR}.
+   */
+  static Path sessionFile(Map<String, String> env, Path cwd, String sessionId) {
+    String configDir = env.get("CLAUDE_CONFIG_DIR");
+    if (configDir == null || configDir.isBlank()) {
+      return null;
+    }
+    return Path.of(configDir)
+        .resolve("projects")
+        .resolve(cwd.toString().replaceAll("[^A-Za-z0-9]", "-"))
+        .resolve(sessionId + ".jsonl");
   }
 
   private static boolean hang(Map<String, String> env) {
@@ -127,6 +171,15 @@ public final class FakeClaude {
         }
       }
       return new Invocation(outputFormat, sessionId, resume, fork, List.copyOf(rest));
+    }
+
+    String fixture(Map<String, String> env) {
+      if (resume == null) {
+        return env.getOrDefault("FAKE_CLAUDE_FIXTURE", DEFAULT_FIXTURE);
+      }
+      return forkSession
+          ? env.getOrDefault("FAKE_CLAUDE_FORK_FIXTURE", "04-fork")
+          : env.getOrDefault("FAKE_CLAUDE_RESUME_FIXTURE", "03-resume");
     }
 
     String effectiveSessionId() {

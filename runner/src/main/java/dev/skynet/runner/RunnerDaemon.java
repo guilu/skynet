@@ -157,11 +157,8 @@ public final class RunnerDaemon implements AutoCloseable {
       return;
     }
     switch (command.type()) {
-      case START -> executor.start(command);
+      case START, RESUME -> executor.start(command);
       case CANCEL -> executor.cancel(command.agentRunId());
-      case RESUME ->
-          executor.reject(
-              command.agentRunId(), "Este runner todavía no admite reanudar ni bifurcar sesiones");
       default -> LOG.warning("Orden no soportada todavía: " + command.type());
     }
   }

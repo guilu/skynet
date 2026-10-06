@@ -1,6 +1,7 @@
 package dev.skynet.runner;
 
 import dev.skynet.protocol.runner.AgentLimits;
+import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerCommandType;
 import dev.skynet.protocol.runner.StartAgent;
@@ -34,21 +35,48 @@ public final class TestAgents {
     return env;
   }
 
+  /**
+   * Como {@link #fakeClaudeEnv(String)}, con las sesiones de Claude guardadas en {@code config}.
+   */
+  public static Map<String, String> fakeClaudeEnv(String fixture, Path config) {
+    Map<String, String> env = fakeClaudeEnv(fixture);
+    env.put("CLAUDE_CONFIG_DIR", config.toString());
+    return env;
+  }
+
   public static RunnerCommand start(UUID agentRunId, String repository, Duration timeout) {
-    StartAgent start =
-        new StartAgent(
-            UUID.randomUUID(),
-            "TKM-1",
-            repository,
-            "main",
-            UUID.randomUUID(),
-            "Arregla add",
-            List.of("Read", "Edit"),
-            "dontAsk",
-            null,
-            new AgentLimits(null, null, timeout),
-            null);
     return new RunnerCommand(
-        UUID.randomUUID(), RunnerCommandType.START, agentRunId, Instant.now(), start);
+        UUID.randomUUID(),
+        RunnerCommandType.START,
+        agentRunId,
+        Instant.now(),
+        invocation(repository, UUID.randomUUID(), "Arregla add", timeout, null));
+  }
+
+  /** Orden RESUME que continúa ({@code fork=false}) o bifurca la sesión de {@code from}. */
+  public static RunnerCommand resume(
+      UUID agentRunId, String repository, UUID sessionId, ResumeFrom from) {
+    return new RunnerCommand(
+        UUID.randomUUID(),
+        RunnerCommandType.RESUME,
+        agentRunId,
+        Instant.now(),
+        invocation(repository, sessionId, "Añade un test", null, from));
+  }
+
+  private static StartAgent invocation(
+      String repository, UUID sessionId, String prompt, Duration timeout, ResumeFrom resume) {
+    return new StartAgent(
+        UUID.randomUUID(),
+        "TKM-1",
+        repository,
+        "main",
+        sessionId,
+        prompt,
+        List.of("Read", "Edit"),
+        "dontAsk",
+        null,
+        new AgentLimits(null, null, timeout),
+        resume);
   }
 }

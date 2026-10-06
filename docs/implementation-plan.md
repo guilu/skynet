@@ -134,7 +134,7 @@ Las órdenes se generan desde una tabla `runner_command` (con `FOR UPDATE SKIP L
 - `workspace/WorkspaceManager`: `git worktree add -b skynet/<trabajo>/<agente> $SKYNET_RUNNER_HOME/workspaces/<ejecución>/<agente> <rama base>`. Emite `agent.workspace.ready` (ruta, rama, commit base). El worktree se conserva al terminar; la limpieza es de M6.
 - `provider/claude/ClaudeCodeProvider`: `claude -p … --output-format stream-json --verbose --include-partial-messages --session-id … --permission-mode … --allowedTools … [--model] [--max-turns] [--max-budget-usd]`.
 - `agent/AgentExecutor`: cada `START` termina con exactamente un `agent.process.exited`, también si falla el worktree, si se cancela antes de arrancar, si se agota `limits.timeout` o si el runner se para o se reinicia.
-- Pendiente: presupuesto propio en el runner (hace falta la tabla de precios; de momento solo `--max-budget-usd`, que no es estricto), tabla `workspace` en el control plane (el evento ya se guarda) y grupos de procesos con `setsid`.
+- Pendiente: presupuesto propio en el runner (hace falta la tabla de precios; de momento solo `--max-budget-usd`, que no es estricto). La tabla `workspace` llegó en M4-A y los grupos de procesos en M4-B.
 
 **Implementado (M2, paso 5):**
 
@@ -292,6 +292,15 @@ Se entrega en cinco PRs: M3-A contratos y proyecciones; M3-B shell, cabecera y f
 - Cada acción (mensaje, cancelar, reintentar, fork) muestra su alcance e impacto y pide confirmación proporcional al riesgo; resumes, reintentos y forks aparecen como entidades enlazadas en la navegación (ADR-0001 §3.8).
 
 **Aceptación:** E2E: run completado → enviar mensaje → nueva actividad en la misma conversación; cancelar a mitad deja estado `CANCELLED` y sin procesos. **MVP 9, 10.**
+
+**Implementado (M4-B), runner:**
+
+- La orden `RESUME` se ejecuta como un `START`, con otro worktree y otro comando:
+  - Sin fork: en el worktree de la invocación anterior, que tiene que estar bajo `$SKYNET_RUNNER_HOME/workspaces`, con `claude -p <mensaje> --resume <sesión>`. El CLI no admite `--session-id` junto a `--resume` salvo al bifurcar.
+  - Con fork: worktree nuevo en una rama propia desde el `HEAD` del padre, con sus cambios sin confirmar (diff de ficheros versionados y ficheros nuevos no ignorados), y `--resume <sesión> --fork-session --session-id <nueva>`. Antes copia la sesión (`<config>/projects/<cwd>/<sesión>.jsonl` y su directorio auxiliar, con `<config>` = `CLAUDE_CONFIG_DIR` o `~/.claude`) al directorio del worktree nuevo, porque `--resume` solo busca en el del cwd. Pendiente confirmarlo una vez con Claude real.
+- Un solo escritor por worktree también en el runner: una segunda invocación en el mismo worktree termina con error.
+- Si hay `setsid` en el `PATH`, el agente se lanza en su propio grupo de procesos. Cancelar mata el árbol y el grupo entero, y al terminar el agente se matan los procesos que dejara en segundo plano. Sin `setsid` (macOS) se mata solo el árbol, como antes. Los procesos zombi cuentan como muertos.
+- fake-claude elige `03-resume` o `04-fork` al reanudar (`FAKE_CLAUDE_RESUME_FIXTURE`, `FAKE_CLAUDE_FORK_FIXTURE`). Con `CLAUDE_CONFIG_DIR` guarda las sesiones como el CLI y falla si `--resume` no encuentra la sesión.
 
 ### M5 — Git, tests y artefactos (≈1,5–2 semanas)
 

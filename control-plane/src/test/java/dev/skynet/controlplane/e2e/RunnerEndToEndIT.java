@@ -1,6 +1,7 @@
 package dev.skynet.controlplane.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import dev.skynet.controlplane.support.IntegrationTest;
 import dev.skynet.runner.RunnerConfig;
@@ -15,6 +16,7 @@ import dev.skynet.runner.workspace.WorkspaceManager;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -149,6 +151,46 @@ class RunnerEndToEndIT extends IntegrationTest {
     assertThat(agentEventTypes(run).getLast()).isEqualTo("agent.process.exited");
   }
 
+  @Test
+  void aMessageResumesTheSessionInItsWorktreeAndAForkBranchesIt() throws Exception {
+    startRunner("02-tools", 0);
+    Launched run = launch("Arregla add()");
+    await("agente completado", () -> "COMPLETED".equals(agentStatus(run)));
+    JsonNode first = agent(run);
+
+    Launched resumed =
+        launched(
+            post(
+                "/api/agent-runs/" + run.agentId() + "/messages", Map.of("text", "Añade un test")));
+    await("reanudación completada", () -> "COMPLETED".equals(agentStatus(resumed)));
+    JsonNode second = agent(resumed);
+    assertThat(second.path("kind").asString()).isEqualTo("RESUME");
+    assertThat(second.path("providerSessionId").asString())
+        .isEqualTo(first.path("providerSessionId").asString());
+    assertThat(second.path("workspace").path("path").asString())
+        .isEqualTo(first.path("workspace").path("path").asString());
+    // 03-resume acumula 0,081472 sobre los 0,0573992 de 02-tools.
+    assertThat(second.path("costUsd").decimalValue())
+        .isCloseTo(new BigDecimal("0.0240728"), within(new BigDecimal("0.000001")));
+    assertThat(get("/api/agent-runs/" + resumed.agentId() + "/conversation").path("turns"))
+        .hasSize(2);
+
+    Launched forked =
+        launched(
+            post("/api/agent-runs/" + run.agentId() + "/fork", Map.of("text", "Prueba otra cosa")));
+    await("fork completado", () -> "COMPLETED".equals(agentStatus(forked)));
+    JsonNode third = agent(forked);
+    assertThat(third.path("kind").asString()).isEqualTo("FORK");
+    assertThat(third.path("providerSessionId").asString())
+        .isNotEqualTo(first.path("providerSessionId").asString());
+    Path forkTree = Path.of(third.path("workspace").path("path").asString());
+    assertThat(forkTree.toString()).isNotEqualTo(first.path("workspace").path("path").asString());
+    assertThat(forkTree.resolve("calc.py")).exists();
+    // Bifurca desde la última invocación de la sesión (la reanudación): 0,0866522 − 0,081472.
+    assertThat(third.path("costUsd").decimalValue())
+        .isCloseTo(new BigDecimal("0.0051802"), within(new BigDecimal("0.000001")));
+  }
+
   // --- runner ---
 
   private void startRunner(String fixture, long delayMs) throws Exception {
@@ -168,6 +210,8 @@ class RunnerEndToEndIT extends IntegrationTest {
     env.put("JAVA_HOME", System.getProperty("java.home"));
     env.put("FAKE_CLAUDE_FIXTURE", fixture);
     env.put("FAKE_CLAUDE_DELAY_MS", Long.toString(delayMs));
+    // fake-claude guarda las sesiones como el CLI y exige encontrarlas al reanudar.
+    env.put("CLAUDE_CONFIG_DIR", dir.resolve("claude").toString());
     ClaudeCodeProvider provider =
         new ClaudeCodeProvider(
             Path.of(System.getProperty("skynet.fakeClaude")).toAbsolutePath().toString(),
@@ -211,10 +255,13 @@ class RunnerEndToEndIT extends IntegrationTest {
         post("/api/projects/" + projectId + "/work-items", Map.of("title", "T", "type", "BUG"))
             .path("id")
             .asString();
-    JsonNode run =
+    return launched(
         post(
             "/api/work-items/" + workItemId + "/runs",
-            Map.of("repositoryId", repositoryId, "prompt", prompt));
+            Map.of("repositoryId", repositoryId, "prompt", prompt)));
+  }
+
+  private static Launched launched(JsonNode run) {
     return new Launched(
         UUID.fromString(run.path("id").asString()),
         UUID.fromString(run.path("stages").get(0).path("agents").get(0).path("id").asString()));
