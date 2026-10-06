@@ -61,7 +61,7 @@ Sin Docker ni `SKYNET_TEST_DB_URL`, los tests de integración se omiten.
 
 ### E2E
 
-`scripts/e2e.sh` compila y arranca el control plane y un runner con fake-claude, sirve la web con `vite preview` y ejecuta Playwright (`web/e2e/`): crea proyecto, repositorio y trabajo, lanza un agente, sigue herramientas y mensajes en vivo, corta la conexión del navegador y comprueba que al reconectar no se pierde ni se repite nada, y que termina con coste. Necesita un PostgreSQL en `localhost:5432` (el de `docker compose`) y Chromium para Playwright:
+`scripts/e2e.sh` compila y arranca el control plane y un runner con fake-claude, sirve la web con `vite preview` y ejecuta Playwright (`web/e2e/`): crea proyecto, repositorio y trabajo, lanza un agente, sigue herramientas y mensajes en vivo, corta la conexión del navegador y comprueba que al reconectar no se pierde ni se repite nada, que termina con coste y que un mensaje continúa la conversación en una invocación nueva. Otra prueba cancela un agente a mitad y comprueba que no queda ningún proceso de fake-claude. Necesita un PostgreSQL en `localhost:5432` (el de `docker compose`) y Chromium para Playwright:
 
 ```bash
 docker compose -f deploy/docker-compose.yml up -d
@@ -93,17 +93,19 @@ docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
 
 Credenciales de la base de datos: `SKYNET_DB_USER` / `SKYNET_DB_PASSWORD` (por defecto `skynet`/`skynet`). Para que un runner pueda registrarse, define `SKYNET_RUNNER_REGISTRATION_TOKEN` con un secreto compartido; sin él, el registro de runners está desactivado. Para parar: `docker compose -f deploy/docker-compose.yml --profile app down` (añade `-v` para borrar los datos). El runner no va en contenedor: se ejecuta en el host porque necesita `claude` y los repositorios.
 
-### Probar la aplicación (estado actual: M3)
+### Probar la aplicación (estado actual: M4)
 
 Con la aplicación levantada, abre la web. La navegación lateral da acceso al **Dashboard** (solo lo que requiere atención: ejecuciones activas, fallos recientes, agentes sin actividad y runners sin latido), **Proyectos**, **Workflows**, **Ejecuciones** (filtrables por estado), **Runners** y **Actividad**. El tema claro/oscuro sigue al sistema o se elige arriba a la derecha.
 
 1. **Proyectos** → crea un proyecto (p. ej. clave `TKM`).
 2. En el proyecto, **registra un repositorio** (ruta absoluta en la máquina del runner) y **crea un trabajo** (`TKM-1`).
 3. En el trabajo, **lanza un agente** con un prompt y, si quieres, límites de turnos, presupuesto o tiempo (vacíos = valores por defecto). Se crea la ejecución con su fase y el agente queda **en cola** hasta que un runner conectado (ver abajo) lo recoge, crea un worktree y ejecuta Claude Code en él.
-4. La ejecución abre con una **cabecera operativa**: estado, duración, agente y herramienta en curso, runner, tokens (con caché), coste y estado de la conexión en vivo, con el botón **Cancelar agente**. Cancelar mata el agente y todos sus procesos. Debajo hay tres paneles:
-   - **Fases** y sus agentes; al elegir uno se abre en el inspector (por defecto, el que está en curso).
-   - **Inspector** con pestañas: Resumen (modelo, sesión, rama, tokens, coste y respuesta final), Prompt, Mensajes, Herramientas (cada llamada con su entrada, su salida y su duración) y Evento original (el evento guardado, leído de la API). Los textos largos salen recortados con «Ver completo». Las flechas recorren las pestañas.
+4. La ejecución abre con una **cabecera operativa**: estado, duración, agente y herramienta en curso, runner, tokens (con caché), coste y estado de la conexión en vivo, con el botón **Cancelar agente**, que pide confirmación. Cancelar mata el agente y todos sus procesos (en Linux, su grupo de procesos entero). Debajo hay tres paneles:
+   - **Fases** y sus agentes; al elegir uno se abre en el inspector (por defecto, el que está en curso). Una reanudación, un reintento o un fork enlaza con el agente del que parte.
+   - **Inspector** con pestañas: Resumen (modelo, sesión, rama, tokens, coste y respuesta final), Prompt, Conversación, Herramientas (cada llamada con su entrada, su salida y su duración) y Evento original (el evento guardado, leído de la API). Los textos largos salen recortados con «Ver completo». Las flechas recorren las pestañas.
    - **Timeline en vivo** (SSE), agrupado: cada herramienta es una entrada con su inicio y su fin, y las llamadas seguidas a la misma herramienta se agrupan («Leídos 14 ficheros»). Cada entrada se abre para ver sus eventos originales, y al elegir uno se abre en el inspector. Se filtra por fase, agente, tipo, severidad y origen, y sigue lo último que llega salvo que hayas elegido un evento.
+
+   **Conversación** muestra la sesión entera: cada invocación (lanzamiento, reanudaciones) con su estado, su coste, tu mensaje y las respuestas del agente. Al pie, cuando la última invocación ha terminado, una caja de mensaje continúa la sesión (`--resume`) en el mismo worktree y runner, que se indican; enviar crea una ejecución nueva enlazada y te lleva a ella. Sobre las pestañas, un agente terminado ofrece **Reintentar…** (mismo prompt y límites, worktree y sesión nuevos) y **Bifurcar…** (una copia de la conversación con tu mensaje, en un worktree nuevo desde el estado del original). Las dos explican su alcance antes de confirmar. Si la acción no es posible (otra invocación en curso en el worktree, sesión sin arrancar), se muestra el motivo.
 
    Con el teclado: ↑/↓ recorren los agentes y las filas del timeline, → y ← abren y cierran una entrada, y las flechas cambian de pestaña en el inspector.
 
@@ -148,4 +150,4 @@ FAKE_CLAUDE_FIXTURE=02-tools tools/fake-claude/build/install/fake-claude/bin/fak
   -p "..." --output-format stream-json --session-id <uuid>
 ```
 
-Variables: `FAKE_CLAUDE_FIXTURE` (nombre de fixture o ruta), `FAKE_CLAUDE_DELAY_MS` (pausa entre líneas) y `FAKE_CLAUDE_HANG` (`false` para no quedarse esperando en fixtures sin `result`). El formato del stream está documentado en [`docs/claude-code-stream-json.md`](docs/claude-code-stream-json.md).
+Variables: `FAKE_CLAUDE_FIXTURE` (nombre de fixture o ruta), `FAKE_CLAUDE_RESUME_FIXTURE` y `FAKE_CLAUDE_FORK_FIXTURE` (con `--resume`, por defecto `03-resume` y `04-fork`), `FAKE_CLAUDE_DELAY_MS` (pausa entre líneas) y `FAKE_CLAUDE_HANG` (`false` para no quedarse esperando en fixtures sin `result`). Con `CLAUDE_CONFIG_DIR` guarda las sesiones como el CLI real y `--resume` falla si no encuentra la sesión. El formato del stream está documentado en [`docs/claude-code-stream-json.md`](docs/claude-code-stream-json.md).

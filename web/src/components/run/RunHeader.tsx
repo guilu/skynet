@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { api, type Run } from '../../api'
 import { elapsed, formatCost, formatDuration, formatNumber, TONE_ICONS } from '../../format'
@@ -30,9 +31,11 @@ export function RunHeader({ run, stream }: { run: Run; stream: StreamState }) {
   })
   const runner = runners.data?.find((r) => r.id === agent?.runnerId)
   const cancellable = run.currentAgentRunId != null
+  const [confirming, setConfirming] = useState(false)
   const cancel = useMutation({
     mutationFn: () => api.cancelAgent(run.currentAgentRunId!),
     onSuccess: () => {
+      setConfirming(false)
       void queryClient.invalidateQueries({ queryKey: ['run', run.id] })
     },
   })
@@ -104,9 +107,26 @@ export function RunHeader({ run, stream }: { run: Run; stream: StreamState }) {
       </dl>
       {cancellable && (
         <div className="run-actions">
-          <button type="button" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
-            {cancel.isPending ? 'Cancelando…' : 'Cancelar agente'}
-          </button>
+          {confirming ? (
+            <span className="confirm" role="group" aria-label="Confirmar la cancelación">
+              <span className="small">
+                ¿Cancelar el agente? Se detiene su proceso; lo hecho hasta ahora se queda en el
+                worktree.
+              </span>
+              <button type="button" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
+                {cancel.isPending ? 'Cancelando…' : 'Sí, cancelar'}
+              </button>
+              <button type="button" className="secondary" onClick={() => setConfirming(false)}>
+                No
+              </button>
+            </span>
+          ) : (
+            !cancel.isSuccess && (
+              <button type="button" onClick={() => setConfirming(true)}>
+                Cancelar agente
+              </button>
+            )
+          )}
           {cancel.isSuccess && (
             <span role="status" className="small">
               Cancelación solicitada: el agente se detendrá en unos segundos.

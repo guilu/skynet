@@ -302,6 +302,14 @@ Se entrega en cinco PRs: M3-A contratos y proyecciones; M3-B shell, cabecera y f
 - Si hay `setsid` en el `PATH`, el agente se lanza en su propio grupo de procesos. Cancelar mata el árbol y el grupo entero, y al terminar el agente se matan los procesos que dejara en segundo plano. Sin `setsid` (macOS) se mata solo el árbol, como antes. Los procesos zombi cuentan como muertos.
 - fake-claude elige `03-resume` o `04-fork` al reanudar (`FAKE_CLAUDE_RESUME_FIXTURE`, `FAKE_CLAUDE_FORK_FIXTURE`). Con `CLAUDE_CONFIG_DIR` guarda las sesiones como el CLI y falla si `--resume` no encuentra la sesión.
 
+**Implementado (M4-C), web:**
+
+- La pestaña Mensajes del inspector pasa a ser **Conversación** (`?tab=conversation`; `?tab=messages` sigue funcionando). Une las invocaciones de la sesión de `GET /api/agent-runs/{id}/conversation` con los mensajes en vivo del agente elegido, con un separador por invocación (tipo, estado, coste y enlace).
+- Caja de mensaje al pie, activa cuando la última invocación de la cadena ha terminado y su sesión existe. Indica worktree, rama y runner. Enviar no pide confirmación y lleva a la ejecución nueva.
+- Reintentar y Bifurcar abren un panel con su alcance antes de confirmar; Cancelar agente pide una confirmación sencilla. Los 409 del backend se muestran tal cual.
+- En Fases, los hijos enlazan con su padre («reanudación del…», «reintento del…», «fork del…») a través de `/agent-runs/{id}`, que abre el agente en su ejecución.
+- E2E: tras completar, un mensaje crea una reanudación que aparece en la misma conversación con su coste; cancelar a mitad deja `CANCELLED` y ningún proceso de fake-claude.
+
 ### M5 — Git, tests y artefactos (≈1,5–2 semanas)
 
 - `BlobStore` en sistema de ficheros; artefactos con `sha256`.

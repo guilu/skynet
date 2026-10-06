@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { api, type AgentRun, type StoredEvent } from '../../api'
 import {
   elapsed,
@@ -12,11 +12,11 @@ import {
 } from '../../format'
 import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
-import { agentOutcome, messagesOf, toolCallsOf, type ToolCall } from './agentEvents'
+import { AgentActions } from './AgentActions'
+import { agentOutcome, toolCallsOf, type ToolCall } from './agentEvents'
+import { Conversation } from './Conversation'
+import { LongText } from './LongText'
 import { INSPECTOR_TABS, type InspectorTab } from './useRunSelection'
-
-/** Texto más largo que esto se muestra recortado, con un botón para verlo entero. */
-export const PREVIEW_CHARS = 2000
 
 interface Props {
   agent: AgentRun
@@ -53,6 +53,7 @@ export function Inspector({ agent, events, tab, sequence, onTab, onShowEvent }: 
 
   return (
     <section className="run-inspector card" aria-label="Inspector del agente">
+      <AgentActions agent={agent} />
       <div role="tablist" aria-label="Detalle del agente" className="tabs" onKeyDown={onKeyDown}>
         {INSPECTOR_TABS.map((t, i) => (
           <button
@@ -75,7 +76,9 @@ export function Inspector({ agent, events, tab, sequence, onTab, onShowEvent }: 
       <div role="tabpanel" id="inspector-panel" aria-labelledby={`tab-${tab}`} tabIndex={0}>
         {tab === 'summary' && <Summary agent={agent} events={events} />}
         {tab === 'prompt' && <Prompts agentId={agent.id} />}
-        {tab === 'messages' && <Messages events={events} onShowEvent={onShowEvent} />}
+        {tab === 'conversation' && (
+          <Conversation agent={agent} events={events} onShowEvent={onShowEvent} />
+        )}
         {tab === 'tools' && <Tools events={events} onShowEvent={onShowEvent} />}
         {tab === 'event' && <OriginalEvent sequence={sequence} />}
       </div>
@@ -149,33 +152,6 @@ function Prompts({ agentId }: { agentId: string }) {
         </article>
       ))}
     </>
-  )
-}
-
-function Messages({
-  events,
-  onShowEvent,
-}: {
-  events: StoredEvent[]
-  onShowEvent: (sequence: number) => void
-}) {
-  const messages = messagesOf(events)
-  if (messages.length === 0) return <p className="muted">Sin mensajes todavía.</p>
-  return (
-    <ol className="messages">
-      {messages.map((m) => (
-        <li key={m.sequence}>
-          <p className="muted small">
-            {formatTime(m.occurredAt)}
-            {m.parentToolUseId && ' · subagente'} ·{' '}
-            <button type="button" className="link" onClick={() => onShowEvent(m.sequence)}>
-              Ver evento #{m.sequence}
-            </button>
-          </p>
-          <LongText text={m.text} />
-        </li>
-      ))}
-    </ol>
   )
 }
 
@@ -262,7 +238,7 @@ function OriginalEvent({ sequence }: { sequence: number | null }) {
   if (sequence == null) {
     return (
       <p className="muted">
-        Elige un evento en el timeline, o «Ver evento» en Mensajes o Herramientas.
+        Elige un evento en el timeline, o «Ver evento» en Conversación o Herramientas.
       </p>
     )
   }
@@ -275,27 +251,6 @@ function OriginalEvent({ sequence }: { sequence: number | null }) {
         {formatDateTime(event.data.occurredAt)}
       </p>
       <LongText text={JSON.stringify(event.data, null, 2)} code />
-    </>
-  )
-}
-
-/**
- * Texto en un bloque que respeta saltos de línea (monoespaciado si es código o JSON); si es muy
- * largo, recortado con «Ver completo».
- */
-export function LongText({ text, code = false }: { text: string; code?: boolean }) {
-  const [full, setFull] = useState(false)
-  const long = text.length > PREVIEW_CHARS
-  return (
-    <>
-      <pre className={code ? 'json prewrap' : 'text-block prewrap'}>
-        {long && !full ? `${text.slice(0, PREVIEW_CHARS)}…` : text}
-      </pre>
-      {long && (
-        <button type="button" className="link small" onClick={() => setFull(!full)}>
-          {full ? 'Ver menos' : `Ver completo (${formatNumber(text.length)} caracteres)`}
-        </button>
-      )}
     </>
   )
 }

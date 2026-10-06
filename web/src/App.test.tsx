@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import agentRunDetail from '../../fixtures/contracts/agent-run-detail.json'
+import conversation from '../../fixtures/contracts/conversation.json'
 import dashboardSummary from '../../fixtures/contracts/dashboard-summary.json'
 import runPage from '../../fixtures/contracts/run-page.json'
 import runView from '../../fixtures/contracts/run-view.json'
@@ -180,7 +181,12 @@ describe('App', () => {
     expect(header.getByText('(llega al terminar)')).toBeInTheDocument()
     expect(header.getByText('Conectando…')).toBeInTheDocument()
 
+    // Interrumpir pide una confirmación sencilla.
     fireEvent.click(header.getByRole('button', { name: 'Cancelar agente' }))
+    expect(header.getByText(/¿Cancelar el agente\?/)).toBeInTheDocument()
+    fireEvent.click(header.getByRole('button', { name: 'No' }))
+    fireEvent.click(header.getByRole('button', { name: 'Cancelar agente' }))
+    fireEvent.click(header.getByRole('button', { name: 'Sí, cancelar' }))
     expect(await header.findByText(/Cancelación solicitada/)).toBeInTheDocument()
   })
 
@@ -283,17 +289,135 @@ describe('App', () => {
     })
     const message = at(1044, 'agent.message.received', { text: '<img src=x onerror=alert(1)>' })
 
-    function openRun(query = '') {
+    function openRun(query = '', routes: Record<string, unknown> = {}) {
       vi.stubGlobal('EventSource', FakeEventSource)
-      stubApi({
+      const fetch = stubApi({
         [`/api/workflow-runs/${runId}`]: runView,
         [`/api/agent-runs/${agent.id}`]: agentRunDetail,
         '/api/runners': runners,
         [`/api/events/${toolCompleted.sequence}`]: toolCompleted,
         [`/api/events/${toolStarted.sequence}`]: toolStarted,
+        ...routes,
       })
       renderAt(`/runs/${runId}${query}`, <App />)
+      return fetch
     }
+
+    /** Llamadas a la API con ese método y ruta, con su cuerpo. */
+    function calls(fetch: ReturnType<typeof vi.fn>, method: string, path: string) {
+      return fetch.mock.calls
+        .filter(([url, init]) => String(url).endsWith(path) && init?.method === method)
+        .map(([, init]) => (init?.body ? JSON.parse(String(init.body)) : null))
+    }
+
+    const resumed = conversation.turns[1].agent
+
+    it('la conversación encadena las invocaciones y continúa desde la última', async () => {
+      const fetch = openRun('?tab=conversation', {
+        [`/api/agent-runs/${agent.id}/conversation`]: conversation,
+        [`POST /api/agent-runs/${resumed.id}/messages`]: { ...runView, id: 'nueva' },
+        '/api/workflow-runs/nueva': { ...runView, id: 'nueva' },
+      })
+      const panel = await screen.findByRole('tabpanel')
+      expect(
+        await within(panel).findByText('Implementa el importador de precios de modelos'),
+      ).toBeInTheDocument()
+      expect(
+        within(panel).getByText('He añadido `PricingImporter` y sus tests.'),
+      ).toBeInTheDocument()
+      expect(within(panel).getByText('Reanudación')).toBeInTheDocument()
+      expect(within(panel).getByRole('link', { name: 'Ver invocación' })).toHaveAttribute(
+        'href',
+        `/runs/${conversation.turns[1].workflowRunId}?agent=${resumed.id}&tab=conversation`,
+      )
+
+      // Continúa desde la última invocación de la sesión, y dice dónde.
+      const composer = within(panel).getByRole('form', { name: 'Continuar la conversación' })
+      expect(within(composer).getByText(resumed.workspace!.path)).toBeInTheDocument()
+      expect(await within(composer).findByText(/runner-01/)).toBeInTheDocument()
+      fireEvent.change(within(composer).getByLabelText('Mensaje'), {
+        target: { value: 'Añade un test' },
+      })
+      fireEvent.click(within(composer).getByRole('button', { name: 'Enviar' }))
+      await waitFor(() =>
+        expect(calls(fetch, 'POST', `/api/agent-runs/${resumed.id}/messages`)).toEqual([
+          { text: 'Añade un test' },
+        ]),
+      )
+      // Y lleva a la ejecución nueva.
+      await waitFor(() =>
+        expect(calls(fetch, 'GET', '/api/workflow-runs/nueva').length).toBeGreaterThan(0),
+      )
+    })
+
+    it('la caja de mensaje espera a que termine la invocación en curso', async () => {
+      const running = { ...resumed, status: 'THINKING', finishedAt: null }
+      openRun('?tab=conversation', {
+        [`/api/agent-runs/${agent.id}/conversation`]: {
+          turns: [conversation.turns[0], { ...conversation.turns[1], agent: running }],
+        },
+      })
+      expect(
+        await screen.findByText('Podrás escribir cuando termine la invocación en curso.'),
+      ).toBeInTheDocument()
+      expect(screen.getByLabelText('Mensaje')).toBeDisabled()
+    })
+
+    it('reintentar y bifurcar explican su alcance antes de confirmar', async () => {
+      const fetch = openRun('', {
+        [`POST /api/agent-runs/${agent.id}/retry`]: { ...runView, id: 'reintento' },
+        [`POST /api/agent-runs/${agent.id}/fork`]: { ...runView, id: 'fork' },
+        // Cada acción lleva a la ejecución nueva.
+        '/api/workflow-runs/reintento': { ...runView, id: 'reintento' },
+        '/api/workflow-runs/fork': { ...runView, id: 'fork' },
+      })
+      fireEvent.click(await screen.findByRole('button', { name: 'Reintentar…' }))
+      expect(screen.getByText(/mismo prompt y los mismos límites/)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+      await waitFor(() =>
+        expect(calls(fetch, 'POST', `/api/agent-runs/${agent.id}/retry`)).toHaveLength(1),
+      )
+      // La ejecución nueva se abre en la misma página, que se vuelve a pintar sin el panel.
+      await waitFor(() => expect(screen.queryByText('Reintentar el agente')).toBeNull())
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Bifurcar…' }))
+      expect(screen.getByText(/cambios sin confirmar incluidos/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Bifurcar' })).toBeDisabled()
+      fireEvent.change(screen.getByLabelText('Mensaje para el fork'), {
+        target: { value: 'Prueba otra cosa' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Bifurcar' }))
+      await waitFor(() =>
+        expect(calls(fetch, 'POST', `/api/agent-runs/${agent.id}/fork`)).toEqual([
+          { text: 'Prueba otra cosa' },
+        ]),
+      )
+      await waitFor(() =>
+        expect(calls(fetch, 'GET', '/api/workflow-runs/fork').length).toBeGreaterThan(0),
+      )
+    })
+
+    it('una reanudación enlaza con el agente del que parte y no ofrece reintentar', async () => {
+      const child = {
+        ...agent,
+        kind: 'RESUME',
+        parentAgentRunId: 'a1b2c3d4-0000-4000-8000-000000000000',
+      }
+      openRun('', {
+        [`/api/workflow-runs/${runId}`]: {
+          ...runView,
+          stages: [{ ...runView.stages[0], agents: [child] }],
+        },
+      })
+      const nav = await screen.findByRole('navigation', { name: 'Fases y agentes' })
+      expect(within(nav).getByText(/reanudación del/)).toBeInTheDocument()
+      expect(within(nav).getByRole('link', { name: 'agente a1b2c3d4' })).toHaveAttribute(
+        'href',
+        '/agent-runs/a1b2c3d4-0000-4000-8000-000000000000',
+      )
+      expect(screen.getByRole('button', { name: 'Bifurcar…' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Reintentar…' })).toBeNull()
+    })
 
     it('elige por defecto el agente de la cabecera y muestra su resumen', async () => {
       openRun()
@@ -332,8 +456,12 @@ describe('App', () => {
     })
 
     it('pinta los mensajes del agente como texto, nunca como HTML', async () => {
+      // ?tab=messages es el enlace antiguo a la pestaña, ahora Conversación.
       openRun('?tab=messages')
-      await screen.findByRole('tab', { name: 'Mensajes' })
+      expect(await screen.findByRole('tab', { name: 'Conversación' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
       FakeEventSource.last!.emit(message)
       expect(await screen.findByText('<img src=x onerror=alert(1)>')).toBeInTheDocument()
       expect(document.querySelector('.run-inspector img')).toBeNull()

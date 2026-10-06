@@ -5,7 +5,7 @@ import type { TimelineFilters } from '../timeline/timeline'
 export const INSPECTOR_TABS = [
   { id: 'summary', label: 'Resumen' },
   { id: 'prompt', label: 'Prompt' },
-  { id: 'messages', label: 'Mensajes' },
+  { id: 'conversation', label: 'Conversación' },
   { id: 'tools', label: 'Herramientas' },
   { id: 'event', label: 'Evento original' },
 ] as const
@@ -13,6 +13,9 @@ export const INSPECTOR_TABS = [
 export type InspectorTab = (typeof INSPECTOR_TABS)[number]['id']
 
 const isTab = (v: string | null): v is InspectorTab => INSPECTOR_TABS.some((t) => t.id === v)
+/** La pestaña Mensajes pasó a ser Conversación: los enlaces antiguos siguen funcionando. */
+const tabOf = (v: string | null): InspectorTab =>
+  v === 'messages' ? 'conversation' : isTab(v) ? v : 'summary'
 
 export interface RunSelection {
   /** Agente elegido en la URL; null si no hay ninguno (la página elige uno por defecto). */
@@ -37,7 +40,7 @@ export function useRunSelection(): [RunSelection, (change: Partial<RunSelection>
   const tab = params.get('tab')
   const selection: RunSelection = {
     agentId: params.get('agent'),
-    tab: isTab(tab) ? tab : 'summary',
+    tab: tabOf(tab),
     sequence: Number.isInteger(seq) && seq > 0 ? seq : null,
     filters: Object.fromEntries(
       FILTER_KEYS.flatMap((k) => {
