@@ -41,6 +41,9 @@ public class ArtifactService {
   /** Lo más que se sirve de una vez. */
   public static final int MAX_CHUNK = 8 * 1024 * 1024;
 
+  /** Lo más que cabe en un array de Java. */
+  private static final long MAX_ARRAY = Integer.MAX_VALUE - 8L;
+
   private static final Set<String> TEXT_TYPES =
       Set.of("application/json", "application/x-ndjson", "application/xml");
   private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
@@ -85,7 +88,7 @@ public class ArtifactService {
    */
   public byte[] content(InputStream body) throws IOException {
     long max = properties.maxUpload().toBytes();
-    byte[] content = body.readNBytes(Math.toIntExact(Math.min(max + 1, Integer.MAX_VALUE - 8)));
+    byte[] content = body.readNBytes((int) Math.min(max + 1, MAX_ARRAY));
     if (content.length > max) {
       throw new ArtifactTooLargeException(
           "El artefacto supera el máximo de " + properties.maxUpload().toMegabytes() + " MB");
