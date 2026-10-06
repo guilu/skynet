@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router'
 import { AppShell } from './components/AppShell'
 import { ActivityPage } from './pages/ActivityPage'
+import { AgentRedirectPage } from './pages/AgentRedirectPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { ProjectPage } from './pages/ProjectPage'
 import { ProjectsPage } from './pages/ProjectsPage'
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/workflows" element={<WorkflowsPage />} />
         <Route path="/runs" element={<RunsPage />} />
         <Route path="/runs/:runId" element={<RunPage />} />
+        <Route path="/agent-runs/:agentId" element={<AgentRedirectPage />} />
         <Route path="/runners" element={<RunnersPage />} />
         <Route path="/activity" element={<ActivityPage />} />
         <Route path="*" element={<p>Página no encontrada.</p>} />

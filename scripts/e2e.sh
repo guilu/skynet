@@ -28,7 +28,7 @@ if [[ "${E2E_SKIP_BUILD:-}" != 1 ]]; then
 fi
 
 # Repositorio de juguete para el worktree del agente.
-rm -rf "$E2E_REPO_PATH" "$OUT/runner-home"
+rm -rf "$E2E_REPO_PATH" "$OUT/runner-home" "$OUT/claude"
 mkdir -p "$E2E_REPO_PATH"
 git -C "$E2E_REPO_PATH" init -q -b main
 printf 'def add(a, b):\n    return a - b\n' > "$E2E_REPO_PATH/calc.py"
@@ -48,6 +48,7 @@ SKYNET_RUNNER_NAME=e2e-$(date +%s) \
 SKYNET_CLAUDE_BIN=$ROOT/tools/fake-claude/build/install/fake-claude/bin/fake-claude \
 SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE,FAKE_CLAUDE_DELAY_MS \
 FAKE_CLAUDE_FIXTURE=02-tools FAKE_CLAUDE_DELAY_MS=${FAKE_CLAUDE_DELAY_MS:-500} \
+CLAUDE_CONFIG_DIR=$OUT/claude \
   runner/build/install/skynet-runner/bin/skynet-runner > "$OUT/runner.log" 2>&1 &
 pids+=($!)
 

@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
 import { startCuttableProxy } from './cuttableProxy.ts'
 
 /**
@@ -19,6 +20,8 @@ test.afterAll(async () => {
 })
 
 test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ page }) => {
+  // Lanzamiento completo y una reanudación, las dos con fake-claude a velocidad lenta.
+  test.setTimeout(240_000)
   const key = `E${Date.now().toString(36).toUpperCase().slice(-6)}`
 
   await test.step('crear proyecto', async () => {
@@ -75,7 +78,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
   })
 
   await test.step('mensajes y herramientas en el inspector', async () => {
-    await page.getByRole('tab', { name: 'Mensajes' }).click()
+    await page.getByRole('tab', { name: 'Conversación' }).click()
     await expect(page.getByRole('tabpanel').getByText(/Fixed `add\(\)`/)).toBeVisible()
 
     await page.getByRole('tab', { name: 'Herramientas' }).click()
@@ -96,4 +99,75 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     await page.getByLabel('Tipo').selectOption('tool')
     await expect(timeline.locator('.timeline-item')).toHaveCount(3)
   })
+
+  await test.step('enviar un mensaje continúa la conversación en otra invocación', async () => {
+    const firstRun = page.url()
+    await page.getByRole('tab', { name: 'Conversación' }).click()
+    const panel = page.getByRole('tabpanel')
+    await expect(panel.getByText('La función add de calc.py resta: arréglala')).toBeVisible()
+    await expect(panel.getByText(/Continúa la sesión en el worktree/)).toBeVisible()
+    await panel.getByLabel('Mensaje').fill('Añade también subtract')
+    await panel.getByRole('button', { name: 'Enviar' }).click()
+
+    // La web lleva a la ejecución nueva, que muestra la conversación completa.
+    await page.waitForURL((url) => url.toString() !== firstRun)
+    await expect(panel.getByText('Reanudación')).toBeVisible()
+    await expect(panel.getByText('La función add de calc.py resta: arréglala')).toBeVisible()
+    await expect(panel.getByText('Añade también subtract')).toBeVisible()
+    await expect(panel.getByText(/subtract\(a, b\)/).first()).toBeVisible({ timeout: 90_000 })
+    await expect(header.getByRole('heading', { level: 1 }).getByText('Completada')).toBeVisible({
+      timeout: 30_000,
+    })
+    await expect(header.getByText(/US\$/)).toBeVisible()
+  })
+})
+
+/** Procesos de fake-claude vivos en esta máquina. */
+function fakeClaudeProcesses(): string[] {
+  try {
+    return execFileSync('pgrep', ['-fa', 'dev[.]skynet[.]fakeclaude'], { encoding: 'utf8' })
+      .split('\n')
+      .filter(Boolean)
+  } catch {
+    return [] // pgrep sale con 1 si no encuentra ninguno.
+  }
+}
+
+async function launchViaApi(page: Page, prompt: string): Promise<string> {
+  const key = `C${Date.now().toString(36).toUpperCase().slice(-6)}`
+  const post = async (path: string, data: unknown) =>
+    (await page.request.post(path, { data })).json()
+  const project = await post('/api/projects', { key, name: 'Cancelar' })
+  const repo = await post(`/api/projects/${project.id}/repositories`, {
+    name: 'demo',
+    localPath: repoPath,
+  })
+  const item = await post(`/api/projects/${project.id}/work-items`, {
+    title: 'Cancelar a mitad',
+    type: 'BUG',
+  })
+  const run = await post(`/api/work-items/${item.id}/runs`, { repositoryId: repo.id, prompt })
+  return run.id
+}
+
+test('cancelar a mitad deja el agente cancelado y ningún proceso vivo', async ({ page }) => {
+  const runId = await launchViaApi(page, 'Tarea larga')
+  await page.goto(`/runs/${runId}`)
+  const header = page.locator('header.run-header')
+
+  await expect(
+    page
+      .getByRole('region', { name: 'Timeline' })
+      .getByRole('button', { name: /Read: / })
+      .first(),
+  ).toBeVisible({ timeout: 45_000 })
+  expect(fakeClaudeProcesses()).not.toHaveLength(0)
+
+  await header.getByRole('button', { name: 'Cancelar agente' }).click()
+  await header.getByRole('button', { name: 'Sí, cancelar' }).click()
+
+  await expect(header.getByRole('heading', { level: 1 }).getByText('Cancelada')).toBeVisible({
+    timeout: 30_000,
+  })
+  await expect.poll(fakeClaudeProcesses, { timeout: 10_000 }).toHaveLength(0)
 })

@@ -1,6 +1,13 @@
 import type { KeyboardEvent } from 'react'
-import type { Run } from '../../api'
+import { Link } from 'react-router'
+import type { AgentRun, Run } from '../../api'
 import { StatusBadge } from '../StatusBadge'
+
+const ORIGIN: Record<Exclude<AgentRun['kind'], 'START'>, string> = {
+  RESUME: 'reanudación del',
+  RETRY: 'reintento del',
+  FORK: 'fork del',
+}
 
 /** ↑/↓ mueven el foco entre los agentes de todas las fases. */
 function moveFocus(e: KeyboardEvent<HTMLElement>) {
@@ -51,6 +58,14 @@ export function AgentNav({
                     <StatusBadge status={agent.status} />
                     {agent.currentTool && <span className="muted small">{agent.currentTool}</span>}
                   </button>
+                  {agent.kind !== 'START' && agent.parentAgentRunId && (
+                    <p className="muted small agent-origin">
+                      {ORIGIN[agent.kind]}{' '}
+                      <Link to={`/agent-runs/${agent.parentAgentRunId}`}>
+                        agente {agent.parentAgentRunId.slice(0, 8)}
+                      </Link>
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
