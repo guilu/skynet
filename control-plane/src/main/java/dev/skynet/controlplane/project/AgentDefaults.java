@@ -1,4 +1,4 @@
-package dev.skynet.controlplane.workflow;
+package dev.skynet.controlplane.project;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -6,7 +6,8 @@ import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Configuración por defecto de los agentes mientras no exista {@code AgentDefinition} (Fase 2).
+ * Política global de los agentes: la de los repositorios sin política propia y el punto de partida
+ * de la suya. El modelo solo se configura aquí.
  *
  * @param allowedTools herramientas permitidas; con {@code dontAsk} el resto se deniega
  * @param maxBudgetUsd presupuesto por invocación, que el runner hace cumplir

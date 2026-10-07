@@ -201,6 +201,15 @@ POST       /api/auth/logout                   # 204
 POST       /api/runners/{id}/revoke           # invalida el token del runner; 204
 ```
 
+Añadido en M6-B:
+
+```text
+PUT        /api/projects/{id}/repositories/{repositoryId}/agent-policy  # {allowedTools, permissionMode, environment, maxTurns, maxBudgetUsd, timeoutMinutes}
+DELETE     /api/projects/{id}/repositories/{repositoryId}/agent-policy  # vuelve a la política global
+```
+
+`RepositoryView` incluye `agentPolicy` (la efectiva) y `agentPolicyCustom`. Lanzar con un límite por encima del de la política da 400.
+
 Los errores siguen RFC 9457 (`ProblemDetail`): 400 validación, 401 sin sesión, 403 sin token CSRF, 404 inexistente, 409 transición no permitida, clave duplicada o conflicto de versión.
 
 ---
@@ -415,6 +424,14 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 - CORS cerrado salvo los orígenes de `SKYNET_CORS_ORIGINS`.
 - `POST /api/runners/{id}/revoke` invalida el token de un runner (`runner.token.revoked`). El runner legítimo recibe 401 y se vuelve a registrar con el secreto de registro.
 - Web: página de login, «Salir» en la barra superior y vuelta al login sin cambiar de página cuando la sesión caduca (también si el stream en vivo falla por eso). «Revocar token…» en Runners, con confirmación.
+
+**Implementado (M6-B), política y presupuesto:**
+
+- Cada repositorio puede tener su política de agentes (migración `V7`): herramientas permitidas (sin comas, p. ej. `Bash(git:*)`), `permission-mode` (`dontAsk`, `acceptEdits`, `default` o `plan`; `bypassPermissions` no, porque ignora las herramientas), variables de entorno y máximos de turnos, presupuesto y tiempo. Sin política propia usa la global (`skynet.agent`), que es también el punto de partida del formulario. Eventos `repository.agent-policy.configured` y `repository.agent-policy.reset`.
+- Al lanzar, los límites vacíos toman el máximo de la política y uno mayor se rechaza con 400. Reintentar, reanudar y bifurcar conservan los límites de la invocación de partida, rebajados si la política se ha endurecido. Las herramientas, el modo y el entorno son siempre los de la política actual; `agent.spawned` registra herramientas y modo.
+- `StartAgent.environment`: variables que pide la política. El runner solo pasa las que también permite `SKYNET_AGENT_ENV` y avisa en su log de las demás; `null` mantiene todas las permitidas. La verificación no cambia: usa el entorno del runner.
+- El runner hace cumplir el presupuesto: estima el coste con los tokens de cada mensaje según se emiten (`message_start`, `message_delta` y `assistant`, sin contar dos veces) y una tabla de precios por modelo (prefijo más largo; ampliable con `SKYNET_MODEL_PRICES`). Escribir en caché cuenta 1,25× la entrada, o 2× con duración de 1 h. Si la estimación pasa del presupuesto, termina el proceso y el agente acaba en `FAILED` con «Presupuesto agotado…». El fin del proceso lleva `estimatedCostUsd` y, si hubo modelos sin precio (que no cuentan), `unpricedModels`; `--max-budget-usd` se sigue pasando. El coste mostrado sigue siendo el del `result`.
+- Web: «Política de agentes» en cada repositorio del proyecto, y en el lanzamiento la política efectiva y los máximos de cada límite.
 
 **Duración estimada Fase 1: 9–11 semanas** para una persona; paralelizable en dos líneas (backend/runner y frontend) a partir de M1.
 

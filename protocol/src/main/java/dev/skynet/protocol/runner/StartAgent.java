@@ -19,6 +19,8 @@ import java.util.UUID;
  * @param permissionMode modo de permisos del proveedor (p. ej. {@code dontAsk})
  * @param model modelo, o {@code null} para el predeterminado del proveedor
  * @param resume sesión y worktree de partida; solo en {@link RunnerCommandType#RESUME}
+ * @param environment variables de entorno adicionales que recibe el agente, siempre dentro de las
+ *     que el runner permite ({@code SKYNET_AGENT_ENV}); {@code null} para todas las permitidas
  */
 public record StartAgent(
     UUID workflowRunId,
@@ -31,7 +33,8 @@ public record StartAgent(
     String permissionMode,
     String model,
     AgentLimits limits,
-    ResumeFrom resume) {
+    ResumeFrom resume,
+    List<String> environment) {
 
   public StartAgent {
     Objects.requireNonNull(workflowRunId, "workflowRunId");
@@ -40,5 +43,6 @@ public record StartAgent(
     Objects.requireNonNull(prompt, "prompt");
     allowedTools = allowedTools == null ? List.of() : List.copyOf(allowedTools);
     limits = limits == null ? AgentLimits.none() : limits;
+    environment = environment == null ? null : List.copyOf(environment);
   }
 }

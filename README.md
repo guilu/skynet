@@ -134,10 +134,11 @@ runner/build/install/skynet-runner/bin/skynet-runner
 | `SKYNET_RUNNER_HOME` | `~/.skynet-runner` | Journal, logs y worktrees |
 | `SKYNET_CLAUDE_BIN` | `claude` | Ejecutable de Claude Code (o fake-claude para probar) |
 | `SKYNET_AGENT_ENV` | — | Variables extra que hereda el agente, separadas por comas |
+| `SKYNET_MODEL_PRICES` | — | Fichero que amplía la tabla de precios con la que se estima el coste (ver abajo) |
 
 En **Runners**, «Revocar token…» invalida el token de un runner al momento. Si es el tuyo, se vuelve a registrar solo con `SKYNET_RUNNER_REGISTRATION_TOKEN`; quien tenga solo el token robado se queda fuera. Si el secreto de registro también se ha filtrado, cámbialo en el control plane y en tus runners.
 
-El agente solo hereda una lista corta de variables (`PATH`, `HOME`, idioma, proxy, `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`…) más las de `SKYNET_AGENT_ENV`. El comando de verificación del repositorio se ejecuta con ese mismo entorno: si necesita `JAVA_HOME`, `GRADLE_USER_HOME` o similares, añádelas a `SKYNET_AGENT_ENV`. Los artefactos pendientes de subir se guardan en `SKYNET_RUNNER_HOME/artifacts`. Para probar sin gastar, usa fake-claude:
+El agente solo hereda una lista corta de variables (`PATH`, `HOME`, idioma, proxy, `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`…) más las de `SKYNET_AGENT_ENV`. La política del repositorio puede reducir estas últimas, nunca ampliarlas. El comando de verificación del repositorio se ejecuta con ese mismo entorno: si necesita `JAVA_HOME`, `GRADLE_USER_HOME` o similares, añádelas a `SKYNET_AGENT_ENV`. Los artefactos pendientes de subir se guardan en `SKYNET_RUNNER_HOME/artifacts`. Para probar sin gastar, usa fake-claude:
 
 ```bash
 ./gradlew :tools:fake-claude:installDist
@@ -145,6 +146,17 @@ SKYNET_CLAUDE_BIN=$PWD/tools/fake-claude/build/install/fake-claude/bin/fake-clau
 SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE FAKE_CLAUDE_FIXTURE=02-tools \
 SKYNET_RUNNER_REGISTRATION_TOKEN=<secreto> runner/build/install/skynet-runner/bin/skynet-runner
 ```
+
+El runner hace cumplir el presupuesto de cada invocación: estima su coste según llegan los tokens y la termina si se pasa («Presupuesto agotado»). Trae los precios de los modelos de Claude; para uno que no esté (se avisa en el fin del proceso y no cuenta para el presupuesto), crea un fichero con líneas `prefijo = entrada, salida, lectura de caché`, en US$ por millón de tokens, y apúntalo con `SKYNET_MODEL_PRICES`:
+
+```text
+# Modelo propio: 3 US$ entrada, 15 salida, 0,30 lectura de caché
+mi-modelo = 3, 15, 0.30
+```
+
+### Política de los agentes
+
+Cada repositorio tiene una política de agentes (en el proyecto, «Política de agentes»): herramientas permitidas (`Bash(git:*)` mejor que `Bash`), modo de permisos, variables de entorno y máximos de turnos, presupuesto y tiempo. Sin política propia se usa la global (`skynet.agent.*`). Al lanzar se ven la política y sus máximos; los límites se pueden bajar, no subir.
 
 ### fake-claude
 

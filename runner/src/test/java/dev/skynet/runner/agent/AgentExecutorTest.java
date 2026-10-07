@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.NormalizedEvent;
+import dev.skynet.protocol.runner.AgentLimits;
 import dev.skynet.protocol.runner.ArtifactType;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.RunVerification;
@@ -13,6 +14,7 @@ import dev.skynet.runner.TestRepos;
 import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.workspace.WorkspaceManager;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -159,6 +161,25 @@ class AgentExecutorTest {
     NormalizedEvent exit = awaitExit(id);
 
     assertThat((String) exit.payload().get("error")).contains("tiempo");
+  }
+
+  @Test
+  void anEstimatedCostOverTheBudgetTerminatesTheAgentWithAnError() throws Exception {
+    UUID id = UUID.randomUUID();
+    // 07-cancelled no termina solo: su primer mensaje ya cuesta unos 0,03 US$.
+    executor("07-cancelled")
+        .start(
+            TestAgents.startWithin(
+                id, repo.toString(), new AgentLimits(null, new BigDecimal("0.01"), null)));
+
+    NormalizedEvent exit = awaitExit(id);
+
+    assertThat((String) exit.payload().get("error"))
+        .startsWith("Presupuesto agotado")
+        .endsWith("supera el máximo de 0.01 US$");
+    assertThat(new BigDecimal(exit.payload().get("estimatedCostUsd").toString()))
+        .isGreaterThan(new BigDecimal("0.01"));
+    assertThat(exit.payload().get("signal")).isIn("SIGTERM", "SIGKILL");
   }
 
   @Test

@@ -31,8 +31,34 @@ export interface Repository {
   validationCommand: string | null
   /** Globs de los informes JUnit XML, relativos al worktree. */
   testReportPaths: string[]
+  /** Política efectiva de los agentes: la propia o, sin ella, la global. */
+  agentPolicy: AgentPolicy
+  /** Si el repositorio tiene política propia. */
+  agentPolicyCustom: boolean
   createdAt: string
 }
+
+/** Lo que pueden usar y gastar los agentes de un repositorio. */
+export interface AgentPolicy {
+  /** Herramientas permitidas, p. ej. `Bash(git:*)`; con `dontAsk` el resto se deniega. */
+  allowedTools: string[]
+  permissionMode: PermissionMode
+  /** Variables extra que recibe el agente, dentro de las que permite el runner; `null`: todas. */
+  environment: string[] | null
+  /** Máximos de cada lanzamiento; `null`: sin límite. */
+  maxTurns: number | null
+  maxBudgetUsd: number | null
+  timeoutMinutes: number | null
+}
+
+export type PermissionMode = 'dontAsk' | 'acceptEdits' | 'default' | 'plan'
+
+export const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
+  { value: 'dontAsk', label: 'dontAsk: deniega lo que no esté permitido' },
+  { value: 'acceptEdits', label: 'acceptEdits: además acepta editar archivos' },
+  { value: 'default', label: 'default: pide permiso (sin nadie que responda, se deniega)' },
+  { value: 'plan', label: 'plan: solo planifica, no cambia nada' },
+]
 
 export interface WorkItem {
   id: string
@@ -393,6 +419,26 @@ export const api = {
       'PUT',
       `/api/projects/${projectId}/repositories/${repositoryId}/verification`,
       body,
+    ),
+  /** Da al repositorio una política propia para sus agentes. */
+  configureAgentPolicy: (
+    projectId: string,
+    repositoryId: string,
+    body: Omit<AgentPolicy, 'maxBudgetUsd' | 'timeoutMinutes'> & {
+      maxBudgetUsd: number
+      timeoutMinutes: number
+    },
+  ) =>
+    request<Repository>(
+      'PUT',
+      `/api/projects/${projectId}/repositories/${repositoryId}/agent-policy`,
+      body,
+    ),
+  /** El repositorio vuelve a la política global. */
+  inheritAgentPolicy: (projectId: string, repositoryId: string) =>
+    request<Repository>(
+      'DELETE',
+      `/api/projects/${projectId}/repositories/${repositoryId}/agent-policy`,
     ),
   workItems: (projectId: string) =>
     request<WorkItem[]>('GET', `/api/projects/${projectId}/work-items`),

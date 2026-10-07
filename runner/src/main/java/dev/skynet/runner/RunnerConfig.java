@@ -20,6 +20,8 @@ import java.util.Map;
  * @param claudeExecutable ejecutable de Claude Code ({@code SKYNET_CLAUDE_BIN})
  * @param extraEnv variables de entorno adicionales que se pasan al agente ({@code
  *     SKYNET_AGENT_ENV}, separadas por comas)
+ * @param modelPrices fichero de precios por modelo que amplía o corrige la tabla con la que se
+ *     estima el coste ({@code SKYNET_MODEL_PRICES}), o {@code null}
  */
 public record RunnerConfig(
     URI controlPlane,
@@ -31,7 +33,8 @@ public record RunnerConfig(
     List<String> extraEnv,
     Duration pollWait,
     Duration heartbeatInterval,
-    Duration cancelGrace) {
+    Duration cancelGrace,
+    Path modelPrices) {
 
   public Path journalFile() {
     return home.resolve("journal.db");
@@ -67,7 +70,8 @@ public record RunnerConfig(
             .toList(),
         Duration.ofSeconds(25),
         Duration.ofSeconds(15),
-        Duration.ofSeconds(10));
+        Duration.ofSeconds(10),
+        env.containsKey("SKYNET_MODEL_PRICES") ? Path.of(env.get("SKYNET_MODEL_PRICES")) : null);
   }
 
   private static String hostname() {

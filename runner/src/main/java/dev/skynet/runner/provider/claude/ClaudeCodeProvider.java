@@ -45,14 +45,29 @@ public class ClaudeCodeProvider {
 
   private final String executable;
   private final List<String> extraEnv;
+  private final ModelPrices prices;
 
   /**
    * @param executable ejecutable de Claude Code ({@code claude}, o fake-claude en pruebas)
    * @param extraEnv variables adicionales que el agente puede heredar
    */
   public ClaudeCodeProvider(String executable, List<String> extraEnv) {
+    this(executable, extraEnv, ModelPrices.defaults());
+  }
+
+  /**
+   * @param prices precios con los que se estima el coste de cada invocación para hacer cumplir su
+   *     presupuesto
+   */
+  public ClaudeCodeProvider(String executable, List<String> extraEnv, ModelPrices prices) {
     this.executable = executable;
     this.extraEnv = List.copyOf(extraEnv);
+    this.prices = prices;
+  }
+
+  /** Estimador de coste para una invocación nueva. */
+  public CostEstimator costEstimator() {
+    return new CostEstimator(prices);
   }
 
   public List<String> command(StartAgent start) {
@@ -122,13 +137,32 @@ public class ClaudeCodeProvider {
 
   /** Entorno del agente: solo las variables permitidas del runner. */
   public Map<String, String> environment(Map<String, String> runnerEnv) {
+    return environment(runnerEnv, null);
+  }
+
+  /**
+   * Entorno de una invocación: las variables básicas y, de las adicionales que permite el runner,
+   * solo las que pide la política del repositorio ({@code null}: todas). Las que pide y el runner
+   * no permite no se pasan.
+   */
+  public Map<String, String> environment(Map<String, String> runnerEnv, List<String> requested) {
     Map<String, String> env = new LinkedHashMap<>();
     runnerEnv.forEach(
         (name, value) -> {
-          if (INHERITED_ENV.contains(name) || extraEnv.contains(name)) {
+          if (INHERITED_ENV.contains(name)
+              || (extraEnv.contains(name) && (requested == null || requested.contains(name)))) {
             env.put(name, value);
           }
         });
     return env;
+  }
+
+  /** Variables que pide la invocación y el runner no permite: no las recibe el agente. */
+  public List<String> refusedEnvironment(StartAgent start) {
+    return start.environment() == null
+        ? List.of()
+        : start.environment().stream()
+            .filter(name -> !INHERITED_ENV.contains(name) && !extraEnv.contains(name))
+            .toList();
   }
 }

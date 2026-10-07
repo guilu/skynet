@@ -45,12 +45,17 @@ public final class TestAgents {
   }
 
   public static RunnerCommand start(UUID agentRunId, String repository, Duration timeout) {
+    return startWithin(agentRunId, repository, new AgentLimits(null, null, timeout));
+  }
+
+  /** Orden START con esos límites. */
+  public static RunnerCommand startWithin(UUID agentRunId, String repository, AgentLimits limits) {
     return new RunnerCommand(
         UUID.randomUUID(),
         RunnerCommandType.START,
         agentRunId,
         Instant.now(),
-        invocation(repository, UUID.randomUUID(), "Arregla add", timeout, null),
+        invocation(repository, UUID.randomUUID(), "Arregla add", limits, null),
         null);
   }
 
@@ -62,12 +67,12 @@ public final class TestAgents {
         RunnerCommandType.RESUME,
         agentRunId,
         Instant.now(),
-        invocation(repository, sessionId, "Añade un test", null, from),
+        invocation(repository, sessionId, "Añade un test", AgentLimits.none(), from),
         null);
   }
 
   private static StartAgent invocation(
-      String repository, UUID sessionId, String prompt, Duration timeout, ResumeFrom resume) {
+      String repository, UUID sessionId, String prompt, AgentLimits limits, ResumeFrom resume) {
     return new StartAgent(
         UUID.randomUUID(),
         "TKM-1",
@@ -78,7 +83,8 @@ public final class TestAgents {
         List.of("Read", "Edit"),
         "dontAsk",
         null,
-        new AgentLimits(null, null, timeout),
-        resume);
+        limits,
+        resume,
+        null);
   }
 }

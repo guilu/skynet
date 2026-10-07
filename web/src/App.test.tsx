@@ -245,6 +245,17 @@ describe('App', () => {
           localPath: '/r',
           remoteUrl: null,
           defaultBranch: 'main',
+          validationCommand: null,
+          testReportPaths: [],
+          agentPolicy: {
+            allowedTools: ['Read', 'Bash(git:*)'],
+            permissionMode: 'dontAsk',
+            environment: null,
+            maxTurns: null,
+            maxBudgetUsd: 1.5,
+            timeoutMinutes: 10,
+          },
+          agentPolicyCustom: true,
           createdAt: '',
         },
       ],
@@ -256,6 +267,16 @@ describe('App', () => {
     fireEvent.change(await screen.findByLabelText('Prompt'), { target: { value: 'Haz X' } })
     fireEvent.change(screen.getByLabelText('Turnos máximos'), { target: { value: '7' } })
     await waitFor(() => expect(screen.getByRole('button', { name: 'Lanzar' })).toBeEnabled())
+    // Se ve la política del repositorio y sus máximos.
+    expect(
+      screen.getByText(
+        (_, el) => el?.tagName === 'P' && !!el.textContent?.startsWith('Política del repositorio:'),
+      ),
+    ).toHaveTextContent(
+      'Política del repositorio: herramientas Read, Bash(git:*), modo dontAsk, entorno el que' +
+        ' permite el runner.',
+    )
+    expect(screen.getByLabelText('Presupuesto (US$) (hasta 1.5)')).toHaveAttribute('max', '1.5')
     fireEvent.click(screen.getByRole('button', { name: 'Lanzar' }))
 
     await waitFor(() =>

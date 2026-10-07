@@ -29,6 +29,7 @@ class ClaudeCodeProviderTest {
             "dontAsk",
             null,
             new AgentLimits(5, new BigDecimal("2.00"), Duration.ofMinutes(30)),
+            null,
             null);
 
     assertThat(new ClaudeCodeProvider("claude", List.of()).command(start))
@@ -79,7 +80,8 @@ class ClaudeCodeProviderTest {
         null,
         null,
         null,
-        from);
+        from,
+        null);
   }
 
   @Test
@@ -96,5 +98,17 @@ class ClaudeCodeProviderTest {
                     "AWS_SECRET_ACCESS_KEY", "s"));
 
     assertThat(env).containsOnlyKeys("PATH", "HOME", "ANTHROPIC_API_KEY", "EXTRA");
+  }
+
+  @Test
+  void theRepositoryPolicyNarrowsTheExtraVariables() {
+    ClaudeCodeProvider provider = new ClaudeCodeProvider("claude", List.of("EXTRA", "OTHER"));
+    Map<String, String> runner =
+        Map.of("PATH", "/bin", "EXTRA", "x", "OTHER", "o", "AWS_SECRET_ACCESS_KEY", "s");
+
+    assertThat(provider.environment(runner, List.of("EXTRA", "AWS_SECRET_ACCESS_KEY")))
+        .containsOnlyKeys("PATH", "EXTRA");
+    assertThat(provider.environment(runner, List.of())).containsOnlyKeys("PATH");
+    assertThat(provider.environment(runner, null)).containsOnlyKeys("PATH", "EXTRA", "OTHER");
   }
 }

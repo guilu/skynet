@@ -34,7 +34,8 @@ class RunnerMessagesJsonTest {
             "dontAsk",
             null,
             new AgentLimits(10, new BigDecimal("0.50"), Duration.ofMinutes(30)),
-            null);
+            null,
+            List.of("JAVA_HOME"));
     RunnerCommand command = RunnerCommand.start(UUID.randomUUID(), UUID.randomUUID(), NOW, start);
 
     assertThat(roundTrip(command, RunnerCommand.class)).isEqualTo(command);
@@ -55,7 +56,8 @@ class RunnerMessagesJsonTest {
             null,
             AgentLimits.none(),
             new ResumeFrom(
-                UUID.randomUUID().toString(), true, "/w/run/agent", "skynet/tkm-1/abcd1234"));
+                UUID.randomUUID().toString(), true, "/w/run/agent", "skynet/tkm-1/abcd1234"),
+            null);
     RunnerCommand command = RunnerCommand.resume(UUID.randomUUID(), UUID.randomUUID(), NOW, start);
 
     assertThat(roundTrip(command, RunnerCommand.class)).isEqualTo(command);
@@ -136,6 +138,7 @@ class RunnerMessagesJsonTest {
             null,
             UUID.randomUUID(),
             "p",
+            null,
             null,
             null,
             null,

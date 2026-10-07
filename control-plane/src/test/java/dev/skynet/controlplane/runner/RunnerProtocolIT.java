@@ -276,6 +276,108 @@ class RunnerProtocolIT extends IntegrationTest {
   }
 
   @Test
+  void theRepositoryPolicyDecidesWhatTheAgentMayUseAndCapsItsLimits() {
+    Runner runner = register("laptop", 2);
+    launch("con la política global");
+    JsonNode global = repository();
+    assertThat(global.path("agentPolicyCustom").asBoolean()).isFalse();
+    assertThat(global.path("agentPolicy").path("permissionMode").asString()).isEqualTo("dontAsk");
+    assertThat(global.path("agentPolicy").path("maxBudgetUsd").decimalValue())
+        .isEqualByComparingTo("2.00");
+    assertThat(global.path("agentPolicy").path("timeoutMinutes").asInt()).isEqualTo(30);
+    assertThat(global.path("agentPolicy").path("environment").isNull()).isTrue();
+
+    JsonNode configured = put(policyUri(), policy(List.of("Read", "Bash(git:*)"), "acceptEdits"));
+    assertThat(configured.path("agentPolicyCustom").asBoolean()).isTrue();
+    assertThat(repository().path("agentPolicy").path("allowedTools").get(1).asString())
+        .isEqualTo("Bash(git:*)");
+
+    Launched capped = launch("con la política del repositorio", Map.of("maxBudgetUsd", 1));
+    JsonNode start =
+        poll(runner, 1).stream()
+            .filter(c -> c.path("agentRunId").asString().equals(capped.agentId().toString()))
+            .findFirst()
+            .orElseThrow()
+            .path("start");
+    assertThat(start.path("allowedTools").toString()).isEqualTo("[\"Read\",\"Bash(git:*)\"]");
+    assertThat(start.path("permissionMode").asString()).isEqualTo("acceptEdits");
+    assertThat(start.path("environment").toString()).isEqualTo("[\"JAVA_HOME\"]");
+    assertThat(start.path("limits").path("maxTurns").asInt()).isEqualTo(20);
+    assertThat(start.path("limits").path("maxBudgetUsd").decimalValue()).isEqualByComparingTo("1");
+    assertThat(start.path("limits").path("timeout").asString()).isEqualTo("PT10M");
+
+    assertThatThrownBy(() -> launch("demasiado caro", Map.of("maxBudgetUsd", 3)))
+        .isInstanceOfSatisfying(
+            HttpClientErrorException.class,
+            e ->
+                assertThat(e.getResponseBodyAsString())
+                    .contains("El presupuesto (3 US$) supera el máximo del repositorio (1.5 US$)"));
+    assertStatus(
+        HttpStatus.BAD_REQUEST, () -> launch("demasiado largo", Map.of("timeoutMinutes", 11)));
+    assertStatus(HttpStatus.BAD_REQUEST, () -> launch("demasiados turnos", Map.of("maxTurns", 21)));
+    assertStatus(
+        HttpStatus.BAD_REQUEST, () -> put(policyUri(), policy(List.of("Bash(a,b)"), "dontAsk")));
+    assertStatus(
+        HttpStatus.BAD_REQUEST,
+        () -> put(policyUri(), policy(List.of("Read"), "bypassPermissions")));
+
+    JsonNode reset = http.delete().uri(policyUri()).retrieve().body(JsonNode.class);
+    assertThat(reset.path("agentPolicyCustom").asBoolean()).isFalse();
+    assertThat(reset.path("agentPolicy").path("permissionMode").asString()).isEqualTo("dontAsk");
+    assertThat(eventTypesOf("repository"))
+        .containsSubsequence("repository.agent-policy.configured", "repository.agent-policy.reset");
+  }
+
+  @Test
+  void aRetryKeepsItsLimitsLoweredToTheCurrentPolicy() {
+    Runner runner = register("laptop", 2);
+    Launched run = launch("Arregla add()", Map.of("maxBudgetUsd", new BigDecimal("1.80")));
+    ack(runner, poll(runner, 1).getFirst());
+    Events events = new Events(run.agentId());
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 1));
+    send(runner, events.batch());
+
+    put(policyUri(), policy(List.of("Read"), "dontAsk"));
+    post("/api/agent-runs/" + run.agentId() + "/retry", Map.of());
+
+    JsonNode start = poll(runner, 1).getFirst().path("start");
+    assertThat(start.path("limits").path("maxBudgetUsd").decimalValue())
+        .isEqualByComparingTo("1.5");
+    assertThat(start.path("allowedTools").toString()).isEqualTo("[\"Read\"]");
+  }
+
+  private Map<String, Object> policy(List<String> tools, String permissionMode) {
+    Map<String, Object> policy = new LinkedHashMap<>();
+    policy.put("allowedTools", tools);
+    policy.put("permissionMode", permissionMode);
+    policy.put("environment", List.of("JAVA_HOME"));
+    policy.put("maxTurns", 20);
+    policy.put("maxBudgetUsd", new BigDecimal("1.5"));
+    policy.put("timeoutMinutes", 10);
+    return policy;
+  }
+
+  private String policyUri() {
+    return "/api/projects/" + projectId + "/repositories/" + repositoryId + "/agent-policy";
+  }
+
+  private JsonNode repository() {
+    JsonNode list = get("/api/projects/" + projectId + "/repositories");
+    return list.get(0);
+  }
+
+  private JsonNode put(String path, Object body) {
+    return http.put().uri(path).body(body).retrieve().body(JsonNode.class);
+  }
+
+  private List<String> eventTypesOf(String aggregateType) {
+    return jdbc.sql("SELECT event_type FROM event WHERE aggregate_type = ? ORDER BY sequence")
+        .param(aggregateType)
+        .query(String.class)
+        .list();
+  }
+
+  @Test
   void longPollReturnsAsSoonAsARunIsLaunched() throws Exception {
     Runner runner = register("laptop", 1);
     CompletableFuture<List<JsonNode>> pending =
@@ -654,8 +756,7 @@ class RunnerProtocolIT extends IntegrationTest {
 
   private Launched launch(String prompt, Map<String, ?> limits) {
     if (launches++ == 0) {
-      String projectId =
-          post("/api/projects", Map.of("key", "RUN", "name", "Runs")).path("id").asString();
+      projectId = post("/api/projects", Map.of("key", "RUN", "name", "Runs")).path("id").asString();
       repositoryId =
           post(
                   "/api/projects/" + projectId + "/repositories",
@@ -673,6 +774,7 @@ class RunnerProtocolIT extends IntegrationTest {
         UUID.fromString(run.path("stages").get(0).path("agents").get(0).path("id").asString()));
   }
 
+  private String projectId;
   private String repositoryId;
   private String workItemId;
 
