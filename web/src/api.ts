@@ -307,12 +307,36 @@ export class ApiError extends Error {
   }
 }
 
+export interface Session {
+  username: string
+}
+
+/** Clave de la sesión en la caché de TanStack Query. */
+export const SESSION_KEY = ['session']
+
+/** Evento de `window` cuando la API responde 401: la sesión ha caducado o se ha cerrado. */
+export const UNAUTHORIZED_EVENT = 'skynet:unauthorized'
+
+/** Token CSRF que el servidor deja en la cookie `XSRF-TOKEN`; va en cada petición que cambia algo. */
+function csrfToken(): string | null {
+  const match = /(?:^|;\s*)XSRF-TOKEN=([^;]*)/.exec(document.cookie)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = {}
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const csrf = method === 'GET' ? null : csrfToken()
+  if (csrf) headers['X-XSRF-TOKEN'] = csrf
   const res = await fetch(path, {
     method,
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   })
+  // El login fallido también es un 401, pero no es una sesión caducada.
+  if (res.status === 401 && path !== '/api/auth/login') {
+    window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+  }
   if (!res.ok) {
     let message = `${res.status} ${res.statusText}`
     try {
@@ -323,18 +347,25 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     }
     throw new ApiError(res.status, message)
   }
+  if (res.status === 204) return undefined as T
   return (await res.json()) as T
 }
 
 /** Lee `limit` bytes de un artefacto desde `offset` (el servidor sirve 8 MiB como mucho). */
 async function artifactChunk(id: string, offset: number, limit: number): Promise<ArtifactChunk> {
   const res = await fetch(`/api/artifacts/${id}/content?offset=${offset}&limit=${limit}`)
+  if (res.status === 401) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
   if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`)
   const bytes = new Uint8Array(await res.arrayBuffer())
   return { bytes, size: Number(res.headers.get('X-Artifact-Size') ?? bytes.length), offset }
 }
 
 export const api = {
+  session: () => request<Session>('GET', '/api/auth/session'),
+  login: (username: string, password: string) =>
+    request<Session>('POST', '/api/auth/login', { username, password }),
+  logout: () => request<void>('POST', '/api/auth/logout'),
+  revokeRunner: (id: string) => request<void>('POST', `/api/runners/${id}/revoke`),
   projects: () => request<Project[]>('GET', '/api/projects'),
   project: (id: string) => request<Project>('GET', `/api/projects/${id}`),
   createProject: (body: { key: string; name: string; description?: string }) =>

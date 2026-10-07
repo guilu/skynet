@@ -10,6 +10,21 @@ import { startCuttableProxy } from './cuttableProxy.ts'
  * retardo entre líneas, para que haya tiempo de cortar la conexión a mitad de ejecución.
  */
 const repoPath = process.env.E2E_REPO_PATH ?? '/tmp/skynet-e2e-repo'
+const adminUser = process.env.SKYNET_ADMIN_USER ?? 'admin'
+const adminSecret = process.env.SKYNET_ADMIN_PASSWORD ?? 'e2e-admin'
+
+/** Entra con el usuario de la web desde la página en la que esté el login. */
+async function login(page: Page, password = adminSecret) {
+  await page.getByLabel('Usuario').fill(adminUser)
+  await page.getByLabel('Contraseña').fill(password)
+  await page.getByRole('button', { name: 'Entrar' }).click()
+}
+
+/** Cabecera CSRF para las llamadas a la API con la sesión del navegador. */
+async function csrf(page: Page): Promise<Record<string, string>> {
+  const cookie = (await page.context().cookies()).find((c) => c.name === 'XSRF-TOKEN')
+  return cookie ? { 'X-XSRF-TOKEN': cookie.value } : {}
+}
 
 let network: Awaited<ReturnType<typeof startCuttableProxy>>
 test.beforeAll(async () => {
@@ -24,8 +39,11 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
   test.setTimeout(240_000)
   const key = `E${Date.now().toString(36).toUpperCase().slice(-6)}`
 
-  await test.step('crear proyecto', async () => {
+  await test.step('entrar y crear proyecto', async () => {
+    // Sin sesión, la web pide entrar y después sigue en la página pedida.
     await page.goto('/projects')
+    await login(page)
+    await expect(page.getByRole('heading', { level: 1, name: 'Proyectos' })).toBeVisible()
     await page.getByLabel('Clave').fill(key)
     await page.getByLabel('Nombre').fill('E2E')
     await page.getByRole('button', { name: 'Crear proyecto' }).click()
@@ -167,8 +185,9 @@ function fakeClaudeProcesses(): string[] {
 
 async function launchViaApi(page: Page, prompt: string): Promise<string> {
   const key = `C${Date.now().toString(36).toUpperCase().slice(-6)}`
+  const headers = await csrf(page)
   const post = async (path: string, data: unknown) =>
-    (await page.request.post(path, { data })).json()
+    (await page.request.post(path, { data, headers })).json()
   const project = await post('/api/projects', { key, name: 'Cancelar' })
   const repo = await post(`/api/projects/${project.id}/repositories`, {
     name: 'demo',
@@ -183,6 +202,9 @@ async function launchViaApi(page: Page, prompt: string): Promise<string> {
 }
 
 test('cancelar a mitad deja el agente cancelado y ningún proceso vivo', async ({ page }) => {
+  await page.goto('/')
+  await login(page)
+  await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible()
   const runId = await launchViaApi(page, 'Tarea larga')
   await page.goto(`/runs/${runId}`)
   const header = page.locator('header.run-header')
@@ -202,4 +224,23 @@ test('cancelar a mitad deja el agente cancelado y ningún proceso vivo', async (
     timeout: 30_000,
   })
   await expect.poll(fakeClaudeProcesses, { timeout: 10_000 }).toHaveLength(0)
+})
+
+test('login: una contraseña incorrecta no entra, salir cierra la sesión', async ({ page }) => {
+  await page.goto('/')
+  await login(page, 'incorrecta')
+  await expect(page.getByRole('alert')).toHaveText('Usuario o contraseña incorrectos')
+
+  await login(page)
+  await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible()
+  expect((await page.request.get('/api/projects')).status()).toBe(200)
+
+  await page.getByRole('button', { name: 'Salir' }).click()
+  await expect(page.getByLabel('Usuario')).toBeVisible()
+  expect((await page.request.get('/api/projects')).status()).toBe(401)
+  // Sin el token CSRF, una sesión no puede cambiar nada aunque sea válida.
+  await login(page)
+  await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible()
+  const forged = await page.request.post('/api/projects', { data: { key: 'XSRF', name: 'x' } })
+  expect(forged.status()).toBe(403)
 })

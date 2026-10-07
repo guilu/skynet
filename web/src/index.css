@@ -851,3 +851,17 @@ button.link {
     grid-template-columns: 1fr;
   }
 }
+
+/* Login: fuera de la estructura de la aplicación, centrado. */
+.login {
+  max-width: 24rem;
+  margin: 12vh auto 0;
+  padding: var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.login h1:focus {
+  outline: none;
+}

@@ -112,6 +112,7 @@ function openRun(tab: string) {
   const fetch = vi.fn(
     mockFetch({
       '/actuator/health': { status: 'UP' },
+      '/api/auth/session': { username: 'admin' },
       [`/api/workflow-runs/${runId}`]: runView,
       '/api/runners': runners,
       [`/api/agent-runs/${agent.id}/verifications`]: verifications,

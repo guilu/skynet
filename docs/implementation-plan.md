@@ -192,7 +192,16 @@ GET        /api/artifacts/{id}/content?offset=&limit=   # trozo del contenido; X
 POST       /api/runner/artifacts              # runner: contenido en el cuerpo, metadatos en X-Artifact-Metadata (JSON en base64url), idempotente
 ```
 
-Los errores siguen RFC 9457 (`ProblemDetail`): 400 validación, 404 inexistente, 409 transición no permitida, clave duplicada o conflicto de versión.
+Añadido en M6-A (todo lo demás exige sesión con CSRF o HTTP Basic; `/api/runner/**` usa el token del runner):
+
+```text
+POST       /api/auth/login                    # {username, password} → {username}; abre la sesión
+GET        /api/auth/session                  # {username} o 401
+POST       /api/auth/logout                   # 204
+POST       /api/runners/{id}/revoke           # invalida el token del runner; 204
+```
+
+Los errores siguen RFC 9457 (`ProblemDetail`): 400 validación, 401 sin sesión, 403 sin token CSRF, 404 inexistente, 409 transición no permitida, clave duplicada o conflicto de versión.
 
 ---
 
@@ -394,6 +403,18 @@ Se entrega en tres PRs (plan aprobado: verificación aparte del agente, comando 
 - Repaso de los 12 criterios del MVP con una sesión real de Claude.
 
 **Aceptación:** checklist §23 completo en un repositorio real.
+
+Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el token del runner, política por repositorio, presupuesto estimado por el runner, reconciliación con los latidos, limpieza automática de worktrees a los 7 días, métricas por periodo, axe en la E2E y prueba real de los 12 criterios).
+
+**Implementado (M6-A), acceso:**
+
+- Spring Security con un usuario único (`SKYNET_ADMIN_USER`, `SKYNET_ADMIN_PASSWORD`). Sin contraseña genera una y la escribe en el log; con `SKYNET_REQUIRE_ADMIN_PASSWORD=true` (Docker Compose) no arranca.
+- La web entra con `POST /api/auth/login` (sesión por cookie, `HttpOnly` y `SameSite=Lax`; el identificador cambia al entrar), consulta `GET /api/auth/session` y sale con `POST /api/auth/logout`. Caduca tras `SKYNET_SESSION_TIMEOUT` (12 h) sin uso.
+- CSRF por cookie (`XSRF-TOKEN`, cabecera `X-XSRF-TOKEN`) en todo lo que cambia algo. No se pide a peticiones con `Authorization` (HTTP Basic de scripts, o el runner) ni a `/api/runner/**`.
+- Un 401 nunca lleva `WWW-Authenticate`, para que el navegador no abra su diálogo. Quedan abiertos `/actuator/health`, el login y la API del runner, que tiene su token.
+- CORS cerrado salvo los orígenes de `SKYNET_CORS_ORIGINS`.
+- `POST /api/runners/{id}/revoke` invalida el token de un runner (`runner.token.revoked`). El runner legítimo recibe 401 y se vuelve a registrar con el secreto de registro.
+- Web: página de login, «Salir» en la barra superior y vuelta al login sin cambiar de página cuando la sesión caduca (también si el stream en vivo falla por eso). «Revocar token…» en Runners, con confirmación.
 
 **Duración estimada Fase 1: 9–11 semanas** para una persona; paralelizable en dos líneas (backend/runner y frontend) a partir de M1.
 

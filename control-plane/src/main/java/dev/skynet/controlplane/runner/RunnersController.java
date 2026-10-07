@@ -1,7 +1,12 @@
 package dev.skynet.controlplane.runner;
 
 import java.util.List;
+import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -12,13 +17,22 @@ import org.springframework.web.bind.annotation.RestController;
 class RunnersController {
 
   private final RunnerDirectory directory;
+  private final RunnerRegistry registry;
 
-  RunnersController(RunnerDirectory directory) {
+  RunnersController(RunnerDirectory directory, RunnerRegistry registry) {
     this.directory = directory;
+    this.registry = registry;
   }
 
   @GetMapping("/api/runners")
   List<RunnerView> list() {
     return directory.list();
+  }
+
+  /** Invalida el token del runner; si es el legítimo, se vuelve a registrar solo. */
+  @PostMapping("/api/runners/{id}/revoke")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  void revoke(@PathVariable UUID id) {
+    registry.revoke(id);
   }
 }

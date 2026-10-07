@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { StoredEvent } from './api'
+import { api, type StoredEvent } from './api'
 
 export type StreamState = 'connecting' | 'open' | 'reconnecting'
 
@@ -22,7 +22,12 @@ export function useEventStream(
     if (workflowRunId) params.set('workflowRunId', workflowRunId)
     const source = new EventSource(`/api/events/stream?${params}`)
     source.onopen = () => setState('open')
-    source.onerror = () => setState('reconnecting')
+    source.onerror = () => {
+      setState('reconnecting')
+      // EventSource no expone el código de estado: si la causa es la sesión, el 401 de esta
+      // comprobación lleva al login.
+      api.session().catch(() => undefined)
+    }
     source.onmessage = (message) => {
       const event = JSON.parse(message.data as string) as StoredEvent
       setEvents((prev) =>

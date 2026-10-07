@@ -33,7 +33,13 @@ const runningRun = runPage.items[0]
 const agentId = runningRun.stages[0].agents[0].id
 
 function stubApi(routes: Record<string, unknown>) {
-  const fetch = vi.fn(mockFetch({ '/actuator/health': { status: 'UP' }, ...routes }))
+  const fetch = vi.fn(
+    mockFetch({
+      '/actuator/health': { status: 'UP' },
+      '/api/auth/session': { username: 'admin' },
+      ...routes,
+    }),
+  )
   vi.stubGlobal('fetch', fetch)
   return fetch
 }
@@ -56,7 +62,15 @@ describe('App', () => {
   })
 
   it('muestra el control plane no disponible si la petición falla', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network')))
+    const api = mockFetch({ '/api/auth/session': { username: 'admin' }, '/api/projects': [] })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+        String(input) === '/actuator/health'
+          ? Promise.reject(new TypeError('network'))
+          : api(input, init),
+      ),
+    )
     renderAt('/projects', <App />)
     expect(await screen.findByText('no disponible')).toBeInTheDocument()
   })
@@ -64,7 +78,7 @@ describe('App', () => {
   it('ofrece la navegación global y marca la sección actual', async () => {
     stubApi({ '/api/runners': runners })
     renderAt('/runners', <App />)
-    const nav = screen.getByRole('navigation', { name: 'Navegación principal' })
+    const nav = await screen.findByRole('navigation', { name: 'Navegación principal' })
     for (const name of [
       'Dashboard',
       'Proyectos',
@@ -265,7 +279,7 @@ describe('App', () => {
   it('el selector de tema fija data-theme en el documento', async () => {
     stubApi({ '/api/runners': runners })
     renderAt('/runners', <App />)
-    fireEvent.change(screen.getByLabelText('Tema'), { target: { value: 'dark' } })
+    fireEvent.change(await screen.findByLabelText('Tema'), { target: { value: 'dark' } })
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
     fireEvent.change(screen.getByLabelText('Tema'), { target: { value: 'system' } })
     expect(document.documentElement).not.toHaveAttribute('data-theme')

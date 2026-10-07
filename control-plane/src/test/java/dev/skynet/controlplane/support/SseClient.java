@@ -29,7 +29,9 @@ public final class SseClient implements AutoCloseable {
 
   public SseClient(String url, Long lastEventId) {
     HttpRequest.Builder request =
-        HttpRequest.newBuilder(URI.create(url)).header("Accept", "text/event-stream");
+        HttpRequest.newBuilder(URI.create(url))
+            .header("Accept", "text/event-stream")
+            .header("Authorization", IntegrationTest.ADMIN_BASIC_AUTH);
     if (lastEventId != null) {
       request.header("Last-Event-ID", Long.toString(lastEventId));
     }
