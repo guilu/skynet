@@ -6,6 +6,7 @@ import dev.skynet.runner.agent.ArtifactSpool;
 import dev.skynet.runner.agent.EventSender;
 import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
+import dev.skynet.runner.provider.claude.ModelPrices;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.transport.ControlPlaneClient;
 import dev.skynet.runner.workspace.WorkspaceManager;
@@ -52,7 +53,12 @@ public final class RunnerMain {
     ControlPlaneClient client = new ControlPlaneClient(config.controlPlane());
     ProcessSupervisor supervisor = new ProcessSupervisor();
     ClaudeCodeProvider provider =
-        new ClaudeCodeProvider(config.claudeExecutable(), config.extraEnv());
+        new ClaudeCodeProvider(
+            config.claudeExecutable(),
+            config.extraEnv(),
+            config.modelPrices() == null
+                ? ModelPrices.defaults()
+                : ModelPrices.load(config.modelPrices()));
     try (EventSender sender =
             new EventSender(journal, client, Duration.ofMillis(500), Duration.ofSeconds(2));
         ArtifactSender artifactSender =

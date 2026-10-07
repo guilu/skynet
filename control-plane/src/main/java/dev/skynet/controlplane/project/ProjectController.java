@@ -1,13 +1,20 @@
 package dev.skynet.controlplane.project;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -58,6 +65,56 @@ class ProjectController {
   record VerificationSettings(
       @Size(max = 2000) String validationCommand, List<@Size(max = 500) String> testReportPaths) {}
 
+  /**
+   * Política propia de los agentes del repositorio. Sin {@code environment}, el agente recibe todas
+   * las variables que permite el runner; sin {@code maxTurns}, no hay límite de turnos.
+   */
+  record AgentPolicySettings(
+      @NotNull @Size(max = 50)
+          List<
+                  @NotBlank @Size(max = 200)
+                  @Pattern(
+                      regexp = TOOL,
+                      message =
+                          "herramienta no válida: un nombre y, opcionalmente, un patrón entre"
+                              + " paréntesis sin comas, como Bash(git:*)")
+                  String>
+              allowedTools,
+      @NotBlank
+          @Pattern(
+              regexp = "dontAsk|acceptEdits|default|plan",
+              message = "debe ser dontAsk, acceptEdits, default o plan")
+          String permissionMode,
+      @Size(max = 50)
+          List<
+                  @NotBlank @Pattern(regexp = ENV_NAME, message = "nombre de variable no válido")
+                  String>
+              environment,
+      @Positive @Max(1_000) Integer maxTurns,
+      @NotNull @Positive @DecimalMax("1000") @Digits(integer = 4, fraction = 2)
+          BigDecimal maxBudgetUsd,
+      @NotNull @Positive @Max(24 * 60) Integer timeoutMinutes) {
+
+    AgentPolicy policy() {
+      return new AgentPolicy(
+          allowedTools.stream().map(String::strip).distinct().toList(),
+          permissionMode,
+          environment == null ? null : environment.stream().map(String::strip).distinct().toList(),
+          maxTurns,
+          maxBudgetUsd,
+          timeoutMinutes);
+    }
+  }
+
+  /** Nombre de herramienta con un patrón opcional; las comas separan herramientas en el CLI. */
+  static final String TOOL = "^[A-Za-z][A-Za-z0-9_]*(\\([^(),\\n]*\\))?$";
+
+  static final String ENV_NAME = "^[A-Za-z_][A-Za-z0-9_]*$";
+
+  /**
+   * @param agentPolicy política efectiva de los agentes: la propia o, sin ella, la global
+   * @param agentPolicyCustom si el repositorio tiene política propia
+   */
   record RepositoryView(
       UUID id,
       UUID projectId,
@@ -67,8 +124,10 @@ class ProjectController {
       String defaultBranch,
       String validationCommand,
       List<String> testReportPaths,
+      AgentPolicy agentPolicy,
+      boolean agentPolicyCustom,
       Instant createdAt) {
-    static RepositoryView of(CodeRepository r) {
+    static RepositoryView of(CodeRepository r, AgentPolicy policy) {
       return new RepositoryView(
           r.getId(),
           r.getProjectId(),
@@ -78,8 +137,14 @@ class ProjectController {
           r.getDefaultBranch(),
           r.getValidationCommand(),
           r.getTestReportPaths(),
+          policy,
+          r.hasCustomAgentPolicy(),
           r.getCreatedAt());
     }
+  }
+
+  private RepositoryView view(CodeRepository repository) {
+    return RepositoryView.of(repository, service.agentPolicy(repository));
   }
 
   @PostMapping
@@ -106,7 +171,7 @@ class ProjectController {
         request.defaultBranch() == null || request.defaultBranch().isBlank()
             ? "main"
             : request.defaultBranch();
-    return RepositoryView.of(
+    return view(
         service.registerRepository(
             id,
             request.name(),
@@ -122,13 +187,27 @@ class ProjectController {
       @PathVariable UUID id,
       @PathVariable UUID repositoryId,
       @Valid @RequestBody VerificationSettings request) {
-    return RepositoryView.of(
+    return view(
         service.configureVerification(
             id, repositoryId, request.validationCommand(), request.testReportPaths()));
   }
 
+  @PutMapping("/{id}/repositories/{repositoryId}/agent-policy")
+  RepositoryView configureAgentPolicy(
+      @PathVariable UUID id,
+      @PathVariable UUID repositoryId,
+      @Valid @RequestBody AgentPolicySettings request) {
+    return view(service.configureAgentPolicy(id, repositoryId, request.policy()));
+  }
+
+  /** El repositorio vuelve a la política global de los agentes. */
+  @DeleteMapping("/{id}/repositories/{repositoryId}/agent-policy")
+  RepositoryView inheritAgentPolicy(@PathVariable UUID id, @PathVariable UUID repositoryId) {
+    return view(service.inheritAgentPolicy(id, repositoryId));
+  }
+
   @GetMapping("/{id}/repositories")
   List<RepositoryView> repositories(@PathVariable UUID id) {
-    return service.repositories(id).stream().map(RepositoryView::of).toList();
+    return service.repositories(id).stream().map(this::view).toList();
   }
 }

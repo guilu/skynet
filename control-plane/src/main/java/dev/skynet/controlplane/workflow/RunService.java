@@ -1,8 +1,11 @@
 package dev.skynet.controlplane.workflow;
 
+import dev.skynet.controlplane.project.AgentDefaults;
+import dev.skynet.controlplane.project.AgentPolicy;
 import dev.skynet.controlplane.project.CodeRepository;
 import dev.skynet.controlplane.project.ProjectService;
 import dev.skynet.controlplane.shared.ConflictException;
+import dev.skynet.controlplane.shared.InvalidRequestException;
 import dev.skynet.controlplane.shared.NotFoundException;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.controlplane.workitem.WorkItem;
@@ -13,7 +16,9 @@ import dev.skynet.protocol.WorkflowRunStatus;
 import dev.skynet.protocol.runner.AgentLimits;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.StartAgent;
+import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -80,7 +85,8 @@ public class RunService {
   /**
    * Lanza una ejecución {@code adhoc}: un workflow con una fase y un agente en cola. El agente
    * queda en {@code QUEUED} hasta que un runner reclame su orden de arranque. Los límites que
-   * falten (o todos, con {@code null}) se toman de {@link AgentDefaults}.
+   * falten (o todos, con {@code null}) se toman de la política del repositorio, y ninguno puede
+   * superar los suyos.
    */
   @Transactional
   public WorkflowRun launch(
@@ -94,7 +100,11 @@ public class RunService {
     return spawn(
         workItem,
         repository,
-        Invocation.fresh(AgentRunKind.START, null, promptText, withDefaults(limits)));
+        Invocation.fresh(
+            AgentRunKind.START,
+            null,
+            promptText,
+            withinPolicy(limits, projects.agentPolicy(repository))));
   }
 
   /**
@@ -135,10 +145,15 @@ public class RunService {
             .orElseThrow(
                 () -> new ConflictException("El agente " + agentRunId + " no tiene prompt"))
             .getContent();
+    CodeRepository repository = projects.getRepository(parent.getRepositoryId());
     return spawn(
         workItemOf(parent),
-        projects.getRepository(parent.getRepositoryId()),
-        Invocation.fresh(AgentRunKind.RETRY, parent, promptText, withDefaults(parent.limits())));
+        repository,
+        Invocation.fresh(
+            AgentRunKind.RETRY,
+            parent,
+            promptText,
+            cappedByPolicy(parent.limits(), projects.agentPolicy(repository))));
   }
 
   private WorkflowRun continueSession(UUID agentRunId, String text, boolean fork) {
@@ -167,15 +182,16 @@ public class RunService {
           "La sesión del agente " + parent.getId() + " no llegó a arrancar: no se puede continuar");
     }
     UUID sessionId = fork ? UUID.randomUUID() : UUID.fromString(parent.getProviderSessionId());
+    CodeRepository repository = projects.getRepository(parent.getRepositoryId());
     return spawn(
         workItemOf(parent),
-        projects.getRepository(parent.getRepositoryId()),
+        repository,
         new Invocation(
             fork ? AgentRunKind.FORK : AgentRunKind.RESUME,
             parent,
             sessionId,
             text,
-            withDefaults(parent.limits()),
+            cappedByPolicy(parent.limits(), projects.agentPolicy(repository)),
             fork ? null : workspace.id(),
             new ResumeFrom(
                 parent.getProviderSessionId(), fork, workspace.path(), workspace.branch()),
@@ -243,10 +259,15 @@ public class RunService {
     }
   }
 
-  /** Crea la ejecución {@code adhoc} con su fase y su agente en cola, y publica la orden. */
+  /**
+   * Crea la ejecución {@code adhoc} con su fase y su agente en cola, y publica la orden. Las
+   * herramientas, el modo de permisos y el entorno son los de la política actual del repositorio,
+   * también al continuar una sesión.
+   */
   private WorkflowRun spawn(WorkItem workItem, CodeRepository repository, Invocation invocation) {
     Instant now = time.now();
     AgentRun parent = invocation.parent();
+    AgentPolicy policy = projects.agentPolicy(repository);
 
     WorkflowRun run = WorkflowRun.create(workItem.getId(), adhocDefinitionId(), now);
     run.transitionTo(WorkflowRunStatus.RUNNING, now);
@@ -299,6 +320,15 @@ public class RunService {
     spawned.put("status", agent.getStatus());
     spawned.put("promptId", prompt.getId());
     spawned.put("promptSha256", prompt.getSha256());
+    spawned.put("allowedTools", policy.allowedTools());
+    spawned.put("permissionMode", policy.permissionMode());
+    Map<String, Object> limits = new LinkedHashMap<>();
+    limits.put("maxTurns", invocation.limits().maxTurns());
+    limits.put("maxBudgetUsd", invocation.limits().maxBudgetUsd());
+    limits.put(
+        "timeoutMinutes",
+        invocation.limits().timeout() == null ? null : invocation.limits().timeout().toMinutes());
+    spawned.put("limits", limits);
     if (parent != null) {
       spawned.put("parentAgentRunId", parent.getId());
     }
@@ -313,11 +343,12 @@ public class RunService {
                 repository.getDefaultBranch(),
                 invocation.sessionId(),
                 invocation.prompt(),
-                defaults.allowedTools(),
-                defaults.permissionMode(),
+                policy.allowedTools(),
+                policy.permissionMode(),
                 defaults.model(),
                 invocation.limits(),
-                invocation.resume()),
+                invocation.resume(),
+                policy.environment()),
             invocation.runnerId()));
     return run;
   }
@@ -635,12 +666,67 @@ public class RunService {
         .toList();
   }
 
-  private AgentLimits withDefaults(AgentLimits limits) {
+  /**
+   * Límites de un lanzamiento: los que falten se toman de la política; si alguno supera el máximo
+   * de la política, se rechaza.
+   */
+  private static AgentLimits withinPolicy(AgentLimits limits, AgentPolicy policy) {
     AgentLimits l = limits == null ? AgentLimits.none() : limits;
     return new AgentLimits(
-        l.maxTurns() != null ? l.maxTurns() : defaults.maxTurns(),
-        l.maxBudgetUsd() != null ? l.maxBudgetUsd() : defaults.maxBudgetUsd(),
-        l.timeout() != null ? l.timeout() : defaults.timeout());
+        within(l.maxTurns(), policy.maxTurns(), "Los turnos máximos", ""),
+        within(l.maxBudgetUsd(), policy.maxBudgetUsd(), "El presupuesto", " US$"),
+        l.timeout() == null
+            ? policy.timeout()
+            : Duration.ofMinutes(
+                within(
+                    Math.toIntExact(l.timeout().toMinutes()),
+                    policy.timeoutMinutes(),
+                    "El tiempo máximo",
+                    " min")));
+  }
+
+  private static <T extends Comparable<T>> T within(
+      T requested, T maximum, String what, String unit) {
+    if (requested == null) {
+      return maximum;
+    }
+    if (maximum != null && requested.compareTo(maximum) > 0) {
+      throw new InvalidRequestException(
+          what
+              + " ("
+              + plain(requested)
+              + unit
+              + ") supera el máximo del repositorio ("
+              + plain(maximum)
+              + unit
+              + ")");
+    }
+    return requested;
+  }
+
+  private static String plain(Object value) {
+    return value instanceof BigDecimal d
+        ? d.stripTrailingZeros().toPlainString()
+        : value.toString();
+  }
+
+  /**
+   * Límites al reintentar o continuar: los de la invocación de partida, rebajados a los de la
+   * política si esta se ha endurecido desde entonces.
+   */
+  private static AgentLimits cappedByPolicy(AgentLimits limits, AgentPolicy policy) {
+    AgentLimits l = limits == null ? AgentLimits.none() : limits;
+    return new AgentLimits(
+        min(l.maxTurns(), policy.maxTurns()),
+        min(l.maxBudgetUsd(), policy.maxBudgetUsd()),
+        min(l.timeout(), policy.timeout()));
+  }
+
+  private static <T extends Comparable<T>> T min(T value, T maximum) {
+    if (value == null || maximum == null) {
+      return value == null ? maximum : value;
+    }
+    return value.compareTo(maximum) <= 0 ? value : maximum;
   }
 
   private UUID adhocDefinitionId() {

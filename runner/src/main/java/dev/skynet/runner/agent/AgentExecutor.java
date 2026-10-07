@@ -11,6 +11,7 @@ import dev.skynet.runner.provider.ParsedEvent;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
 import dev.skynet.runner.provider.claude.ClaudeSessions;
 import dev.skynet.runner.provider.claude.ClaudeStreamParser;
+import dev.skynet.runner.provider.claude.CostEstimator;
 import dev.skynet.runner.supervisor.ProcessExit;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.supervisor.SupervisedProcess;
@@ -19,6 +20,8 @@ import dev.skynet.runner.workspace.GitIndexer;
 import dev.skynet.runner.workspace.Workspace;
 import dev.skynet.runner.workspace.WorkspaceManager;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -220,7 +223,18 @@ public final class AgentExecutor implements AutoCloseable {
     ready.put("baseCommit", workspace.baseCommit());
     emit(id, AgentEventType.WORKSPACE_READY, ready);
 
+    List<String> refused = provider.refusedEnvironment(start);
+    if (!refused.isEmpty()) {
+      LOG.warning(
+          () ->
+              "La invocación "
+                  + id
+                  + " pide variables que el runner no permite (SKYNET_AGENT_ENV): "
+                  + refused);
+    }
     ClaudeStreamParser parser = new ClaudeStreamParser();
+    BigDecimal budget = start.limits().maxBudgetUsd();
+    CostEstimator cost = provider.costEstimator();
     SupervisedProcess process;
     try {
       process =
@@ -229,9 +243,15 @@ public final class AgentExecutor implements AutoCloseable {
                   supervisor.start(
                       provider.command(start),
                       workspace.path(),
-                      provider.environment(runnerEnv),
+                      provider.environment(runnerEnv, start.environment()),
                       logs.resolve(id + ".ndjson"),
-                      line -> parser.parse(line).forEach(e -> emit(id, e))));
+                      line -> {
+                        parser.parse(line).forEach(e -> emit(id, e));
+                        cost.accept(line);
+                        if (budget != null && cost.estimatedUsd().compareTo(budget) > 0) {
+                          overBudget(id, execution);
+                        }
+                      }));
     } catch (IOException e) {
       finish(id, failure("No se pudo lanzar el agente: " + e.getMessage()));
       return;
@@ -269,6 +289,17 @@ public final class AgentExecutor implements AutoCloseable {
       payload.put(ERROR, "El runner se detuvo durante la ejecución");
     } else if (execution.timedOut && !execution.cancelled()) {
       payload.put(ERROR, "Se agotó el tiempo máximo (" + timeout + ")");
+    } else if (execution.overBudget && !execution.cancelled()) {
+      payload.put(
+          ERROR,
+          "Presupuesto agotado: el coste estimado ("
+              + usd(cost.estimatedUsd())
+              + ") supera el máximo de "
+              + usd(budget));
+    }
+    payload.put("estimatedCostUsd", cost.estimatedUsd().setScale(6, RoundingMode.HALF_UP));
+    if (!cost.unpricedModels().isEmpty()) {
+      payload.put("unpricedModels", List.copyOf(cost.unpricedModels()));
     }
     if (!parser.sawResult() && exit.exitCode() != 0 && !exit.stderrTail().isBlank()) {
       payload.put("stderr", exit.stderrTail());
@@ -571,11 +602,41 @@ public final class AgentExecutor implements AutoCloseable {
   }
 
   /** Estado de una invocación en curso. Lanzar y cancelar se excluyen mutuamente. */
+  /**
+   * El coste estimado pasa del presupuesto: termina el proceso una sola vez. {@code
+   * --max-budget-usd} solo se comprueba al final de cada turno, y un turno largo puede gastar mucho
+   * más.
+   */
+  private void overBudget(UUID id, Execution execution) {
+    SupervisedProcess process = execution.exceedBudget();
+    if (process != null) {
+      LOG.warning(() -> "La invocación " + id + " ha agotado su presupuesto: se termina");
+      pool.submit(() -> process.terminate(cancelGrace));
+    }
+  }
+
+  private static String usd(BigDecimal amount) {
+    return amount.setScale(4, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() + " US$";
+  }
+
   private static final class Execution {
     private SupervisedProcess process;
     private boolean cancelled;
     volatile boolean timedOut;
     volatile boolean stopping;
+    volatile boolean overBudget;
+
+    /**
+     * Marca la invocación como fuera de presupuesto y devuelve su proceso la primera vez; después,
+     * {@code null}.
+     */
+    synchronized SupervisedProcess exceedBudget() {
+      if (overBudget) {
+        return null;
+      }
+      overBudget = true;
+      return process;
+    }
 
     /** Lanza el proceso salvo que ya se haya cancelado; en ese caso devuelve {@code null}. */
     synchronized SupervisedProcess launch(Launcher launcher) throws IOException {

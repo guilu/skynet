@@ -27,10 +27,12 @@ export function WorkItemPage() {
   const [maxTurns, setMaxTurns] = useState('')
   const [maxBudgetUsd, setMaxBudgetUsd] = useState('')
   const [timeoutMinutes, setTimeoutMinutes] = useState('')
+  const repository = repos.data?.find((r) => r.id === repositoryId) ?? repos.data?.[0]
+  const policy = repository?.agentPolicy
   const launch = useMutation({
     mutationFn: () =>
       api.launchRun(workItemId, {
-        repositoryId: repositoryId || repos.data![0].id,
+        repositoryId: repository!.id,
         prompt,
         maxTurns: optionalNumber(maxTurns),
         maxBudgetUsd: optionalNumber(maxBudgetUsd),
@@ -98,25 +100,42 @@ export function WorkItemPage() {
               required
             />
           </label>
+          {policy && (
+            <p className="small muted">
+              Política {repository.agentPolicyCustom ? 'del repositorio' : 'global'}: herramientas{' '}
+              {policy.allowedTools.length > 0 ? (
+                <code>{policy.allowedTools.join(', ')}</code>
+              ) : (
+                'ninguna'
+              )}
+              , modo <code>{policy.permissionMode}</code>, entorno{' '}
+              {policy.environment === null
+                ? 'el que permite el runner'
+                : policy.environment.length > 0
+                  ? policy.environment.join(', ')
+                  : 'sin variables extra'}
+              .
+            </p>
+          )}
           <fieldset className="limits">
-            <legend>Límites (opcionales; vacío = valor por defecto del servidor)</legend>
+            <legend>Límites (opcionales; vacío = el máximo del repositorio)</legend>
             <label>
-              Turnos máximos
+              Turnos máximos{policy?.maxTurns != null && ` (hasta ${policy.maxTurns})`}
               <input
                 type="number"
                 min={1}
-                max={1000}
+                max={policy?.maxTurns ?? 1000}
                 step={1}
                 value={maxTurns}
                 onChange={(e) => setMaxTurns(e.target.value)}
               />
             </label>
             <label>
-              Presupuesto (US$)
+              Presupuesto (US$){policy?.maxBudgetUsd != null && ` (hasta ${policy.maxBudgetUsd})`}
               <input
                 type="number"
                 min={0.01}
-                max={1000}
+                max={policy?.maxBudgetUsd ?? 1000}
                 step={0.01}
                 value={maxBudgetUsd}
                 onChange={(e) => setMaxBudgetUsd(e.target.value)}
@@ -124,10 +143,11 @@ export function WorkItemPage() {
             </label>
             <label>
               Tiempo máximo (min)
+              {policy?.timeoutMinutes != null && ` (hasta ${policy.timeoutMinutes})`}
               <input
                 type="number"
                 min={1}
-                max={1440}
+                max={policy?.timeoutMinutes ?? 1440}
                 step={1}
                 value={timeoutMinutes}
                 onChange={(e) => setTimeoutMinutes(e.target.value)}

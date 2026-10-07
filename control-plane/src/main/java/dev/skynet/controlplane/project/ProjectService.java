@@ -21,18 +21,21 @@ public class ProjectService {
   private final EventStore events;
   private final TimeSource time;
   private final JdbcClient jdbc;
+  private final AgentDefaults agentDefaults;
 
   ProjectService(
       ProjectRepository projects,
       CodeRepositoryRepository repositories,
       EventStore events,
       TimeSource time,
-      JdbcClient jdbc) {
+      JdbcClient jdbc,
+      AgentDefaults agentDefaults) {
     this.projects = projects;
     this.repositories = repositories;
     this.events = events;
     this.time = time;
     this.jdbc = jdbc;
+    this.agentDefaults = agentDefaults;
   }
 
   @Transactional
@@ -90,10 +93,7 @@ public class ProjectService {
   @Transactional
   public CodeRepository configureVerification(
       UUID projectId, UUID repositoryId, String command, List<String> reportPaths) {
-    CodeRepository repository = getRepository(repositoryId);
-    if (!repository.getProjectId().equals(projectId)) {
-      throw new NotFoundException("Repositorio", repositoryId);
-    }
+    CodeRepository repository = repositoryOf(projectId, repositoryId);
     repository.configureVerification(command, reportPaths);
     repository = repositories.save(repository);
     Map<String, Object> payload = new LinkedHashMap<>();
@@ -107,6 +107,61 @@ public class ProjectService {
             null,
             payload,
             time.now()));
+    return repository;
+  }
+
+  /** Política efectiva de los agentes del repositorio: la suya o, si no tiene, la global. */
+  public AgentPolicy agentPolicy(CodeRepository repository) {
+    return repository.customAgentPolicy().orElseGet(() -> AgentPolicy.of(agentDefaults));
+  }
+
+  /** Da al repositorio una política propia para sus agentes. */
+  @Transactional
+  public CodeRepository configureAgentPolicy(
+      UUID projectId, UUID repositoryId, AgentPolicy policy) {
+    CodeRepository repository = repositoryOf(projectId, repositoryId);
+    repository.configureAgentPolicy(policy);
+    repository = repositories.save(repository);
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("allowedTools", policy.allowedTools());
+    payload.put("permissionMode", policy.permissionMode());
+    payload.put("environment", policy.environment());
+    payload.put("maxTurns", policy.maxTurns());
+    payload.put("maxBudgetUsd", policy.maxBudgetUsd());
+    payload.put("timeoutMinutes", policy.timeoutMinutes());
+    events.append(
+        EventDraft.of(
+            "repository",
+            repository.getId(),
+            "repository.agent-policy.configured",
+            null,
+            payload,
+            time.now()));
+    return repository;
+  }
+
+  /** El repositorio vuelve a la política global de los agentes. */
+  @Transactional
+  public CodeRepository inheritAgentPolicy(UUID projectId, UUID repositoryId) {
+    CodeRepository repository = repositoryOf(projectId, repositoryId);
+    repository.inheritAgentPolicy();
+    repository = repositories.save(repository);
+    events.append(
+        EventDraft.of(
+            "repository",
+            repository.getId(),
+            "repository.agent-policy.reset",
+            null,
+            Map.of(),
+            time.now()));
+    return repository;
+  }
+
+  private CodeRepository repositoryOf(UUID projectId, UUID repositoryId) {
+    CodeRepository repository = getRepository(repositoryId);
+    if (!repository.getProjectId().equals(projectId)) {
+      throw new NotFoundException("Repositorio", repositoryId);
+    }
     return repository;
   }
 

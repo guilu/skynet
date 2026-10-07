@@ -1,8 +1,8 @@
-package dev.skynet.controlplane.workflow;
+package dev.skynet.controlplane.project;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({MonitoringProperties.class, VerificationProperties.class})
-class WorkflowConfiguration {}
+@EnableConfigurationProperties(AgentDefaults.class)
+class ProjectConfiguration {}

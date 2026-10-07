@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
-import { api, WORK_ITEM_TYPES, type Repository, type WorkItemType } from '../api'
+import {
+  api,
+  PERMISSION_MODES,
+  WORK_ITEM_TYPES,
+  type PermissionMode,
+  type Repository,
+  type WorkItemType,
+} from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { StatusBadge } from '../components/StatusBadge'
 
@@ -79,6 +86,7 @@ function Repositories({ projectId }: { projectId: string }) {
             <strong>{r.name}</strong> <code>{r.localPath}</code>{' '}
             <span className="muted">({r.defaultBranch})</span>
             <VerificationSettings projectId={projectId} repository={r} />
+            <AgentPolicySettings projectId={projectId} repository={r} />
           </li>
         ))}
       </ul>
@@ -200,6 +208,161 @@ function VerificationSettings({
           </span>
         )}
         <ErrorMessage error={save.error} />
+      </form>
+    </details>
+  )
+}
+
+/** Una entrada por línea, sin vacías. */
+function lines(text: string): string[] {
+  return text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+}
+
+/**
+ * Qué pueden usar y gastar los agentes del repositorio. Sin política propia se usa la global del
+ * servidor, que es también el punto de partida del formulario.
+ */
+function AgentPolicySettings({
+  projectId,
+  repository,
+}: {
+  projectId: string
+  repository: Repository
+}) {
+  const queryClient = useQueryClient()
+  const policy = repository.agentPolicy
+  const [tools, setTools] = useState(policy.allowedTools.join('\n'))
+  const [mode, setMode] = useState<PermissionMode>(policy.permissionMode)
+  const [allEnv, setAllEnv] = useState(policy.environment === null)
+  const [env, setEnv] = useState((policy.environment ?? []).join('\n'))
+  const [maxTurns, setMaxTurns] = useState(policy.maxTurns?.toString() ?? '')
+  const [maxBudgetUsd, setMaxBudgetUsd] = useState(policy.maxBudgetUsd?.toString() ?? '')
+  const [timeoutMinutes, setTimeoutMinutes] = useState(policy.timeoutMinutes?.toString() ?? '')
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['repositories', projectId] })
+  const save = useMutation({
+    mutationFn: () =>
+      api.configureAgentPolicy(projectId, repository.id, {
+        allowedTools: lines(tools),
+        permissionMode: mode,
+        environment: allEnv ? null : lines(env),
+        maxTurns: maxTurns.trim() === '' ? null : Number(maxTurns),
+        maxBudgetUsd: Number(maxBudgetUsd),
+        timeoutMinutes: Number(timeoutMinutes),
+      }),
+    onSuccess: () => void refresh(),
+  })
+  const inherit = useMutation({
+    mutationFn: () => api.inheritAgentPolicy(projectId, repository.id),
+    onSuccess: (updated) => {
+      const p = updated.agentPolicy
+      setTools(p.allowedTools.join('\n'))
+      setMode(p.permissionMode)
+      setAllEnv(p.environment === null)
+      setEnv((p.environment ?? []).join('\n'))
+      setMaxTurns(p.maxTurns?.toString() ?? '')
+      setMaxBudgetUsd(p.maxBudgetUsd?.toString() ?? '')
+      setTimeoutMinutes(p.timeoutMinutes?.toString() ?? '')
+      void refresh()
+    },
+  })
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    save.mutate()
+  }
+
+  return (
+    <details className="small">
+      <summary>
+        Política de agentes: {repository.agentPolicyCustom ? 'propia' : 'global'} ·{' '}
+        <code>{policy.permissionMode}</code> ·{' '}
+        {policy.allowedTools.join(', ') || 'sin herramientas'}
+      </summary>
+      <form className="form" onSubmit={submit}>
+        <label>
+          Herramientas permitidas, una por línea (p. ej. <code>Bash(git:*)</code> en vez de{' '}
+          <code>Bash</code>)
+          <textarea value={tools} onChange={(e) => setTools(e.target.value)} rows={4} />
+        </label>
+        <label>
+          Modo de permisos
+          <select value={mode} onChange={(e) => setMode(e.target.value as PermissionMode)}>
+            {PERMISSION_MODES.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={allEnv} onChange={(e) => setAllEnv(e.target.checked)} />
+          El agente recibe todas las variables que permite el runner (<code>SKYNET_AGENT_ENV</code>)
+        </label>
+        {!allEnv && (
+          <label>
+            Variables de entorno que recibe, una por línea (solo llegan las que el runner permite)
+            <textarea value={env} onChange={(e) => setEnv(e.target.value)} rows={2} />
+          </label>
+        )}
+        <fieldset className="limits">
+          <legend>Máximos de cada lanzamiento (al lanzar se pueden bajar, no subir)</legend>
+          <label>
+            Turnos (vacío: sin límite)
+            <input
+              type="number"
+              min={1}
+              max={1000}
+              step={1}
+              value={maxTurns}
+              onChange={(e) => setMaxTurns(e.target.value)}
+            />
+          </label>
+          <label>
+            Presupuesto (US$)
+            <input
+              type="number"
+              min={0.01}
+              max={1000}
+              step={0.01}
+              value={maxBudgetUsd}
+              onChange={(e) => setMaxBudgetUsd(e.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Tiempo (min)
+            <input
+              type="number"
+              min={1}
+              max={1440}
+              step={1}
+              value={timeoutMinutes}
+              onChange={(e) => setTimeoutMinutes(e.target.value)}
+              required
+            />
+          </label>
+        </fieldset>
+        <button type="submit" disabled={save.isPending}>
+          Guardar política
+        </button>
+        {repository.agentPolicyCustom && (
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => inherit.mutate()}
+            disabled={inherit.isPending}
+          >
+            Volver a la política global
+          </button>
+        )}
+        {(save.isSuccess || inherit.isSuccess) && (
+          <span role="status" className="small">
+            Guardado.
+          </span>
+        )}
+        <ErrorMessage error={save.error ?? inherit.error} />
       </form>
     </details>
   )
