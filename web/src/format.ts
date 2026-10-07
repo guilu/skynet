@@ -27,6 +27,8 @@ const STATUS_LABELS: Record<string, string> = {
   CLOSED: 'Cerrado',
   ONLINE: 'En línea',
   STALE: 'Sin latido',
+  PASSED: 'Pasa',
+  ERROR: 'Error',
 }
 
 export const statusLabel = (status: string) => STATUS_LABELS[status] ?? status
@@ -34,8 +36,8 @@ export const statusLabel = (status: string) => STATUS_LABELS[status] ?? status
 export type StatusTone = 'neutral' | 'active' | 'ok' | 'bad' | 'warn'
 
 export function statusTone(status: string): StatusTone {
-  if (['SUCCEEDED', 'COMPLETED', 'ONLINE'].includes(status)) return 'ok'
-  if (['FAILED'].includes(status)) return 'bad'
+  if (['SUCCEEDED', 'COMPLETED', 'ONLINE', 'PASSED'].includes(status)) return 'ok'
+  if (['FAILED', 'ERROR'].includes(status)) return 'bad'
   if (['WAITING_FOR_INPUT', 'WAITING_FOR_APPROVAL', 'UNRESPONSIVE', 'STALE'].includes(status))
     return 'warn'
   if (['RUNNING', 'STARTING', 'THINKING', 'EXECUTING'].includes(status)) return 'active'
@@ -116,6 +118,20 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return payload.error
         ? `Proceso terminado: ${p('error')}`
         : `Proceso terminado (código ${p('exitCode')}${payload.signal ? `, ${p('signal')}` : ''})`
+    case 'repository.verification.configured':
+      return payload.validationCommand
+        ? `Verificación configurada: ${truncate(p('validationCommand'), 100)}`
+        : 'Verificación desactivada'
+    case 'verification.queued':
+      return `Verificación ${p('trigger') === 'MANUAL' ? 'manual' : 'automática'} en cola`
+    case 'agent.verification.started':
+      return `Verificación iniciada: ${truncate(p('command'), 100)}`
+    case 'agent.verification.completed':
+      return describeVerification(payload)
+    case 'artifact.created':
+      return `Artefacto ${p('name')} (${formatBytes(Number(payload.size ?? 0))})${
+        payload.truncated ? ', recortado' : ''
+      }`
     case 'agent.status.changed':
     case 'stage.status.changed':
     case 'workflow.status.changed':
@@ -123,6 +139,28 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
     default:
       return type
   }
+}
+
+function describeVerification(payload: Record<string, unknown>): string {
+  if (payload.error) return `Verificación sin completar: ${String(payload.error)}`
+  const tests = payload.tests as { total?: number; failed?: number; errors?: number } | undefined
+  const summary = tests
+    ? ` · ${tests.total ?? 0} tests, ${(tests.failed ?? 0) + (tests.errors ?? 0)} fallidos`
+    : ''
+  return `Verificación terminada (código ${String(payload.exitCode ?? '?')})${summary}`
+}
+
+/** Tamaño legible: «512 B», «3,4 KB», «12,1 MB». */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KB', 'MB', 'GB']
+  let value = bytes / 1024
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit++
+  }
+  return `${value.toLocaleString('es-ES', { maximumFractionDigits: 1 })} ${units[unit]}`
 }
 
 export const formatCost = (usd: number | null) =>

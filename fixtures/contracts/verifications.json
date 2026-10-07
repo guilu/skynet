@@ -1,0 +1,20 @@
+[ {
+  "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0f",
+  "agentRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a06",
+  "trigger" : "AUTO",
+  "status" : "FAILED",
+  "command" : "./gradlew test",
+  "exitCode" : 1,
+  "signal" : null,
+  "error" : null,
+  "tests" : {
+    "total" : 12,
+    "failed" : 1,
+    "errors" : 0,
+    "skipped" : 2
+  },
+  "createdAt" : "2026-10-05T09:00:43Z",
+  "startedAt" : "2026-10-05T09:00:44Z",
+  "finishedAt" : "2026-10-05T09:00:58Z",
+  "live" : false
+} ]

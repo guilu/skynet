@@ -88,6 +88,8 @@ public class AgentEventIngestion {
       if (!verifications.belongsTo(verificationRunId, agent.getId())) {
         return Outcome.UNKNOWN_VERIFICATION_RUN;
       }
+      // El agregado es la verificación: el agente va en el payload, como en verification.queued.
+      payload.put("agentRunId", agent.getId());
     }
     boolean isNew =
         events
