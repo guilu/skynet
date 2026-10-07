@@ -2,6 +2,7 @@ package dev.skynet.runner.agent;
 
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.runner.ArtifactType;
+import dev.skynet.protocol.runner.CleanupWorkspace;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
@@ -122,6 +123,66 @@ public final class AgentExecutor implements AutoCloseable {
       return;
     }
     pool.submit(() -> runVerification(command.agentRunId(), verification));
+  }
+
+  /**
+   * Elimina el worktree de un agente que ya terminó (retención o petición desde la web). Siempre
+   * responde con un evento {@code agent.workspace.removed}; con {@code error} si no se pudo.
+   */
+  public void cleanup(RunnerCommand command) {
+    pool.submit(() -> runCleanup(command.agentRunId(), command.id(), command.cleanup()));
+  }
+
+  private void runCleanup(UUID agentRunId, UUID commandId, CleanupWorkspace cleanup) {
+    Path path = Path.of(cleanup.workspacePath()).toAbsolutePath().normalize();
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("workspaceId", cleanup.workspaceId().toString());
+    payload.put("path", cleanup.workspacePath());
+    if (busyWorkspaces.putIfAbsent(path, commandId) != null) {
+      payload.put(ERROR, "Hay una invocación en curso en el worktree " + path);
+    } else {
+      try {
+        workspaces.remove(path);
+      } catch (IOException e) {
+        payload.put(ERROR, "No se pudo eliminar el worktree: " + e.getMessage());
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        payload.put(ERROR, "El runner se detuvo mientras eliminaba el worktree");
+      } finally {
+        busyWorkspaces.remove(path, commandId);
+      }
+    }
+    emit(agentRunId, AgentEventType.WORKSPACE_REMOVED, payload);
+  }
+
+  /**
+   * Borra los logs locales (NDJSON del agente y salida de las verificaciones) modificados hace más
+   * de {@code retention}. Para entonces ya están subidos como artefactos: el spool guarda su propia
+   * copia. Los de las invocaciones en curso no se tocan. Devuelve cuántos borró.
+   */
+  public int purgeLogs(Duration retention) {
+    if (!Files.isDirectory(logs)) {
+      return 0;
+    }
+    Instant cutoff = Instant.now().minus(retention);
+    List<String> active = running().stream().map(UUID::toString).toList();
+    int deleted = 0;
+    try (var files = Files.list(logs)) {
+      for (Path file : files.toList()) {
+        String name = file.getFileName().toString();
+        if (!Files.isRegularFile(file)
+            || active.stream().anyMatch(name::startsWith)
+            || Files.getLastModifiedTime(file).toInstant().isAfter(cutoff)) {
+          continue;
+        }
+        if (Files.deleteIfExists(file)) {
+          deleted++;
+        }
+      }
+    } catch (IOException e) {
+      LOG.log(Level.WARNING, e, () -> "No se pudieron limpiar los logs de " + logs);
+    }
+    return deleted;
   }
 
   /**
@@ -601,7 +662,6 @@ public final class AgentExecutor implements AutoCloseable {
     timer.shutdownNow();
   }
 
-  /** Estado de una invocación en curso. Lanzar y cancelar se excluyen mutuamente. */
   /**
    * El coste estimado pasa del presupuesto: termina el proceso una sola vez. {@code
    * --max-budget-usd} solo se comprueba al final de cada turno, y un turno largo puede gastar mucho
@@ -619,6 +679,7 @@ public final class AgentExecutor implements AutoCloseable {
     return amount.setScale(4, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() + " US$";
   }
 
+  /** Estado de una invocación en curso. Lanzar y cancelar se excluyen mutuamente. */
   private static final class Execution {
     private SupervisedProcess process;
     private boolean cancelled;

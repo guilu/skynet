@@ -6,6 +6,7 @@ import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.runner.AgentLimits;
 import dev.skynet.protocol.runner.ArtifactType;
+import dev.skynet.protocol.runner.CleanupWorkspace;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
@@ -124,6 +125,74 @@ class AgentExecutorTest {
     assertThat(dir.resolve("logs").resolve(id + ".ndjson")).isNotEmptyFile();
     assertThat(journal.processes()).isEmpty();
     assertThat(executor.running()).isEmpty();
+  }
+
+  @Test
+  void cleanupRemovesTheWorktreeAndKeepsItsBranch() throws Exception {
+    UUID id = UUID.randomUUID();
+    executor("01-simple-text").start(TestAgents.start(id, repo.toString(), null));
+    awaitExit(id);
+    Map<String, Object> ready = eventsOf(id).getFirst().payload();
+    Path worktree = Path.of((String) ready.get("path"));
+    UUID workspaceId = UUID.randomUUID();
+
+    executor.cleanup(
+        RunnerCommand.cleanup(
+            UUID.randomUUID(),
+            id,
+            Instant.now(),
+            new CleanupWorkspace(workspaceId, worktree.toString())));
+    NormalizedEvent removed = awaitEvent(id, AgentEventType.WORKSPACE_REMOVED);
+
+    assertThat(removed.payload())
+        .containsEntry("workspaceId", workspaceId.toString())
+        .containsEntry("path", worktree.toString())
+        .doesNotContainKey("error");
+    assertThat(worktree).doesNotExist();
+    assertThat(TestRepos.git(repo, "branch", "--list", (String) ready.get("branch")))
+        .contains((String) ready.get("branch"));
+  }
+
+  @Test
+  void cleanupOutsideTheWorkspacesRootReportsAnError() throws Exception {
+    UUID id = UUID.randomUUID();
+    executor("01-simple-text")
+        .cleanup(
+            RunnerCommand.cleanup(
+                UUID.randomUUID(),
+                id,
+                Instant.now(),
+                new CleanupWorkspace(UUID.randomUUID(), repo.toString())));
+
+    assertThat(awaitEvent(id, AgentEventType.WORKSPACE_REMOVED).payload())
+        .hasEntrySatisfying("error", e -> assertThat((String) e).contains("no es de este runner"));
+    assertThat(repo.resolve("calc.py")).exists();
+  }
+
+  @Test
+  void purgeLogsDeletesOnlyOldLogs() throws Exception {
+    Path logs = Files.createDirectories(dir.resolve("logs"));
+    Path old = Files.writeString(logs.resolve(UUID.randomUUID() + ".ndjson"), "{}");
+    Files.setLastModifiedTime(
+        old, java.nio.file.attribute.FileTime.from(Instant.now().minus(Duration.ofDays(8))));
+    Path recent = Files.writeString(logs.resolve(UUID.randomUUID() + ".ndjson"), "{}");
+
+    assertThat(executor("01-simple-text").purgeLogs(Duration.ofDays(7))).isEqualTo(1);
+    assertThat(old).doesNotExist();
+    assertThat(recent).exists();
+  }
+
+  private NormalizedEvent awaitEvent(UUID agentRunId, AgentEventType type)
+      throws InterruptedException {
+    long deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos();
+    while (System.nanoTime() < deadline) {
+      var found = eventsOf(agentRunId).stream().filter(e -> e.type() == type).findFirst();
+      if (found.isPresent()) {
+        return found.get();
+      }
+      Thread.sleep(50);
+    }
+    throw new AssertionError("No llegó " + type + ": " + eventsOf(agentRunId));
   }
 
   @Test

@@ -49,6 +49,11 @@ public enum AgentEventType {
    * informes JUnit, y {@code error} si el comando no se pudo ejecutar o se agotó su tiempo.
    */
   VERIFICATION_COMPLETED("agent.verification.completed"),
+  /**
+   * Resultado de una orden {@code CLEANUP}: {@code workspaceId}, {@code path} y, si no se pudo
+   * eliminar, {@code error}. No cambia el estado del agente.
+   */
+  WORKSPACE_REMOVED("agent.workspace.removed"),
   /** Línea que el adaptador no reconoce; se conserva para no perder información. */
   RAW("agent.raw");
 

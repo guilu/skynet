@@ -73,6 +73,9 @@ const WORKSPACE: Keys<Workspace> = {
   path: true,
   branch: true,
   baseCommit: true,
+  cleanupRequestedAt: true,
+  cleanupError: true,
+  removedAt: true,
 }
 const CONVERSATION: Keys<Conversation> = { turns: true }
 const CONVERSATION_TURN: Keys<ConversationTurn> = {

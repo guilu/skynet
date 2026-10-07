@@ -29,9 +29,11 @@ class RunController {
   private static final int MAX_PAGE = 200;
 
   private final RunService service;
+  private final WorkspaceCleanup cleanup;
 
-  RunController(RunService service) {
+  RunController(RunService service, WorkspaceCleanup cleanup) {
     this.service = service;
+    this.cleanup = cleanup;
   }
 
   /**
@@ -124,6 +126,14 @@ class RunController {
   @PostMapping("/api/agent-runs/{id}/cancel")
   AgentRunDetail cancel(@PathVariable UUID id) {
     service.cancelAgent(id);
+    return service.agent(id);
+  }
+
+  /** Pide al runner eliminar el worktree del agente; la rama se conserva. */
+  @PostMapping("/api/agent-runs/{id}/workspace/cleanup")
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  AgentRunDetail cleanupWorkspace(@PathVariable UUID id) {
+    cleanup.request(id);
     return service.agent(id);
   }
 }

@@ -20,6 +20,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.HttpClientErrorException;
@@ -676,6 +677,148 @@ class RunnerProtocolIT extends IntegrationTest {
     assertThat(poll(runner, 0)).isEmpty();
   }
 
+  // --- M6-C: invocaciones perdidas y limpieza de worktrees ---
+
+  @Test
+  void anAgentTheRunnerStopsReportingFailsAfterTwoHeartbeats() {
+    Runner runner = register("laptop", 2);
+    Launched acked = launch("confirmado");
+    Launched unacked = launch("sin confirmar");
+    List<JsonNode> starts = poll(runner, 0);
+    ack(runner, starts.getFirst());
+
+    heartbeat(runner, List.of(acked.agentId()));
+    heartbeat(runner, List.of());
+    assertThat(agent(acked).path("status").asString()).isEqualTo("STARTING");
+    // Declararlo otra vez pone la cuenta a cero.
+    heartbeat(runner, List.of(acked.agentId()));
+    heartbeat(runner, List.of());
+    assertThat(agent(acked).path("status").asString()).isEqualTo("STARTING");
+
+    heartbeat(runner, List.of());
+    JsonNode lost = agent(acked);
+    assertThat(lost.path("status").asString()).isEqualTo("FAILED");
+    assertThat(lost.path("error").asString()).isEqualTo("El proceso ya no existe en el runner");
+    assertThat(get("/api/workflow-runs/" + acked.runId()).path("status").asString())
+        .isEqualTo("FAILED");
+    // Una orden entregada y sin confirmar se reentrega; no se da por perdida.
+    assertThat(agent(unacked).path("status").asString()).isEqualTo("STARTING");
+    // Si el fin llega después, se registra sin cambiar nada.
+    Events events = new Events(acked.agentId());
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 0));
+    send(runner, events.batch());
+    assertThat(agent(acked).path("status").asString()).isEqualTo("FAILED");
+  }
+
+  @Test
+  void removingAWorktreeKeepsItsRecordAndBlocksResumeForkAndVerify() {
+    Runner runner = register("laptop", 1);
+    Launched run = launch("Arregla add()");
+    JsonNode start = poll(runner, 0).getFirst();
+    ack(runner, start);
+    completed(
+        runner, run.agentId(), start.path("start").path("sessionId").asString(), "/w/a1", "0.01");
+    String workspaceId = agent(run).path("workspace").path("id").asString();
+
+    post("/api/agent-runs/" + run.agentId() + "/workspace/cleanup", Map.of());
+    assertThat(agent(run).path("workspace").path("cleanupRequestedAt").isNull()).isFalse();
+    // Mientras se elimina no se puede escribir en él, y pedirlo otra vez no repite la orden.
+    assertStatus(HttpStatus.CONFLICT, () -> continueWith(run.agentId(), "messages", "sigue"));
+    post("/api/agent-runs/" + run.agentId() + "/workspace/cleanup", Map.of());
+    List<JsonNode> commands = poll(runner, 0);
+    assertThat(commands).hasSize(1);
+    JsonNode cleanup = commands.getFirst();
+    assertThat(cleanup.path("type").asString()).isEqualTo("CLEANUP");
+    assertThat(cleanup.path("agentRunId").asString()).isEqualTo(run.agentId().toString());
+    assertThat(cleanup.path("cleanup").path("workspaceId").asString()).isEqualTo(workspaceId);
+    assertThat(cleanup.path("cleanup").path("workspacePath").asString()).isEqualTo("/w/a1");
+    ack(runner, cleanup);
+
+    // Un fallo lo deja como estaba, con el motivo a la vista.
+    Events events = new Events(run.agentId());
+    events.add(
+        AgentEventType.WORKSPACE_REMOVED,
+        Map.of("workspaceId", workspaceId, "path", "/w/a1", "error", "disco de solo lectura"));
+    send(runner, events.batch());
+    JsonNode workspace = agent(run).path("workspace");
+    assertThat(workspace.path("cleanupError").asString()).isEqualTo("disco de solo lectura");
+    assertThat(workspace.path("cleanupRequestedAt").isNull()).isTrue();
+    assertThat(workspace.path("removedAt").isNull()).isTrue();
+
+    post("/api/agent-runs/" + run.agentId() + "/workspace/cleanup", Map.of());
+    ack(runner, poll(runner, 0).getFirst());
+    events = new Events(run.agentId());
+    events.add(
+        AgentEventType.WORKSPACE_REMOVED, Map.of("workspaceId", workspaceId, "path", "/w/a1"));
+    send(runner, events.batch());
+    workspace = agent(run).path("workspace");
+    assertThat(workspace.path("removedAt").isNull()).isFalse();
+    assertThat(workspace.path("cleanupError").isNull()).isTrue();
+    assertThat(workspace.path("branch").asString()).isEqualTo("skynet/run-1/a1");
+
+    assertStatus(HttpStatus.CONFLICT, () -> continueWith(run.agentId(), "messages", "sigue"));
+    assertStatus(HttpStatus.CONFLICT, () -> continueWith(run.agentId(), "fork", "otra"));
+    assertStatus(
+        HttpStatus.CONFLICT,
+        () -> post("/api/agent-runs/" + run.agentId() + "/verifications", Map.of()));
+    // Un reintento empieza en un worktree nuevo: sigue siendo posible.
+    post("/api/agent-runs/" + run.agentId() + "/retry", Map.of());
+    assertThat(eventTypesOf("agent_run"))
+        .contains("agent.workspace.cleanup.requested", "agent.workspace.removed");
+  }
+
+  @Test
+  void aWorktreeInUseCannotBeRemoved() {
+    Runner runner = register("laptop", 1);
+    Launched run = launch("en curso");
+    ack(runner, poll(runner, 0).getFirst());
+    Events events = new Events(run.agentId());
+    events.add(
+        AgentEventType.WORKSPACE_READY,
+        Map.of("path", "/w/b1", "branch", "skynet/run-1/b1", "baseCommit", "abc"));
+    send(runner, events.batch());
+
+    assertStatus(
+        HttpStatus.CONFLICT,
+        () -> post("/api/agent-runs/" + run.agentId() + "/workspace/cleanup", Map.of()));
+  }
+
+  @Autowired dev.skynet.controlplane.workflow.WorkspaceCleanup cleanup;
+
+  @Test
+  void retentionRemovesWorktreesIdleForLongerThanItsPeriod() {
+    Runner runner = register("laptop", 2);
+    Launched old = launch("antiguo");
+    JsonNode start = poll(runner, 0).getFirst();
+    ack(runner, start);
+    completed(
+        runner, old.agentId(), start.path("start").path("sessionId").asString(), "/w/old", "0.01");
+    Launched recent = launch("reciente");
+    start = poll(runner, 0).getFirst();
+    ack(runner, start);
+    completed(
+        runner,
+        recent.agentId(),
+        start.path("start").path("sessionId").asString(),
+        "/w/new",
+        "0.01");
+    Instant longAgo = Instant.now().minus(Duration.ofDays(8));
+    jdbc.sql("UPDATE workspace SET created_at = ? WHERE path = '/w/old'")
+        .param(java.sql.Timestamp.from(longAgo))
+        .update();
+    jdbc.sql("UPDATE agent_run SET finished_at = ? WHERE id = ?")
+        .params(java.sql.Timestamp.from(longAgo), old.agentId())
+        .update();
+
+    assertThat(cleanup.expire()).isEqualTo(1);
+    assertThat(cleanup.expire()).isZero();
+
+    List<JsonNode> commands = poll(runner, 0);
+    assertThat(commands).hasSize(1);
+    assertThat(commands.getFirst().path("cleanup").path("workspacePath").asString())
+        .isEqualTo("/w/old");
+  }
+
   /** Recorre una invocación completa: worktree, sesión, un mensaje, resultado y salida limpia. */
   private void completed(
       Runner runner, UUID agentRunId, String session, String worktree, String cumulativeCost) {
@@ -799,10 +942,14 @@ class RunnerProtocolIT extends IntegrationTest {
   }
 
   private void heartbeat(Runner runner) {
+    heartbeat(runner, List.of());
+  }
+
+  private void heartbeat(Runner runner, List<UUID> running) {
     http.post()
         .uri("/api/runner/heartbeat")
         .header(HttpHeaders.AUTHORIZATION, "Bearer " + runner.token())
-        .body(new RunnerHeartbeat(1, List.of()))
+        .body(new RunnerHeartbeat(1, running))
         .retrieve()
         .toBodilessEntity();
   }

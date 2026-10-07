@@ -181,7 +181,10 @@ class ContractIT extends IntegrationTest {
           RUNNER,
           "/home/dev/.skynet/worktrees/" + RUN + "/" + AGENT,
           "skynet/tkm-1/0b6a3c1e",
-          "9f2c1d07a4e3b1c5d6e7f8091a2b3c4d5e6f7a8b");
+          "9f2c1d07a4e3b1c5d6e7f8091a2b3c4d5e6f7a8b",
+          null,
+          null,
+          null);
     }
 
     /** Reanudación de {@link #completedAgent()}: misma sesión y worktree, en otra ejecución. */

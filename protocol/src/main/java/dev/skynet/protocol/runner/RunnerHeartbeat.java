@@ -7,7 +7,9 @@ import java.util.UUID;
  * Latido periódico de un runner ({@code POST /api/runner/heartbeat}).
  *
  * @param capacity capacidad total
- * @param runningAgentRunIds invocaciones con proceso vivo; permite al control plane reconciliar
+ * @param runningAgentRunIds invocaciones que el runner sigue ejecutando o de las que aún tiene
+ *     eventos sin enviar; el control plane da por perdidas las demás que crea en curso en este
+ *     runner
  */
 public record RunnerHeartbeat(int capacity, List<UUID> runningAgentRunIds) {
 

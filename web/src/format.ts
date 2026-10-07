@@ -56,6 +56,11 @@ export const TONE_ICONS: Record<StatusTone, string> = {
 const TERMINAL = ['SUCCEEDED', 'COMPLETED', 'FAILED', 'CANCELLED', 'SKIPPED']
 export const isTerminal = (status: string) => TERMINAL.includes(status)
 
+/** Worktree en el que aún se puede trabajar: preparado, sin eliminar y sin eliminación pedida. */
+export const workspaceUsable = (
+  workspace: { removedAt: string | null; cleanupRequestedAt: string | null } | null,
+) => workspace != null && !workspace.removedAt && !workspace.cleanupRequestedAt
+
 /** Duración legible: «45 s», «3 min 05 s», «1 h 02 min». */
 export function formatDuration(ms: number | null): string {
   if (ms == null || ms < 0) return '—'
@@ -92,6 +97,14 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `Agente ${p('provider')} en cola`
     case 'agent.workspace.ready':
       return `Worktree listo en la rama ${p('branch')}`
+    case 'agent.workspace.cleanup.requested':
+      return `Eliminación del worktree pedida (${
+        payload.trigger === 'retention' ? 'retención' : 'desde la web'
+      })`
+    case 'agent.workspace.removed':
+      return payload.error
+        ? `No se pudo eliminar el worktree: ${p('error')}`
+        : `Worktree eliminado (${p('path')})`
     case 'agent.session.started':
       return `Sesión iniciada${payload.model ? ` con ${p('model')}` : ''}`
     case 'agent.message.received':

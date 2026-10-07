@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
+import { resolve } from 'node:path'
 import { startCuttableProxy } from './cuttableProxy.ts'
 
 /**
@@ -223,6 +224,76 @@ test('cancelar a mitad deja el agente cancelado y ningún proceso vivo', async (
   await expect(header.getByRole('heading', { level: 1 }).getByText('Cancelada')).toBeVisible({
     timeout: 30_000,
   })
+  await expect.poll(fakeClaudeProcesses, { timeout: 10_000 }).toHaveLength(0)
+})
+
+/** Para o arranca el control plane o el runner de las E2E (scripts/e2e-service.sh). */
+function service(action: 'start' | 'stop' | 'kill', name: 'control-plane' | 'runner') {
+  execFileSync(resolve(import.meta.dirname, '../../scripts/e2e-service.sh'), [action, name], {
+    stdio: 'ignore',
+    timeout: 120_000,
+  })
+}
+
+/** Abre la ejecución y espera a que el agente esté usando herramientas. */
+async function openWhileRunning(page: Page, runId: string) {
+  await page.goto(`/runs/${runId}`)
+  await expect(
+    page
+      .getByRole('region', { name: 'Timeline' })
+      .getByRole('button', { name: /Read: / })
+      .first(),
+  ).toBeVisible({ timeout: 45_000 })
+}
+
+test('reiniciar el control plane a mitad no interrumpe la ejecución', async ({ page }) => {
+  test.setTimeout(240_000)
+  await page.goto('/')
+  await login(page)
+  await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible()
+  const runId = await launchViaApi(page, 'Sigue aunque se reinicie el control plane')
+  await openWhileRunning(page, runId)
+
+  try {
+    service('stop', 'control-plane')
+  } finally {
+    service('start', 'control-plane')
+  }
+
+  // Las sesiones de la web eran del proceso anterior: hay que volver a entrar.
+  await page.goto(`/runs/${runId}`)
+  await login(page)
+  const header = page.locator('header.run-header')
+  await expect(header.getByRole('heading', { level: 1 }).getByText('Completada')).toBeVisible({
+    timeout: 90_000,
+  })
+  // El runner siguió declarando la invocación en sus latidos: no se dio por perdida.
+  await expect(header.getByText('Fallida')).toHaveCount(0)
+})
+
+test('reiniciar el runner a mitad deja el agente fallido y ningún proceso vivo', async ({
+  page,
+}) => {
+  test.setTimeout(180_000)
+  await page.goto('/')
+  await login(page)
+  await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible()
+  const runId = await launchViaApi(page, 'Se corta la luz del runner')
+  await openWhileRunning(page, runId)
+  expect(fakeClaudeProcesses()).not.toHaveLength(0)
+
+  // Un corte brusco: el runner no llega a terminar el proceso del agente.
+  try {
+    service('kill', 'runner')
+  } finally {
+    service('start', 'runner')
+  }
+
+  const header = page.locator('header.run-header')
+  await expect(header.getByRole('heading', { level: 1 }).getByText('Fallida')).toBeVisible({
+    timeout: 60_000,
+  })
+  await expect(page.getByText('El runner se reinició durante la ejecución').first()).toBeVisible()
   await expect.poll(fakeClaudeProcesses, { timeout: 10_000 }).toHaveLength(0)
 })
 

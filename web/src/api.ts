@@ -138,6 +138,12 @@ export interface Workspace {
   path: string
   branch: string
   baseCommit: string | null
+  /** Se ha pedido eliminarlo y el runner aún no ha respondido. */
+  cleanupRequestedAt: string | null
+  /** Por qué falló el último intento de eliminarlo. */
+  cleanupError: string | null
+  /** El runner lo eliminó: ya no se puede continuar, bifurcar ni verificar. La rama sigue. */
+  removedAt: string | null
 }
 
 /** Invocaciones encadenadas de una sesión, de la primera a la última. */
@@ -461,6 +467,8 @@ export const api = {
     request<Run>('POST', `/api/work-items/${workItemId}/runs`, body),
   agent: (id: string) => request<AgentRunDetail>('GET', `/api/agent-runs/${id}`),
   cancelAgent: (id: string) => request<AgentRunDetail>('POST', `/api/agent-runs/${id}/cancel`),
+  cleanupWorkspace: (id: string) =>
+    request<AgentRunDetail>('POST', `/api/agent-runs/${id}/workspace/cleanup`),
   conversation: (id: string) => request<Conversation>('GET', `/api/agent-runs/${id}/conversation`),
   /** Reanuda la sesión con un mensaje; devuelve la ejecución nueva. */
   sendMessage: (id: string, text: string) =>

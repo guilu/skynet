@@ -43,8 +43,10 @@ class JournalTest {
       assertThat(pending.get(2).payload())
           .containsEntry("costUsdCumulative", new BigDecimal("0.08147199999999999"));
 
+      assertThat(journal.agentsWithPendingEvents()).containsExactlyInAnyOrder(a, b);
       journal.delivered(List.of(pending.get(0).eventId(), pending.get(1).eventId()));
       assertThat(journal.pending(10)).extracting(NormalizedEvent::seq).containsExactly(2L);
+      assertThat(journal.agentsWithPendingEvents()).containsExactly(a);
 
       // El seq sigue aunque se hayan borrado los anteriores.
       assertThat(journal.append(a, AgentEventType.RAW, Map.of(), Instant.now()).seq()).isEqualTo(3);

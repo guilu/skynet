@@ -61,7 +61,7 @@ Sin Docker ni `SKYNET_TEST_DB_URL`, los tests de integración se omiten.
 
 ### E2E
 
-`scripts/e2e.sh` compila y arranca el control plane y un runner con fake-claude, sirve la web con `vite preview` y ejecuta Playwright (`web/e2e/`): crea proyecto, repositorio y trabajo, lanza un agente, sigue herramientas y mensajes en vivo, corta la conexión del navegador y comprueba que al reconectar no se pierde ni se repite nada, que termina con coste, que la pestaña Artefactos muestra el archivo modificado, su diff y el commit, que la verificación del repositorio pasa y se puede reejecutar, y que un mensaje continúa la conversación en una invocación nueva. Otra prueba cancela un agente a mitad y comprueba que no queda ningún proceso de fake-claude, y otra comprueba el login: una contraseña incorrecta no entra, «Salir» cierra la sesión y una petición sin token CSRF se rechaza. Necesita un PostgreSQL en `localhost:5432` (el de `docker compose`) y Chromium para Playwright:
+`scripts/e2e.sh` compila y arranca el control plane y un runner con fake-claude, sirve la web con `vite preview` y ejecuta Playwright (`web/e2e/`): crea proyecto, repositorio y trabajo, lanza un agente, sigue herramientas y mensajes en vivo, corta la conexión del navegador y comprueba que al reconectar no se pierde ni se repite nada, que termina con coste, que la pestaña Artefactos muestra el archivo modificado, su diff y el commit, que la verificación del repositorio pasa y se puede reejecutar, y que un mensaje continúa la conversación en una invocación nueva. Otra prueba cancela un agente a mitad y comprueba que no queda ningún proceso de fake-claude; dos más reinician el control plane a mitad de una ejecución (que termina bien) y matan el runner con `kill -9` (el agente acaba «Fallida» y no queda ningún proceso), con `scripts/e2e-service.sh`; y otra comprueba el login: una contraseña incorrecta no entra, «Salir» cierra la sesión y una petición sin token CSRF se rechaza. Necesita un PostgreSQL en `localhost:5432` (el de `docker compose`) y Chromium para Playwright:
 
 ```bash
 docker compose -f deploy/docker-compose.yml up -d
@@ -135,6 +135,7 @@ runner/build/install/skynet-runner/bin/skynet-runner
 | `SKYNET_CLAUDE_BIN` | `claude` | Ejecutable de Claude Code (o fake-claude para probar) |
 | `SKYNET_AGENT_ENV` | — | Variables extra que hereda el agente, separadas por comas |
 | `SKYNET_MODEL_PRICES` | — | Fichero que amplía la tabla de precios con la que se estima el coste (ver abajo) |
+| `SKYNET_LOG_RETENTION_DAYS` | `7` | Días que se conservan los logs locales (`SKYNET_RUNNER_HOME/logs`); ya están subidos como artefactos |
 
 En **Runners**, «Revocar token…» invalida el token de un runner al momento. Si es el tuyo, se vuelve a registrar solo con `SKYNET_RUNNER_REGISTRATION_TOKEN`; quien tenga solo el token robado se queda fuera. Si el secreto de registro también se ha filtrado, cámbialo en el control plane y en tus runners.
 
@@ -153,6 +154,8 @@ El runner hace cumplir el presupuesto de cada invocación: estima su coste segú
 # Modelo propio: 3 US$ entrada, 15 salida, 0,30 lectura de caché
 mi-modelo = 3, 15, 0.30
 ```
+
+**Worktrees y recuperación.** Cada invocación trabaja en un worktree de `SKYNET_RUNNER_HOME/workspaces`. Se conservan para poder continuar, bifurcar o verificar, y se eliminan solos cuando pasan `SKYNET_WORKTREE_RETENTION` (variable del control plane, 7 días por defecto) desde que terminó lo último que los usó; también a mano, con «Eliminar worktree…» en el agente. La rama se conserva en el repositorio. Si el runner se reinicia a mitad de una invocación, al arrancar mata el proceso huérfano y el agente acaba en «Fallida» («El runner se reinició durante la ejecución»). Si el runner deja de declarar en sus latidos una invocación que confirmó (por ejemplo, porque se borró su journal), el control plane la da por perdida tras dos latidos: «El proceso ya no existe en el runner».
 
 ### Política de los agentes
 

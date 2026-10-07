@@ -56,6 +56,7 @@ public final class TestAgents {
         agentRunId,
         Instant.now(),
         invocation(repository, UUID.randomUUID(), "Arregla add", limits, null),
+        null,
         null);
   }
 
@@ -68,6 +69,7 @@ public final class TestAgents {
         agentRunId,
         Instant.now(),
         invocation(repository, sessionId, "Añade un test", AgentLimits.none(), from),
+        null,
         null);
   }
 

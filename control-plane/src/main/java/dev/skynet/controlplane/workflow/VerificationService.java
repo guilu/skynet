@@ -92,6 +92,7 @@ public class VerificationService {
           "El repositorio no tiene comando de verificación: configúralo para poder verificar");
     }
     workspaces.lock(workspace.id());
+    RunService.requireUsable(workspaces.find(workspace.id()).orElseThrow());
     if (workspaces.hasLiveInvocation(workspace.id())) {
       throw new ConflictException(
           "Ya hay una invocación o una verificación en curso en el worktree "

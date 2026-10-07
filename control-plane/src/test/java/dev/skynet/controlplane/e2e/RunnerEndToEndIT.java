@@ -284,7 +284,8 @@ class RunnerEndToEndIT extends IntegrationTest {
             Duration.ofSeconds(2),
             Duration.ofMillis(500),
             Duration.ofSeconds(2),
-            null);
+            null,
+            Duration.ofDays(7));
     Map<String, String> env = new HashMap<>(System.getenv());
     env.put("JAVA_HOME", System.getProperty("java.home"));
     env.put("FAKE_CLAUDE_FIXTURE", fixture);

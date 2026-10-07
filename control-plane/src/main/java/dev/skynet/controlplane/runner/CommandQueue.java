@@ -7,6 +7,8 @@ import dev.skynet.controlplane.workflow.AgentRunQueued;
 import dev.skynet.controlplane.workflow.AgentRunWithdrawn;
 import dev.skynet.controlplane.workflow.RunService;
 import dev.skynet.controlplane.workflow.VerificationQueued;
+import dev.skynet.controlplane.workflow.WorkspaceCleanupRequested;
+import dev.skynet.protocol.runner.CleanupWorkspace;
 import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerCommandType;
@@ -17,6 +19,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -90,6 +93,50 @@ class CommandQueue {
         queued.agentRunId(),
         RunnerCommandType.VERIFY,
         json.writeValueAsString(queued.verify()));
+  }
+
+  /** Orden de eliminar un worktree, para su runner. */
+  @EventListener
+  void on(WorkspaceCleanupRequested requested) {
+    insert(
+        requested.runnerId(),
+        requested.agentRunId(),
+        RunnerCommandType.CLEANUP,
+        json.writeValueAsString(new CleanupWorkspace(requested.workspaceId(), requested.path())));
+  }
+
+  /**
+   * Cuenta, para cada invocación confirmada y aún activa del runner, los latidos seguidos en los
+   * que no la ha declarado, y devuelve las que llegan a {@code threshold}: su proceso ya no existe.
+   * Un runner declara también las invocaciones terminadas cuyo fin aún no ha enviado, así que una
+   * que acaba de terminar no se da por perdida.
+   */
+  @Transactional
+  List<UUID> missedBy(UUID runnerId, List<UUID> reported, int threshold) {
+    // IN () no es SQL válido: sin nada declarado, un id que no existe.
+    List<UUID> present = reported.isEmpty() ? List.of(new UUID(0, 0)) : reported;
+    return jdbc
+        .sql(
+            "UPDATE runner_command SET missed_heartbeats = CASE WHEN agent_run_id IN (:present)"
+                + " THEN 0 ELSE missed_heartbeats + 1 END WHERE runner_id = :runner"
+                + " AND status = :acked AND type IN (:start, :resume)"
+                + " AND agent_run_id IN (SELECT id FROM agent_run WHERE status NOT IN"
+                + " ('COMPLETED', 'FAILED', 'CANCELLED'))"
+                + " RETURNING agent_run_id, missed_heartbeats")
+        .param("present", present)
+        .param("runner", runnerId)
+        .param("acked", ACKED)
+        .param("start", RunnerCommandType.START.name())
+        .param("resume", RunnerCommandType.RESUME.name())
+        .query(
+            (rs, n) ->
+                rs.getInt("missed_heartbeats") >= threshold
+                    ? rs.getObject("agent_run_id", UUID.class)
+                    : null)
+        .list()
+        .stream()
+        .filter(Objects::nonNull)
+        .toList();
   }
 
   /** El agente se canceló en cola: su arranque ya no debe entregarse. */
@@ -230,13 +277,16 @@ class CommandQueue {
   private RunnerCommand command(Row row) {
     StartAgent start = null;
     RunVerification verify = null;
+    CleanupWorkspace cleanup = null;
     if (row.type() == RunnerCommandType.VERIFY) {
       verify = json.readValue(row.payload(), RunVerification.class);
+    } else if (row.type() == RunnerCommandType.CLEANUP) {
+      cleanup = json.readValue(row.payload(), CleanupWorkspace.class);
     } else if (row.payload() != null) {
       start = json.readValue(row.payload(), StartAgent.class);
     }
     return new RunnerCommand(
-        row.id(), row.type(), row.agentRunId(), row.createdAt(), start, verify);
+        row.id(), row.type(), row.agentRunId(), row.createdAt(), start, verify, cleanup);
   }
 
   private Row row(ResultSet rs, int n) throws SQLException {

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { api, type AgentRun, type StoredEvent, type VerificationResult } from '../../api'
-import { elapsed, formatDateTime, formatDuration, isTerminal } from '../../format'
+import { elapsed, formatDateTime, formatDuration, isTerminal, workspaceUsable } from '../../format'
 import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
 import { agentOutcome } from './agentEvents'
@@ -28,7 +28,7 @@ export function VerificationTab({ agent, events }: { agent: AgentRun; events: St
   const { result } = agentOutcome(events)
   const [latest, ...older] = verifications.data ?? []
   const live = latest?.live ?? false
-  const canRerun = isTerminal(agent.status) && agent.workspace != null && !live
+  const canRerun = isTerminal(agent.status) && workspaceUsable(agent.workspace) && !live
 
   return (
     <>
@@ -68,6 +68,9 @@ export function VerificationTab({ agent, events }: { agent: AgentRun; events: St
           {rerun.isPending ? 'Encolando…' : 'Reejecutar verificación'}
         </button>{' '}
         {live && <span className="muted small">Hay una verificación en curso.</span>}
+        {agent.workspace?.removedAt && (
+          <span className="muted small">El worktree se eliminó: ya no se puede verificar.</span>
+        )}
         {!isTerminal(agent.status) && (
           <span className="muted small">Se puede reejecutar cuando termine la invocación.</span>
         )}

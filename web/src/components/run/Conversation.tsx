@@ -2,7 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { api, type AgentRun, type ConversationTurn, type StoredEvent } from '../../api'
-import { formatCost, formatTime, isTerminal } from '../../format'
+import { formatCost, formatTime, isTerminal, workspaceUsable } from '../../format'
 import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
 import { messagesOf } from './agentEvents'
@@ -145,7 +145,8 @@ function Composer({ last }: { last: AgentRun }) {
       void navigate(`/runs/${run.id}?tab=conversation`)
     },
   })
-  const ready = isTerminal(last.status) && !!last.providerSessionId && !!last.workspace
+  const ready =
+    isTerminal(last.status) && !!last.providerSessionId && workspaceUsable(last.workspace)
   const runner = runners.data?.find((r) => r.id === last.workspace?.runnerId)
 
   function submit(e: FormEvent) {
@@ -173,9 +174,13 @@ function Composer({ last }: { last: AgentRun }) {
         </p>
       ) : (
         <p className="muted small">
-          {isTerminal(last.status)
-            ? 'La sesión no llegó a arrancar: no se puede continuar.'
-            : 'Podrás escribir cuando termine la invocación en curso.'}
+          {!isTerminal(last.status)
+            ? 'Podrás escribir cuando termine la invocación en curso.'
+            : last.workspace?.removedAt
+              ? 'El worktree de esta sesión se eliminó: no se puede continuar.'
+              : last.workspace?.cleanupRequestedAt
+                ? 'El worktree de esta sesión se está eliminando: no se puede continuar.'
+                : 'La sesión no llegó a arrancar: no se puede continuar.'}
         </p>
       )}
       <button type="submit" disabled={!ready || !text.trim() || send.isPending}>

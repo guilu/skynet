@@ -9,5 +9,7 @@ public enum RunnerCommandType {
   /** Termina la invocación y todo su árbol de procesos. */
   CANCEL,
   /** Ejecuta la verificación de un worktree, independiente del agente (M5). */
-  VERIFY
+  VERIFY,
+  /** Elimina un worktree que ya no se usa, conservando su rama (M6). */
+  CLEANUP
 }

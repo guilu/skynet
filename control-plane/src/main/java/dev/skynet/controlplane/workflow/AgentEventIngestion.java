@@ -109,6 +109,12 @@ public class AgentEventIngestion {
     if (verificationRunId != null) {
       // La verificación llega cuando el agente ya ha terminado y no cambia su estado.
       verifications.apply(verificationRunId, event.type(), redacted, event.occurredAt());
+    } else if (event.type() == AgentEventType.WORKSPACE_REMOVED) {
+      // También llega con el agente terminado: solo cambia el worktree.
+      UUID workspaceId = uuid(redacted.get("workspaceId"));
+      if (workspaceId != null) {
+        workspaces.cleanupFinished(workspaceId, string(redacted, "error"), event.occurredAt());
+      }
     } else if (!agent.getStatus().isTerminal()) {
       apply(agent, stage, event, redacted);
     }
