@@ -1,27 +1,29 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { api, type AgentRun, type Run } from '../../api'
-import { isTerminal } from '../../format'
+import { formatDateTime, isTerminal, workspaceUsable } from '../../format'
 import { ErrorMessage } from '../ErrorMessage'
 
-type Action = 'retry' | 'fork'
+type Action = 'retry' | 'fork' | 'cleanup'
 
 /**
- * Reintentar y bifurcar un agente terminado. Las dos crean otro agente con coste propio, así que
- * antes de confirmar explican su alcance: qué worktree usa, de qué sesión parte y qué repite
- * (ADR-0001 §3.8). Cada acción lleva a la ejecución nueva.
+ * Reintentar, bifurcar y eliminar el worktree de un agente terminado. Reintentar y bifurcar crean
+ * otro agente con coste propio, así que antes de confirmar explican su alcance: qué worktree usa,
+ * de qué sesión parte y qué repite (ADR-0001 §3.8). Cada una lleva a la ejecución nueva.
  */
 export function AgentActions({ agent }: { agent: AgentRun }) {
   const [open, setOpen] = useState<Action | null>(null)
   if (!isTerminal(agent.status)) return null
+  const usable = workspaceUsable(agent.workspace)
   // Un reintento repite el lanzamiento: solo tiene sentido sobre uno (o sobre otro reintento).
   const canRetry = agent.kind === 'START' || agent.kind === 'RETRY'
-  const canFork = !!agent.providerSessionId && !!agent.workspace
-  if (!canRetry && !canFork) return null
+  const canFork = !!agent.providerSessionId && usable
+  if (!canRetry && !canFork && !agent.workspace) return null
 
   return (
     <div className="agent-actions">
+      <WorkspaceState agent={agent} />
       <div className="run-actions">
         {canRetry && (
           <button
@@ -41,10 +43,88 @@ export function AgentActions({ agent }: { agent: AgentRun }) {
             Bifurcar…
           </button>
         )}
+        {usable && (
+          <button
+            type="button"
+            className="secondary"
+            aria-expanded={open === 'cleanup'}
+            onClick={() => setOpen(open === 'cleanup' ? null : 'cleanup')}
+          >
+            Eliminar worktree…
+          </button>
+        )}
       </div>
       {open === 'retry' && <RetryPanel agent={agent} onClose={() => setOpen(null)} />}
       {open === 'fork' && <ForkPanel agent={agent} onClose={() => setOpen(null)} />}
+      {open === 'cleanup' && <CleanupPanel agent={agent} onClose={() => setOpen(null)} />}
     </div>
+  )
+}
+
+/** Si el worktree se eliminó, se está eliminando o falló al eliminarlo. */
+function WorkspaceState({ agent }: { agent: AgentRun }) {
+  const workspace = agent.workspace
+  if (!workspace) return null
+  if (workspace.removedAt) {
+    return (
+      <p className="muted small" role="status">
+        Worktree eliminado el {formatDateTime(workspace.removedAt)}: ya no se puede continuar,
+        bifurcar ni verificar. La rama <code>{workspace.branch}</code> sigue en el repositorio.
+      </p>
+    )
+  }
+  if (workspace.cleanupRequestedAt) {
+    return (
+      <p className="muted small" role="status">
+        Eliminando el worktree <code>{workspace.path}</code>…
+      </p>
+    )
+  }
+  if (workspace.cleanupError) {
+    return (
+      <p className="error small" role="status">
+        No se pudo eliminar el worktree: {workspace.cleanupError}
+      </p>
+    )
+  }
+  return null
+}
+
+function CleanupPanel({ agent, onClose }: { agent: AgentRun; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const cleanup = useMutation({
+    mutationFn: () => api.cleanupWorkspace(agent.id),
+    onSuccess: () => {
+      onClose()
+      void queryClient.invalidateQueries({ queryKey: ['run'] })
+    },
+  })
+  const workspace = agent.workspace!
+  return (
+    <section className="action-panel" role="group" aria-labelledby="cleanup-title">
+      <h3 id="cleanup-title">Eliminar el worktree</h3>
+      <ul className="small">
+        <li>
+          Borra <code>{workspace.path}</code> en el runner, cambios sin confirmar incluidos.
+        </li>
+        <li>
+          La rama <code>{workspace.branch}</code> y sus commits se conservan en el repositorio.
+        </li>
+        <li>
+          Después no se podrá continuar, bifurcar ni verificar esta sesión; reintentar sí, en un
+          worktree nuevo.
+        </li>
+      </ul>
+      <div className="run-actions">
+        <button type="button" onClick={() => cleanup.mutate()} disabled={cleanup.isPending}>
+          {cleanup.isPending ? 'Eliminando…' : 'Eliminar'}
+        </button>
+        <button type="button" className="secondary" onClick={onClose}>
+          Cancelar
+        </button>
+      </div>
+      <ErrorMessage error={cleanup.error} />
+    </section>
   )
 }
 

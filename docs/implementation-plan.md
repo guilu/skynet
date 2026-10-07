@@ -131,7 +131,7 @@ Las órdenes se generan desde una tabla `runner_command` (con `FOR UPDATE SKIP L
 - `transport/ControlPlaneClient`: registro, heartbeat, long-poll, `ack` y lotes de eventos sobre `java.net.http`. Un 401 hace que el daemon se registre de nuevo.
 - `journal/Journal` (SQLite en `$SKYNET_RUNNER_HOME/journal.db`): credenciales, eventos pendientes con `seq` por invocación, órdenes recibidas (una orden reentregada no se ejecuta dos veces), invocaciones terminadas y PIDs. Un evento solo se borra cuando el control plane responde al lote.
 - `supervisor/ProcessSupervisor`: entorno vaciado y rellenado desde una lista permitida, stdin a `/dev/null`, stdout línea a línea al parser y al log bruto (`logs/<agentRunId>.ndjson`), últimos 8 KB de stderr. Terminar = SIGTERM a todo el árbol (descendientes tomados antes de matar al padre), gracia de 10 s y SIGKILL. Al arrancar mata los procesos que dejó vivos un runner anterior (comprobando el instante de arranque para no matar un PID reutilizado).
-- `workspace/WorkspaceManager`: `git worktree add -b skynet/<trabajo>/<agente> $SKYNET_RUNNER_HOME/workspaces/<ejecución>/<agente> <rama base>`. Emite `agent.workspace.ready` (ruta, rama, commit base). El worktree se conserva al terminar; la limpieza es de M6.
+- `workspace/WorkspaceManager`: `git worktree add -b skynet/<trabajo>/<agente> $SKYNET_RUNNER_HOME/workspaces/<ejecución>/<agente> <rama base>`. Emite `agent.workspace.ready` (ruta, rama, commit base). El worktree se conserva al terminar; se elimina con la orden `CLEANUP` (M6-C).
 - `provider/claude/ClaudeCodeProvider`: `claude -p … --output-format stream-json --verbose --include-partial-messages --session-id … --permission-mode … --allowedTools … [--model] [--max-turns] [--max-budget-usd]`.
 - `agent/AgentExecutor`: cada `START` termina con exactamente un `agent.process.exited`, también si falla el worktree, si se cancela antes de arrancar, si se agota `limits.timeout` o si el runner se para o se reinicia.
 - Pendiente: presupuesto propio en el runner (hace falta la tabla de precios; de momento solo `--max-budget-usd`, que no es estricto). La tabla `workspace` llegó en M4-A y los grupos de procesos en M4-B.
@@ -209,6 +209,14 @@ DELETE     /api/projects/{id}/repositories/{repositoryId}/agent-policy  # vuelve
 ```
 
 `RepositoryView` incluye `agentPolicy` (la efectiva) y `agentPolicyCustom`. Lanzar con un límite por encima del de la política da 400.
+
+Añadido en M6-C:
+
+```text
+POST       /api/agent-runs/{id}/workspace/cleanup   # 202 + AgentRunDetail; 409 si algo usa el worktree
+```
+
+`WorkspaceView` incluye `cleanupRequestedAt`, `cleanupError` y `removedAt`. Con el worktree eliminado (o eliminándose), reanudar, bifurcar y verificar dan 409; reintentar sigue funcionando.
 
 Los errores siguen RFC 9457 (`ProblemDetail`): 400 validación, 401 sin sesión, 403 sin token CSRF, 404 inexistente, 409 transición no permitida, clave duplicada o conflicto de versión.
 
@@ -432,6 +440,16 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 - `StartAgent.environment`: variables que pide la política. El runner solo pasa las que también permite `SKYNET_AGENT_ENV` y avisa en su log de las demás; `null` mantiene todas las permitidas. La verificación no cambia: usa el entorno del runner.
 - El runner hace cumplir el presupuesto: estima el coste con los tokens de cada mensaje según se emiten (`message_start`, `message_delta` y `assistant`, sin contar dos veces) y una tabla de precios por modelo (prefijo más largo; ampliable con `SKYNET_MODEL_PRICES`). Escribir en caché cuenta 1,25× la entrada, o 2× con duración de 1 h. Si la estimación pasa del presupuesto, termina el proceso y el agente acaba en `FAILED` con «Presupuesto agotado…». El fin del proceso lleva `estimatedCostUsd` y, si hubo modelos sin precio (que no cuentan), `unpricedModels`; `--max-budget-usd` se sigue pasando. El coste mostrado sigue siendo el del `result`.
 - Web: «Política de agentes» en cada repositorio del proyecto, y en el lanzamiento la política efectiva y los máximos de cada límite.
+
+**Implementado (M6-C), recuperación y limpieza:**
+
+- Reconciliación con los latidos (migración `V8`): el runner declara en `runningAgentRunIds` las invocaciones en curso y las terminadas con eventos aún por enviar. Cada latido cuenta, por orden `START`/`RESUME` confirmada de un agente activo, las veces seguidas que no aparece (`runner_command.missed_heartbeats`); a las `skynet.runner.lost-after-heartbeats` (2) el agente pasa a `FAILED` con «El proceso ya no existe en el runner» (o a `CANCELLED` si se había pedido cancelarlo). Cubre los agentes que se quedaban en «Arrancando». Una orden entregada y sin confirmar se sigue reentregando.
+- Reinicio del runner: como en M2, al arrancar mata los procesos huérfanos y cierra sus invocaciones con «El runner se reinició durante la ejecución». Reinicio del control plane: el runner guarda los eventos en su journal y los envía al volver; la ejecución termina bien.
+- Orden `CLEANUP` (`CleanupWorkspace`: id y ruta del worktree): el runner hace `git worktree remove --force` (si falla, borra el directorio) y conserva la rama; responde con `agent.workspace.removed` (`workspaceId`, `path` y, si falla, `error`). No toca un worktree con una invocación o verificación en curso ni rutas fuera de su raíz.
+- Retención: cada hora se piden eliminar los worktrees sin nada vivo cuya última invocación o verificación terminó hace más de `SKYNET_WORKTREE_RETENTION` (7 días). Uno que falló al eliminarse no se reintenta solo; su motivo queda a la vista. Eventos `agent.workspace.cleanup.requested` (`trigger`: `manual` o `retention`) y `agent.workspace.removed`.
+- El runner borra cada hora los logs locales (`logs/`) de más de `SKYNET_LOG_RETENTION_DAYS` (7) días, salvo los de invocaciones en curso; ya están subidos como artefactos.
+- Web: «Eliminar worktree…» en el agente, con confirmación; el agente muestra «Worktree eliminado» (o que se está eliminando, o por qué falló) y desactiva continuar, bifurcar y reejecutar la verificación.
+- E2E: reiniciar el control plane a mitad (termina «Completada») y matar el runner con `kill -9` a mitad (termina «Fallida» sin procesos vivos), con `scripts/e2e-service.sh`.
 
 **Duración estimada Fase 1: 9–11 semanas** para una persona; paralelizable en dos líneas (backend/runner y frontend) a partir de M1.
 

@@ -14,8 +14,10 @@ import dev.skynet.runner.transport.UnauthorizedException;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -73,6 +75,7 @@ public final class RunnerDaemon implements AutoCloseable {
     running = true;
     heartbeats.scheduleWithFixedDelay(
         this::heartbeat, 0, config.heartbeatInterval().toMillis(), TimeUnit.MILLISECONDS);
+    heartbeats.scheduleWithFixedDelay(this::purgeLogs, 0, 1, TimeUnit.HOURS);
     poller = Thread.ofPlatform().name("command-poller").start(this::pollLoop);
   }
 
@@ -180,16 +183,32 @@ public final class RunnerDaemon implements AutoCloseable {
       case START, RESUME -> executor.start(command);
       case CANCEL -> executor.cancel(command.agentRunId());
       case VERIFY -> executor.verify(command);
+      case CLEANUP -> executor.cleanup(command);
     }
   }
 
   private void heartbeat() {
     try {
-      client.heartbeat(new RunnerHeartbeat(config.capacity(), executor.running()));
+      // También las que ya terminaron con eventos por enviar: el control plane da por perdida
+      // una invocación activa que deja de aparecer aquí.
+      Set<UUID> agents = new LinkedHashSet<>(executor.running());
+      agents.addAll(journal.agentsWithPendingEvents());
+      client.heartbeat(new RunnerHeartbeat(config.capacity(), List.copyOf(agents)));
     } catch (IOException e) {
       LOG.log(Level.FINE, "No se pudo enviar el latido", e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+    }
+  }
+
+  private void purgeLogs() {
+    try {
+      int deleted = executor.purgeLogs(config.logRetention());
+      if (deleted > 0) {
+        LOG.info(() -> "Borrados " + deleted + " logs con más de " + config.logRetention());
+      }
+    } catch (RuntimeException e) {
+      LOG.log(Level.WARNING, "No se pudieron limpiar los logs", e);
     }
   }
 

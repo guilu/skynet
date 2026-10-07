@@ -432,6 +432,44 @@ describe('App', () => {
       )
     })
 
+    it('eliminar el worktree explica qué se pierde antes de confirmar', async () => {
+      const fetch = openRun('', {
+        [`POST /api/agent-runs/${agent.id}/workspace/cleanup`]: agentRunDetail,
+      })
+      fireEvent.click(await screen.findByRole('button', { name: 'Eliminar worktree…' }))
+      expect(screen.getByText(/se conservan en el repositorio/)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Eliminar' }))
+      await waitFor(() =>
+        expect(calls(fetch, 'POST', `/api/agent-runs/${agent.id}/workspace/cleanup`)).toHaveLength(
+          1,
+        ),
+      )
+      await waitFor(() => expect(screen.queryByText('Eliminar el worktree')).toBeNull())
+    })
+
+    it('con el worktree eliminado no deja continuar, bifurcar ni verificar', async () => {
+      const removed = {
+        ...agent,
+        workspace: { ...agent.workspace!, removedAt: '2026-10-07T10:00:00Z' },
+      }
+      openRun('?tab=conversation', {
+        [`/api/workflow-runs/${runId}`]: {
+          ...runView,
+          stages: [{ ...runView.stages[0], agents: [removed] }],
+        },
+        [`/api/agent-runs/${agent.id}/conversation`]: {
+          turns: [{ ...conversation.turns[0], agent: removed }],
+        },
+      })
+      expect(await screen.findByText(/Worktree eliminado el/)).toBeInTheDocument()
+      expect(
+        await screen.findByText('El worktree de esta sesión se eliminó: no se puede continuar.'),
+      ).toBeInTheDocument()
+      expect(screen.getByLabelText('Mensaje')).toBeDisabled()
+      expect(screen.queryByRole('button', { name: 'Bifurcar…' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Eliminar worktree…' })).toBeNull()
+    })
+
     it('una reanudación enlaza con el agente del que parte y no ofrece reintentar', async () => {
       const child = {
         ...agent,

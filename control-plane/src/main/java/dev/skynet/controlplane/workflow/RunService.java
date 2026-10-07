@@ -171,6 +171,7 @@ public class RunService {
     // el commit.
     workspaces.lock(workspace.id());
     AgentRun parent = lastOfSession(requested);
+    requireUsable(workspaces.find(workspace.id()).orElseThrow());
     if (workspaces.hasLiveInvocation(workspace.id())) {
       throw new ConflictException(
           "Ya hay una invocación o una verificación en curso en el worktree "
@@ -220,6 +221,21 @@ public class RunService {
             .query(Integer.class)
             .single()
         > 0;
+  }
+
+  /** Un worktree eliminado, o a punto de eliminarse, ya no admite escritores. */
+  static void requireUsable(WorkspaceView workspace) {
+    if (workspace.removedAt() != null) {
+      throw new ConflictException(
+          "El worktree "
+              + workspace.path()
+              + " se eliminó: ya no se puede reanudar, bifurcar ni verificar (su rama "
+              + workspace.branch()
+              + " sigue en el repositorio)");
+    }
+    if (workspace.cleanupRequestedAt() != null) {
+      throw new ConflictException("El worktree " + workspace.path() + " se está eliminando");
+    }
   }
 
   private static void requireFinished(AgentRun agent) {
@@ -407,6 +423,28 @@ public class RunService {
     transitions.agent(
         agent, AgentObservableStatus.STARTING, stage.getWorkflowRunId(), "assigned", now);
     transitions.advanceStage(stage, StageStatus.STARTING, "agent-assigned", now);
+    return true;
+  }
+
+  /**
+   * El runner del agente ha dejado de declararlo en sus latidos: su proceso ya no existe (el runner
+   * perdió su journal, o la orden se confirmó pero la invocación se perdió). Pasa a {@code FAILED},
+   * o a {@code CANCELLED} si ya se había pedido cancelarlo. Devuelve si lo ha cerrado.
+   */
+  @Transactional
+  public boolean failLost(UUID agentRunId) {
+    AgentRun agent = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
+    if (agent.getStatus().isTerminal()) {
+      return false;
+    }
+    StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
+    WorkflowRun run = workflowRuns.findById(stage.getWorkflowRunId()).orElseThrow();
+    Instant now = time.now();
+    AgentObservableStatus outcome =
+        agent.exited(null, null, "El proceso ya no existe en el runner");
+    agent = transitions.advanceAgent(agent, outcome, run.getId(), "process-lost", now);
+    transitions.finishAdhoc(stage, run, outcome, now);
+    agentRuns.save(agent);
     return true;
   }
 

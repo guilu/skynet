@@ -71,6 +71,8 @@ export function kindOf(type: string): EventKind {
       return 'status'
     case 'agent.session.started':
     case 'agent.workspace.ready':
+    case 'agent.workspace.cleanup.requested':
+    case 'agent.workspace.removed':
     case 'agent.process.exited':
     case 'agent.rate_limit':
     case 'agent.permission.denied':
@@ -86,6 +88,7 @@ export function originOf(event: StoredEvent): Origin {
   if (
     event.type === 'agent.process.exited' ||
     event.type === 'agent.workspace.ready' ||
+    event.type === 'agent.workspace.removed' ||
     event.type.startsWith('agent.verification.')
   ) {
     return 'runner'

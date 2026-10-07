@@ -90,6 +90,7 @@ class RunnerMessagesJsonTest {
                     UUID.randomUUID(),
                     NOW,
                     null,
+                    null,
                     null))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(
@@ -100,7 +101,31 @@ class RunnerMessagesJsonTest {
                     UUID.randomUUID(),
                     NOW,
                     null,
-                    verify))
+                    verify,
+                    null))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void cleanupCommandRoundTrip() {
+    RunnerCommand command =
+        RunnerCommand.cleanup(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            NOW,
+            new CleanupWorkspace(UUID.randomUUID(), "/w/run/agent"));
+
+    assertThat(roundTrip(command, RunnerCommand.class)).isEqualTo(command);
+    assertThatThrownBy(
+            () ->
+                new RunnerCommand(
+                    UUID.randomUUID(),
+                    RunnerCommandType.CLEANUP,
+                    UUID.randomUUID(),
+                    NOW,
+                    null,
+                    null,
+                    null))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -124,7 +149,13 @@ class RunnerMessagesJsonTest {
     assertThatThrownBy(
             () ->
                 new RunnerCommand(
-                    UUID.randomUUID(), RunnerCommandType.START, UUID.randomUUID(), NOW, null, null))
+                    UUID.randomUUID(),
+                    RunnerCommandType.START,
+                    UUID.randomUUID(),
+                    NOW,
+                    null,
+                    null,
+                    null))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -152,6 +183,7 @@ class RunnerMessagesJsonTest {
                     UUID.randomUUID(),
                     NOW,
                     plain,
+                    null,
                     null))
         .isInstanceOf(IllegalArgumentException.class);
   }

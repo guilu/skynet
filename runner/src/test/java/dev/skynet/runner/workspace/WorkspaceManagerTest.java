@@ -39,6 +39,24 @@ class WorkspaceManagerTest {
   }
 
   @Test
+  void removeDeletesTheWorktreeButKeepsTheBranch() throws Exception {
+    Path repo = TestRepos.create(dir.resolve("repo"));
+    WorkspaceManager manager = new WorkspaceManager(dir.resolve("workspaces"));
+    Workspace ws = manager.create(repo, "main", UUID.randomUUID(), "TKM-1", UUID.randomUUID());
+    Files.writeString(ws.path().resolve("sucio.txt"), "sin confirmar\n");
+
+    assertThat(manager.remove(ws.path())).isTrue();
+
+    assertThat(ws.path()).doesNotExist();
+    assertThat(TestRepos.git(repo, "worktree", "list")).doesNotContain(ws.path().toString());
+    assertThat(TestRepos.git(repo, "branch", "--list", ws.branch())).contains(ws.branch());
+    assertThat(manager.remove(ws.path())).isFalse();
+    assertThatThrownBy(() -> manager.remove(repo))
+        .isInstanceOf(IOException.class)
+        .hasMessageContaining("no es de este runner");
+  }
+
+  @Test
   void failsClearlyWhenTheRepositoryIsMissingOrTheBranchDoesNotExist() throws Exception {
     WorkspaceManager manager = new WorkspaceManager(dir.resolve("workspaces"));
     assertThatThrownBy(

@@ -51,6 +51,7 @@ class RunnerController {
   private final AgentEventIngestion ingestion;
   private final RunnerProperties properties;
   private final ArtifactService artifacts;
+  private final LostInvocations lost;
 
   RunnerController(
       RunnerRegistry registry,
@@ -58,13 +59,15 @@ class RunnerController {
       CommandSignal signal,
       AgentEventIngestion ingestion,
       RunnerProperties properties,
-      ArtifactService artifacts) {
+      ArtifactService artifacts,
+      LostInvocations lost) {
     this.registry = registry;
     this.commands = commands;
     this.signal = signal;
     this.ingestion = ingestion;
     this.properties = properties;
     this.artifacts = artifacts;
+    this.lost = lost;
   }
 
   @PostMapping("/register")
@@ -78,7 +81,9 @@ class RunnerController {
   void heartbeat(
       @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
       @RequestBody RunnerHeartbeat heartbeat) {
-    registry.heartbeat(registry.authenticate(authorization), heartbeat);
+    UUID runnerId = registry.authenticate(authorization);
+    registry.heartbeat(runnerId, heartbeat);
+    lost.reconcile(runnerId, heartbeat);
   }
 
   /**

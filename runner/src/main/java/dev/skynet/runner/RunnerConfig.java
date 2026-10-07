@@ -22,6 +22,8 @@ import java.util.Map;
  *     SKYNET_AGENT_ENV}, separadas por comas)
  * @param modelPrices fichero de precios por modelo que amplía o corrige la tabla con la que se
  *     estima el coste ({@code SKYNET_MODEL_PRICES}), o {@code null}
+ * @param logRetention cuánto se conservan los logs locales ya subidos ({@code
+ *     SKYNET_LOG_RETENTION_DAYS}, 7 días por defecto)
  */
 public record RunnerConfig(
     URI controlPlane,
@@ -34,7 +36,8 @@ public record RunnerConfig(
     Duration pollWait,
     Duration heartbeatInterval,
     Duration cancelGrace,
-    Path modelPrices) {
+    Path modelPrices,
+    Duration logRetention) {
 
   public Path journalFile() {
     return home.resolve("journal.db");
@@ -71,7 +74,8 @@ public record RunnerConfig(
         Duration.ofSeconds(25),
         Duration.ofSeconds(15),
         Duration.ofSeconds(10),
-        env.containsKey("SKYNET_MODEL_PRICES") ? Path.of(env.get("SKYNET_MODEL_PRICES")) : null);
+        env.containsKey("SKYNET_MODEL_PRICES") ? Path.of(env.get("SKYNET_MODEL_PRICES")) : null,
+        Duration.ofDays(Long.parseLong(env.getOrDefault("SKYNET_LOG_RETENTION_DAYS", "7"))));
   }
 
   private static String hostname() {

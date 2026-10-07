@@ -6,17 +6,21 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.logging.Logger;
 
 /**
  * Crea un {@code git worktree} por invocación en {@code <root>/<workflow-run>/<agent-run>/}, sobre
- * la rama {@code skynet/<work-item>/<agent-run>}. Los worktrees se conservan al terminar; su
- * limpieza llega con la política de retención (M6).
+ * la rama {@code skynet/<work-item>/<agent-run>}. Los worktrees se conservan al terminar, hasta que
+ * el control plane pide eliminarlos ({@link #remove}).
  */
 public class WorkspaceManager {
+
+  private static final Logger LOG = Logger.getLogger(WorkspaceManager.class.getName());
 
   private final Path root;
 
@@ -81,6 +85,44 @@ public class WorkspaceManager {
       throw e;
     }
     return new Workspace(path, branch, head);
+  }
+
+  /**
+   * Elimina un worktree con {@code git worktree remove --force}; la rama se conserva en el
+   * repositorio. Un worktree que ya no existe no es un error: eliminarlo otra vez no hace nada.
+   * Devuelve {@code false} en ese caso.
+   */
+  public boolean remove(Path path) throws IOException, InterruptedException {
+    Path normalized = path.toAbsolutePath().normalize();
+    if (!normalized.startsWith(root) || normalized.equals(root)) {
+      throw new IOException("El worktree no es de este runner: " + path);
+    }
+    if (!Files.exists(normalized)) {
+      return false;
+    }
+    if (Files.isRegularFile(normalized.resolve(".git"))) {
+      try {
+        git(normalized, List.of("worktree", "remove", "--force", normalized.toString()));
+      } catch (IOException e) {
+        // Sin el repositorio principal git no puede quitarlo; se borra el directorio igualmente
+        // y el registro que quede en el repositorio lo limpia git worktree prune.
+        LOG.warning(() -> "git worktree remove falló en " + normalized + ": " + e.getMessage());
+      }
+    }
+    // Lo que quede (un worktree roto, sin .git) se borra a mano.
+    deleteTree(normalized);
+    return true;
+  }
+
+  private static void deleteTree(Path path) throws IOException {
+    if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+      return;
+    }
+    try (var files = Files.walk(path)) {
+      for (Path file : files.sorted(Comparator.reverseOrder()).toList()) {
+        Files.deleteIfExists(file);
+      }
+    }
   }
 
   /** Lleva a {@code target} los cambios sin confirmar de {@code source}. */

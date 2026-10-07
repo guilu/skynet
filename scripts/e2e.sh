@@ -14,14 +14,12 @@ export E2E_REPO_PATH=${E2E_REPO_PATH:-$OUT/repo}
 export SKYNET_ADMIN_USER=${SKYNET_ADMIN_USER:-admin}
 export SKYNET_ADMIN_PASSWORD=${SKYNET_ADMIN_PASSWORD:-e2e-admin}
 
-pids=()
+export E2E_OUT=$OUT
+export E2E_RUNNER_NAME=${E2E_RUNNER_NAME:-e2e-$(date +%s)}
+
 cleanup() {
-  # El lanzador del runner es un script: hay que parar también la JVM que arranca.
-  for pid in "${pids[@]}"; do
-    pkill -TERM -P "$pid" 2>/dev/null || true
-    kill "$pid" 2>/dev/null || true
-  done
-  wait 2>/dev/null || true
+  "$ROOT/scripts/e2e-service.sh" stop runner || true
+  "$ROOT/scripts/e2e-service.sh" stop control-plane || true
 }
 trap cleanup EXIT
 
@@ -30,7 +28,7 @@ if [[ "${E2E_SKIP_BUILD:-}" != 1 ]]; then
 fi
 
 # Repositorio de juguete para el worktree del agente.
-rm -rf "$E2E_REPO_PATH" "$OUT/runner-home" "$OUT/claude"
+rm -rf "$E2E_REPO_PATH" "$OUT/runner-home" "$OUT/claude" "$OUT"/*.log
 mkdir -p "$E2E_REPO_PATH"
 git -C "$E2E_REPO_PATH" init -q -b main
 printf 'def add(a, b):\n    return a - b\n' > "$E2E_REPO_PATH/calc.py"
@@ -49,22 +47,9 @@ printf 'build/\n' > "$E2E_REPO_PATH/.gitignore"
 git -C "$E2E_REPO_PATH" add calc.py check.sh .gitignore
 git -C "$E2E_REPO_PATH" -c user.email=e2e@skynet -c user.name=e2e commit -qm "Inicial"
 
-java -jar control-plane/build/libs/control-plane.jar > "$OUT/control-plane.log" 2>&1 &
-pids+=($!)
-for _ in $(seq 60); do
-  curl -fsS http://localhost:8080/actuator/health 2>/dev/null | grep -q '"UP"' && break
-  sleep 2
-done
-curl -fsS http://localhost:8080/actuator/health > /dev/null
-
-SKYNET_RUNNER_HOME=$OUT/runner-home \
-SKYNET_RUNNER_NAME=e2e-$(date +%s) \
-SKYNET_CLAUDE_BIN=$ROOT/tools/fake-claude/build/install/fake-claude/bin/fake-claude \
-SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE,FAKE_CLAUDE_DELAY_MS,FAKE_CLAUDE_APPLY \
-FAKE_CLAUDE_FIXTURE=02-tools FAKE_CLAUDE_DELAY_MS=${FAKE_CLAUDE_DELAY_MS:-500} FAKE_CLAUDE_APPLY=1 \
-CLAUDE_CONFIG_DIR=$OUT/claude \
-  runner/build/install/skynet-runner/bin/skynet-runner > "$OUT/runner.log" 2>&1 &
-pids+=($!)
+# Las E2E de reinicio paran y vuelven a arrancar los dos servicios con el mismo script.
+scripts/e2e-service.sh start control-plane
+scripts/e2e-service.sh start runner
 
 cd web
 if [[ "${E2E_SKIP_BUILD:-}" != 1 ]]; then

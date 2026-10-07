@@ -164,6 +164,18 @@ public final class Journal implements AutoCloseable {
   }
 
   /**
+   * Agentes con eventos aún sin confirmar por el control plane. El latido los declara junto a las
+   * invocaciones en curso: una invocación que acaba de terminar no debe darse por perdida mientras
+   * su evento de fin sigue en el journal.
+   */
+  public synchronized List<UUID> agentsWithPendingEvents() {
+    return query(
+        "SELECT DISTINCT agent_run_id FROM event",
+        ps -> {},
+        rs -> UUID.fromString(rs.getString(1)));
+  }
+
+  /**
    * Olvida los eventos que el control plane ya ha procesado (aceptados, duplicados o rechazados).
    */
   public synchronized void delivered(Collection<UUID> eventIds) {

@@ -40,6 +40,12 @@ skynet:
   monitoring:
     # Tiempo sin actividad tras el que un agente activo pasa a UNRESPONSIVE.
     unresponsive-after: ${SKYNET_UNRESPONSIVE_AFTER:5m}
+  workspaces:
+    # Tiempo desde que termina lo último que trabajó en un worktree hasta que se elimina en su
+    # runner. La rama se conserva.
+    retention: ${SKYNET_WORKTREE_RETENTION:7d}
+    # Cada cuánto se buscan worktrees que han pasado la retención.
+    check-interval: ${SKYNET_WORKTREE_CHECK_INTERVAL:1h}
   verification:
     # Tiempo máximo del comando de validación de un repositorio.
     timeout: ${SKYNET_VERIFICATION_TIMEOUT:30m}
