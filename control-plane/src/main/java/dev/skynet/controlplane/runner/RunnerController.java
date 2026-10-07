@@ -1,13 +1,20 @@
 package dev.skynet.controlplane.runner;
 
+import dev.skynet.controlplane.artifact.ArtifactService;
+import dev.skynet.controlplane.artifact.ArtifactTooLargeException;
+import dev.skynet.controlplane.artifact.InvalidArtifactException;
 import dev.skynet.controlplane.workflow.AgentEventIngestion;
 import dev.skynet.protocol.NormalizedEvent;
+import dev.skynet.protocol.runner.ArtifactStored;
+import dev.skynet.protocol.runner.ArtifactUpload;
 import dev.skynet.protocol.runner.EventBatch;
 import dev.skynet.protocol.runner.EventBatchResult;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
 import dev.skynet.protocol.runner.RunnerRegistration;
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,18 +50,21 @@ class RunnerController {
   private final CommandSignal signal;
   private final AgentEventIngestion ingestion;
   private final RunnerProperties properties;
+  private final ArtifactService artifacts;
 
   RunnerController(
       RunnerRegistry registry,
       CommandQueue commands,
       CommandSignal signal,
       AgentEventIngestion ingestion,
-      RunnerProperties properties) {
+      RunnerProperties properties,
+      ArtifactService artifacts) {
     this.registry = registry;
     this.commands = commands;
     this.signal = signal;
     this.ingestion = ingestion;
     this.properties = properties;
+    this.artifacts = artifacts;
   }
 
   @PostMapping("/register")
@@ -121,11 +132,30 @@ class RunnerController {
             rejected.add(new EventBatchResult.Rejected(event.eventId(), "unknown-agent-run"));
         case NOT_ASSIGNED_TO_RUNNER ->
             rejected.add(new EventBatchResult.Rejected(event.eventId(), "not-assigned-to-runner"));
+        case UNKNOWN_VERIFICATION_RUN ->
+            rejected.add(
+                new EventBatchResult.Rejected(event.eventId(), "unknown-verification-run"));
       }
     }
     // Un agente que termina libera capacidad: puede haber arranques esperando.
     signal.wakeUp();
     return new EventBatchResult(accepted, duplicates, rejected);
+  }
+
+  /**
+   * Subida de un artefacto: el contenido en el cuerpo y los metadatos en {@link
+   * ArtifactUpload#HEADER} (JSON en base64url). El cuerpo se lee con el límite de {@code
+   * skynet.artifacts.max-upload}. Idempotente: reenviarlo devuelve el ya guardado con {@code
+   * duplicate=true}.
+   */
+  @PostMapping(path = "/artifacts", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+  ArtifactStored artifact(
+      @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+      @RequestHeader(ArtifactUpload.HEADER) String metadata,
+      InputStream body)
+      throws IOException {
+    UUID runnerId = registry.authenticate(authorization);
+    return artifacts.store(runnerId, artifacts.metadata(metadata), artifacts.content(body));
   }
 
   private List<RunnerCommand> claim(UUID runnerId) {
@@ -148,6 +178,16 @@ class RunnerController {
         }
       }
     }
+  }
+
+  @ExceptionHandler(InvalidArtifactException.class)
+  ProblemDetail invalidArtifact(InvalidArtifactException e) {
+    return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+  }
+
+  @ExceptionHandler(ArtifactTooLargeException.class)
+  ProblemDetail artifactTooLarge(ArtifactTooLargeException e) {
+    return ProblemDetail.forStatusAndDetail(HttpStatus.CONTENT_TOO_LARGE, e.getMessage());
   }
 
   @ExceptionHandler(UnauthorizedRunnerException.class)

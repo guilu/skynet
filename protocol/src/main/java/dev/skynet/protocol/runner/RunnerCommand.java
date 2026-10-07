@@ -8,11 +8,19 @@ import java.util.UUID;
  * Orden pendiente para un runner. El runner la confirma con {@code ack}; mientras no lo haga, el
  * control plane la vuelve a entregar.
  *
+ * @param agentRunId agente al que se refiere; en {@link RunnerCommandType#VERIFY}, el agente cuyo
+ *     worktree se verifica
  * @param start datos de la invocación; solo en órdenes {@link RunnerCommandType#START} y {@link
  *     RunnerCommandType#RESUME}, y en estas con {@link StartAgent#resume()}
+ * @param verify datos de la verificación; solo, y siempre, en {@link RunnerCommandType#VERIFY}
  */
 public record RunnerCommand(
-    UUID id, RunnerCommandType type, UUID agentRunId, Instant createdAt, StartAgent start) {
+    UUID id,
+    RunnerCommandType type,
+    UUID agentRunId,
+    Instant createdAt,
+    StartAgent start,
+    RunVerification verify) {
 
   public RunnerCommand {
     Objects.requireNonNull(id, "id");
@@ -27,18 +35,26 @@ public record RunnerCommand(
     if (invocation && (type == RunnerCommandType.RESUME) != (start.resume() != null)) {
       throw new IllegalArgumentException("resume solo se informa, y es obligatorio, en RESUME");
     }
+    if ((type == RunnerCommandType.VERIFY) != (verify != null)) {
+      throw new IllegalArgumentException("verify solo se informa, y es obligatorio, en VERIFY");
+    }
   }
 
   public static RunnerCommand start(UUID id, UUID agentRunId, Instant createdAt, StartAgent start) {
-    return new RunnerCommand(id, RunnerCommandType.START, agentRunId, createdAt, start);
+    return new RunnerCommand(id, RunnerCommandType.START, agentRunId, createdAt, start, null);
   }
 
   public static RunnerCommand resume(
       UUID id, UUID agentRunId, Instant createdAt, StartAgent start) {
-    return new RunnerCommand(id, RunnerCommandType.RESUME, agentRunId, createdAt, start);
+    return new RunnerCommand(id, RunnerCommandType.RESUME, agentRunId, createdAt, start, null);
   }
 
   public static RunnerCommand cancel(UUID id, UUID agentRunId, Instant createdAt) {
-    return new RunnerCommand(id, RunnerCommandType.CANCEL, agentRunId, createdAt, null);
+    return new RunnerCommand(id, RunnerCommandType.CANCEL, agentRunId, createdAt, null, null);
+  }
+
+  public static RunnerCommand verify(
+      UUID id, UUID agentRunId, Instant createdAt, RunVerification verify) {
+    return new RunnerCommand(id, RunnerCommandType.VERIFY, agentRunId, createdAt, null, verify);
   }
 }

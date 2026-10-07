@@ -69,11 +69,60 @@ class RunnerMessagesJsonTest {
   }
 
   @Test
+  void verifyCommandRoundTrip() {
+    RunVerification verify =
+        new RunVerification(
+            UUID.randomUUID(),
+            "/w/run/agent",
+            "./gradlew test",
+            List.of("**/build/test-results/**/*.xml"),
+            Duration.ofMinutes(30));
+    RunnerCommand command = RunnerCommand.verify(UUID.randomUUID(), UUID.randomUUID(), NOW, verify);
+
+    assertThat(roundTrip(command, RunnerCommand.class)).isEqualTo(command);
+    assertThatThrownBy(
+            () ->
+                new RunnerCommand(
+                    UUID.randomUUID(),
+                    RunnerCommandType.VERIFY,
+                    UUID.randomUUID(),
+                    NOW,
+                    null,
+                    null))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () ->
+                new RunnerCommand(
+                    UUID.randomUUID(),
+                    RunnerCommandType.CANCEL,
+                    UUID.randomUUID(),
+                    NOW,
+                    null,
+                    verify))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void artifactUploadRoundTrip() {
+    ArtifactUpload upload =
+        new ArtifactUpload(
+            UUID.randomUUID(),
+            null,
+            ArtifactType.DIFF,
+            "changes.diff",
+            "text/x-diff",
+            "ab12",
+            Map.of("files", 2));
+
+    assertThat(roundTrip(upload, ArtifactUpload.class)).isEqualTo(upload);
+  }
+
+  @Test
   void startPayloadOnlyInStartCommands() {
     assertThatThrownBy(
             () ->
                 new RunnerCommand(
-                    UUID.randomUUID(), RunnerCommandType.START, UUID.randomUUID(), NOW, null))
+                    UUID.randomUUID(), RunnerCommandType.START, UUID.randomUUID(), NOW, null, null))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -95,7 +144,12 @@ class RunnerMessagesJsonTest {
     assertThatThrownBy(
             () ->
                 new RunnerCommand(
-                    UUID.randomUUID(), RunnerCommandType.RESUME, UUID.randomUUID(), NOW, plain))
+                    UUID.randomUUID(),
+                    RunnerCommandType.RESUME,
+                    UUID.randomUUID(),
+                    NOW,
+                    plain,
+                    null))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

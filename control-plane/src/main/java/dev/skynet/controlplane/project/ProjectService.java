@@ -5,6 +5,7 @@ import dev.skynet.controlplane.event.EventStore;
 import dev.skynet.controlplane.shared.NotFoundException;
 import dev.skynet.controlplane.shared.TimeSource;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -61,12 +62,19 @@ public class ProjectService {
 
   @Transactional
   public CodeRepository registerRepository(
-      UUID projectId, String name, String localPath, String remoteUrl, String defaultBranch) {
+      UUID projectId,
+      String name,
+      String localPath,
+      String remoteUrl,
+      String defaultBranch,
+      String validationCommand,
+      List<String> testReportPaths) {
     get(projectId);
     Instant now = time.now();
-    CodeRepository repository =
-        repositories.save(
-            CodeRepository.create(projectId, name, localPath, remoteUrl, defaultBranch, now));
+    CodeRepository created =
+        CodeRepository.create(projectId, name, localPath, remoteUrl, defaultBranch, now);
+    created.configureVerification(validationCommand, testReportPaths);
+    CodeRepository repository = repositories.save(created);
     events.append(
         EventDraft.of(
             "repository",
@@ -75,6 +83,30 @@ public class ProjectService {
             null,
             Map.of("projectId", projectId, "name", name, "localPath", localPath),
             now));
+    return repository;
+  }
+
+  /** Cambia el comando de validación del repositorio y dónde deja sus informes JUnit. */
+  @Transactional
+  public CodeRepository configureVerification(
+      UUID projectId, UUID repositoryId, String command, List<String> reportPaths) {
+    CodeRepository repository = getRepository(repositoryId);
+    if (!repository.getProjectId().equals(projectId)) {
+      throw new NotFoundException("Repositorio", repositoryId);
+    }
+    repository.configureVerification(command, reportPaths);
+    repository = repositories.save(repository);
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("validationCommand", repository.getValidationCommand());
+    payload.put("testReportPaths", repository.getTestReportPaths());
+    events.append(
+        EventDraft.of(
+            "repository",
+            repository.getId(),
+            "repository.verification.configured",
+            null,
+            payload,
+            time.now()));
     return repository;
   }
 

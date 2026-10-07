@@ -8,6 +8,6 @@ public enum RunnerCommandType {
   RESUME,
   /** Termina la invocación y todo su árbol de procesos. */
   CANCEL,
-  /** Ejecuta un comando de validación independiente del agente (M5). */
-  RUN_COMMAND
+  /** Ejecuta la verificación de un worktree, independiente del agente (M5). */
+  VERIFY
 }

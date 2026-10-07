@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -46,7 +47,16 @@ class ProjectController {
       @NotBlank @Size(max = 200) String name,
       @NotBlank @Pattern(regexp = "^/.*", message = "debe ser una ruta absoluta") String localPath,
       @Size(max = 500) String remoteUrl,
-      @Size(max = 200) String defaultBranch) {}
+      @Size(max = 200) String defaultBranch,
+      @Size(max = 2000) String validationCommand,
+      List<@Size(max = 500) String> testReportPaths) {}
+
+  /**
+   * Verificación del repositorio. Sin {@code validationCommand} no se verifica; sin {@code
+   * testReportPaths} se buscan los informes JUnit de Gradle y Maven.
+   */
+  record VerificationSettings(
+      @Size(max = 2000) String validationCommand, List<@Size(max = 500) String> testReportPaths) {}
 
   record RepositoryView(
       UUID id,
@@ -55,6 +65,8 @@ class ProjectController {
       String localPath,
       String remoteUrl,
       String defaultBranch,
+      String validationCommand,
+      List<String> testReportPaths,
       Instant createdAt) {
     static RepositoryView of(CodeRepository r) {
       return new RepositoryView(
@@ -64,6 +76,8 @@ class ProjectController {
           r.getLocalPath(),
           r.getRemoteUrl(),
           r.getDefaultBranch(),
+          r.getValidationCommand(),
+          r.getTestReportPaths(),
           r.getCreatedAt());
     }
   }
@@ -94,7 +108,23 @@ class ProjectController {
             : request.defaultBranch();
     return RepositoryView.of(
         service.registerRepository(
-            id, request.name(), request.localPath(), request.remoteUrl(), branch));
+            id,
+            request.name(),
+            request.localPath(),
+            request.remoteUrl(),
+            branch,
+            request.validationCommand(),
+            request.testReportPaths()));
+  }
+
+  @PutMapping("/{id}/repositories/{repositoryId}/verification")
+  RepositoryView configureVerification(
+      @PathVariable UUID id,
+      @PathVariable UUID repositoryId,
+      @Valid @RequestBody VerificationSettings request) {
+    return RepositoryView.of(
+        service.configureVerification(
+            id, repositoryId, request.validationCommand(), request.testReportPaths()));
   }
 
   @GetMapping("/{id}/repositories")

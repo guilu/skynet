@@ -6,6 +6,8 @@ import dev.skynet.controlplane.workflow.AgentCancelRequested;
 import dev.skynet.controlplane.workflow.AgentRunQueued;
 import dev.skynet.controlplane.workflow.AgentRunWithdrawn;
 import dev.skynet.controlplane.workflow.RunService;
+import dev.skynet.controlplane.workflow.VerificationQueued;
+import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerCommandType;
 import dev.skynet.protocol.runner.StartAgent;
@@ -78,6 +80,16 @@ class CommandQueue {
   @EventListener
   void on(AgentCancelRequested requested) {
     insert(requested.runnerId(), requested.agentRunId(), RunnerCommandType.CANCEL, null);
+  }
+
+  /** Orden de verificación para el runner del worktree. */
+  @EventListener
+  void on(VerificationQueued queued) {
+    insert(
+        queued.runnerId(),
+        queued.agentRunId(),
+        RunnerCommandType.VERIFY,
+        json.writeValueAsString(queued.verify()));
   }
 
   /** El agente se canceló en cola: su arranque ya no debe entregarse. */
@@ -216,9 +228,15 @@ class CommandQueue {
   }
 
   private RunnerCommand command(Row row) {
-    StartAgent start =
-        row.payload() == null ? null : json.readValue(row.payload(), StartAgent.class);
-    return new RunnerCommand(row.id(), row.type(), row.agentRunId(), row.createdAt(), start);
+    StartAgent start = null;
+    RunVerification verify = null;
+    if (row.type() == RunnerCommandType.VERIFY) {
+      verify = json.readValue(row.payload(), RunVerification.class);
+    } else if (row.payload() != null) {
+      start = json.readValue(row.payload(), StartAgent.class);
+    }
+    return new RunnerCommand(
+        row.id(), row.type(), row.agentRunId(), row.createdAt(), start, verify);
   }
 
   private Row row(ResultSet rs, int n) throws SQLException {

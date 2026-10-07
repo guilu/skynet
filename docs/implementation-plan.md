@@ -110,9 +110,9 @@ Cada evento lleva `eventId` (UUID generado en el runner, clave de idempotencia),
 ```text
 POST /api/runner/register            → runnerId, token
 POST /api/runner/heartbeat           → capacidad, procesos vivos
-GET  /api/runner/commands?wait=30s   → long-poll: START / RESUME / CANCEL / RUN_COMMAND
+GET  /api/runner/commands?wait=30s   → long-poll: START / RESUME / CANCEL / VERIFY
 POST /api/runner/events              → lote de eventos (idempotente por eventId)
-POST /api/runner/artifacts           → subida multipart con sha256
+POST /api/runner/artifacts           → subida del contenido con sha256 (metadatos en cabecera)
 POST /api/runner/commands/{id}/ack
 ```
 
@@ -179,6 +179,17 @@ POST       /api/agent-runs/{id}/messages     # {text}: reanuda la sesión (RESUM
 POST       /api/agent-runs/{id}/fork         # {text}: bifurca la sesión (--fork-session) en un worktree nuevo del mismo runner
 POST       /api/agent-runs/{id}/retry        # mismo prompt y límites, sesión y worktree nuevos, cualquier runner
 GET        /api/agent-runs/{id}/conversation # invocaciones encadenadas de la sesión con sus prompts y mensajes
+```
+
+Añadido en M5-A:
+
+```text
+PUT        /api/projects/{id}/repositories/{repositoryId}/verification  # {validationCommand, testReportPaths}
+GET        /api/agent-runs/{id}/verifications # de la más reciente a la más antigua
+POST       /api/agent-runs/{id}/verifications # reejecuta la verificación (409 si el worktree está ocupado o no hay comando)
+GET        /api/agent-runs/{id}/artifacts     # ArtifactSummary, sin contenido
+GET        /api/artifacts/{id}/content?offset=&limit=   # trozo del contenido; X-Artifact-Size con el total
+POST       /api/runner/artifacts              # runner: contenido en el cuerpo, metadatos en X-Artifact-Metadata (JSON en base64url), idempotente
 ```
 
 Los errores siguen RFC 9457 (`ProblemDetail`): 400 validación, 404 inexistente, 409 transición no permitida, clave duplicada o conflicto de versión.
@@ -322,6 +333,28 @@ Se entrega en cinco PRs: M3-A contratos y proyecciones; M3-B shell, cabecera y f
 - El NDJSON bruto pasa por el mismo redactor que la ingestión antes de guardarse.
 
 **Aceptación:** tras un run que modifica código se ven archivos, diff y commits; el resultado de tests procede del comando ejecutado por el runner, no del texto del agente. **MVP 7, 8, 12.**
+
+Se entrega en tres PRs (plan aprobado: verificación aparte del agente, comando por repositorio, redacción de todos los artefactos de texto, 20 MB por artefacto y Monaco cargado bajo demanda).
+
+**Implementado (M5-A), control plane y protocolo:**
+
+- Migración `V6`:
+  - `repository.validation_command` y `test_report_paths` (por defecto los informes de Gradle y Surefire).
+  - Tabla `verification_run`: estado `QUEUED`, `RUNNING`, `PASSED`, `FAILED` o `ERROR`, código de salida, totales de tests y error.
+  - Tabla `artifact`, única por (invocación, verificación, tipo, nombre).
+- Verificación:
+  - Cuando una invocación termina `COMPLETED` y su repositorio tiene comando, se crea una verificación `AUTO` y una orden `VERIFY` (`RunVerification`: worktree, comando, globs y tiempo máximo, `skynet.verification.timeout`, 30 min) para el runner del worktree.
+  - `POST /api/agent-runs/{id}/verifications` la reejecuta (`MANUAL`).
+  - El runner informa con `agent.verification.started` y `agent.verification.completed`, que se registran con el agregado `verification_run` aunque el agente ya haya terminado y no cambian su estado ni el de la ejecución.
+  - Fallar los tests es `FAILED`; no poder ejecutar el comando o agotar el tiempo (`error`) es `ERROR`.
+  - Una verificación viva ocupa el worktree igual que una invocación: reanudar, bifurcar o reejecutar responde 409.
+- Artefactos:
+  - `POST /api/runner/artifacts` recibe el contenido en el cuerpo (como mucho `skynet.artifacts.max-upload`, 64 MB; si no, 413) y los metadatos en la cabecera `X-Artifact-Metadata`. Comprueba el sha256 recibido y que el agente (y la verificación, si la hay) sea de ese runner.
+  - Los de texto pasan por el `PayloadRedactor`; lo que supere `skynet.artifacts.max-size` (20 MB) se recorta con una marca.
+  - El contenido se guarda en un `BlobStore` de ficheros (`skynet.artifacts.root`) direccionado por su sha256; el original queda en `metadata.originalSha256` si cambió.
+  - Cada artefacto nuevo registra `artifact.created`.
+  - La web lee el contenido por trozos (como mucho 8 MiB por petición); lo que es texto se sirve como `text/plain` o JSON, nunca como HTML.
+- El runner de esta PR todavía no verifica: responde a `VERIFY` con un `error` para que la verificación no quede en cola. Llega en M5-B.
 
 ### M6 — Endurecimiento y cierre del MVP (≈1 semana)
 

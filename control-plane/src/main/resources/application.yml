@@ -24,3 +24,13 @@ skynet:
   monitoring:
     # Tiempo sin actividad tras el que un agente activo pasa a UNRESPONSIVE.
     unresponsive-after: ${SKYNET_UNRESPONSIVE_AFTER:5m}
+  verification:
+    # Tiempo máximo del comando de validación de un repositorio.
+    timeout: ${SKYNET_VERIFICATION_TIMEOUT:30m}
+  artifacts:
+    # Directorio donde se guarda el contenido de los artefactos.
+    root: ${SKYNET_ARTIFACTS_DIR:data/artifacts}
+    # Tamaño máximo de un artefacto; lo que pase se recorta con una marca visible.
+    max-size: ${SKYNET_ARTIFACT_MAX_SIZE:20MB}
+    # Lo más que se acepta en una subida del runner, antes de redactar y recortar.
+    max-upload: ${SKYNET_ARTIFACT_MAX_UPLOAD:64MB}
