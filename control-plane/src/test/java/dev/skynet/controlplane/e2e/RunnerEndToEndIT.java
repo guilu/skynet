@@ -7,6 +7,8 @@ import dev.skynet.controlplane.support.IntegrationTest;
 import dev.skynet.runner.RunnerConfig;
 import dev.skynet.runner.RunnerDaemon;
 import dev.skynet.runner.agent.AgentExecutor;
+import dev.skynet.runner.agent.ArtifactSender;
+import dev.skynet.runner.agent.ArtifactSpool;
 import dev.skynet.runner.agent.EventSender;
 import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
@@ -55,6 +57,7 @@ class RunnerEndToEndIT extends IntegrationTest {
   private Path repo;
   private Journal journal;
   private TcpProxy proxy;
+  private final Map<String, String> extraEnv = new HashMap<>();
 
   @BeforeEach
   void setUp() throws Exception {
@@ -191,6 +194,81 @@ class RunnerEndToEndIT extends IntegrationTest {
         .isCloseTo(new BigDecimal("0.0051802"), within(new BigDecimal("0.000001")));
   }
 
+  @Test
+  void theRunnerUploadsTheArtifactsAndVerifiesTheWorktreeIndependently() throws Exception {
+    extraEnv.put("FAKE_CLAUDE_APPLY", "1");
+    startRunner("02-tools", 0);
+    // Pasa solo si el agente arregló add() de verdad, y deja un informe JUnit.
+    String command =
+        """
+        mkdir -p build/test-results/test
+        if grep -q 'a + b' calc.py; then r='<testcase name="add"/>'
+        else r='<testcase name="add"><failure message="resta"/></testcase>'; fi
+        echo "<testsuite name='calc'>$r</testsuite>" >build/test-results/test/TEST-calc.xml
+        echo verificado
+        """;
+    Launched run = launch("Arregla add()", command);
+
+    await("agente completado", () -> "COMPLETED".equals(agentStatus(run)));
+    await(
+        "verificación automática",
+        () -> "PASSED".equals(verifications(run).path(0).path("status").asString()));
+    JsonNode auto = verifications(run).get(0);
+    assertThat(auto.path("trigger").asString()).isEqualTo("AUTO");
+    assertThat(auto.path("exitCode").asInt()).isZero();
+    assertThat(auto.path("tests").path("total").asInt()).isEqualTo(1);
+    assertThat(auto.path("tests").path("failed").asInt()).isZero();
+
+    List<String> expected =
+        List.of(
+            "PROMPT", "LOG", "RESULT", "GIT_CHANGES", "DIFF", "VERIFICATION_LOG", "TEST_REPORT");
+    await("artefactos", () -> artifactTypes(run).containsAll(expected));
+    assertThat(artifactTypes(run)).hasSameSizeAs(expected);
+    JsonNode changes = artifact(run, "GIT_CHANGES");
+    assertThat(changes.path("metadata").path("commits").asInt()).isEqualTo(1);
+    assertThat(content(artifact(run, "DIFF"))).contains("+    return a + b");
+    assertThat(content(artifact(run, "VERIFICATION_LOG"))).contains("verificado");
+    assertThat(artifact(run, "VERIFICATION_LOG").path("verificationRunId").asString())
+        .isEqualTo(auto.path("id").asString());
+
+    JsonNode manual = post("/api/agent-runs/" + run.agentId() + "/verifications", Map.of());
+    assertThat(manual.path("trigger").asString()).isEqualTo("MANUAL");
+    await(
+        "verificación manual",
+        () -> "PASSED".equals(verifications(run).path(0).path("status").asString()));
+    assertThat(verifications(run)).hasSize(2);
+    assertThat(agentStatus(run)).isEqualTo("COMPLETED");
+    assertThat(get("/api/workflow-runs/" + run.runId()).path("status").asString())
+        .isEqualTo("SUCCEEDED");
+  }
+
+  private JsonNode verifications(Launched run) {
+    return get("/api/agent-runs/" + run.agentId() + "/verifications");
+  }
+
+  private List<String> artifactTypes(Launched run) {
+    List<String> types = new ArrayList<>();
+    get("/api/agent-runs/" + run.agentId() + "/artifacts")
+        .forEach(a -> types.add(a.path("type").asString()));
+    return types;
+  }
+
+  private JsonNode artifact(Launched run, String type) {
+    for (JsonNode a : get("/api/agent-runs/" + run.agentId() + "/artifacts")) {
+      if (a.path("type").asString().equals(type)) {
+        return a;
+      }
+    }
+    throw new AssertionError("Sin artefacto " + type);
+  }
+
+  private String content(JsonNode artifact) {
+    return http.get()
+        .uri("/api/artifacts/" + artifact.path("id").asString() + "/content")
+        .retrieve()
+        .body(String.class);
+  }
+
   // --- runner ---
 
   private void startRunner(String fixture, long delayMs) throws Exception {
@@ -212,13 +290,17 @@ class RunnerEndToEndIT extends IntegrationTest {
     env.put("FAKE_CLAUDE_DELAY_MS", Long.toString(delayMs));
     // fake-claude guarda las sesiones como el CLI y exige encontrarlas al reanudar.
     env.put("CLAUDE_CONFIG_DIR", dir.resolve("claude").toString());
+    env.putAll(extraEnv);
     ClaudeCodeProvider provider =
         new ClaudeCodeProvider(
             Path.of(System.getProperty("skynet.fakeClaude")).toAbsolutePath().toString(),
-            List.of("JAVA_HOME", "FAKE_CLAUDE_FIXTURE", "FAKE_CLAUDE_DELAY_MS"));
+            List.of(
+                "JAVA_HOME", "FAKE_CLAUDE_FIXTURE", "FAKE_CLAUDE_DELAY_MS", "FAKE_CLAUDE_APPLY"));
     ControlPlaneClient client = new ControlPlaneClient(config.controlPlane());
     EventSender sender =
         new EventSender(journal, client, Duration.ofMillis(100), Duration.ofMillis(200));
+    ArtifactSender artifactSender =
+        new ArtifactSender(journal, client, Duration.ofMillis(100), Duration.ofMillis(200));
     ProcessSupervisor supervisor = new ProcessSupervisor();
     AgentExecutor executor =
         new AgentExecutor(
@@ -229,10 +311,13 @@ class RunnerEndToEndIT extends IntegrationTest {
             env,
             config.logsDir(),
             config.cancelGrace(),
-            sender::wakeUp);
+            sender::wakeUp,
+            new ArtifactSpool(journal, config.artifactsDir(), artifactSender::wakeUp));
     RunnerDaemon daemon =
-        new RunnerDaemon(config, client, journal, executor, sender, supervisor, "fake");
+        new RunnerDaemon(
+            config, client, journal, executor, sender, artifactSender, supervisor, "fake");
     closeables.add(sender);
+    closeables.add(artifactSender);
     closeables.add(executor);
     closeables.add(daemon);
     daemon.start();
@@ -243,14 +328,18 @@ class RunnerEndToEndIT extends IntegrationTest {
   private record Launched(UUID runId, UUID agentId) {}
 
   private Launched launch(String prompt) {
+    return launch(prompt, null);
+  }
+
+  private Launched launch(String prompt, String validationCommand) {
+    Map<String, Object> repository = new HashMap<>();
+    repository.put("name", "demo");
+    repository.put("localPath", repo.toString());
+    repository.put("validationCommand", validationCommand);
     String projectId =
         post("/api/projects", Map.of("key", "E2E", "name", "E2E")).path("id").asString();
     String repositoryId =
-        post(
-                "/api/projects/" + projectId + "/repositories",
-                Map.of("name", "demo", "localPath", repo.toString()))
-            .path("id")
-            .asString();
+        post("/api/projects/" + projectId + "/repositories", repository).path("id").asString();
     String workItemId =
         post("/api/projects/" + projectId + "/work-items", Map.of("title", "T", "type", "BUG"))
             .path("id")

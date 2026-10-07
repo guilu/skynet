@@ -1,7 +1,9 @@
 package dev.skynet.runner.agent;
 
 import dev.skynet.protocol.AgentEventType;
+import dev.skynet.protocol.runner.ArtifactType;
 import dev.skynet.protocol.runner.ResumeFrom;
+import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.StartAgent;
 import dev.skynet.runner.journal.Journal;
@@ -12,9 +14,13 @@ import dev.skynet.runner.provider.claude.ClaudeStreamParser;
 import dev.skynet.runner.supervisor.ProcessExit;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.supervisor.SupervisedProcess;
+import dev.skynet.runner.verify.JUnitReports;
+import dev.skynet.runner.workspace.GitIndexer;
 import dev.skynet.runner.workspace.Workspace;
 import dev.skynet.runner.workspace.WorkspaceManager;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -30,6 +36,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Ejecuta las invocaciones (arranques, reanudaciones y forks): prepara el worktree, lanza Claude
@@ -42,6 +50,10 @@ public final class AgentExecutor implements AutoCloseable {
   private static final String ERROR = "error";
 
   private static final Logger LOG = Logger.getLogger(AgentExecutor.class.getName());
+  private static final ObjectMapper JSON = JsonMapper.builder().build();
+  private static final String TEXT = "text/plain; charset=utf-8";
+  private static final String JSON_TYPE = "application/json";
+  private static final String EXIT_CODE = "exitCode";
 
   private final Journal journal;
   private final ProcessSupervisor supervisor;
@@ -56,7 +68,9 @@ public final class AgentExecutor implements AutoCloseable {
       Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon().factory());
   private final Map<UUID, Execution> executions = new ConcurrentHashMap<>();
   private final Map<Path, UUID> busyWorkspaces = new ConcurrentHashMap<>();
+  private final Map<UUID, SupervisedProcess> verifications = new ConcurrentHashMap<>();
   private final ClaudeSessions sessions;
+  private final ArtifactSpool spool;
 
   public AgentExecutor(
       Journal journal,
@@ -66,7 +80,8 @@ public final class AgentExecutor implements AutoCloseable {
       Map<String, String> runnerEnv,
       Path logs,
       Duration cancelGrace,
-      Runnable eventsAvailable) {
+      Runnable eventsAvailable,
+      ArtifactSpool spool) {
     this.journal = journal;
     this.supervisor = supervisor;
     this.workspaces = workspaces;
@@ -76,6 +91,7 @@ public final class AgentExecutor implements AutoCloseable {
     this.cancelGrace = cancelGrace;
     this.eventsAvailable = eventsAvailable;
     this.sessions = ClaudeSessions.of(runnerEnv).orElse(null);
+    this.spool = spool;
   }
 
   /** Invocaciones en curso en este runner. */
@@ -93,14 +109,16 @@ public final class AgentExecutor implements AutoCloseable {
   }
 
   /**
-   * Verifica el worktree de un agente. Todavía no está implementado (M5-B): responde con un error
-   * para que la verificación no quede en cola y no bloquee el worktree.
+   * Verifica el worktree de un agente: ejecuta el comando de validación del repositorio, lee los
+   * informes JUnit y sube su salida y su resultado. Toda verificación recibida termina con un único
+   * evento {@code agent.verification.completed}.
    */
   public void verify(RunnerCommand command) {
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("verificationRunId", command.verify().verificationRunId().toString());
-    payload.put(ERROR, "Este runner todavía no sabe ejecutar verificaciones");
-    emit(command.agentRunId(), AgentEventType.VERIFICATION_COMPLETED, payload);
+    RunVerification verification = command.verify();
+    if (!journal.firstVerification(verification.verificationRunId(), command.agentRunId())) {
+      return;
+    }
+    pool.submit(() -> runVerification(command.agentRunId(), verification));
   }
 
   /**
@@ -239,9 +257,11 @@ public final class AgentExecutor implements AutoCloseable {
     if (deadline != null) {
       deadline.cancel(false);
     }
+    // Antes del fin: así el agente termina con sus artefactos ya en cola.
+    collectArtifacts(id, start, workspace, logs.resolve(id + ".ndjson"));
 
     Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("exitCode", exit.exitCode());
+    payload.put(EXIT_CODE, exit.exitCode());
     if (exit.signal() != null) {
       payload.put("signal", exit.signal());
     }
@@ -254,6 +274,258 @@ public final class AgentExecutor implements AutoCloseable {
       payload.put("stderr", exit.stderrTail());
     }
     finish(id, payload);
+  }
+
+  /**
+   * Artefactos de la invocación: prompt, NDJSON bruto, resultado final, y rama, commits y diff del
+   * worktree. Un artefacto que falla no impide los demás ni el fin de la invocación.
+   */
+  private void collectArtifacts(UUID id, StartAgent start, Workspace workspace, Path log)
+      throws InterruptedException {
+    artifact(
+        id,
+        "PROMPT",
+        () ->
+            spool.add(
+                id,
+                null,
+                ArtifactType.PROMPT,
+                "prompt.txt",
+                TEXT,
+                start.prompt().getBytes(StandardCharsets.UTF_8),
+                Map.of()));
+    if (Files.exists(log)) {
+      artifact(
+          id,
+          "LOG",
+          () ->
+              spool.addFile(
+                  id,
+                  null,
+                  ArtifactType.LOG,
+                  "agent.ndjson",
+                  "application/x-ndjson",
+                  log,
+                  Map.of("bytes", Files.size(log))));
+      artifact(
+          id,
+          "RESULT",
+          () -> {
+            java.util.Optional<String> result = resultLine(log);
+            if (result.isPresent()) {
+              addResult(id, result.get());
+            }
+          });
+    }
+    Path diff = logs.resolve(id + ".diff");
+    try {
+      GitIndexer.Changes changes = GitIndexer.index(workspace.path(), workspace.baseCommit(), diff);
+      artifact(
+          id,
+          "GIT_CHANGES",
+          () ->
+              spool.add(
+                  id,
+                  null,
+                  ArtifactType.GIT_CHANGES,
+                  "changes.json",
+                  JSON_TYPE,
+                  JSON.writeValueAsBytes(changes.changes()),
+                  changes.summary()));
+      if (Files.size(diff) == 0) {
+        return; // Sin cambios no hay diff que subir.
+      }
+      artifact(
+          id,
+          "DIFF",
+          () ->
+              spool.addFile(
+                  id,
+                  null,
+                  ArtifactType.DIFF,
+                  "changes.diff",
+                  "text/x-diff",
+                  diff,
+                  changes.summary()));
+    } catch (IOException e) {
+      LOG.warning(
+          () -> "No se pudo indexar el worktree " + workspace.path() + ": " + e.getMessage());
+    } finally {
+      deleteQuietly(diff);
+    }
+  }
+
+  private void addResult(UUID id, String result) throws IOException {
+    spool.add(
+        id,
+        null,
+        ArtifactType.RESULT,
+        "result.json",
+        JSON_TYPE,
+        result.getBytes(StandardCharsets.UTF_8),
+        Map.of());
+  }
+
+  /** Última línea {@code result} del NDJSON: el resultado final que dio el proveedor. */
+  private static java.util.Optional<String> resultLine(Path log) throws IOException {
+    String last = null;
+    try (var lines = Files.lines(log, StandardCharsets.UTF_8)) {
+      for (String line : (Iterable<String>) lines::iterator) {
+        if (line.contains("\"result\"") && isResult(line)) {
+          last = line;
+        }
+      }
+    }
+    return java.util.Optional.ofNullable(last);
+  }
+
+  private static boolean isResult(String line) {
+    try {
+      return "result".equals(JSON.readTree(line).path("type").asString(""));
+    } catch (RuntimeException e) {
+      return false;
+    }
+  }
+
+  private static void artifact(UUID id, String what, ArtifactWork work) {
+    try {
+      work.run();
+    } catch (IOException | RuntimeException e) {
+      LOG.log(Level.WARNING, e, () -> "No se pudo guardar el artefacto " + what + " de " + id);
+    }
+  }
+
+  @FunctionalInterface
+  private interface ArtifactWork {
+    void run() throws IOException;
+  }
+
+  private static void deleteQuietly(Path file) {
+    try {
+      Files.deleteIfExists(file);
+    } catch (IOException e) {
+      LOG.log(Level.FINE, e, () -> "No se pudo borrar " + file);
+    }
+  }
+
+  private void runVerification(UUID agentRunId, RunVerification verification) {
+    UUID id = verification.verificationRunId();
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("verificationRunId", id.toString());
+    try {
+      Workspace workspace = workspaces.existing(Path.of(verification.workspacePath()));
+      if (busyWorkspaces.putIfAbsent(workspace.path(), id) != null) {
+        result.put(ERROR, "Hay una invocación en curso en el worktree " + workspace.path());
+        return;
+      }
+      try {
+        verifyIn(agentRunId, verification, workspace, result);
+      } finally {
+        busyWorkspaces.remove(workspace.path(), id);
+      }
+    } catch (IOException e) {
+      result.put(ERROR, "No se pudo verificar el worktree: " + e.getMessage());
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      result.put(ERROR, "El runner se detuvo durante la verificación");
+    } catch (RuntimeException e) {
+      LOG.log(Level.SEVERE, e, () -> "Fallo inesperado en la verificación " + id);
+      result.put(ERROR, "Fallo interno del runner: " + e);
+    } finally {
+      journal.finishVerification(id, agentRunId, result, Instant.now());
+      eventsAvailable.run();
+    }
+  }
+
+  private void verifyIn(
+      UUID agentRunId,
+      RunVerification verification,
+      Workspace workspace,
+      Map<String, Object> result)
+      throws IOException, InterruptedException {
+    UUID id = verification.verificationRunId();
+    Map<String, Object> started = new LinkedHashMap<>();
+    started.put("verificationRunId", id.toString());
+    started.put("command", verification.command());
+    emit(agentRunId, AgentEventType.VERIFICATION_STARTED, started);
+
+    Instant since = Instant.now().minusSeconds(1);
+    Path log = logs.resolve("verification-" + id + ".log");
+    SupervisedProcess process;
+    try {
+      // stderr al mismo sitio que stdout: la salida se guarda entera, en orden.
+      process =
+          supervisor.start(
+              List.of("sh", "-c", "exec 2>&1\n" + verification.command()),
+              workspace.path(),
+              provider.environment(runnerEnv),
+              log,
+              line -> {});
+    } catch (IOException e) {
+      result.put(ERROR, "No se pudo ejecutar el comando de verificación: " + e.getMessage());
+      return;
+    }
+    verifications.put(id, process);
+    journal.processStarted(id, process.pid(), process.startedAt());
+    java.util.concurrent.atomic.AtomicBoolean timedOut =
+        new java.util.concurrent.atomic.AtomicBoolean();
+    ScheduledFuture<?> deadline =
+        timer.schedule(
+            () -> {
+              timedOut.set(true);
+              process.terminate(cancelGrace);
+            },
+            verification.timeout().toMillis(),
+            TimeUnit.MILLISECONDS);
+    ProcessExit exit;
+    try {
+      exit = process.awaitExit(cancelGrace);
+    } finally {
+      deadline.cancel(false);
+      verifications.remove(id);
+    }
+    result.put(EXIT_CODE, exit.exitCode());
+    if (exit.signal() != null) {
+      result.put("signal", exit.signal());
+    }
+    if (timedOut.get()) {
+      result.put(ERROR, "Se agotó el tiempo máximo (" + verification.timeout() + ")");
+    }
+
+    JUnitReports.Summary tests =
+        JUnitReports.read(workspace.path(), verification.testReportPaths(), since);
+    if (tests.found()) {
+      result.put("tests", tests.totals());
+    }
+    result.put("reports", tests.reports().size());
+    if (Files.exists(log)) {
+      artifact(
+          agentRunId,
+          "VERIFICATION_LOG",
+          () ->
+              spool.addFile(
+                  agentRunId,
+                  id,
+                  ArtifactType.VERIFICATION_LOG,
+                  "verification.log",
+                  TEXT,
+                  log,
+                  Map.of(EXIT_CODE, exit.exitCode())));
+    }
+    if (tests.found() || !tests.unreadable().isEmpty()) {
+      artifact(
+          agentRunId,
+          "TEST_REPORT",
+          () ->
+              spool.add(
+                  agentRunId,
+                  id,
+                  ArtifactType.TEST_REPORT,
+                  "tests.json",
+                  JSON_TYPE,
+                  JSON.writeValueAsBytes(tests.toMap()),
+                  tests.totals()));
+    }
   }
 
   private void emit(UUID id, ParsedEvent event) {
@@ -277,6 +549,9 @@ public final class AgentExecutor implements AutoCloseable {
   /** Termina todas las invocaciones en curso (al parar el runner) y espera su evento de fin. */
   @Override
   public void close() {
+    for (SupervisedProcess process : verifications.values()) {
+      pool.submit(() -> process.terminate(cancelGrace));
+    }
     for (UUID id : running()) {
       Execution execution = executions.get(id);
       if (execution != null) {

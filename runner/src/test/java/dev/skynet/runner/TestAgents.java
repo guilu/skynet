@@ -23,7 +23,7 @@ public final class TestAgents {
   public static ClaudeCodeProvider fakeClaude() {
     return new ClaudeCodeProvider(
         Path.of(System.getProperty("skynet.fakeClaude")).toAbsolutePath().toString(),
-        List.of("JAVA_HOME", "FAKE_CLAUDE_FIXTURE", "FAKE_CLAUDE_DELAY_MS"));
+        List.of("JAVA_HOME", "FAKE_CLAUDE_FIXTURE", "FAKE_CLAUDE_DELAY_MS", "FAKE_CLAUDE_APPLY"));
   }
 
   /** Entorno del runner con el que fake-claude reproduce {@code fixture}. */

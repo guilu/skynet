@@ -31,6 +31,10 @@ import tools.jackson.databind.node.ObjectNode;
  *   <li>{@code FAKE_CLAUDE_DELAY_MS}: pausa entre líneas. Por defecto 10.
  *   <li>{@code FAKE_CLAUDE_HANG}: si el fixture no tiene línea {@code result} (sesión cortada), el
  *       proceso se queda esperando hasta que lo maten. {@code false} para terminar con código 143.
+ *   <li>{@code FAKE_CLAUDE_APPLY}: con {@code 1}, ejecuta de verdad las herramientas {@code Edit},
+ *       {@code Write} y {@code Bash} del fixture en el directorio de trabajo (las rutas del fixture
+ *       se traducen desde su {@code cwd}). Así una ejecución de prueba cambia archivos y hace
+ *       commits.
  *   <li>{@code CLAUDE_CONFIG_DIR}: si está definida, guarda cada sesión en {@code
  *       <dir>/projects/<cwd>/<sesión>.jsonl}, como el CLI real, y {@code --resume} falla si no
  *       encuentra la sesión en el directorio de trabajo actual. Sin ella no comprueba nada.
@@ -74,6 +78,8 @@ public final class FakeClaude {
       }
     }
     long delayMs = Long.parseLong(env.getOrDefault("FAKE_CLAUDE_DELAY_MS", "10"));
+    ToolApplier applier =
+        "1".equals(env.get("FAKE_CLAUDE_APPLY")) ? new ToolApplier(cwd, err) : null;
     boolean sawResult = false;
     boolean isError = false;
 
@@ -87,6 +93,9 @@ public final class FakeClaude {
       }
       String type = node.path("type").asString("");
       if ("system".equals(type) && "init".equals(node.path("subtype").asString(""))) {
+        if (applier != null) {
+          applier.fixtureCwd(node.path("cwd").asString(""));
+        }
         node.put("cwd", cwd.toString());
       }
       if ("result".equals(type)) {
@@ -96,6 +105,9 @@ public final class FakeClaude {
       String json = JSON.writeValueAsString(node);
       out.println(json);
       out.flush();
+      if (applier != null && "assistant".equals(type)) {
+        applier.apply(node.path("message").path("content"));
+      }
       if (sessionFile != null) {
         Files.createDirectories(sessionFile.getParent());
         Files.writeString(

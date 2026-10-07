@@ -7,6 +7,8 @@ import com.sun.net.httpserver.HttpServer;
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.runner.agent.AgentExecutor;
+import dev.skynet.runner.agent.ArtifactSender;
+import dev.skynet.runner.agent.ArtifactSpool;
 import dev.skynet.runner.agent.EventSender;
 import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
@@ -84,6 +86,8 @@ class RunnerDaemonTest {
     ControlPlaneClient client = new ControlPlaneClient(config.controlPlane());
     EventSender sender =
         new EventSender(journal, client, Duration.ofMillis(100), Duration.ofMillis(100));
+    ArtifactSender artifactSender =
+        new ArtifactSender(journal, client, Duration.ofMillis(100), Duration.ofMillis(100));
     ProcessSupervisor supervisor = new ProcessSupervisor();
     AgentExecutor executor =
         new AgentExecutor(
@@ -94,10 +98,13 @@ class RunnerDaemonTest {
             TestAgents.fakeClaudeEnv("02-tools"),
             config.logsDir(),
             config.cancelGrace(),
-            sender::wakeUp);
+            sender::wakeUp,
+            new ArtifactSpool(journal, config.artifactsDir(), artifactSender::wakeUp));
     RunnerDaemon daemon =
-        new RunnerDaemon(config, client, journal, executor, sender, supervisor, "2.1.0");
+        new RunnerDaemon(
+            config, client, journal, executor, sender, artifactSender, supervisor, "2.1.0");
     closeables.add(sender);
+    closeables.add(artifactSender);
     closeables.add(daemon);
     return daemon;
   }
@@ -123,6 +130,7 @@ class RunnerDaemonTest {
   @Test
   void runsAStartCommandAndDeliversEveryEventDespiteFailedSends() throws Exception {
     controlPlane.failEventsTimes.set(3);
+    controlPlane.failArtifactsTimes.set(2);
     UUID agentRunId = UUID.randomUUID();
     RunnerCommand start = TestAgents.start(agentRunId, repo.toString(), null);
     controlPlane.commands.add(start);
@@ -145,6 +153,16 @@ class RunnerDaemonTest {
     assertThat(events.getLast().get("payload").get("exitCode").asInt()).isZero();
     await("journal vacío", () -> journal.pending(1).isEmpty());
     await("latido", () -> !controlPlane.heartbeats.isEmpty());
+    await("artefactos subidos", () -> journal.pendingArtifacts(1).isEmpty());
+    assertThat(controlPlane.artifactUploads)
+        .hasSize(4)
+        .anySatisfy(b -> assertThat(b).contains("\"type\":\"PROMPT\"").contains("Arregla add"))
+        .anySatisfy(b -> assertThat(b).contains("\"type\":\"LOG\""))
+        .anySatisfy(b -> assertThat(b).contains("\"type\":\"RESULT\""))
+        .anySatisfy(b -> assertThat(b).contains("\"type\":\"GIT_CHANGES\""));
+    try (var spooled = java.nio.file.Files.list(dir.resolve("artifacts"))) {
+      assertThat(spooled).isEmpty();
+    }
   }
 
   @Test
@@ -206,11 +224,36 @@ class RunnerDaemonTest {
         .contains("reinició");
   }
 
+  @Test
+  void closesVerificationsLeftRunningByAPreviousRunnerProcess() throws Exception {
+    UUID agentRunId = UUID.randomUUID();
+    UUID verificationRunId = UUID.randomUUID();
+    Process orphan = new ProcessBuilder("sleep", "60").start();
+    ProcessHandle handle = orphan.toHandle();
+    journal.firstVerification(verificationRunId, agentRunId);
+    journal.processStarted(
+        verificationRunId, handle.pid(), handle.info().startInstant().orElse(Instant.now()));
+
+    daemon().start();
+    await(
+        "agent.verification.completed",
+        () -> controlPlane.typesOf(agentRunId).contains("agent.verification.completed"));
+
+    assertThat(orphan.waitFor(5, TimeUnit.SECONDS)).isTrue();
+    JsonNode payload = controlPlane.eventsOf(agentRunId).getLast().get("payload");
+    assertThat(payload.get("verificationRunId").asString()).isEqualTo(verificationRunId.toString());
+    assertThat(payload.get("error").asString()).contains("reinició");
+    assertThat(journal.unfinishedVerifications()).isEmpty();
+    assertThat(journal.processes()).isEmpty();
+  }
+
   /** Control plane mínimo: implementa el protocolo del runner en memoria. */
   static final class StubControlPlane {
 
     final AtomicInteger registrations = new AtomicInteger();
     final AtomicInteger failEventsTimes = new AtomicInteger();
+    final AtomicInteger failArtifactsTimes = new AtomicInteger();
+    final List<String> artifactUploads = new CopyOnWriteArrayList<>();
     final java.util.concurrent.atomic.AtomicBoolean dropAcks =
         new java.util.concurrent.atomic.AtomicBoolean();
     final Set<String> validTokens = ConcurrentHashMap.newKeySet();
@@ -299,6 +342,17 @@ class RunnerDaemonTest {
           }
           respond(
               exchange, 200, Map.of("accepted", accepted, "duplicates", 0, "rejected", List.of()));
+        } else if (path.equals("/api/runner/artifacts")) {
+          if (failArtifactsTimes.getAndUpdate(n -> Math.max(0, n - 1)) > 0) {
+            respond(exchange, 503, Map.of("detail", "no disponible"));
+            return;
+          }
+          String metadata = exchange.getRequestHeaders().getFirst("X-Artifact-Metadata");
+          artifactUploads.add(
+              new String(java.util.Base64.getUrlDecoder().decode(metadata), StandardCharsets.UTF_8)
+                  + "\n"
+                  + new String(body, StandardCharsets.UTF_8));
+          respond(exchange, 200, Map.of("id", UUID.randomUUID().toString(), "duplicate", false));
         } else {
           respond(exchange, 404, Map.of("detail", path));
         }
