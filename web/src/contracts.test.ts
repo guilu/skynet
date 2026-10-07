@@ -3,16 +3,19 @@
 // añade, quita o renombra un campo, este test falla hasta que se actualicen los tipos.
 import { describe, expect, it } from 'vitest'
 import agentRunDetail from '../../fixtures/contracts/agent-run-detail.json'
+import artifacts from '../../fixtures/contracts/artifacts.json'
 import conversation from '../../fixtures/contracts/conversation.json'
 import dashboardSummary from '../../fixtures/contracts/dashboard-summary.json'
 import runPage from '../../fixtures/contracts/run-page.json'
 import runView from '../../fixtures/contracts/run-view.json'
 import runners from '../../fixtures/contracts/runners.json'
 import storedEvent from '../../fixtures/contracts/stored-event.json'
+import verifications from '../../fixtures/contracts/verifications.json'
 import workflowDefinitions from '../../fixtures/contracts/workflow-definitions.json'
 import type {
   AgentRun,
   AgentRunDetail,
+  ArtifactSummary,
   Conversation,
   ConversationMessage,
   ConversationTurn,
@@ -24,7 +27,9 @@ import type {
   Runner,
   StageRun,
   StoredEvent,
+  TestTotals,
   UnresponsiveAgent,
+  VerificationResult,
   WorkflowDefinition,
   Workspace,
 } from './api'
@@ -159,6 +164,36 @@ const WORKFLOW_DEFINITION: Keys<WorkflowDefinition> = {
   createdAt: true,
 }
 
+const ARTIFACT: Keys<ArtifactSummary> = {
+  id: true,
+  agentRunId: true,
+  verificationRunId: true,
+  type: true,
+  name: true,
+  mediaType: true,
+  size: true,
+  sha256: true,
+  truncated: true,
+  metadata: true,
+  createdAt: true,
+}
+const VERIFICATION: Keys<VerificationResult> = {
+  id: true,
+  agentRunId: true,
+  trigger: true,
+  status: true,
+  command: true,
+  exitCode: true,
+  signal: true,
+  error: true,
+  tests: true,
+  createdAt: true,
+  startedAt: true,
+  finishedAt: true,
+  live: true,
+}
+const TEST_TOTALS: Keys<TestTotals> = { total: true, failed: true, errors: true, skipped: true }
+
 const keysOf = (value: object) => Object.keys(value).sort()
 const expectShape = (value: object, shape: object) => expect(keysOf(value)).toEqual(keysOf(shape))
 
@@ -221,5 +256,16 @@ describe('contratos con el backend', () => {
 
   it('definiciones de workflow', () => {
     workflowDefinitions.forEach((d) => expectShape(d, WORKFLOW_DEFINITION))
+  })
+  it('artefactos', () => {
+    expect(artifacts.map((a) => a.type)).toEqual(['DIFF', 'TEST_REPORT'])
+    artifacts.forEach((a) => expectShape(a, ARTIFACT))
+  })
+
+  it('verificaciones', () => {
+    verifications.forEach((v) => {
+      expectShape(v, VERIFICATION)
+      if (v.tests) expectShape(v.tests, TEST_TOTALS)
+    })
   })
 })

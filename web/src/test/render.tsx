@@ -23,6 +23,9 @@ export function mockFetch(routes: Record<string, unknown>) {
     const key = `${init?.method ?? 'GET'} ${path}`
     const match = key in routes ? key : path in routes ? path : null
     if (match == null) return new Response('{}', { status: 404 })
-    return new Response(JSON.stringify(routes[match]), { status: 200 })
+    const value = routes[match]
+    // Una respuesta ya hecha (p. ej. el contenido de un artefacto) se devuelve tal cual.
+    if (value instanceof Response) return value.clone()
+    return new Response(JSON.stringify(value), { status: 200 })
   }
 }

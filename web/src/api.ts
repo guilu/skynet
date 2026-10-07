@@ -27,6 +27,10 @@ export interface Repository {
   localPath: string
   remoteUrl: string | null
   defaultBranch: string
+  /** Comando de verificación; sin él no se verifica. */
+  validationCommand: string | null
+  /** Globs de los informes JUnit XML, relativos al worktree. */
+  testReportPaths: string[]
   createdAt: string
 }
 
@@ -232,6 +236,59 @@ export interface StoredEvent {
   recordedAt: string
 }
 
+export type ArtifactType =
+  'PROMPT' | 'RESULT' | 'LOG' | 'GIT_CHANGES' | 'DIFF' | 'VERIFICATION_LOG' | 'TEST_REPORT'
+
+/** Artefacto de una invocación o de una verificación, sin su contenido. */
+export interface ArtifactSummary {
+  id: string
+  agentRunId: string
+  verificationRunId: string | null
+  type: ArtifactType
+  name: string
+  mediaType: string
+  size: number
+  sha256: string
+  /** Se recortó por superar el tamaño máximo. */
+  truncated: boolean
+  metadata: Record<string, unknown>
+  createdAt: string
+}
+
+/** Trozo del contenido de un artefacto. */
+export interface ArtifactChunk {
+  bytes: Uint8Array
+  /** Tamaño total del artefacto, en bytes. */
+  size: number
+  offset: number
+}
+
+export type VerificationStatus = 'QUEUED' | 'RUNNING' | 'PASSED' | 'FAILED' | 'ERROR'
+
+export interface TestTotals {
+  total: number
+  failed: number
+  errors: number
+  skipped: number
+}
+
+/** Verificación del worktree, tal como la comprobó Skynet (no lo que declara el agente). */
+export interface VerificationResult {
+  id: string
+  agentRunId: string
+  trigger: 'AUTO' | 'MANUAL'
+  status: VerificationStatus
+  command: string
+  exitCode: number | null
+  signal: string | null
+  error: string | null
+  tests: TestTotals | null
+  createdAt: string
+  startedAt: string | null
+  finishedAt: string | null
+  live: boolean
+}
+
 /** Lanzamiento de un agente; los límites que falten usan los valores por defecto del servidor. */
 export interface LaunchRequest {
   repositoryId: string
@@ -269,6 +326,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return (await res.json()) as T
 }
 
+/** Lee `limit` bytes de un artefacto desde `offset` (el servidor sirve 8 MiB como mucho). */
+async function artifactChunk(id: string, offset: number, limit: number): Promise<ArtifactChunk> {
+  const res = await fetch(`/api/artifacts/${id}/content?offset=${offset}&limit=${limit}`)
+  if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`)
+  const bytes = new Uint8Array(await res.arrayBuffer())
+  return { bytes, size: Number(res.headers.get('X-Artifact-Size') ?? bytes.length), offset }
+}
+
 export const api = {
   projects: () => request<Project[]>('GET', '/api/projects'),
   project: (id: string) => request<Project>('GET', `/api/projects/${id}`),
@@ -278,8 +343,26 @@ export const api = {
     request<Repository[]>('GET', `/api/projects/${projectId}/repositories`),
   registerRepository: (
     projectId: string,
-    body: { name: string; localPath: string; remoteUrl?: string; defaultBranch?: string },
+    body: {
+      name: string
+      localPath: string
+      remoteUrl?: string
+      defaultBranch?: string
+      validationCommand?: string
+      testReportPaths?: string[]
+    },
   ) => request<Repository>('POST', `/api/projects/${projectId}/repositories`, body),
+  /** Cambia el comando de verificación; sin `testReportPaths` se usan los de Gradle y Maven. */
+  configureVerification: (
+    projectId: string,
+    repositoryId: string,
+    body: { validationCommand: string | null; testReportPaths?: string[] },
+  ) =>
+    request<Repository>(
+      'PUT',
+      `/api/projects/${projectId}/repositories/${repositoryId}/verification`,
+      body,
+    ),
   workItems: (projectId: string) =>
     request<WorkItem[]>('GET', `/api/projects/${projectId}/work-items`),
   workItem: (id: string) => request<WorkItem>('GET', `/api/work-items/${id}`),
@@ -310,6 +393,15 @@ export const api = {
     request<Run>('POST', `/api/agent-runs/${id}/fork`, { text }),
   /** Repite el lanzamiento con el mismo prompt y límites; devuelve la ejecución nueva. */
   retryAgent: (id: string) => request<Run>('POST', `/api/agent-runs/${id}/retry`),
+  artifacts: (agentId: string) =>
+    request<ArtifactSummary[]>('GET', `/api/agent-runs/${agentId}/artifacts`),
+  artifactChunk,
+  /** Verificaciones del agente, la más reciente primero. */
+  verifications: (agentId: string) =>
+    request<VerificationResult[]>('GET', `/api/agent-runs/${agentId}/verifications`),
+  /** Reejecuta solo la verificación del worktree del agente. */
+  verify: (agentId: string) =>
+    request<VerificationResult>('POST', `/api/agent-runs/${agentId}/verifications`),
   runners: () => request<Runner[]>('GET', '/api/runners'),
   dashboard: () => request<DashboardSummary>('GET', '/api/dashboard'),
   workflowDefinitions: () => request<WorkflowDefinition[]>('GET', '/api/workflow-definitions'),

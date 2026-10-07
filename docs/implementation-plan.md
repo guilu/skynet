@@ -372,6 +372,16 @@ Se entrega en tres PRs (plan aprobado: verificación aparte del agente, comando 
   - Si el runner se reinicia a mitad, mata el proceso y cierra la verificación con un `error`.
 - fake-claude con `FAKE_CLAUDE_APPLY=1` aplica de verdad los `Edit`, `Write` y `Bash` de la fixture en su directorio de trabajo, para que haya diff y commits que indexar.
 
+**Implementado (M5-C), web:**
+
+- Pestaña **Artefactos** del inspector: rama y commits base y final, archivos modificados con su estado y +/−, el diff del archivo elegido (solo su trozo, por `diffOffset`/`diffLength`), los commits y los logs (`PROMPT`, NDJSON, resultado, log de verificación) leídos por páginas de 512 KB.
+- Diffs y logs en Monaco de solo lectura con un lenguaje `diff` propio. Va empaquetado (sin CDN), solo el editor base y su worker, y se descarga con `React.lazy` la primera vez que hace falta; si no carga, se muestra el texto plano.
+- Pestaña **Verificación**: lo declarado por el agente (subtipo y respuesta final) junto a la última verificación de Skynet (estado, origen, comando, código de salida, duración, totales y tests fallidos del `TEST_REPORT`), las anteriores y el botón «Reejecutar verificación».
+- Pestaña **Coste**: tokens y coste de la invocación, acumulado de la sesión y tabla de las invocaciones encadenadas con su total.
+- La cabecera muestra la última verificación con su estado y «pasados/total tests». Los eventos `verification_run` y `artifact` llevan `agentRunId`, así que aparecen en el timeline del agente y refrescan sus pestañas en vivo.
+- En el proyecto, el registro de repositorio admite comando de verificación y globs de informes, y cada repositorio tiene un formulario «Verificación» para cambiarlos.
+- E2E: el repositorio de prueba tiene un `check.sh` que genera un JUnit XML; tras la ejecución se ven `calc.py`, su diff y el commit, la verificación pasa y reejecutarla crea otra.
+
 ### M6 — Endurecimiento y cierre del MVP (≈1 semana)
 
 - Spring Security (usuario único local, form login), token de runner, CORS.

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
-import { api, WORK_ITEM_TYPES, type WorkItemType } from '../api'
+import { api, WORK_ITEM_TYPES, type Repository, type WorkItemType } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { StatusBadge } from '../components/StatusBadge'
 
@@ -43,17 +43,23 @@ function Repositories({ projectId }: { projectId: string }) {
   const [name, setName] = useState('')
   const [localPath, setLocalPath] = useState('')
   const [defaultBranch, setDefaultBranch] = useState('')
+  const [validationCommand, setValidationCommand] = useState('')
+  const [reportPaths, setReportPaths] = useState('')
   const register = useMutation({
     mutationFn: () =>
       api.registerRepository(projectId, {
         name,
         localPath,
         defaultBranch: defaultBranch || undefined,
+        validationCommand: validationCommand.trim() || undefined,
+        testReportPaths: globs(reportPaths),
       }),
     onSuccess: () => {
       setName('')
       setLocalPath('')
       setDefaultBranch('')
+      setValidationCommand('')
+      setReportPaths('')
       void queryClient.invalidateQueries({ queryKey: ['repositories', projectId] })
     },
   })
@@ -72,6 +78,7 @@ function Repositories({ projectId }: { projectId: string }) {
           <li key={r.id}>
             <strong>{r.name}</strong> <code>{r.localPath}</code>{' '}
             <span className="muted">({r.defaultBranch})</span>
+            <VerificationSettings projectId={projectId} repository={r} />
           </li>
         ))}
       </ul>
@@ -97,12 +104,104 @@ function Repositories({ projectId }: { projectId: string }) {
             placeholder="main"
           />
         </label>
+        <label>
+          Comando de verificación (opcional)
+          <input
+            value={validationCommand}
+            onChange={(e) => setValidationCommand(e.target.value)}
+            placeholder="./gradlew test"
+          />
+        </label>
+        <label>
+          Informes JUnit XML, un glob por línea (vacío: los de Gradle y Maven)
+          <textarea
+            value={reportPaths}
+            onChange={(e) => setReportPaths(e.target.value)}
+            rows={2}
+            placeholder="**/build/test-results/**/*.xml"
+          />
+        </label>
         <button type="submit" disabled={register.isPending}>
           Registrar repositorio
         </button>
         <ErrorMessage error={register.error} />
       </form>
     </section>
+  )
+}
+
+/** Globs escritos uno por línea; sin ninguno, `undefined` para que el servidor use los suyos. */
+function globs(text: string): string[] | undefined {
+  const list = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+  return list.length > 0 ? list : undefined
+}
+
+/**
+ * Comando con el que Skynet verifica cada invocación en su worktree, independiente de lo que
+ * declare el agente.
+ */
+function VerificationSettings({
+  projectId,
+  repository,
+}: {
+  projectId: string
+  repository: Repository
+}) {
+  const queryClient = useQueryClient()
+  const [command, setCommand] = useState(repository.validationCommand ?? '')
+  const [reportPaths, setReportPaths] = useState(repository.testReportPaths.join('\n'))
+  const save = useMutation({
+    mutationFn: () =>
+      api.configureVerification(projectId, repository.id, {
+        validationCommand: command.trim() || null,
+        testReportPaths: globs(reportPaths),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['repositories', projectId] })
+    },
+  })
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    save.mutate()
+  }
+
+  return (
+    <details className="small">
+      <summary>
+        Verificación:{' '}
+        {repository.validationCommand ? (
+          <code>{repository.validationCommand}</code>
+        ) : (
+          <span className="muted">sin comando</span>
+        )}
+      </summary>
+      <form className="form" onSubmit={submit}>
+        <label>
+          Comando de verificación
+          <input
+            value={command}
+            onChange={(e) => setCommand(e.target.value)}
+            placeholder="./gradlew test"
+          />
+        </label>
+        <label>
+          Informes JUnit XML, un glob por línea
+          <textarea value={reportPaths} onChange={(e) => setReportPaths(e.target.value)} rows={2} />
+        </label>
+        <button type="submit" disabled={save.isPending}>
+          Guardar verificación
+        </button>
+        {save.isSuccess && (
+          <span role="status" className="small">
+            Guardado.
+          </span>
+        )}
+        <ErrorMessage error={save.error} />
+      </form>
+    </details>
   )
 }
 

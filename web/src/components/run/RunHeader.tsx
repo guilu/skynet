@@ -2,7 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { api, type Run } from '../../api'
-import { elapsed, formatCost, formatDuration, formatNumber, TONE_ICONS } from '../../format'
+import {
+  elapsed,
+  formatCost,
+  formatDuration,
+  formatNumber,
+  isTerminal,
+  TONE_ICONS,
+} from '../../format'
 import { useNow } from '../../useNow'
 import type { StreamState } from '../../useEventStream'
 import { ErrorMessage } from '../ErrorMessage'
@@ -30,6 +37,13 @@ export function RunHeader({ run, stream }: { run: Run; stream: StreamState }) {
     enabled: !!agent?.runnerId,
   })
   const runner = runners.data?.find((r) => r.id === agent?.runnerId)
+  // La verificación llega cuando el agente ya ha terminado.
+  const verifications = useQuery({
+    queryKey: ['verifications', agent?.id],
+    queryFn: () => api.verifications(agent!.id),
+    enabled: agent != null && isTerminal(agent.status),
+  })
+  const verification = verifications.data?.[0]
   const cancellable = run.currentAgentRunId != null
   const [confirming, setConfirming] = useState(false)
   const cancel = useMutation({
@@ -73,6 +87,22 @@ export function RunHeader({ run, stream }: { run: Run; stream: StreamState }) {
             {agent?.currentTool && <span className="muted small"> · {agent.currentTool}</span>}
           </dd>
         </div>
+        {verification && (
+          <div>
+            <dt>Verificación</dt>
+            <dd>
+              <StatusBadge status={verification.status} />
+              {verification.tests && (
+                <span className="muted small">
+                  {' '}
+                  ·{' '}
+                  {verification.tests.total - verification.tests.failed - verification.tests.errors}
+                  /{verification.tests.total} tests
+                </span>
+              )}
+            </dd>
+          </div>
+        )}
         <div>
           <dt>Runner</dt>
           <dd>{runner?.name ?? (agent?.runnerId ? agent.runnerId.slice(0, 8) : 'sin asignar')}</dd>

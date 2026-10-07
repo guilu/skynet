@@ -74,6 +74,8 @@ export function kindOf(type: string): EventKind {
     case 'agent.process.exited':
     case 'agent.rate_limit':
     case 'agent.permission.denied':
+    case 'agent.verification.started':
+    case 'agent.verification.completed':
       return 'lifecycle'
     default:
       return type.endsWith('.status.changed') ? 'status' : 'other'
@@ -81,7 +83,11 @@ export function kindOf(type: string): EventKind {
 }
 
 export function originOf(event: StoredEvent): Origin {
-  if (event.type === 'agent.process.exited' || event.type === 'agent.workspace.ready') {
+  if (
+    event.type === 'agent.process.exited' ||
+    event.type === 'agent.workspace.ready' ||
+    event.type.startsWith('agent.verification.')
+  ) {
     return 'runner'
   }
   if (event.type.startsWith('agent.') && kindOf(event.type) !== 'status') return 'agent'
@@ -98,6 +104,11 @@ export function severityOf(event: StoredEvent): Severity {
       return 'warn'
     case 'agent.rate_limit':
       return p.status === 'allowed' ? 'info' : 'warn'
+    case 'agent.verification.completed': {
+      const tests = p.tests as { failed?: number; errors?: number } | undefined
+      const failedTests = (tests?.failed ?? 0) + (tests?.errors ?? 0) > 0
+      return p.error != null || p.exitCode !== 0 || failedTests ? 'error' : 'info'
+    }
     case 'agent.process.exited':
       if (p.error != null) return 'error'
       if (p.signal != null) return 'warn'
@@ -123,7 +134,9 @@ function isToolTransition(event: StoredEvent): boolean {
 const str = (v: unknown) => (typeof v === 'string' ? v : null)
 
 function single(event: StoredEvent, ctx: TimelineContext): TimelineEntry {
-  const agentId = event.aggregateType === 'agent_run' ? event.aggregateId : null
+  // Las verificaciones y los artefactos llevan su agente en el payload.
+  const agentId =
+    event.aggregateType === 'agent_run' ? event.aggregateId : str(event.payload.agentRunId)
   return {
     id: `e${event.sequence}`,
     sequence: event.sequence,

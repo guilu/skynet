@@ -13,10 +13,13 @@ import {
 import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
 import { AgentActions } from './AgentActions'
+import { ArtifactsTab } from './ArtifactsTab'
 import { agentOutcome, toolCallsOf, type ToolCall } from './agentEvents'
 import { Conversation } from './Conversation'
+import { CostTab } from './CostTab'
 import { LongText } from './LongText'
 import { INSPECTOR_TABS, type InspectorTab } from './useRunSelection'
+import { VerificationTab } from './VerificationTab'
 
 interface Props {
   agent: AgentRun
@@ -80,6 +83,9 @@ export function Inspector({ agent, events, tab, sequence, onTab, onShowEvent }: 
           <Conversation agent={agent} events={events} onShowEvent={onShowEvent} />
         )}
         {tab === 'tools' && <Tools events={events} onShowEvent={onShowEvent} />}
+        {tab === 'artifacts' && <ArtifactsTab agent={agent} />}
+        {tab === 'verification' && <VerificationTab agent={agent} events={events} />}
+        {tab === 'cost' && <CostTab agent={agent} />}
         {tab === 'event' && <OriginalEvent sequence={sequence} />}
       </div>
     </section>

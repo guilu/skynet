@@ -38,6 +38,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
   await test.step('registrar repositorio y crear trabajo', async () => {
     await page.getByLabel('Nombre', { exact: true }).fill('demo')
     await page.getByLabel('Ruta local (en la máquina del runner)').fill(repoPath)
+    await page.getByLabel('Comando de verificación (opcional)').fill('sh check.sh')
     await page.getByRole('button', { name: 'Registrar repositorio' }).click()
     await expect(page.getByText(repoPath)).toBeVisible()
 
@@ -85,6 +86,37 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     const tools = page.getByRole('tabpanel').locator('.tool-calls > li')
     await expect(tools).toHaveCount(3)
     await expect(page.getByRole('tabpanel').getByText('Hecha')).toHaveCount(3)
+  })
+
+  await test.step('artefactos: archivo modificado, su diff y el commit', async () => {
+    await page.getByRole('tab', { name: 'Artefactos' }).click()
+    const panel = page.getByRole('tabpanel')
+    await expect(
+      panel.getByRole('list', { name: 'Archivos modificados' }).getByRole('button', {
+        name: /calc\.py/,
+      }),
+    ).toBeVisible({ timeout: 30_000 })
+    await expect(panel.getByLabel('Diff de calc.py')).toContainText('return a + b', {
+      timeout: 30_000,
+    })
+    await expect(panel.getByText('fix add')).toBeVisible()
+  })
+
+  await test.step('verificación independiente y reejecución', async () => {
+    await page.getByRole('tab', { name: 'Verificación' }).click()
+    const panel = page.getByRole('tabpanel')
+    const verified = panel.getByRole('region', { name: 'Verificado por Skynet' })
+    await expect(verified.getByText('Pasa')).toBeVisible({ timeout: 60_000 })
+    await expect(verified.getByText('1 tests · 0 fallidos · 0 omitidos')).toBeVisible()
+    await expect(verified.getByText('sh check.sh')).toBeVisible()
+    await expect(header.getByText('1/1 tests')).toBeVisible()
+
+    await panel.getByRole('button', { name: 'Reejecutar verificación' }).click()
+    await expect(panel.getByRole('heading', { name: 'Anteriores' })).toBeVisible({
+      timeout: 30_000,
+    })
+    await expect(verified.getByText('Manual')).toBeVisible({ timeout: 60_000 })
+    await expect(verified.getByText('Pasa')).toBeVisible({ timeout: 60_000 })
   })
 
   await test.step('el timeline no pierde ni repite eventos tras reconectar', async () => {

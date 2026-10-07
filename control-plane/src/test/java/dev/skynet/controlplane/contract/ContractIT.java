@@ -2,6 +2,7 @@ package dev.skynet.controlplane.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.skynet.controlplane.artifact.ArtifactSummary;
 import dev.skynet.controlplane.dashboard.DashboardSummary;
 import dev.skynet.controlplane.event.StoredEvent;
 import dev.skynet.controlplane.runner.RunnerView;
@@ -16,6 +17,7 @@ import dev.skynet.controlplane.workflow.RunTotals;
 import dev.skynet.controlplane.workflow.RunView;
 import dev.skynet.controlplane.workflow.StageRunView;
 import dev.skynet.controlplane.workflow.UnresponsiveAgent;
+import dev.skynet.controlplane.workflow.VerificationResult;
 import dev.skynet.controlplane.workflow.WorkflowDefinitionView;
 import dev.skynet.controlplane.workflow.WorkspaceView;
 import dev.skynet.protocol.AgentObservableStatus;
@@ -63,7 +65,9 @@ class ContractIT extends IntegrationTest {
         Arguments.of("dashboard-summary", Samples.dashboard()),
         Arguments.of("stored-event", Samples.toolStartedEvent()),
         Arguments.of("workflow-definitions", List.of(Samples.adhocDefinition())),
-        Arguments.of("conversation", Samples.conversation()));
+        Arguments.of("conversation", Samples.conversation()),
+        Arguments.of("artifacts", Samples.artifacts()),
+        Arguments.of("verifications", Samples.verifications()));
   }
 
   @ParameterizedTest(name = "{0}")
@@ -358,6 +362,69 @@ class ContractIT extends IntegrationTest {
           1,
           "id: adhoc\nversion: 1\nstages:\n  - id: agent\n    type: agent\n",
           T0);
+    }
+
+    static final UUID VERIFICATION = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0f");
+    static final UUID DIFF_ARTIFACT = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a10");
+    static final UUID REPORT_ARTIFACT = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a11");
+
+    static List<ArtifactSummary> artifacts() {
+      Map<String, Object> changes = new LinkedHashMap<>();
+      changes.put("branch", "skynet/tkm-1/0b6a3c1e");
+      changes.put("baseCommit", "e423d4a4c8acc52a200b70a76f322933eb3d6679");
+      changes.put("headCommit", "c3c0c205acb0adea069f8d5ee5d835a24da433b1");
+      changes.put("commits", 1);
+      changes.put("files", 1);
+      changes.put("insertions", 1);
+      changes.put("deletions", 1);
+      changes.put("uncommittedFiles", 0);
+      Map<String, Object> totals = new LinkedHashMap<>();
+      totals.put("total", 12);
+      totals.put("failed", 1);
+      totals.put("errors", 0);
+      totals.put("skipped", 2);
+      return List.of(
+          new ArtifactSummary(
+              DIFF_ARTIFACT,
+              AGENT,
+              null,
+              "DIFF",
+              "changes.diff",
+              "text/x-diff",
+              157,
+              "35dc711418e60edc7974186bd853c7ab08db843f16e43066417b07a53d8566ba",
+              false,
+              changes,
+              at(43)),
+          new ArtifactSummary(
+              REPORT_ARTIFACT,
+              AGENT,
+              VERIFICATION,
+              "TEST_REPORT",
+              "tests.json",
+              "application/json",
+              812,
+              "a4d62eed966ce4e2563a0776d2d4a4ed3d87a09ecc026f0e478a39ec9b613107",
+              false,
+              totals,
+              at(58)));
+    }
+
+    static List<VerificationResult> verifications() {
+      return List.of(
+          new VerificationResult(
+              VERIFICATION,
+              AGENT,
+              "AUTO",
+              "FAILED",
+              "./gradlew test",
+              1,
+              null,
+              null,
+              new VerificationResult.TestTotals(12, 1, 0, 2),
+              at(43),
+              at(44),
+              at(58)));
     }
 
     private Samples() {}

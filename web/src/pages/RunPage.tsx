@@ -41,6 +41,18 @@ export function RunPage() {
 
   // Cada evento se aplica a la vista en caché; solo se relee lo que el evento no trae.
   const { events, state } = useEventStream({ workflowRunId: runId }, (event) => {
+    // Verificaciones y artefactos van aparte de la vista de la ejecución: se releen sus listas.
+    if (event.aggregateType === 'verification_run' || event.aggregateType === 'artifact') {
+      const agentId = event.payload.agentRunId
+      const key = event.aggregateType === 'artifact' ? 'artifacts' : 'verifications'
+      void queryClient.invalidateQueries({
+        queryKey: typeof agentId === 'string' ? [key, agentId] : [key],
+      })
+      if (key === 'verifications' && event.type === 'agent.verification.completed') {
+        void queryClient.invalidateQueries({ queryKey: ['artifacts'] })
+      }
+      return
+    }
     let refetch = 'now'
     queryClient.setQueryData<Run>(['run', runId], (current) => {
       if (!current) return current

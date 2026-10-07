@@ -61,7 +61,7 @@ Sin Docker ni `SKYNET_TEST_DB_URL`, los tests de integración se omiten.
 
 ### E2E
 
-`scripts/e2e.sh` compila y arranca el control plane y un runner con fake-claude, sirve la web con `vite preview` y ejecuta Playwright (`web/e2e/`): crea proyecto, repositorio y trabajo, lanza un agente, sigue herramientas y mensajes en vivo, corta la conexión del navegador y comprueba que al reconectar no se pierde ni se repite nada, que termina con coste y que un mensaje continúa la conversación en una invocación nueva. Otra prueba cancela un agente a mitad y comprueba que no queda ningún proceso de fake-claude. Necesita un PostgreSQL en `localhost:5432` (el de `docker compose`) y Chromium para Playwright:
+`scripts/e2e.sh` compila y arranca el control plane y un runner con fake-claude, sirve la web con `vite preview` y ejecuta Playwright (`web/e2e/`): crea proyecto, repositorio y trabajo, lanza un agente, sigue herramientas y mensajes en vivo, corta la conexión del navegador y comprueba que al reconectar no se pierde ni se repite nada, que termina con coste, que la pestaña Artefactos muestra el archivo modificado, su diff y el commit, que la verificación del repositorio pasa y se puede reejecutar, y que un mensaje continúa la conversación en una invocación nueva. Otra prueba cancela un agente a mitad y comprueba que no queda ningún proceso de fake-claude. Necesita un PostgreSQL en `localhost:5432` (el de `docker compose`) y Chromium para Playwright:
 
 ```bash
 docker compose -f deploy/docker-compose.yml up -d

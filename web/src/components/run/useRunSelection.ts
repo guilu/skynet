@@ -7,6 +7,9 @@ export const INSPECTOR_TABS = [
   { id: 'prompt', label: 'Prompt' },
   { id: 'conversation', label: 'Conversación' },
   { id: 'tools', label: 'Herramientas' },
+  { id: 'artifacts', label: 'Artefactos' },
+  { id: 'verification', label: 'Verificación' },
+  { id: 'cost', label: 'Coste' },
   { id: 'event', label: 'Evento original' },
 ] as const
 
