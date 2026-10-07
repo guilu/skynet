@@ -31,9 +31,16 @@ fi
 rm -rf "$E2E_REPO_PATH" "$OUT/runner-home" "$OUT/claude" "$OUT"/*.log
 mkdir -p "$E2E_REPO_PATH"
 git -C "$E2E_REPO_PATH" init -q -b main
-printf 'def add(a, b):\n    return a - b\n' > "$E2E_REPO_PATH/calc.py"
+# Secretos falsos que no deben llegar nunca a la web (web/e2e/review.e2e.ts): uno en calc.py, que
+# sale como contexto en el diff, y otro que imprime check.sh, que sale en el log de la verificación.
+export E2E_SECRET_GITHUB=ghp_e2eFakeTokenForRedaction0123456789ab
+export E2E_SECRET_AWS=AKIAE2EFAKEKEY012345
+printf '# token de pruebas: %s\ndef add(a, b):\n    return a - b\n' "$E2E_SECRET_GITHUB" > "$E2E_REPO_PATH/calc.py"
 # Comando de verificación del repositorio: un informe JUnit que pasa solo si add() suma.
-cat > "$E2E_REPO_PATH/check.sh" <<'SH'
+cat > "$E2E_REPO_PATH/check.sh" <<SH
+echo "usando AWS_ACCESS_KEY_ID=$E2E_SECRET_AWS"
+SH
+cat >> "$E2E_REPO_PATH/check.sh" <<'SH'
 mkdir -p build/test-results/test
 if grep -q 'a + b' calc.py; then
   r='<testcase classname="CalcTest" name="adds"/>'

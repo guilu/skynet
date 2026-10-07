@@ -218,6 +218,13 @@ POST       /api/agent-runs/{id}/workspace/cleanup   # 202 + AgentRunDetail; 409 
 
 `WorkspaceView` incluye `cleanupRequestedAt`, `cleanupError` y `removedAt`. Con el worktree eliminado (o eliminándose), reanudar, bifurcar y verificar dan 409; reintentar sigue funcionando.
 
+Añadido en M6-D:
+
+```text
+GET        /api/dashboard/metrics?period=24h|7d|30d&tz=<zona IANA>  # RunMetrics: totales por estado, duración mediana, tokens, coste y tramos por hora (24h) o día
+GET        /api/workflow-runs?since=<instante>                       # filtro por fecha de creación, combinable con status y projectId
+```
+
 Los errores siguen RFC 9457 (`ProblemDetail`): 400 validación, 401 sin sesión, 403 sin token CSRF, 404 inexistente, 409 transición no permitida, clave duplicada o conflicto de versión.
 
 ---
@@ -450,6 +457,13 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 - El runner borra cada hora los logs locales (`logs/`) de más de `SKYNET_LOG_RETENTION_DAYS` (7) días, salvo los de invocaciones en curso; ya están subidos como artefactos.
 - Web: «Eliminar worktree…» en el agente, con confirmación; el agente muestra «Worktree eliminado» (o que se está eliminando, o por qué falló) y desactiva continuar, bifurcar y reejecutar la verificación.
 - E2E: reiniciar el control plane a mitad (termina «Completada») y matar el runner con `kill -9` a mitad (termina «Fallida» sin procesos vivos), con `scripts/e2e-service.sh`.
+
+**Implementado (M6-D), métricas y revisión de la web:**
+
+- `GET /api/dashboard/metrics` resume las ejecuciones creadas en el periodo (24 h, 7 o 30 días): total, activas, completadas, fallidas y canceladas, duración mediana de las terminadas, tokens de entrada y salida y coste (suma de sus agentes), y la serie por hora (24 h) o por día (7 y 30 días) en la zona del navegador (`tz`), con los tramos vacíos incluidos. `GET /api/workflow-runs` acepta `since`.
+- Web: «Métricas» al pie del dashboard, con el periodo en la URL (`?period=`). Cada cifra enlaza a Ejecuciones filtrada por estado y fecha («Creadas desde…», con «Quitar»). Gráfico de barras propio en SVG con detalle al pasar por encima y «Ver como tabla».
+- E2E con `@axe-core/playwright` (WCAG 2.1 A y AA) en el login, todas las pestañas de una ejecución, el dashboard, Ejecuciones, Proyectos, Runners, Actividad, Workflows, un proyecto y un trabajo. Lo que encontró: el verde de «Completada» no llegaba a 4,5:1 sobre blanco (`--ok` pasa a `#1a7a43`).
+- E2E «ningún secreto llega al DOM»: el repositorio de prueba lleva un token de GitHub en `calc.py` y su `check.sh` imprime una clave de AWS; ni el HTML de cada pestaña ni la API de eventos los contienen, y el diff y el log de la verificación muestran `[REDACTED]`.
 
 **Duración estimada Fase 1: 9–11 semanas** para una persona; paralelizable en dos líneas (backend/runner y frontend) a partir de M1.
 

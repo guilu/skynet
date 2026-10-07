@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { api } from '../api'
+import { DashboardMetrics } from '../components/DashboardMetrics'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { RunsTable } from '../components/RunsTable'
 import { StatusBadge } from '../components/StatusBadge'
@@ -8,8 +9,8 @@ import { formatDateTime } from '../format'
 import { useNow } from '../useNow'
 
 /**
- * Dashboard de excepciones (ADR-0001 §3.2): solo lo que requiere atención, cada bloque enlazado a
- * su lista completa. Las métricas agregadas llegan en M6.
+ * Dashboard (ADR-0001 §3.2): primero lo que requiere atención, cada bloque enlazado a su lista
+ * completa, y después las métricas del periodo elegido.
  */
 export function DashboardPage() {
   const summary = useQuery({
@@ -79,6 +80,7 @@ export function DashboardPage() {
           <Link to="/runs?status=FAILED">Ver todas las fallidas</Link>
         </section>
       )}
+      <DashboardMetrics />
     </>
   )
 }

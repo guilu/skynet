@@ -198,6 +198,75 @@ class ReadProjectionsIT extends IntegrationTest {
   }
 
   @Test
+  void metricsByPeriodMatchTheFilteredLists() {
+    Launched ok = launch("ALPHA", "bien");
+    Launched failed = launch("ALPHA", "mal");
+    Launched old = launch("ALPHA", "antigua");
+    Instant now = Instant.now();
+    finish(ok, "SUCCEEDED", now.minus(1, ChronoUnit.HOURS), 60, "0.5", 100L);
+    finish(failed, "FAILED", now.minus(2, ChronoUnit.HOURS), 120, "0.25", null);
+    finish(old, "SUCCEEDED", now.minus(10, ChronoUnit.DAYS), 30, "1", 5L);
+    jdbc.sql("UPDATE workflow_run SET created_at = ? WHERE id = ?")
+        .params(Timestamp.from(now.minus(10, ChronoUnit.DAYS)), old.runId())
+        .update();
+
+    JsonNode week = get("/api/dashboard/metrics?period=7d&tz=Europe/Madrid");
+    assertThat(week.path("bucket").asString()).isEqualTo("day");
+    assertThat(week.path("total").asLong()).isEqualTo(2);
+    assertThat(week.path("succeeded").asLong()).isEqualTo(1);
+    assertThat(week.path("failed").asLong()).isEqualTo(1);
+    assertThat(week.path("active").asLong()).isZero();
+    assertThat(week.path("medianDurationSeconds").asDouble()).isEqualTo(90.0);
+    assertThat(week.path("costUsd").decimalValue()).isEqualByComparingTo("0.75");
+    assertThat(week.path("inputTokens").asLong()).isEqualTo(100);
+    JsonNode buckets = week.path("buckets");
+    assertThat(buckets.size()).isBetween(7, 8);
+    long inBuckets = 0;
+    for (JsonNode b : buckets) {
+      inBuckets += b.path("total").asLong();
+    }
+    assertThat(inBuckets).isEqualTo(2);
+
+    JsonNode month = get("/api/dashboard/metrics?period=30d");
+    assertThat(month.path("total").asLong()).isEqualTo(3);
+    assertThat(month.path("costUsd").decimalValue()).isEqualByComparingTo("1.75");
+    JsonNode day = get("/api/dashboard/metrics?period=24h");
+    assertThat(day.path("bucket").asString()).isEqualTo("hour");
+    assertThat(day.path("buckets").size()).isBetween(24, 25);
+
+    // Cada cifra enlaza a la lista con el mismo filtro.
+    String since = week.path("since").asString();
+    assertThat(get("/api/workflow-runs?since=" + since).path("total").asLong()).isEqualTo(2);
+    assertThat(get("/api/workflow-runs?status=FAILED&since=" + since).path("total").asLong())
+        .isEqualTo(1);
+    assertThat(get("/api/workflow-runs").path("total").asLong()).isEqualTo(3);
+
+    assertThatThrownBy(() -> get("/api/dashboard/metrics?period=1y"))
+        .isInstanceOfSatisfying(
+            HttpClientErrorException.class,
+            e -> assertThat(e.getStatusCode().value()).isEqualTo(400));
+    assertThatThrownBy(() -> get("/api/dashboard/metrics?tz=Marte/Olympus"))
+        .isInstanceOfSatisfying(
+            HttpClientErrorException.class,
+            e -> assertThat(e.getStatusCode().value()).isEqualTo(400));
+  }
+
+  /** Termina una ejecución a mano: estado, duración y coste e input del agente. */
+  private void finish(
+      Launched run, String status, Instant started, int seconds, String cost, Long input) {
+    jdbc.sql("UPDATE workflow_run SET status = ?, started_at = ?, finished_at = ? WHERE id = ?")
+        .params(
+            status,
+            Timestamp.from(started),
+            Timestamp.from(started.plusSeconds(seconds)),
+            run.runId())
+        .update();
+    jdbc.sql("UPDATE agent_run SET cost_usd = ?, input_tokens = ? WHERE id = ?")
+        .params(new BigDecimal(cost), input, run.agentId())
+        .update();
+  }
+
+  @Test
   void singleEventsAndHistoryBackwards() {
     Launched run = launch("ALPHA", "x");
     List<Long> sequences = new ArrayList<>();

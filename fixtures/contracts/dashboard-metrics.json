@@ -1,0 +1,29 @@
+{
+  "since" : "2026-10-04T09:00:00Z",
+  "until" : "2026-10-05T09:00:00Z",
+  "bucket" : "hour",
+  "total" : 3,
+  "active" : 1,
+  "succeeded" : 1,
+  "failed" : 1,
+  "cancelled" : 0,
+  "medianDurationSeconds" : 95.5,
+  "inputTokens" : 1200,
+  "outputTokens" : 3400,
+  "costUsd" : 0.1234,
+  "buckets" : [ {
+    "start" : "2026-10-05T08:00:00Z",
+    "total" : 2,
+    "succeeded" : 1,
+    "failed" : 1,
+    "cancelled" : 0,
+    "costUsd" : 0.1234
+  }, {
+    "start" : "2026-10-05T09:00:00Z",
+    "total" : 1,
+    "succeeded" : 0,
+    "failed" : 0,
+    "cancelled" : 0,
+    "costUsd" : null
+  } ]
+}

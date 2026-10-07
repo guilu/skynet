@@ -8,7 +8,7 @@
   --border: #e2e2e7;
   --accent: #3b5bdb;
   --accent-fg: #ffffff;
-  --ok: #1f8a4c;
+  --ok: #1a7a43;
   --bad: #b3261e;
   --warn: #a15c00;
   --active: #3b5bdb;
@@ -870,4 +870,113 @@ button.link {
 
 .login h1:focus {
   outline: none;
+}
+
+/* --- Métricas del dashboard (M6-D) --- */
+.metrics-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.segmented button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  padding: var(--space-1) var(--space-3);
+}
+.segmented button + button {
+  border-left: 1px solid var(--border);
+}
+.segmented button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+.stat-tile {
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+}
+.stat-tile dt {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.stat-tile dd {
+  margin: 0;
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+.runs-chart {
+  margin: 0;
+}
+.runs-chart figcaption {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  margin-bottom: var(--space-1);
+}
+.chart-frame {
+  position: relative;
+}
+.chart-frame svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.chart-grid line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.chart-grid text,
+.chart-axis {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.chart-baseline {
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+.chart-bar {
+  fill: var(--accent);
+}
+.chart-bar.is-hover {
+  opacity: 0.8;
+}
+.chart-hit {
+  fill: transparent;
+}
+.chart-tooltip {
+  position: absolute;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+  padding: var(--space-2);
+  font-size: 0.8125rem;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.chart-table summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  margin-top: var(--space-2);
 }

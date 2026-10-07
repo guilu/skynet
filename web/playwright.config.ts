@@ -10,6 +10,8 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 15_000 },
   retries: 0,
+  // Las pruebas de reinicio paran el control plane y el runner que comparten todas.
+  workers: 1,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     // El navegador entra por el proxy que levanta la prueba (:4100 → :4173) para poder cortarle la

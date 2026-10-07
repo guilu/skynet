@@ -12,6 +12,7 @@ import dev.skynet.controlplane.workflow.AgentRunKind;
 import dev.skynet.controlplane.workflow.AgentRunView;
 import dev.skynet.controlplane.workflow.ConversationView;
 import dev.skynet.controlplane.workflow.PromptView;
+import dev.skynet.controlplane.workflow.RunMetrics;
 import dev.skynet.controlplane.workflow.RunPage;
 import dev.skynet.controlplane.workflow.RunTotals;
 import dev.skynet.controlplane.workflow.RunView;
@@ -63,6 +64,7 @@ class ContractIT extends IntegrationTest {
         Arguments.of("agent-run-detail", Samples.agentDetail()),
         Arguments.of("runners", List.of(Samples.onlineRunner(), Samples.staleRunner())),
         Arguments.of("dashboard-summary", Samples.dashboard()),
+        Arguments.of("dashboard-metrics", Samples.metrics()),
         Arguments.of("stored-event", Samples.toolStartedEvent()),
         Arguments.of("workflow-definitions", List.of(Samples.adhocDefinition())),
         Arguments.of("conversation", Samples.conversation()),
@@ -336,6 +338,25 @@ class ContractIT extends IntegrationTest {
           List.of(new UnresponsiveAgent(AGENT, RUN, "TKM-1", at(17))),
           List.of(staleRunner()),
           at(600));
+    }
+
+    static RunMetrics metrics() {
+      return new RunMetrics(
+          at(-86_400),
+          at(0),
+          "hour",
+          3,
+          1,
+          1,
+          1,
+          0,
+          95.5,
+          1200L,
+          3400L,
+          new BigDecimal("0.1234"),
+          List.of(
+              new RunMetrics.Bucket(at(-3600), 2, 1, 1, 0, new BigDecimal("0.1234")),
+              new RunMetrics.Bucket(at(0), 1, 0, 0, 0, null)));
     }
 
     static StoredEvent toolStartedEvent() {

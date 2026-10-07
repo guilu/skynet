@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -583,13 +584,16 @@ public class RunService {
    * null}: sin filtro).
    */
   @Transactional(readOnly = true)
-  public RunPage list(Set<WorkflowRunStatus> statuses, UUID projectId, int page, int size) {
+  public RunPage list(
+      Set<WorkflowRunStatus> statuses, UUID projectId, Instant since, int page, int size) {
     String where =
         " FROM workflow_run r JOIN work_item w ON w.id = r.work_item_id"
             + " WHERE (CAST(:project AS uuid) IS NULL OR w.project_id = :project)"
+            + " AND (CAST(:since AS timestamptz) IS NULL OR r.created_at >= :since)"
             + (statuses == null || statuses.isEmpty() ? "" : " AND r.status IN (:statuses)");
     Map<String, Object> params = new HashMap<>();
     params.put("project", projectId);
+    params.put("since", since == null ? null : Timestamp.from(since));
     if (statuses != null && !statuses.isEmpty()) {
       params.put("statuses", statuses.stream().map(Enum::name).toList());
     }
@@ -607,6 +611,102 @@ public class RunService {
     Map<UUID, WorkflowRun> byId = new HashMap<>();
     workflowRuns.findAllById(ids).forEach(r -> byId.put(r.getId(), r));
     return new RunPage(views(ids.stream().map(byId::get).toList()), page, size, total);
+  }
+
+  /**
+   * Métricas de las ejecuciones creadas desde {@code since}, en tramos de una hora o de un día
+   * ({@code bucket}) según el calendario de {@code zone}.
+   */
+  @Transactional(readOnly = true)
+  public RunMetrics metrics(Instant since, Instant until, String bucket, ZoneId zone) {
+    if (!bucket.equals("hour") && !bucket.equals("day")) {
+      throw new IllegalArgumentException("Tramo no válido: " + bucket);
+    }
+    Map<String, Object> params = new HashMap<>();
+    params.put("since", Timestamp.from(since));
+    params.put("until", Timestamp.from(until));
+    params.put("unit", bucket);
+    params.put("tz", zone.getId());
+    // Una fila por ejecución del periodo, con la suma de sus agentes.
+    String runs =
+        "WITH runs AS (SELECT r.id, r.status, r.created_at, r.started_at, r.finished_at,"
+            + " (SELECT sum(a.input_tokens) FROM agent_run a JOIN stage_run s"
+            + " ON s.id = a.stage_run_id WHERE s.workflow_run_id = r.id) AS input_tokens,"
+            + " (SELECT sum(a.output_tokens) FROM agent_run a JOIN stage_run s"
+            + " ON s.id = a.stage_run_id WHERE s.workflow_run_id = r.id) AS output_tokens,"
+            + " (SELECT sum(a.cost_usd) FROM agent_run a JOIN stage_run s"
+            + " ON s.id = a.stage_run_id WHERE s.workflow_run_id = r.id) AS cost_usd"
+            + " FROM workflow_run r WHERE r.created_at >= :since AND r.created_at <= :until)";
+    RunMetrics totals =
+        jdbc.sql(
+                runs
+                    + " SELECT count(*) AS total,"
+                    + " count(*) FILTER (WHERE status IN ('PENDING', 'RUNNING')) AS active,"
+                    + " count(*) FILTER (WHERE status = 'SUCCEEDED') AS succeeded,"
+                    + " count(*) FILTER (WHERE status = 'FAILED') AS failed,"
+                    + " count(*) FILTER (WHERE status = 'CANCELLED') AS cancelled,"
+                    + " percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM"
+                    + " finished_at - coalesce(started_at, created_at))) FILTER (WHERE"
+                    + " finished_at IS NOT NULL) AS median,"
+                    + " CAST(sum(input_tokens) AS bigint) AS input_tokens,"
+                    + " CAST(sum(output_tokens) AS bigint) AS output_tokens,"
+                    + " sum(cost_usd) AS cost_usd FROM runs")
+            .params(params)
+            .query(
+                (rs, n) ->
+                    new RunMetrics(
+                        since,
+                        until,
+                        bucket,
+                        rs.getLong("total"),
+                        rs.getLong("active"),
+                        rs.getLong("succeeded"),
+                        rs.getLong("failed"),
+                        rs.getLong("cancelled"),
+                        rs.getObject("median", Double.class),
+                        rs.getObject("input_tokens", Long.class),
+                        rs.getObject("output_tokens", Long.class),
+                        rs.getBigDecimal("cost_usd"),
+                        List.of()))
+            .single();
+    List<RunMetrics.Bucket> buckets =
+        jdbc.sql(
+                runs
+                    + ", buckets AS (SELECT generate_series(date_trunc(:unit, CAST(:since AS"
+                    + " timestamptz) AT TIME ZONE :tz), date_trunc(:unit, CAST(:until AS"
+                    + " timestamptz) AT TIME ZONE :tz), CAST('1 ' || :unit AS interval)) AS b)"
+                    + " SELECT b AT TIME ZONE :tz AS start, count(runs.id) AS total,"
+                    + " count(runs.id) FILTER (WHERE runs.status = 'SUCCEEDED') AS succeeded,"
+                    + " count(runs.id) FILTER (WHERE runs.status = 'FAILED') AS failed,"
+                    + " count(runs.id) FILTER (WHERE runs.status = 'CANCELLED') AS cancelled,"
+                    + " sum(runs.cost_usd) AS cost_usd FROM buckets LEFT JOIN runs"
+                    + " ON date_trunc(:unit, runs.created_at AT TIME ZONE :tz) = b"
+                    + " GROUP BY b ORDER BY b")
+            .params(params)
+            .query(
+                (rs, n) ->
+                    new RunMetrics.Bucket(
+                        rs.getTimestamp("start").toInstant(),
+                        rs.getLong("total"),
+                        rs.getLong("succeeded"),
+                        rs.getLong("failed"),
+                        rs.getLong("cancelled"),
+                        rs.getBigDecimal("cost_usd")))
+            .list();
+    return new RunMetrics(
+        totals.since(),
+        totals.until(),
+        totals.bucket(),
+        totals.total(),
+        totals.active(),
+        totals.succeeded(),
+        totals.failed(),
+        totals.cancelled(),
+        totals.medianDurationSeconds(),
+        totals.inputTokens(),
+        totals.outputTokens(),
+        totals.costUsd(),
+        buckets);
   }
 
   /** Definiciones de workflow, de la más reciente a la más antigua (en la Fase 1, solo adhoc). */
