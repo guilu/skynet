@@ -42,6 +42,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 class SecurityConfiguration {
 
   private static final Logger log = LoggerFactory.getLogger(SecurityConfiguration.class);
+  private static final SecureRandom RANDOM = new SecureRandom();
 
   @Bean
   SecurityFilterChain securityFilterChain(HttpSecurity http, SecurityContextRepository contexts) {
@@ -134,7 +135,7 @@ class SecurityConfiguration {
 
   private static String generatedPassword() {
     byte[] bytes = new byte[18];
-    new SecureRandom().nextBytes(bytes);
+    RANDOM.nextBytes(bytes);
     return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
   }
 }
