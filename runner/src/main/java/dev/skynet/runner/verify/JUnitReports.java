@@ -35,6 +35,7 @@ public final class JUnitReports {
 
   static final int MAX_DETAIL = 4000;
 
+  private static final String TESTSUITE = "testsuite";
   private static final List<String> SKIPPED_DIRS = List.of(".git", "node_modules");
 
   private JUnitReports() {}
@@ -163,11 +164,11 @@ public final class JUnitReports {
     void root(Element root) {
       switch (root.getTagName()) {
         case "testsuites" -> {
-          for (Element suite : children(root, "testsuite")) {
+          for (Element suite : children(root, TESTSUITE)) {
             suite(suite);
           }
         }
-        case "testsuite" -> suite(root);
+        case TESTSUITE -> suite(root);
         default -> {
           // No es un informe JUnit.
         }
@@ -175,7 +176,7 @@ public final class JUnitReports {
     }
 
     void suite(Element suite) {
-      List<Element> nested = children(suite, "testsuite");
+      List<Element> nested = children(suite, TESTSUITE);
       for (Element child : nested) {
         suite(child);
       }

@@ -7,6 +7,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +51,9 @@ public final class GitIndexer {
                 .filter(l -> !l.isBlank())
                 .count();
 
-    Path index = Files.createTempFile("skynet-index", null);
+    // Índice temporal dentro del directorio git del worktree, que solo es del runner.
+    Path gitDir = Path.of(Git.text(worktree, List.of("rev-parse", "--absolute-git-dir")).trim());
+    Path index = Files.createTempFile(gitDir, "skynet-index", null);
     try {
       Map<String, String> env = Map.of("GIT_INDEX_FILE", index.toString());
       Git.run(worktree, List.of("read-tree", "HEAD"), new byte[0], env);
@@ -96,8 +100,8 @@ public final class GitIndexer {
                 "--format=%H%x1f%an%x1f%ae%x1f%aI%x1f%s%x1e",
                 base + "..HEAD"));
     List<Map<String, Object>> commits = new ArrayList<>();
-    for (String record : log.split("\u001e")) {
-      String[] fields = record.strip().split("\u001f", -1);
+    for (String entry : log.split("\u001e")) {
+      String[] fields = entry.strip().split("\u001f", -1);
       if (fields.length < 5) {
         continue;
       }
@@ -116,17 +120,20 @@ public final class GitIndexer {
    * {@code --name-status -z}: {@code M\0ruta\0} o, en un renombrado, {@code R100\0vieja\0nueva\0}.
    */
   static List<FileChange> nameStatus(byte[] output) {
-    String[] parts = new String(output, StandardCharsets.UTF_8).split("\0");
+    Iterator<String> parts = fields(output);
     List<FileChange> files = new ArrayList<>();
-    for (int i = 0; i + 1 < parts.length; ) {
-      String status = parts[i++];
+    while (parts.hasNext()) {
+      String status = parts.next();
+      if (status.isEmpty() || !parts.hasNext()) {
+        continue;
+      }
       FileChange file = new FileChange();
       file.status = status.substring(0, 1);
-      if (file.status.equals("R") || file.status.equals("C")) {
-        file.oldPath = parts[i++];
+      if ((file.status.equals("R") || file.status.equals("C")) && parts.hasNext()) {
+        file.oldPath = parts.next();
       }
-      if (i < parts.length) {
-        file.path = parts[i++];
+      if (parts.hasNext()) {
+        file.path = parts.next();
         files.add(file);
       }
     }
@@ -139,20 +146,32 @@ public final class GitIndexer {
    * mismo orden que {@code --name-status}.
    */
   static void addNumstat(List<FileChange> files, byte[] output) {
-    String[] parts = new String(output, StandardCharsets.UTF_8).split("\0");
+    Iterator<String> parts = fields(output);
     int file = 0;
-    for (int i = 0; i < parts.length && file < files.size(); i++) {
-      String[] fields = parts[i].split("\t", 3);
+    while (parts.hasNext() && file < files.size()) {
+      String[] fields = parts.next().split("\t", 3);
       if (fields.length < 3) {
         continue;
       }
       if (fields[2].isEmpty()) {
-        i += 2; // Renombrado: siguen la ruta vieja y la nueva.
+        // Renombrado: siguen la ruta vieja y la nueva.
+        skip(parts, 2);
       }
       FileChange change = files.get(file++);
       change.binary = fields[0].equals("-");
       change.insertions = change.binary ? 0 : Long.parseLong(fields[0]);
       change.deletions = change.binary ? 0 : Long.parseLong(fields[1]);
+    }
+  }
+
+  /** Campos de una salida {@code -z} de git, separados por NUL. */
+  private static Iterator<String> fields(byte[] output) {
+    return Arrays.asList(new String(output, StandardCharsets.UTF_8).split("\0")).iterator();
+  }
+
+  private static void skip(Iterator<String> parts, int count) {
+    for (int skipped = 0; skipped < count && parts.hasNext(); skipped++) {
+      parts.next();
     }
   }
 

@@ -69,12 +69,12 @@ final class ToolApplier {
 
   private void bash(String command) throws IOException, InterruptedException {
     Process process =
-        new ProcessBuilder("sh", "-c", command)
+        new ProcessBuilder("/bin/sh", "-c", command)
             .directory(cwd.toFile())
             .redirectErrorStream(true)
             .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-            .redirectInput(ProcessBuilder.Redirect.from(new java.io.File("/dev/null")))
             .start();
+    process.getOutputStream().close(); // Sin entrada: el comando no puede quedarse esperándola.
     if (!process.waitFor(60, TimeUnit.SECONDS)) {
       process.destroyForcibly();
       throw new IOException("el comando no terminó: " + command);

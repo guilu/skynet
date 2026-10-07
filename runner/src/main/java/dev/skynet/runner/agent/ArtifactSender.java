@@ -49,7 +49,7 @@ public final class ArtifactSender implements AutoCloseable {
     }
   }
 
-  /** Intenta subir todo lo pendiente ahora mismo. Devuelve {@code true} si no queda nada. */
+  /** Intenta subir ya lo que quede pendiente. Devuelve {@code true} si no queda nada. */
   public boolean flush() {
     try {
       while (true) {

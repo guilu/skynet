@@ -52,6 +52,8 @@ public final class AgentExecutor implements AutoCloseable {
   private static final Logger LOG = Logger.getLogger(AgentExecutor.class.getName());
   private static final ObjectMapper JSON = JsonMapper.builder().build();
   private static final String TEXT = "text/plain; charset=utf-8";
+  private static final String JSON_TYPE = "application/json";
+  private static final String EXIT_CODE = "exitCode";
 
   private final Journal journal;
   private final ProcessSupervisor supervisor;
@@ -259,7 +261,7 @@ public final class AgentExecutor implements AutoCloseable {
     collectArtifacts(id, start, workspace, logs.resolve(id + ".ndjson"));
 
     Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("exitCode", exit.exitCode());
+    payload.put(EXIT_CODE, exit.exitCode());
     if (exit.signal() != null) {
       payload.put("signal", exit.signal());
     }
@@ -327,7 +329,7 @@ public final class AgentExecutor implements AutoCloseable {
                   null,
                   ArtifactType.GIT_CHANGES,
                   "changes.json",
-                  "application/json",
+                  JSON_TYPE,
                   JSON.writeValueAsBytes(changes.changes()),
                   changes.summary()));
       if (Files.size(diff) == 0) {
@@ -359,7 +361,7 @@ public final class AgentExecutor implements AutoCloseable {
         null,
         ArtifactType.RESULT,
         "result.json",
-        "application/json",
+        JSON_TYPE,
         result.getBytes(StandardCharsets.UTF_8),
         Map.of());
   }
@@ -482,7 +484,7 @@ public final class AgentExecutor implements AutoCloseable {
       deadline.cancel(false);
       verifications.remove(id);
     }
-    result.put("exitCode", exit.exitCode());
+    result.put(EXIT_CODE, exit.exitCode());
     if (exit.signal() != null) {
       result.put("signal", exit.signal());
     }
@@ -508,7 +510,7 @@ public final class AgentExecutor implements AutoCloseable {
                   "verification.log",
                   TEXT,
                   log,
-                  Map.of("exitCode", exit.exitCode())));
+                  Map.of(EXIT_CODE, exit.exitCode())));
     }
     if (tests.found() || !tests.unreadable().isEmpty()) {
       artifact(
@@ -520,7 +522,7 @@ public final class AgentExecutor implements AutoCloseable {
                   id,
                   ArtifactType.TEST_REPORT,
                   "tests.json",
-                  "application/json",
+                  JSON_TYPE,
                   JSON.writeValueAsBytes(tests.toMap()),
                   tests.totals()));
     }
