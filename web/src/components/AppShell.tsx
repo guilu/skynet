@@ -1,5 +1,7 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router'
+import { api, SESSION_KEY, type Session } from '../api'
 import { HealthIndicator } from '../HealthIndicator'
 import { useTheme, type ThemeChoice } from '../theme'
 
@@ -21,6 +23,15 @@ const THEMES: { value: ThemeChoice; label: string }[] = [
 /** Estructura común: navegación global, estado del control plane, tema y contenido. */
 export function AppShell({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useTheme()
+  const queryClient = useQueryClient()
+  const session = useQuery<Session | null>({ queryKey: SESSION_KEY, enabled: false })
+  const logout = useMutation({
+    mutationFn: api.logout,
+    onSettled: () => {
+      queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== SESSION_KEY[0] })
+      queryClient.setQueryData(SESSION_KEY, null)
+    },
+  })
   return (
     <div className="shell">
       <a className="skip-link" href="#main">
@@ -39,6 +50,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
           </select>
         </label>
+        {session.data && (
+          <span className="session">
+            <span className="muted small">{session.data.username}</span>{' '}
+            <button
+              type="button"
+              className="link"
+              onClick={() => logout.mutate()}
+              disabled={logout.isPending}
+            >
+              Salir
+            </button>
+          </span>
+        )}
       </header>
       <nav className="sidenav" aria-label="Navegación principal">
         <ul>

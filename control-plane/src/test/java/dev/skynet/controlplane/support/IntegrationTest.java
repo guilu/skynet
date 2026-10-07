@@ -23,6 +23,8 @@ public abstract class IntegrationTest {
   static void database(DynamicPropertyRegistry registry) {
     TestDatabase.register(registry);
     registry.add("skynet.runner.registration-token", () -> RUNNER_REGISTRATION_TOKEN);
+    registry.add("skynet.security.username", () -> ADMIN_USER);
+    registry.add("skynet.security.password", () -> ADMIN_SECRET);
     registry.add("skynet.runner.redeliver-after", () -> "1s");
     registry.add("skynet.artifacts.root", () -> ARTIFACTS.toString());
     registry.add("skynet.artifacts.max-size", () -> "64KB");
@@ -30,6 +32,16 @@ public abstract class IntegrationTest {
   }
 
   protected static final String RUNNER_REGISTRATION_TOKEN = "test-registration-token";
+  protected static final String ADMIN_USER = "admin";
+  protected static final String ADMIN_SECRET = "test-admin-password";
+
+  /** Cabecera HTTP Basic del usuario de la web, para las llamadas de los tests a la API. */
+  protected static final String ADMIN_BASIC_AUTH =
+      "Basic "
+          + java.util.Base64.getEncoder()
+              .encodeToString(
+                  (ADMIN_USER + ":" + ADMIN_SECRET)
+                      .getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
   /** Blobs de los artefactos, compartidos por todos los tests de la JVM. */
   protected static final java.nio.file.Path ARTIFACTS = createArtifactsDir();
@@ -55,6 +67,10 @@ public abstract class IntegrationTest {
         .update();
     baseline =
         jdbc.sql("SELECT last_value FROM event_sequence WHERE id = 1").query(Long.class).single();
-    http = RestClient.builder().baseUrl("http://localhost:" + port).build();
+    http =
+        RestClient.builder()
+            .baseUrl("http://localhost:" + port)
+            .defaultHeader(org.springframework.http.HttpHeaders.AUTHORIZATION, ADMIN_BASIC_AUTH)
+            .build();
   }
 }

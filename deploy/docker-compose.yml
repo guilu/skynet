@@ -1,7 +1,7 @@
 # Desarrollo y despliegue local de Skynet.
 #
 #   Solo PostgreSQL (API y web en local):  docker compose -f deploy/docker-compose.yml up -d
-#   Aplicación completa:                   docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
+#   Aplicación completa:                   SKYNET_ADMIN_PASSWORD=<contraseña> docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
 #
 # El runner no va en contenedor: se ejecuta en el host porque necesita `claude` y los repositorios.
 name: skynet
@@ -35,6 +35,12 @@ services:
       # Secreto para registrar runners; vacío desactiva el registro.
       SKYNET_RUNNER_REGISTRATION_TOKEN: ${SKYNET_RUNNER_REGISTRATION_TOKEN:-}
       SKYNET_ARTIFACTS_DIR: /data/artifacts
+      # Usuario de la web. Sin SKYNET_ADMIN_PASSWORD la API no arranca.
+      SKYNET_ADMIN_USER: ${SKYNET_ADMIN_USER:-admin}
+      SKYNET_ADMIN_PASSWORD: ${SKYNET_ADMIN_PASSWORD:-}
+      SKYNET_REQUIRE_ADMIN_PASSWORD: "true"
+      # Solo detrás de HTTPS: la cookie de sesión viaja únicamente cifrada.
+      SKYNET_SECURE_COOKIES: ${SKYNET_SECURE_COOKIES:-false}
     volumes:
       - artifacts-data:/data/artifacts
     ports:

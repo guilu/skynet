@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
-import { api } from '../api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { api, type Runner } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { StatusBadge } from '../components/StatusBadge'
 import { formatDateTime } from '../format'
@@ -29,6 +30,9 @@ export function RunnersPage() {
                 </th>
                 <th scope="col">Último latido</th>
                 <th scope="col">Versiones</th>
+                <th scope="col">
+                  <span className="visually-hidden">Acciones</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -45,6 +49,9 @@ export function RunnersPage() {
                   <td className="muted small">
                     runner {r.runnerVersion ?? '—'} · Claude Code {r.providerVersion ?? '—'}
                   </td>
+                  <td>
+                    <RevokeToken runner={r} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -52,5 +59,47 @@ export function RunnersPage() {
         </div>
       )}
     </>
+  )
+}
+
+/**
+ * Invalida el token del runner. El runner legítimo se vuelve a registrar solo con el secreto de
+ * registro; quien solo tenga el token se queda fuera.
+ */
+function RevokeToken({ runner }: { runner: Runner }) {
+  const queryClient = useQueryClient()
+  const [confirming, setConfirming] = useState(false)
+  const revoke = useMutation({
+    mutationFn: () => api.revokeRunner(runner.id),
+    onSuccess: () => {
+      setConfirming(false)
+      void queryClient.invalidateQueries({ queryKey: ['runners'] })
+    },
+  })
+  if (revoke.isSuccess && !confirming) {
+    return (
+      <span role="status" className="muted small">
+        Token revocado
+      </span>
+    )
+  }
+  if (!confirming) {
+    return (
+      <button type="button" className="link" onClick={() => setConfirming(true)}>
+        Revocar token…
+      </button>
+    )
+  }
+  return (
+    <span className="small">
+      ¿Revocar el token de {runner.name}? Si es tu runner, se volverá a registrar solo.{' '}
+      <button type="button" onClick={() => revoke.mutate()} disabled={revoke.isPending}>
+        Sí, revocar
+      </button>{' '}
+      <button type="button" className="link" onClick={() => setConfirming(false)}>
+        No
+      </button>
+      <ErrorMessage error={revoke.error} />
+    </span>
   )
 }

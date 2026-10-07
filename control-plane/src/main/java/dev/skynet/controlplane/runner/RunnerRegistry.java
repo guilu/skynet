@@ -2,6 +2,7 @@ package dev.skynet.controlplane.runner;
 
 import dev.skynet.controlplane.event.EventDraft;
 import dev.skynet.controlplane.event.EventStore;
+import dev.skynet.controlplane.shared.NotFoundException;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
@@ -83,6 +84,24 @@ class RunnerRegistry {
     payload.put("providerVersion", registration.providerVersion());
     events.append(EventDraft.of("runner", id, "runner.registered", null, payload, now));
     return new RunnerRegistered(id, token);
+  }
+
+  /**
+   * Invalida el token del runner: se cambia por el hash de uno que nadie conoce. El runner legítimo
+   * recibe un 401 y se vuelve a registrar con el secreto de registro; quien solo tenga el token
+   * robado se queda fuera.
+   */
+  @Transactional
+  void revoke(UUID runnerId) {
+    int updated =
+        jdbc.sql("UPDATE runner SET token_hash = ? WHERE id = ?")
+            .params(hash(newToken()), runnerId)
+            .update();
+    if (updated == 0) {
+      throw new NotFoundException("Runner", runnerId);
+    }
+    events.append(
+        EventDraft.of("runner", runnerId, "runner.token.revoked", null, Map.of(), time.now()));
   }
 
   /** Resuelve el runner a partir de la cabecera {@code Authorization: Bearer <token>}. */

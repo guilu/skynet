@@ -41,8 +41,8 @@ docker compose -f deploy/docker-compose.yml up -d
 ./gradlew build
 ./gradlew spotlessApply   # formatear
 
-# Control plane en :8080
-./gradlew :control-plane:bootRun
+# Control plane en :8080 (sin SKYNET_ADMIN_PASSWORD, genera una contraseña y la escribe en el log)
+SKYNET_ADMIN_PASSWORD=<contraseña> ./gradlew :control-plane:bootRun
 
 # Web en :5173 (redirige /api y /actuator a :8080)
 cd web && npm ci && npm run dev
@@ -61,7 +61,7 @@ Sin Docker ni `SKYNET_TEST_DB_URL`, los tests de integración se omiten.
 
 ### E2E
 
-`scripts/e2e.sh` compila y arranca el control plane y un runner con fake-claude, sirve la web con `vite preview` y ejecuta Playwright (`web/e2e/`): crea proyecto, repositorio y trabajo, lanza un agente, sigue herramientas y mensajes en vivo, corta la conexión del navegador y comprueba que al reconectar no se pierde ni se repite nada, que termina con coste, que la pestaña Artefactos muestra el archivo modificado, su diff y el commit, que la verificación del repositorio pasa y se puede reejecutar, y que un mensaje continúa la conversación en una invocación nueva. Otra prueba cancela un agente a mitad y comprueba que no queda ningún proceso de fake-claude. Necesita un PostgreSQL en `localhost:5432` (el de `docker compose`) y Chromium para Playwright:
+`scripts/e2e.sh` compila y arranca el control plane y un runner con fake-claude, sirve la web con `vite preview` y ejecuta Playwright (`web/e2e/`): crea proyecto, repositorio y trabajo, lanza un agente, sigue herramientas y mensajes en vivo, corta la conexión del navegador y comprueba que al reconectar no se pierde ni se repite nada, que termina con coste, que la pestaña Artefactos muestra el archivo modificado, su diff y el commit, que la verificación del repositorio pasa y se puede reejecutar, y que un mensaje continúa la conversación en una invocación nueva. Otra prueba cancela un agente a mitad y comprueba que no queda ningún proceso de fake-claude, y otra comprueba el login: una contraseña incorrecta no entra, «Salir» cierra la sesión y una petición sin token CSRF se rechaza. Necesita un PostgreSQL en `localhost:5432` (el de `docker compose`) y Chromium para Playwright:
 
 ```bash
 docker compose -f deploy/docker-compose.yml up -d
@@ -82,7 +82,7 @@ En CI corre como job propio, con PostgreSQL como servicio.
 ### Aplicación completa con Docker
 
 ```bash
-docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
+SKYNET_ADMIN_PASSWORD=<contraseña> docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
 ```
 
 | Servicio | URL | Variable para cambiar el puerto |
@@ -90,6 +90,8 @@ docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
 | Web (nginx; redirige `/api` y `/actuator` a la API) | http://localhost:8081 | `SKYNET_WEB_PORT` |
 | API | http://localhost:8080/actuator/health | `SKYNET_API_PORT` |
 | PostgreSQL | localhost:5432 | `SKYNET_DB_PORT` |
+
+**Acceso.** La web pide usuario y contraseña: `SKYNET_ADMIN_USER` (por defecto `admin`) y `SKYNET_ADMIN_PASSWORD`, obligatoria con Docker Compose. Fuera de Docker, sin contraseña, el control plane genera una al arrancar y la escribe en el log. La sesión caduca tras `SKYNET_SESSION_TIMEOUT` (12 h) sin uso; detrás de HTTPS, pon `SKYNET_SECURE_COOKIES=true`. Los scripts pueden llamar a la API con HTTP Basic (`curl -u admin:<contraseña> …`), sin cookies ni token CSRF. La API del runner usa su propio token y no necesita usuario. CORS está cerrado: la web va por el mismo origen; para abrirlo a otros dominios, `SKYNET_CORS_ORIGINS` (separados por comas).
 
 Credenciales de la base de datos: `SKYNET_DB_USER` / `SKYNET_DB_PASSWORD` (por defecto `skynet`/`skynet`). Los artefactos (diff, logs, informes de tests) se guardan en el volumen `artifacts-data`; fuera de Docker, en `SKYNET_ARTIFACTS_DIR` (por defecto `data/artifacts`), con un máximo por artefacto de `SKYNET_ARTIFACT_MAX_SIZE` (20 MB) y por subida de `SKYNET_ARTIFACT_MAX_UPLOAD` (64 MB). El comando de verificación tiene un tiempo máximo de `SKYNET_VERIFICATION_TIMEOUT` (30 min). Para que un runner pueda registrarse, define `SKYNET_RUNNER_REGISTRATION_TOKEN` con un secreto compartido; sin él, el registro de runners está desactivado. Para parar: `docker compose -f deploy/docker-compose.yml --profile app down` (añade `-v` para borrar los datos). El runner no va en contenedor: se ejecuta en el host porque necesita `claude` y los repositorios.
 
@@ -132,6 +134,8 @@ runner/build/install/skynet-runner/bin/skynet-runner
 | `SKYNET_RUNNER_HOME` | `~/.skynet-runner` | Journal, logs y worktrees |
 | `SKYNET_CLAUDE_BIN` | `claude` | Ejecutable de Claude Code (o fake-claude para probar) |
 | `SKYNET_AGENT_ENV` | — | Variables extra que hereda el agente, separadas por comas |
+
+En **Runners**, «Revocar token…» invalida el token de un runner al momento. Si es el tuyo, se vuelve a registrar solo con `SKYNET_RUNNER_REGISTRATION_TOKEN`; quien tenga solo el token robado se queda fuera. Si el secreto de registro también se ha filtrado, cámbialo en el control plane y en tus runners.
 
 El agente solo hereda una lista corta de variables (`PATH`, `HOME`, idioma, proxy, `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`…) más las de `SKYNET_AGENT_ENV`. El comando de verificación del repositorio se ejecuta con ese mismo entorno: si necesita `JAVA_HOME`, `GRADLE_USER_HOME` o similares, añádelas a `SKYNET_AGENT_ENV`. Los artefactos pendientes de subir se guardan en `SKYNET_RUNNER_HOME/artifacts`. Para probar sin gastar, usa fake-claude:
 

@@ -10,6 +10,14 @@ spring:
 
 server:
   port: ${SKYNET_PORT:8080}
+  servlet:
+    session:
+      # Una sesión de la web caduca tras este tiempo sin peticiones.
+      timeout: ${SKYNET_SESSION_TIMEOUT:12h}
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${SKYNET_SECURE_COOKIES:false}
 
 management:
   endpoints:
@@ -18,6 +26,14 @@ management:
         include: health,info
 
 skynet:
+  security:
+    # Usuario único de la web y la API. Sin contraseña, se genera una y se escribe en el log.
+    username: ${SKYNET_ADMIN_USER:admin}
+    password: ${SKYNET_ADMIN_PASSWORD:}
+    # true: no arranca sin contraseña en vez de generar una (lo usa Docker Compose).
+    require-password: ${SKYNET_REQUIRE_ADMIN_PASSWORD:false}
+    # Orígenes, separados por comas, que pueden llamar a la API desde otro dominio.
+    cors-origins: ${SKYNET_CORS_ORIGINS:}
   runner:
     # Secreto para registrar runners. Sin él, el registro está desactivado.
     registration-token: ${SKYNET_RUNNER_REGISTRATION_TOKEN:}

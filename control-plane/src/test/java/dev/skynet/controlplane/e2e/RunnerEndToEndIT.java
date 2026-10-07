@@ -409,6 +409,7 @@ class RunnerEndToEndIT extends IntegrationTest {
                 URI.create(
                     "http://localhost:" + port + "/api/events/stream?workflowRunId=" + runId))
             .header("Accept", "text/event-stream")
+            .header("Authorization", ADMIN_BASIC_AUTH)
             .build();
     try (HttpClient client = HttpClient.newHttpClient()) {
       HttpResponse<java.io.InputStream> response =
