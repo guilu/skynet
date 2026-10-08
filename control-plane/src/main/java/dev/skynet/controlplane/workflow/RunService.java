@@ -585,15 +585,28 @@ public class RunService {
    */
   @Transactional(readOnly = true)
   public RunPage list(
-      Set<WorkflowRunStatus> statuses, UUID projectId, Instant since, int page, int size) {
+      Set<WorkflowRunStatus> statuses,
+      UUID projectId,
+      Instant since,
+      String query,
+      int page,
+      int size) {
+    String text = query == null || query.isBlank() ? null : query.strip();
     String where =
         " FROM workflow_run r JOIN work_item w ON w.id = r.work_item_id"
             + " WHERE (CAST(:project AS uuid) IS NULL OR w.project_id = :project)"
             + " AND (CAST(:since AS timestamptz) IS NULL OR r.created_at >= :since)"
-            + (statuses == null || statuses.isEmpty() ? "" : " AND r.status IN (:statuses)");
+            + (statuses == null || statuses.isEmpty() ? "" : " AND r.status IN (:statuses)")
+            + (text == null
+                ? ""
+                : " AND (w.key ILIKE :q ESCAPE '\\' OR w.title ILIKE :q ESCAPE '\\')");
     Map<String, Object> params = new HashMap<>();
     params.put("project", projectId);
     params.put("since", since == null ? null : Timestamp.from(since));
+    if (text != null) {
+      // Los comodines de LIKE que escriba el usuario se buscan tal cual.
+      params.put("q", "%" + text.replaceAll("([\\\\%_])", "\\\\$1") + "%");
+    }
     if (statuses != null && !statuses.isEmpty()) {
       params.put("statuses", statuses.stream().map(Enum::name).toList());
     }

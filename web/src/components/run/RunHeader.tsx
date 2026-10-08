@@ -1,25 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Radio, RotateCw, Square, type LucideIcon } from 'lucide-react'
+import { Square } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { api, type Run } from '../../api'
 import { elapsed, formatCost, formatDuration, formatNumber, isTerminal } from '../../format'
 import { useNow } from '../../useNow'
 import type { StreamState } from '../../useEventStream'
+import { STREAM } from './stream'
 import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
 import { Button } from '../ui/Button'
 import { Pill } from '../ui/Pill'
 import { headlineAgent } from './headlineAgent'
-
-const STREAM: Record<
-  StreamState,
-  { label: string; tone: 'active' | 'warn' | 'neutral'; icon: LucideIcon }
-> = {
-  connecting: { label: 'Conectando…', tone: 'neutral', icon: RotateCw },
-  open: { label: 'En vivo', tone: 'active', icon: Radio },
-  reconnecting: { label: 'Reconectando…', tone: 'warn', icon: RotateCw },
-}
 
 /**
  * Cabecera operativa de una ejecución (ADR-0001 §3.5): estado, duración, runner, tokens, coste y

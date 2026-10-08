@@ -71,17 +71,20 @@ class RunController {
   }
 
   /**
-   * Ejecuciones de más reciente a más antigua; {@code status} se puede repetir y {@code since} deja
-   * solo las creadas desde ese instante (ISO-8601).
+   * Ejecuciones de más reciente a más antigua; {@code status} se puede repetir, {@code since} deja
+   * solo las creadas desde ese instante (ISO-8601) y {@code q} busca en la clave y el título del
+   * trabajo, sin distinguir mayúsculas.
    */
   @GetMapping("/api/workflow-runs")
   RunPage list(
       @RequestParam(required = false) Set<WorkflowRunStatus> status,
       @RequestParam(required = false) UUID projectId,
       @RequestParam(required = false) Instant since,
+      @RequestParam(required = false) @Size(max = 200) String q,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "50") int size) {
-    return service.list(status, projectId, since, Math.max(0, page), Math.clamp(size, 1, MAX_PAGE));
+    return service.list(
+        status, projectId, since, q, Math.max(0, page), Math.clamp(size, 1, MAX_PAGE));
   }
 
   @GetMapping("/api/workflow-definitions")

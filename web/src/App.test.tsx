@@ -202,8 +202,8 @@ describe('App', () => {
     })
     renderAt(`/runs?status=FAILED&since=${since}`, <App />)
     expect(await screen.findByText(/Creadas desde/)).toBeInTheDocument()
-    expect(await screen.findByText('No hay ejecuciones.')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Quitar' }))
+    expect(await screen.findByText('Ninguna ejecución con estos filtros.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar el filtro de fecha' }))
     await waitFor(() => expect(screen.queryByText(/Creadas desde/)).toBeNull())
     expect(fetch).toHaveBeenCalledWith(
       '/api/workflow-runs?status=FAILED&page=0&size=25',
@@ -216,12 +216,60 @@ describe('App', () => {
       '/api/workflow-runs?status=FAILED&page=0&size=25': { ...runPage, items: [] },
     })
     renderAt('/runs?status=FAILED', <App />)
-    expect(await screen.findByText('No hay ejecuciones.')).toBeInTheDocument()
-    expect(screen.getByLabelText('Estado')).toHaveDisplayValue('Fallidas')
+    expect(await screen.findByText('Ninguna ejecución con estos filtros.')).toBeInTheDocument()
+    const chips = screen.getByRole('group', { name: 'Estado' })
+    expect(within(chips).getByRole('button', { name: 'Fallidas' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(chips).getByRole('button', { name: 'En curso' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
     expect(fetch).toHaveBeenCalledWith(
       '/api/workflow-runs?status=FAILED&page=0&size=25',
       expect.anything(),
     )
+  })
+
+  it('la lista de ejecuciones combina chips de estado y búsqueda en la URL', async () => {
+    const fetch = stubApi({
+      '/api/workflow-runs?page=0&size=25': runPage,
+      '/api/workflow-runs?status=RUNNING&page=0&size=25': runPage,
+      '/api/workflow-runs?status=RUNNING&q=TKM&page=0&size=25': runPage,
+    })
+    renderAt('/runs', <App />)
+    await screen.findByRole('link', { name: /TKM-1/ })
+    fireEvent.click(screen.getByRole('button', { name: 'En curso' }))
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/workflow-runs?status=RUNNING&page=0&size=25',
+        expect.anything(),
+      ),
+    )
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'TKM' } })
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/workflow-runs?status=RUNNING&q=TKM&page=0&size=25',
+        expect.anything(),
+      ),
+    )
+  })
+
+  it('la lista de ejecuciones oculta columnas y lo recuerda', async () => {
+    stubApi({ '/api/workflow-runs?page=0&size=25': runPage })
+    const { unmount } = renderAt('/runs', <App />)
+    const table = await screen.findByRole('table', { name: 'Ejecuciones' })
+    expect(within(table).getByRole('columnheader', { name: 'Coste' })).toBeInTheDocument()
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Columnas' }), { key: 'Enter' })
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Coste' }))
+    await waitFor(() =>
+      expect(within(table).queryByRole('columnheader', { name: 'Coste' })).toBeNull(),
+    )
+    unmount()
+    renderAt('/runs', <App />)
+    const again = await screen.findByRole('table', { name: 'Ejecuciones' })
+    expect(within(again).queryByRole('columnheader', { name: 'Coste' })).toBeNull()
   })
 
   it('la lista de ejecuciones muestra trabajo, estado, agente y herramienta', async () => {
@@ -231,6 +279,15 @@ describe('App', () => {
     expect(within(row).getByText('En curso')).toBeInTheDocument()
     expect(within(row).getByText('Ejecutando')).toBeInTheDocument()
     expect(within(row).getByText('Read')).toBeInTheDocument()
+  })
+
+  it('la página de runners filtra por estado con chips', async () => {
+    stubApi({ '/api/runners': runners })
+    renderAt('/runners', <App />)
+    await screen.findByText('runner-02')
+    fireEvent.click(screen.getByRole('button', { name: 'Sin latido' }))
+    await waitFor(() => expect(screen.queryByText('runner-01')).toBeNull())
+    expect(screen.getByText('runner-02')).toBeInTheDocument()
   })
 
   it('la página de runners distingue los que no envían latidos', async () => {
