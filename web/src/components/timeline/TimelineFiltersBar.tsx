@@ -7,6 +7,7 @@ import {
   type Severity,
   type TimelineFilters,
 } from './timeline'
+import { Button } from '../ui/Button'
 
 interface Option {
   value: string
@@ -56,9 +57,9 @@ export function TimelineFiltersBar({
         onChange={set('origin')}
       />
       {active && (
-        <button type="button" className="link small" onClick={() => onChange({})}>
+        <Button variant="link" className="small" onClick={() => onChange({})}>
           Quitar filtros
-        </button>
+        </Button>
       )}
     </div>
   )

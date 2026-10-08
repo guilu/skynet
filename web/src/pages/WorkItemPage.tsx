@@ -5,6 +5,7 @@ import { api } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { StatusBadge } from '../components/StatusBadge'
 import { formatDateTime } from '../format'
+import { Button } from '../components/ui/Button'
 
 export function WorkItemPage() {
   const { workItemId = '' } = useParams()
@@ -154,9 +155,9 @@ export function WorkItemPage() {
               />
             </label>
           </fieldset>
-          <button type="submit" disabled={launch.isPending || !repos.data?.length}>
+          <Button type="submit" disabled={launch.isPending || !repos.data?.length}>
             Lanzar
-          </button>
+          </Button>
           <p className="muted">
             El agente queda en cola hasta que un runner conectado lo recoge (ver README, «Runner
             local»).

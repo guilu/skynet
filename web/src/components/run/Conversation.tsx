@@ -7,6 +7,7 @@ import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
 import { messagesOf } from './agentEvents'
 import { LongText } from './LongText'
+import { Button } from '../ui/Button'
 
 const KIND_LABELS: Record<AgentRun['kind'], string> = {
   START: 'Lanzamiento',
@@ -75,13 +76,13 @@ export function Conversation({
                     {current && (
                       <>
                         {' · '}
-                        <button
+                        <Button
                           type="button"
-                          className="link"
+                          variant="link"
                           onClick={() => onShowEvent(m.sequence)}
                         >
                           Ver evento #{m.sequence}
-                        </button>
+                        </Button>
                       </>
                     )}
                   </p>
@@ -183,9 +184,9 @@ function Composer({ last }: { last: AgentRun }) {
                 : 'La sesión no llegó a arrancar: no se puede continuar.'}
         </p>
       )}
-      <button type="submit" disabled={!ready || !text.trim() || send.isPending}>
+      <Button type="submit" disabled={!ready || !text.trim() || send.isPending}>
         {send.isPending ? 'Enviando…' : 'Enviar'}
-      </button>
+      </Button>
       <ErrorMessage error={send.error} />
     </form>
   )

@@ -8,6 +8,7 @@ import { agentOutcome } from './agentEvents'
 import { artifactOf, type TestReport } from './artifacts'
 import { useNow } from '../../useNow'
 import { LongText } from './LongText'
+import { Button } from '../ui/Button'
 
 /**
  * Lo que declara el agente frente a lo que comprobó Skynet al ejecutar el comando de verificación
@@ -60,13 +61,13 @@ export function VerificationTab({ agent, events }: { agent: AgentRun; events: St
         </section>
       </div>
       <p>
-        <button
+        <Button
           type="button"
           onClick={() => rerun.mutate()}
           disabled={!canRerun || rerun.isPending}
         >
           {rerun.isPending ? 'Encolando…' : 'Reejecutar verificación'}
-        </button>{' '}
+        </Button>{' '}
         {live && <span className="muted small">Hay una verificación en curso.</span>}
         {agent.workspace?.removedAt && (
           <span className="muted small">El worktree se eliminó: ya no se puede verificar.</span>

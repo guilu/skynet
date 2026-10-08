@@ -1,25 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Radio, RotateCw, Square, type LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { api, type Run } from '../../api'
-import {
-  elapsed,
-  formatCost,
-  formatDuration,
-  formatNumber,
-  isTerminal,
-  TONE_ICONS,
-} from '../../format'
+import { elapsed, formatCost, formatDuration, formatNumber, isTerminal } from '../../format'
 import { useNow } from '../../useNow'
 import type { StreamState } from '../../useEventStream'
 import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
+import { Button } from '../ui/Button'
+import { Pill } from '../ui/Pill'
 import { headlineAgent } from './headlineAgent'
 
-const STREAM: Record<StreamState, { label: string; tone: 'ok' | 'warn' | 'neutral' }> = {
-  connecting: { label: 'Conectando…', tone: 'neutral' },
-  open: { label: 'En vivo', tone: 'ok' },
-  reconnecting: { label: 'Reconectando…', tone: 'warn' },
+const STREAM: Record<
+  StreamState,
+  { label: string; tone: 'active' | 'warn' | 'neutral'; icon: LucideIcon }
+> = {
+  connecting: { label: 'Conectando…', tone: 'neutral', icon: RotateCw },
+  open: { label: 'En vivo', tone: 'active', icon: Radio },
+  reconnecting: { label: 'Reconectando…', tone: 'warn', icon: RotateCw },
 }
 
 /**
@@ -69,10 +68,11 @@ export function RunHeader({ run, stream }: { run: Run; stream: StreamState }) {
           {run.workItemKey && <Link to={`/work-items/${run.workItemId}`}>{run.workItemKey}</Link>}{' '}
           {run.workItemTitle ?? 'Ejecución'} <StatusBadge status={run.status} />
         </h1>
-        <span className={`connection badge badge-${connection.tone}`} role="status">
-          <span aria-hidden="true">{TONE_ICONS[connection.tone]}</span>{' '}
-          <span className="visually-hidden">Conexión: </span>
-          {connection.label}
+        <span className="connection" role="status">
+          <Pill tone={connection.tone} icon={connection.icon}>
+            <span className="visually-hidden">Conexión: </span>
+            {connection.label}
+          </Pill>
         </span>
       </div>
       <dl className="metrics">
@@ -143,18 +143,19 @@ export function RunHeader({ run, stream }: { run: Run; stream: StreamState }) {
                 ¿Cancelar el agente? Se detiene su proceso; lo hecho hasta ahora se queda en el
                 worktree.
               </span>
-              <button type="button" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
+              <Button variant="danger" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
                 {cancel.isPending ? 'Cancelando…' : 'Sí, cancelar'}
-              </button>
-              <button type="button" className="secondary" onClick={() => setConfirming(false)}>
+              </Button>
+              <Button variant="secondary" onClick={() => setConfirming(false)}>
                 No
-              </button>
+              </Button>
             </span>
           ) : (
             !cancel.isSuccess && (
-              <button type="button" onClick={() => setConfirming(true)}>
+              <Button variant="secondary-danger" onClick={() => setConfirming(true)}>
+                <Square size={16} strokeWidth={2.75} aria-hidden="true" />
                 Cancelar agente
-              </button>
+              </Button>
             )
           )}
           {cancel.isSuccess && (

@@ -5,6 +5,7 @@ import { ErrorMessage } from '../components/ErrorMessage'
 import { RunsTable } from '../components/RunsTable'
 import { formatDateTime } from '../format'
 import { useNow } from '../useNow'
+import { Button } from '../components/ui/Button'
 
 const PAGE_SIZE = 25
 
@@ -63,24 +64,34 @@ export function RunsPage() {
       {since && (
         <p className="small">
           Creadas desde {formatDateTime(since)}{' '}
-          <button type="button" className="link" onClick={() => go({ since: null, page: 0 })}>
+          <Button variant="link" onClick={() => go({ since: null, page: 0 })}>
             Quitar
-          </button>
+          </Button>
         </p>
       )}
       <ErrorMessage error={runs.error} />
       {runs.data && <RunsTable runs={runs.data.items} now={now} />}
       {total > PAGE_SIZE && (
         <nav className="pager" aria-label="Paginación">
-          <button type="button" disabled={page === 0} onClick={() => go({ page: page - 1 })}>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={page === 0}
+            onClick={() => go({ page: page - 1 })}
+          >
             Anterior
-          </button>
+          </Button>
           <span>
             Página {page + 1} de {pages} · {total} ejecuciones
           </span>
-          <button type="button" disabled={page + 1 >= pages} onClick={() => go({ page: page + 1 })}>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={page + 1 >= pages}
+            onClick={() => go({ page: page + 1 })}
+          >
             Siguiente
-          </button>
+          </Button>
         </nav>
       )}
     </>

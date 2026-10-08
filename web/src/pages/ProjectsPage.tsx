@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { api } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { Button } from '../components/ui/Button'
 
 export function ProjectsPage() {
   const queryClient = useQueryClient()
@@ -60,9 +61,9 @@ export function ProjectsPage() {
           Descripción
           <input value={description} onChange={(e) => setDescription(e.target.value)} />
         </label>
-        <button type="submit" disabled={create.isPending}>
+        <Button type="submit" disabled={create.isPending}>
           Crear proyecto
-        </button>
+        </Button>
         <ErrorMessage error={create.error} />
       </form>
     </>

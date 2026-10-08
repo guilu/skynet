@@ -11,6 +11,7 @@ import {
 } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { StatusBadge } from '../components/StatusBadge'
+import { Button } from '../components/ui/Button'
 
 export function ProjectPage() {
   const { projectId = '' } = useParams()
@@ -129,9 +130,9 @@ function Repositories({ projectId }: { projectId: string }) {
             placeholder="**/build/test-results/**/*.xml"
           />
         </label>
-        <button type="submit" disabled={register.isPending}>
+        <Button type="submit" disabled={register.isPending}>
           Registrar repositorio
-        </button>
+        </Button>
         <ErrorMessage error={register.error} />
       </form>
     </section>
@@ -199,9 +200,9 @@ function VerificationSettings({
           Informes JUnit XML, un glob por línea
           <textarea value={reportPaths} onChange={(e) => setReportPaths(e.target.value)} rows={2} />
         </label>
-        <button type="submit" disabled={save.isPending}>
+        <Button type="submit" disabled={save.isPending}>
           Guardar verificación
-        </button>
+        </Button>
         {save.isSuccess && (
           <span role="status" className="small">
             Guardado.
@@ -344,18 +345,18 @@ function AgentPolicySettings({
             />
           </label>
         </fieldset>
-        <button type="submit" disabled={save.isPending}>
+        <Button type="submit" disabled={save.isPending}>
           Guardar política
-        </button>
+        </Button>
         {repository.agentPolicyCustom && (
-          <button
+          <Button
             type="button"
-            className="secondary"
+            variant="secondary"
             onClick={() => inherit.mutate()}
             disabled={inherit.isPending}
           >
             Volver a la política global
-          </button>
+          </Button>
         )}
         {(save.isSuccess || inherit.isSuccess) && (
           <span role="status" className="small">
@@ -425,9 +426,9 @@ function WorkItems({ projectId }: { projectId: string }) {
           Descripción
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
         </label>
-        <button type="submit" disabled={create.isPending}>
+        <Button type="submit" disabled={create.isPending}>
           Crear trabajo
-        </button>
+        </Button>
         <ErrorMessage error={create.error} />
       </form>
     </section>
