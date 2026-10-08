@@ -272,6 +272,8 @@ runner_command(id, runner_id, type, payload_json, status, created_at, acked_at)
 
 ## 6. Fase 1 — Observabilidad (MVP)
 
+**Estado: terminada el 2026-10-08.** M0–M6 fusionados (M6: PRs #28–#32) y los 12 criterios del MVP comprobados con Claude Code real ([`mvp-checklist.md`](mvp-checklist.md)).
+
 Cada hito incluye los criterios de éxito del MVP (§23 de la especificación) que cubre.
 
 ### M0 — Cimientos y spike (≈1 semana)
@@ -540,6 +542,8 @@ Se planificará con datos reales de las fases anteriores: descomposición dinám
 ## 12. Próximos pasos
 
 1. ~~Validar las decisiones abiertas de §2.~~ Hecho.
-2. Ejecutar el spike de M0 y ajustar §4.2 con el NDJSON real.
-3. Crear el backlog de Fase 1 (épicas M0–M6) como issues en GitHub.
-4. Arrancar M0.
+2. ~~Spike de M0 y ajuste de §4.2 con el NDJSON real.~~ Hecho.
+3. ~~Backlog de Fase 1 como issues en GitHub.~~ Hecho (épica #2 y una issue por hito).
+4. ~~Fase 1 (M0–M6).~~ Terminada el 2026-10-08.
+5. **Rediseño visual del control plane**, antes de la Fase 2: nuevas vistas, paneles y estilo a partir de un estudio de interfaces de orquestación agéntica. Su alcance se decidirá con ese estudio; respeta los principios y la arquitectura de información de [ADR-0001](adr/0001-control-plane-user-interface.md).
+6. Fase 2, empezando por W1 (definiciones) y W2 (motor) como primer hito.

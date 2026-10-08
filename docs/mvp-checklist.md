@@ -34,28 +34,28 @@ Marca cada casilla (☐ → ☑) al comprobarlo con Claude. La columna «Automá
 
 | # | Criterio | Cómo comprobarlo | Automático |
 |---|---|---|---|
-| 1 | ☐ Registrar un repositorio | Proyectos → crea un proyecto → «Registrar repositorio» con la ruta local, el comando de verificación (`sh check.sh` o `./gradlew test`) y, si hace falta, los informes JUnit. Aparece en la lista con su verificación. | E2E `run.e2e.ts` (crear, lanzar…) |
-| 2 | ☐ Crear un trabajo | En el proyecto, «Crear trabajo» (p. ej. «Arreglar la suma»). Aparece como `<CLAVE>-1`. | E2E `run.e2e.ts` |
-| 3 | ☐ Lanzar una ejecución de Claude Code | En el trabajo, prompt «La función add de calc.py resta: arréglala, añade subtract y haz commit» → «Lanzar». La ejecución pasa de «En cola» a «En curso» en tu runner. | E2E `run.e2e.ts`; `compose-smoke.sh` en CI |
-| 4 | ☐ Ver tokens, mensajes y herramientas en tiempo real | En la ejecución: «En vivo» en la cabecera, los tokens y el coste subiendo, y en el timeline cada `Read`, `Edit` y `Bash` según ocurren, con los mensajes de Claude. | E2E `run.e2e.ts` (incluido cortar la conexión y reconectar) |
-| 5 | ☐ Ver el estado real del agente | La cabecera muestra el estado, el agente y la herramienta en curso y el runner; el Dashboard la lista como activa y Runners cuenta un agente activo. Al terminar: «Completada» con duración, turnos y coste. | E2E `run.e2e.ts`; `ReadProjectionsIT` |
-| 6 | ☐ Conservar la sesión tras finalizar | Inspector → Resumen: id de sesión, rama `skynet/…` y worktree conservado. `git -C <repositorio> branch --list 'skynet/*'` muestra la rama. | E2E `run.e2e.ts` |
-| 7 | ☐ Mostrar los archivos modificados y el diff | Inspector → Artefactos: `calc.py` en «Archivos modificados», su diff y el commit de Claude. | E2E `run.e2e.ts` |
-| 8 | ☐ Mostrar el resultado de tests | Inspector → Verificación: «Verificado por Skynet» con «Pasa», «1 tests · 0 fallidos», el comando y su salida; la cabecera muestra «1/1 tests». «Reejecutar verificación» vuelve a pasarla. | E2E `run.e2e.ts`; `VerificationAndArtifactsIT` |
-| 9 | ☐ Reanudar la sesión con un nuevo mensaje | Conversación → «Mensaje»: «Añade también multiply» → «Enviar». Se abre una ejecución nueva «Reanudación» con toda la conversación, en el mismo worktree; Claude recuerda lo anterior. | E2E `run.e2e.ts` |
-| 10 | ☐ Cancelar una ejecución | Lanza otra con un prompt largo («Escribe tests exhaustivos para calc.py») y, en cuanto use herramientas, «Cancelar agente» → «Sí, cancelar». Acaba «Cancelada» y en tu máquina no queda ningún proceso de `claude` de esa ejecución (`pgrep -fa claude`). | E2E `run.e2e.ts` (cancelar a mitad) |
-| 11 | ☐ Ver un timeline persistente | Recarga la página de una ejecución terminada: el timeline está entero. Reinicia el control plane (`docker compose … restart api`) y vuelve: sigue igual. Actividad muestra todos los eventos. | E2E `run.e2e.ts` (reinicios); `EventStoreIT` |
-| 12 | ☐ Consultar los artefactos generados | Inspector → Artefactos: prompt, log NDJSON, resultado, cambios de git, diff e informe de tests, cada uno descargable o visible. | E2E `run.e2e.ts`; `VerificationAndArtifactsIT` |
+| 1 | ☑ Registrar un repositorio | Proyectos → crea un proyecto → «Registrar repositorio» con la ruta local, el comando de verificación (`sh check.sh` o `./gradlew test`) y, si hace falta, los informes JUnit. Aparece en la lista con su verificación. | E2E `run.e2e.ts` (crear, lanzar…) |
+| 2 | ☑ Crear un trabajo | En el proyecto, «Crear trabajo» (p. ej. «Arreglar la suma»). Aparece como `<CLAVE>-1`. | E2E `run.e2e.ts` |
+| 3 | ☑ Lanzar una ejecución de Claude Code | En el trabajo, prompt «La función add de calc.py resta: arréglala, añade subtract y haz commit» → «Lanzar». La ejecución pasa de «En cola» a «En curso» en tu runner. | E2E `run.e2e.ts`; `compose-smoke.sh` en CI |
+| 4 | ☑ Ver tokens, mensajes y herramientas en tiempo real | En la ejecución: «En vivo» en la cabecera, los tokens y el coste subiendo, y en el timeline cada `Read`, `Edit` y `Bash` según ocurren, con los mensajes de Claude. | E2E `run.e2e.ts` (incluido cortar la conexión y reconectar) |
+| 5 | ☑ Ver el estado real del agente | La cabecera muestra el estado, el agente y la herramienta en curso y el runner; el Dashboard la lista como activa y Runners cuenta un agente activo. Al terminar: «Completada» con duración, turnos y coste. | E2E `run.e2e.ts`; `ReadProjectionsIT` |
+| 6 | ☑ Conservar la sesión tras finalizar | Inspector → Resumen: id de sesión, rama `skynet/…` y worktree conservado. `git -C <repositorio> branch --list 'skynet/*'` muestra la rama. | E2E `run.e2e.ts` |
+| 7 | ☑ Mostrar los archivos modificados y el diff | Inspector → Artefactos: `calc.py` en «Archivos modificados», su diff y el commit de Claude. | E2E `run.e2e.ts` |
+| 8 | ☑ Mostrar el resultado de tests | Inspector → Verificación: «Verificado por Skynet» con «Pasa», «1 tests · 0 fallidos», el comando y su salida; la cabecera muestra «1/1 tests». «Reejecutar verificación» vuelve a pasarla. | E2E `run.e2e.ts`; `VerificationAndArtifactsIT` |
+| 9 | ☑ Reanudar la sesión con un nuevo mensaje | Conversación → «Mensaje»: «Añade también multiply» → «Enviar». Se abre una ejecución nueva «Reanudación» con toda la conversación, en el mismo worktree; Claude recuerda lo anterior. | E2E `run.e2e.ts` |
+| 10 | ☑ Cancelar una ejecución | Lanza otra con un prompt largo («Escribe tests exhaustivos para calc.py») y, en cuanto use herramientas, «Cancelar agente» → «Sí, cancelar». Acaba «Cancelada» y en tu máquina no queda ningún proceso de `claude` de esa ejecución (`pgrep -fa claude`). | E2E `run.e2e.ts` (cancelar a mitad) |
+| 11 | ☑ Ver un timeline persistente | Recarga la página de una ejecución terminada: el timeline está entero. Reinicia el control plane (`docker compose … restart api`) y vuelve: sigue igual. Actividad muestra todos los eventos. | E2E `run.e2e.ts` (reinicios); `EventStoreIT` |
+| 12 | ☑ Consultar los artefactos generados | Inspector → Artefactos: prompt, log NDJSON, resultado, cambios de git, diff e informe de tests, cada uno descargable o visible. | E2E `run.e2e.ts`; `VerificationAndArtifactsIT` |
 
 ## Comprobaciones de cierre
 
-- [ ] **Sin secretos en la web.** Pide a Claude que lea un fichero con algo como `AKIA…` o `ghp_…`: en la web aparece como `[REDACTED]`. (E2E `review.e2e.ts`.)
-- [ ] **Presupuesto.** Un lanzamiento con presupuesto 0,01 US$ acaba en «Fallida» con «Presupuesto agotado…».
-- [ ] **Métricas.** El Dashboard cuenta las ejecuciones de la prueba y el coste coincide con la suma de sus agentes.
-- [ ] **Reinicio del runner.** Con un agente en curso, `systemctl --user restart skynet-runner` (o `launchctl kickstart -k …`): el agente acaba «Fallida» («El runner se reinició durante la ejecución») y el runner vuelve «En línea».
+- [x] **Sin secretos en la web.** Pide a Claude que lea un fichero con algo como `AKIA…` o `ghp_…`: en la web aparece como `[REDACTED]`. (E2E `review.e2e.ts`.)
+- [x] **Presupuesto.** Un lanzamiento con presupuesto 0,01 US$ acaba en «Fallida» con «Presupuesto agotado…».
+- [x] **Métricas.** El Dashboard cuenta las ejecuciones de la prueba y el coste coincide con la suma de sus agentes.
+- [x] **Reinicio del runner.** Con un agente en curso, `systemctl --user restart skynet-runner` (o `launchctl kickstart -k …`): el agente acaba «Fallida» («El runner se reinició durante la ejecución») y el runner vuelve «En línea».
 
 ## Registro
 
 | Fecha | Versión (commit) | Repositorio | Resultado | Notas |
 |---|---|---|---|---|
-| | | | | |
+| 2026-10-08 | `3612cba` (M6-E, PR #32) | Repositorio de prueba de Diego | ☑ 12/12 criterios y comprobaciones de cierre | Prueba manual con Claude Code real; confirmada al fusionar M6-E. Cierra las issues #9 y #2. |
