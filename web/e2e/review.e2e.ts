@@ -58,9 +58,10 @@ test('ningún secreto llega al DOM', async ({ page }) => {
 
   await page.getByRole('tab', { name: 'Artefactos' }).click()
   // El diff de calc.py lleva la línea del token como contexto.
-  const diff = panel.getByLabel('Diff de calc.py')
-  await expect(diff).toContainText('return a + b', { timeout: 30_000 })
-  await expect(diff).toContainText('[REDACTED]')
+  // Se busca el texto pintado y no el elemento con la etiqueta: mientras Monaco se descarga, la
+  // etiqueta está en un bloque de texto, y después en el campo de edición de Monaco, que va vacío.
+  await expect(panel.getByText(/return\s+a\s+\+\s+b/).first()).toBeVisible({ timeout: 30_000 })
+  await expect(panel.getByText(/token de pruebas:\s+\[REDACTED\]/).first()).toBeVisible()
   await expectNoSecrets(page, 'diff')
   // La salida de la verificación imprime el otro token.
   await panel.getByRole('button', { name: 'Salida de la verificación' }).first().click()
@@ -117,6 +118,17 @@ test('las páginas principales pasan axe', async ({ page }) => {
     ).toBeVisible()
     await expectAccessible(page, name)
   }
+
+  // Paleta ⌘K y menú de tema de la barra superior, abiertos.
+  await page.keyboard.press('ControlOrMeta+k')
+  await expect(page.getByRole('dialog', { name: 'Buscar o ejecutar una orden' })).toBeVisible()
+  await expect(page.getByRole('option').first()).toBeVisible()
+  await expectAccessible(page, 'paleta ⌘K')
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: /^Tema:/ }).click()
+  await expect(page.getByRole('menu')).toBeVisible()
+  await expectAccessible(page, 'menú de tema')
+  await page.keyboard.press('Escape')
 
   // Proyecto y trabajo de la ejecución: se llega desde la lista de proyectos.
   await page.goto('/projects')

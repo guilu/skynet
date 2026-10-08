@@ -45,6 +45,18 @@ function stubApi(routes: Record<string, unknown>) {
   return fetch
 }
 
+const workItem = {
+  id: 'w1',
+  projectId: 'p1',
+  key: 'TKM-7',
+  title: 'Arreglar la suma',
+  description: null,
+  type: 'BUG',
+  externalRef: null,
+  status: 'OPEN',
+  createdAt: '',
+}
+
 describe('App', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -362,13 +374,79 @@ describe('App', () => {
     ).toBeInTheDocument()
   })
 
-  it('el selector de tema fija data-theme en el documento', async () => {
+  it('el menú de tema fija data-theme en el documento', async () => {
     stubApi({ '/api/runners': runners })
     renderAt('/runners', <App />)
-    fireEvent.change(await screen.findByLabelText('Tema'), { target: { value: 'dark' } })
+    fireEvent.keyDown(await screen.findByRole('button', { name: 'Tema: Sistema' }), {
+      key: 'Enter',
+    })
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Oscuro' }))
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
-    fireEvent.change(screen.getByLabelText('Tema'), { target: { value: 'system' } })
+    fireEvent.keyDown(await screen.findByRole('button', { name: 'Tema: Oscuro' }), {
+      key: 'Enter',
+    })
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Sistema' }))
     expect(document.documentElement).not.toHaveAttribute('data-theme')
+  })
+
+  it('la barra lateral se pliega, lo recuerda y los enlaces conservan su nombre', async () => {
+    stubApi({ '/api/runners': runners })
+    renderAt('/runners', <App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Plegar la barra lateral' }))
+    expect(screen.getByRole('button', { name: 'Desplegar la barra lateral' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(localStorage.getItem('skynet.sidebar.collapsed')).toBe('1')
+    const nav = screen.getByRole('navigation', { name: 'Navegación principal' })
+    expect(within(nav).getByRole('link', { name: 'Proyectos' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Desplegar la barra lateral' }))
+    expect(localStorage.getItem('skynet.sidebar.collapsed')).toBe('0')
+  })
+
+  it('las migas nombran el proyecto y el trabajo', async () => {
+    stubApi({
+      '/api/work-items/w1': workItem,
+      '/api/projects/p1': {
+        id: 'p1',
+        key: 'TKM',
+        name: 'TokenMeter',
+        description: null,
+        createdAt: '',
+      },
+      '/api/work-items/w1/runs': [],
+      '/api/projects/p1/repositories': [],
+    })
+    renderAt('/work-items/w1', <App />)
+    const crumbs = await screen.findByRole('navigation', { name: 'Migas' })
+    expect(await within(crumbs).findByRole('link', { name: 'TokenMeter' })).toHaveAttribute(
+      'href',
+      '/projects/p1',
+    )
+    expect(within(crumbs).getByText('TKM-7')).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('⌘K busca un trabajo por su clave y lo abre', async () => {
+    stubApi({
+      '/api/projects': [
+        { id: 'p1', key: 'TKM', name: 'TokenMeter', description: null, createdAt: '' },
+      ],
+      '/api/projects/p1/work-items': [workItem],
+      '/api/workflow-runs?size=30': runPage,
+      '/api/runners': runners,
+      '/api/work-items/w1': workItem,
+      '/api/work-items/w1/runs': [],
+      '/api/projects/p1/repositories': [],
+    })
+    renderAt('/runners', <App />)
+    await screen.findByRole('heading', { level: 1, name: 'Runners' })
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true })
+    const input = await screen.findByPlaceholderText(/Buscar ejecución/)
+    fireEvent.change(input, { target: { value: 'TKM-7' } })
+    fireEvent.click(await screen.findByRole('option', { name: /Arreglar la suma/ }))
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /Arreglar la suma/ }),
+    ).toBeInTheDocument()
   })
   describe('inspector de la ejecución', () => {
     const runId = runView.id

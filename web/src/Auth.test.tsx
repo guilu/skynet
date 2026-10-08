@@ -35,7 +35,7 @@ describe('login', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Runners' })).toBeInTheDocument()
-    expect(screen.getByText('admin')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cuenta: admin' })).toBeInTheDocument()
     const login = fetch.mock.calls.find(([url]) => url === '/api/auth/login')!
     expect(JSON.parse(login[1]!.body as string)).toEqual({ username: 'admin', password: 'secreto' })
     expect((login[1]!.headers as Record<string, string>)['X-XSRF-TOKEN']).toBe('token-csrf')
@@ -88,7 +88,10 @@ describe('login', () => {
     )
     vi.stubGlobal('fetch', fetch)
     renderAt('/runners', <App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Salir' }))
+    fireEvent.keyDown(await screen.findByRole('button', { name: 'Cuenta: admin' }), {
+      key: 'Enter',
+    })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Salir' }))
     expect(await screen.findByLabelText('Usuario')).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(
       '/api/auth/logout',

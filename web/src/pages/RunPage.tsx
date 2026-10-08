@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef } from 'react'
-import { Link, useParams } from 'react-router'
+import { useParams } from 'react-router'
 import { api, type Run } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { AgentNav } from '../components/run/AgentNav'
@@ -85,9 +85,6 @@ export function RunPage() {
 
   return (
     <>
-      <p className="breadcrumbs">
-        <Link to="/runs">Ejecuciones</Link> /
-      </p>
       <ErrorMessage error={run.error} />
       {run.data && (
         <>

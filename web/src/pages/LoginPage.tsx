@@ -3,6 +3,8 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, type Session } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { Button } from '../components/ui/Button'
+import { Pill } from '../components/ui/Pill'
+import { Sparkles } from 'lucide-react'
 
 /** Entrada a la web con el usuario único del control plane. */
 export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) {
@@ -25,34 +27,56 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
 
   return (
     <main className="login">
-      <h1 ref={heading} tabIndex={-1}>
-        Skynet
-      </h1>
-      <form className="form" onSubmit={submit}>
-        <label>
-          Usuario
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-            required
-          />
-        </label>
-        <label>
-          Contraseña
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-          />
-        </label>
-        <Button type="submit" disabled={login.isPending}>
-          {login.isPending ? 'Entrando…' : 'Entrar'}
-        </Button>
-        <ErrorMessage error={login.error} />
-      </form>
+      <div className="login-card">
+        <section className="login-hero" aria-hidden="true">
+          <span className="brand-mark brand-mark-lg">
+            <Sparkles size={30} strokeWidth={2.5} />
+          </span>
+          <p className="login-tagline">Tus agentes, a la vista.</p>
+          <ul className="login-states">
+            <li>
+              <Pill tone="active">Pensando</Pill>
+            </li>
+            <li>
+              <Pill tone="ok">Completada</Pill>
+            </li>
+            <li>
+              <Pill tone="warn">Esperando</Pill>
+            </li>
+          </ul>
+        </section>
+        <section className="login-form">
+          <h1 ref={heading} tabIndex={-1}>
+            Skynet
+          </h1>
+          <p className="muted">Entra con el usuario del control plane.</p>
+          <form className="form" onSubmit={submit}>
+            <label>
+              Usuario
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+                required
+              />
+            </label>
+            <label>
+              Contraseña
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </label>
+            <Button type="submit" disabled={login.isPending}>
+              {login.isPending ? 'Entrando…' : 'Entrar'}
+            </Button>
+            <ErrorMessage error={login.error} />
+          </form>
+        </section>
+      </div>
     </main>
   )
 }

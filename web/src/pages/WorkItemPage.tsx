@@ -51,10 +51,6 @@ export function WorkItemPage() {
 
   return (
     <>
-      <p className="breadcrumbs">
-        <Link to="/projects">Proyectos</Link> /{' '}
-        {projectId && <Link to={`/projects/${projectId}`}>proyecto</Link>} /
-      </p>
       <ErrorMessage error={item.error} />
       {item.data && (
         <>
