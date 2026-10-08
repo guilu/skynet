@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router'
 import { api, type AgentRun, type Run } from '../../api'
 import { formatDateTime, isTerminal, workspaceUsable } from '../../format'
 import { ErrorMessage } from '../ErrorMessage'
+import { Button } from '../ui/Button'
 
 type Action = 'retry' | 'fork' | 'cleanup'
 
@@ -26,32 +27,32 @@ export function AgentActions({ agent }: { agent: AgentRun }) {
       <WorkspaceState agent={agent} />
       <div className="run-actions">
         {canRetry && (
-          <button
+          <Button
             type="button"
             aria-expanded={open === 'retry'}
             onClick={() => setOpen(open === 'retry' ? null : 'retry')}
           >
             Reintentar…
-          </button>
+          </Button>
         )}
         {canFork && (
-          <button
+          <Button
             type="button"
             aria-expanded={open === 'fork'}
             onClick={() => setOpen(open === 'fork' ? null : 'fork')}
           >
             Bifurcar…
-          </button>
+          </Button>
         )}
         {usable && (
-          <button
+          <Button
             type="button"
-            className="secondary"
+            variant="secondary-danger"
             aria-expanded={open === 'cleanup'}
             onClick={() => setOpen(open === 'cleanup' ? null : 'cleanup')}
           >
             Eliminar worktree…
-          </button>
+          </Button>
         )}
       </div>
       {open === 'retry' && <RetryPanel agent={agent} onClose={() => setOpen(null)} />}
@@ -116,12 +117,17 @@ function CleanupPanel({ agent, onClose }: { agent: AgentRun; onClose: () => void
         </li>
       </ul>
       <div className="run-actions">
-        <button type="button" onClick={() => cleanup.mutate()} disabled={cleanup.isPending}>
+        <Button
+          variant="danger"
+          type="button"
+          onClick={() => cleanup.mutate()}
+          disabled={cleanup.isPending}
+        >
           {cleanup.isPending ? 'Eliminando…' : 'Eliminar'}
-        </button>
-        <button type="button" className="secondary" onClick={onClose}>
+        </Button>
+        <Button variant="secondary" onClick={onClose}>
           Cancelar
-        </button>
+        </Button>
       </div>
       <ErrorMessage error={cleanup.error} />
     </section>
@@ -147,12 +153,12 @@ function RetryPanel({ agent, onClose }: { agent: AgentRun; onClose: () => void }
         <li>Su coste se suma aparte del de este agente.</li>
       </ul>
       <div className="run-actions">
-        <button type="button" onClick={() => retry.mutate()} disabled={retry.isPending}>
+        <Button onClick={() => retry.mutate()} disabled={retry.isPending}>
           {retry.isPending ? 'Reintentando…' : 'Reintentar'}
-        </button>
-        <button type="button" className="secondary" onClick={onClose}>
+        </Button>
+        <Button variant="secondary" onClick={onClose}>
           Cancelar
-        </button>
+        </Button>
       </div>
       <ErrorMessage error={retry.error} />
     </section>
@@ -186,12 +192,12 @@ function ForkPanel({ agent, onClose }: { agent: AgentRun; onClose: () => void })
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} required />
       </label>
       <div className="run-actions">
-        <button type="submit" disabled={!text.trim() || fork.isPending}>
+        <Button type="submit" disabled={!text.trim() || fork.isPending}>
           {fork.isPending ? 'Bifurcando…' : 'Bifurcar'}
-        </button>
-        <button type="button" className="secondary" onClick={onClose}>
+        </Button>
+        <Button variant="secondary" onClick={onClose}>
           Cancelar
-        </button>
+        </Button>
       </div>
       <ErrorMessage error={fork.error} />
     </form>

@@ -4,6 +4,7 @@ import { api, type Runner } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { StatusBadge } from '../components/StatusBadge'
 import { formatDateTime } from '../format'
+import { Button } from '../components/ui/Button'
 
 /** Runners registrados, su carga y si siguen enviando latidos. */
 export function RunnersPage() {
@@ -85,20 +86,25 @@ function RevokeToken({ runner }: { runner: Runner }) {
   }
   if (!confirming) {
     return (
-      <button type="button" className="link" onClick={() => setConfirming(true)}>
+      <Button variant="secondary-danger" size="sm" onClick={() => setConfirming(true)}>
         Revocar token…
-      </button>
+      </Button>
     )
   }
   return (
     <span className="small">
       ¿Revocar el token de {runner.name}? Si es tu runner, se volverá a registrar solo.{' '}
-      <button type="button" onClick={() => revoke.mutate()} disabled={revoke.isPending}>
+      <Button
+        variant="danger"
+        size="sm"
+        onClick={() => revoke.mutate()}
+        disabled={revoke.isPending}
+      >
         Sí, revocar
-      </button>{' '}
-      <button type="button" className="link" onClick={() => setConfirming(false)}>
+      </Button>{' '}
+      <Button variant="secondary" size="sm" onClick={() => setConfirming(false)}>
         No
-      </button>
+      </Button>
       <ErrorMessage error={revoke.error} />
     </span>
   )

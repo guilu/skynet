@@ -12,6 +12,7 @@ import {
 } from '../../format'
 import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
+import { Pill } from '../ui/Pill'
 import { AgentActions } from './AgentActions'
 import { ArtifactsTab } from './ArtifactsTab'
 import { agentOutcome, toolCallsOf, type ToolCall } from './agentEvents'
@@ -20,6 +21,7 @@ import { CostTab } from './CostTab'
 import { LongText } from './LongText'
 import { INSPECTOR_TABS, type InspectorTab } from './useRunSelection'
 import { VerificationTab } from './VerificationTab'
+import { Button } from '../ui/Button'
 
 interface Props {
   agent: AgentRun
@@ -197,23 +199,23 @@ function Tools({
               <p className="muted small">El runner recortó la salida original a 16 KB.</p>
             )}
             <p className="small">
-              <button
+              <Button
                 type="button"
-                className="link"
+                variant="link"
                 onClick={() => onShowEvent(call.startedSequence)}
               >
                 Evento de inicio #{call.startedSequence}
-              </button>
+              </Button>
               {call.completedSequence != null && (
                 <>
                   {' · '}
-                  <button
+                  <Button
                     type="button"
-                    className="link"
+                    variant="link"
                     onClick={() => onShowEvent(call.completedSequence!)}
                   >
                     Evento de resultado #{call.completedSequence}
-                  </button>
+                  </Button>
                 </>
               )}
             </p>
@@ -226,11 +228,7 @@ function Tools({
 
 function ToolState({ call }: { call: ToolCall }) {
   if (call.completedSequence == null) return <StatusBadge status="EXECUTING" />
-  return (
-    <span className={`badge badge-${call.isError ? 'bad' : 'ok'}`}>
-      <span aria-hidden="true">{call.isError ? '✕' : '✓'}</span> {call.isError ? 'Error' : 'Hecha'}
-    </span>
-  )
+  return <Pill tone={call.isError ? 'bad' : 'ok'}>{call.isError ? 'Error' : 'Hecha'}</Pill>
 }
 
 /** Evento tal como está guardado (ya redactado), leído de `GET /api/events/{sequence}`. */

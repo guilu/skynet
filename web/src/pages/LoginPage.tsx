@@ -2,6 +2,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, type Session } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { Button } from '../components/ui/Button'
 
 /** Entrada a la web con el usuario único del control plane. */
 export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) {
@@ -47,9 +48,9 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
             required
           />
         </label>
-        <button type="submit" disabled={login.isPending}>
+        <Button type="submit" disabled={login.isPending}>
           {login.isPending ? 'Entrando…' : 'Entrar'}
-        </button>
+        </Button>
         <ErrorMessage error={login.error} />
       </form>
     </main>

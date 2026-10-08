@@ -44,15 +44,6 @@ export function statusTone(status: string): StatusTone {
   return 'neutral'
 }
 
-/** Icono de cada tono: el estado nunca se comunica solo con el color. */
-export const TONE_ICONS: Record<StatusTone, string> = {
-  neutral: '○',
-  active: '●',
-  ok: '✓',
-  bad: '✕',
-  warn: '!',
-}
-
 const TERMINAL = ['SUCCEEDED', 'COMPLETED', 'FAILED', 'CANCELLED', 'SKIPPED']
 export const isTerminal = (status: string) => TERMINAL.includes(status)
 

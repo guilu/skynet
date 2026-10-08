@@ -15,6 +15,7 @@ import {
   type GitChanges,
 } from './artifacts'
 import { CodeView } from './CodeView'
+import { Button } from '../ui/Button'
 
 /** Lo que se lee de un log de una vez. */
 export const LOG_PAGE = 512 * 1024
@@ -95,9 +96,10 @@ function Changes({ changes, diff }: { changes: ArtifactSummary; diff?: ArtifactS
           <ul className="changed-files" aria-label="Archivos modificados">
             {git.files.map((f) => (
               <li key={f.path}>
-                <button
+                <Button
                   type="button"
-                  className={f === file ? 'link selected' : 'link'}
+                  variant="link"
+                  className={f === file ? 'selected' : undefined}
                   aria-current={f === file ? 'true' : undefined}
                   onClick={() => setSelected(f.path)}
                 >
@@ -105,7 +107,7 @@ function Changes({ changes, diff }: { changes: ArtifactSummary; diff?: ArtifactS
                     {f.status}
                   </span>{' '}
                   {f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}
-                </button>{' '}
+                </Button>{' '}
                 {f.binary ? (
                   <span className="muted small">binario</span>
                 ) : (
@@ -172,14 +174,14 @@ function Logs({ artifacts }: { artifacts: ArtifactSummary[] }) {
       <ul className="list small">
         {artifacts.map((a) => (
           <li key={a.id}>
-            <button
+            <Button
               type="button"
-              className="link"
+              variant="link"
               aria-expanded={open === a.id}
               onClick={() => setOpen(open === a.id ? null : a.id)}
             >
               {artifactLabel(a)}
-            </button>{' '}
+            </Button>{' '}
             <span className="muted">
               {a.name} · {formatBytes(a.size)} · {formatDateTime(a.createdAt)}
               {a.truncated && ' · recortado'}
@@ -239,9 +241,9 @@ function LogViewer({ artifact }: { artifact: ArtifactSummary }) {
       <p className="muted small">
         {loading ? 'Cargando…' : `${formatBytes(loaded)} de ${formatBytes(artifact.size)}`}{' '}
         {!loading && loaded < artifact.size && (
-          <button type="button" className="link" onClick={() => void more(loaded)}>
+          <Button variant="link" onClick={() => void more(loaded)}>
             Cargar más
-          </button>
+          </Button>
         )}
       </p>
     </div>

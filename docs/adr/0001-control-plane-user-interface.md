@@ -260,6 +260,17 @@ Skynet usará una estética de control plane técnico, no una interfaz de chat c
 
 No se adoptará una dependencia completa de componentes de otro producto. React Flow se utilizará para el DAG; Monaco se reservará para diff, código y artefactos de texto, tal como prevé la especificación.
 
+### 5.1. Lenguaje visual (2026-10-08)
+
+Al cerrar la Fase 1 se rediseña la interfaz con un lenguaje propio, inspirado en la claridad, la tactilidad y la expresividad de las aplicaciones educativas gamificadas, sin copiar la marca, la mascota, las ilustraciones ni los iconos de ninguna. La referencia es la maqueta [`docs/ui/maqueta.html`](../ui/maqueta.html).
+
+- Formas muy redondeadas, bordes visibles de 2 px y sombras cortas y firmes, sin desenfoque.
+- Botones con volumen que se hunden al pulsarlos; colores vivos reservados a los estados.
+- Cada estado lleva color, icono y etiqueta; lo que está vivo late y lo que termina aparece con un pequeño «pop».
+- Animaciones cortas que comunican una acción o un cambio de estado, desactivadas con `prefers-reduced-motion`.
+- Tipografía redondeada (Baloo 2 en títulos, Nunito en el texto) y JetBrains Mono para IDs, hashes, comandos y payloads, empaquetadas con la aplicación.
+- Tailwind CSS 4 con los *tokens* como utilidades; componentes propios en `web/src/components/ui/`, sobre Radix cuando hagan falta primitivas accesibles (menús, diálogos, paneles).
+
 ## 6. Estrategia incremental
 
 ### Fase A — M3: observabilidad usable sin DAG editable

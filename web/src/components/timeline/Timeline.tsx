@@ -1,7 +1,8 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { StoredEvent } from '../../api'
-import { describeEvent, formatTime, TONE_ICONS } from '../../format'
+import { describeEvent, formatTime } from '../../format'
+import { Pill } from '../ui/Pill'
 import { indexOfSequence, type TimelineEntry } from './timeline'
 
 type Row =
@@ -197,12 +198,7 @@ function EntryRow({
         <span className="timeline-time">{formatTime(entry.occurredAt)}</span>
         <code className="timeline-type">{entry.events[0].type}</code>
         <span>
-          {tone && (
-            <span className={`badge badge-${tone}`}>
-              <span aria-hidden="true">{TONE_ICONS[tone]}</span>{' '}
-              {entry.severity === 'error' ? 'Error' : 'Aviso'}
-            </span>
-          )}{' '}
+          {tone && <Pill tone={tone}>{entry.severity === 'error' ? 'Error' : 'Aviso'}</Pill>}{' '}
           {entry.title}
           {entry.children.length > 0 && (
             <span className="muted small"> · {entry.events.length} eventos</span>

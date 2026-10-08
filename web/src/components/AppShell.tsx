@@ -1,17 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  Activity,
+  CirclePlay,
+  Folder,
+  House,
+  Server,
+  Sparkles,
+  Workflow,
+  type LucideIcon,
+} from 'lucide-react'
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router'
 import { api, SESSION_KEY, type Session } from '../api'
 import { HealthIndicator } from '../HealthIndicator'
 import { useTheme, type ThemeChoice } from '../theme'
+import { Button } from './ui/Button'
 
-const NAV = [
-  { to: '/', label: 'Dashboard', end: true },
-  { to: '/projects', label: 'Proyectos' },
-  { to: '/workflows', label: 'Workflows' },
-  { to: '/runs', label: 'Ejecuciones' },
-  { to: '/runners', label: 'Runners' },
-  { to: '/activity', label: 'Actividad' },
+const NAV: { to: string; label: string; icon: LucideIcon; end?: boolean }[] = [
+  { to: '/', label: 'Dashboard', icon: House, end: true },
+  { to: '/projects', label: 'Proyectos', icon: Folder },
+  { to: '/workflows', label: 'Workflows', icon: Workflow },
+  { to: '/runs', label: 'Ejecuciones', icon: CirclePlay },
+  { to: '/runners', label: 'Runners', icon: Server },
+  { to: '/activity', label: 'Actividad', icon: Activity },
 ]
 
 const THEMES: { value: ThemeChoice; label: string }[] = [
@@ -38,7 +49,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         Saltar al contenido
       </a>
       <header className="topbar">
-        <span className="brand">Skynet</span>
+        <span className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            <Sparkles size={20} strokeWidth={2.5} />
+          </span>
+          Skynet
+        </span>
         <HealthIndicator />
         <label className="theme-picker">
           <span className="visually-hidden">Tema</span>
@@ -53,14 +69,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         {session.data && (
           <span className="session">
             <span className="muted small">{session.data.username}</span>{' '}
-            <button
+            <Button
               type="button"
-              className="link"
+              variant="link"
               onClick={() => logout.mutate()}
               disabled={logout.isPending}
             >
               Salir
-            </button>
+            </Button>
           </span>
         )}
       </header>
@@ -69,6 +85,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {NAV.map((item) => (
             <li key={item.to}>
               <NavLink to={item.to} end={item.end}>
+                <item.icon size={24} strokeWidth={2.25} aria-hidden="true" />
                 {item.label}
               </NavLink>
             </li>
