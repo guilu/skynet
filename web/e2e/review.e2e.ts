@@ -79,6 +79,13 @@ test('ningún secreto llega al DOM', async ({ page }) => {
 
 /** Reglas WCAG 2.1 A y AA. */
 async function expectAccessible(page: Page, what: string) {
+  // Menús y diálogos entran con una animación de opacidad: a medias, axe mide un contraste falso.
+  // (Las e2e no cargan los tipos del DOM: va como texto.)
+  await page.evaluate(`Promise.all(
+    document.getAnimations()
+      .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+      .map((a) => a.finished.catch(() => undefined)),
+  )`)
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze()

@@ -488,6 +488,7 @@ export const api = {
     status?: RunStatus[]
     projectId?: string
     since?: string
+    q?: string
     page?: number
     size?: number
   }) => {
@@ -495,6 +496,7 @@ export const api = {
     query.status?.forEach((s) => params.append('status', s))
     if (query.projectId) params.set('projectId', query.projectId)
     if (query.since) params.set('since', query.since)
+    if (query.q) params.set('q', query.q)
     if (query.page !== undefined) params.set('page', String(query.page))
     if (query.size !== undefined) params.set('size', String(query.size))
     return request<RunPage>('GET', `/api/workflow-runs?${params}`)

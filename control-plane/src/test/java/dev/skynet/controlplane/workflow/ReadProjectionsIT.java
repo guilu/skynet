@@ -127,6 +127,12 @@ class ReadProjectionsIT extends IntegrationTest {
                 .asLong())
         .isZero();
 
+    // Búsqueda por clave o título del trabajo, sin distinguir mayúsculas; % y _ no son comodines.
+    assertThat(ids(get("/api/workflow-runs?q=beta"))).containsExactly(other.runId());
+    assertThat(get("/api/workflow-runs?q=alpha-1").path("total").asLong()).isEqualTo(2);
+    assertThat(get("/api/workflow-runs?q=%25").path("total").asLong()).isZero();
+    assertThat(get("/api/workflow-runs?q=+").path("total").asLong()).isEqualTo(3);
+
     JsonNode page = get("/api/workflow-runs?size=1&page=1");
     assertThat(page.path("total").asLong()).isEqualTo(3);
     assertThat(page.path("size").asInt()).isEqualTo(1);
