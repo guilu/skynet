@@ -56,13 +56,18 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
   })
 
   const header = page.locator('header.run-header')
-  const timeline = page.getByRole('region', { name: 'Timeline' })
+  const timeline = page.getByRole('tabpanel', { name: /^Eventos/ })
+  const inspector = page.getByRole('region', { name: 'Inspector del agente' }).getByRole('tabpanel')
 
-  await test.step('herramientas en vivo', async () => {
+  await test.step('herramientas en vivo, en la cascada y en los eventos', async () => {
     await expect(header.getByText('En vivo')).toBeVisible()
-    await expect(timeline.getByRole('button', { name: /Read: / }).first()).toBeVisible({
+    await page.getByRole('tab', { name: 'Cascada' }).click()
+    const waterfall = page.getByRole('tabpanel', { name: 'Cascada' })
+    await expect(waterfall.getByRole('button', { name: /^Read / }).first()).toBeVisible({
       timeout: 45_000,
     })
+    await page.getByRole('tab', { name: /^Eventos/ }).click()
+    await expect(timeline.getByRole('button', { name: /Read: / }).first()).toBeVisible()
   })
 
   await test.step('cortar y reconectar el stream', async () => {
@@ -79,19 +84,28 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     await expect(header.getByRole('button', { name: 'Cancelar agente' })).toHaveCount(0)
   })
 
-  await test.step('mensajes y herramientas en el inspector', async () => {
+  await test.step('mensajes en la conversación y herramientas en el inspector', async () => {
     await page.getByRole('tab', { name: 'Conversación' }).click()
-    await expect(page.getByRole('tabpanel').getByText(/Fixed `add\(\)`/)).toBeVisible()
+    const conversation = page.getByRole('tabpanel', { name: 'Conversación' })
+    await expect(conversation.getByText(/Fixed `add\(\)`/)).toBeVisible()
+    await expect(conversation.locator('.tool-card')).toHaveCount(3)
 
     await page.getByRole('tab', { name: 'Herramientas' }).click()
-    const tools = page.getByRole('tabpanel').locator('.tool-calls > li')
-    await expect(tools).toHaveCount(3)
-    await expect(page.getByRole('tabpanel').getByText('Hecha')).toHaveCount(3)
+    await expect(inspector.locator('.tool-calls > li')).toHaveCount(3)
+    await expect(inspector.getByText('Hecha')).toHaveCount(3)
+
+    // Elegir una herramienta en el árbol la abre en el inspector.
+    const tree = page.getByRole('navigation', { name: 'Fases y agentes' })
+    await tree.getByRole('button', { name: /^Edit / }).click()
+    await expect(inspector.locator('.tool-calls > li.selected > details')).toHaveAttribute(
+      'open',
+      '',
+    )
   })
 
   await test.step('artefactos: archivo modificado, su diff y el commit', async () => {
     await page.getByRole('tab', { name: 'Artefactos' }).click()
-    const panel = page.getByRole('tabpanel')
+    const panel = inspector
     await expect(
       panel.getByRole('list', { name: 'Archivos modificados' }).getByRole('button', {
         name: /calc\.py/,
@@ -105,7 +119,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
 
   await test.step('verificación independiente y reejecución', async () => {
     await page.getByRole('tab', { name: 'Verificación' }).click()
-    const panel = page.getByRole('tabpanel')
+    const panel = inspector
     const verified = panel.getByRole('region', { name: 'Verificado por Skynet' })
     await expect(verified.getByText('Pasa')).toBeVisible({ timeout: 60_000 })
     await expect(verified.getByText('1 tests · 0 fallidos · 0 omitidos')).toBeVisible()
@@ -125,6 +139,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     const stored = await (
       await page.request.get(`/api/events?workflowRunId=${runId}&limit=1000`)
     ).json()
+    await page.getByRole('tab', { name: /^Eventos/ }).click()
     await page.getByLabel('Tipo').selectOption('message')
     await expect(timeline.locator('.timeline-item')).toHaveCount(
       stored.filter((e: { type: string }) => e.type === 'agent.message.received').length,
@@ -136,7 +151,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
   await test.step('enviar un mensaje continúa la conversación en otra invocación', async () => {
     const firstRun = page.url()
     await page.getByRole('tab', { name: 'Conversación' }).click()
-    const panel = page.getByRole('tabpanel')
+    const panel = page.getByRole('tabpanel', { name: 'Conversación' })
     await expect(panel.getByText('La función add de calc.py resta: arréglala')).toBeVisible()
     await expect(panel.getByText(/Continúa la sesión en el worktree/)).toBeVisible()
     await panel.getByLabel('Mensaje').fill('Añade también subtract')
@@ -147,7 +162,15 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     await expect(panel.getByText('Reanudación')).toBeVisible()
     await expect(panel.getByText('La función add de calc.py resta: arréglala')).toBeVisible()
     await expect(panel.getByText('Añade también subtract')).toBeVisible()
-    await expect(panel.getByText(/subtract\(a, b\)/).first()).toBeVisible({ timeout: 90_000 })
+    // En un mensaje del agente: las herramientas plegadas también lo llevan, pero ocultas.
+    await expect(
+      panel
+        .locator('.bubble')
+        .getByText(/subtract\(a, b\)/)
+        .first(),
+    ).toBeVisible({
+      timeout: 90_000,
+    })
     await expect(header.getByRole('heading', { level: 1 }).getByText('Completada')).toBeVisible({
       timeout: 30_000,
     })
@@ -160,12 +183,12 @@ test('cancelar a mitad deja el agente cancelado y ningún proceso vivo', async (
   await login(page)
   await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible()
   const runId = await launchViaApi(page, 'Tarea larga')
-  await page.goto(`/runs/${runId}`)
+  await page.goto(`/runs/${runId}?view=events`)
   const header = page.locator('header.run-header')
 
   await expect(
     page
-      .getByRole('region', { name: 'Timeline' })
+      .getByRole('tabpanel', { name: /^Eventos/ })
       .getByRole('button', { name: /Read: / })
       .first(),
   ).toBeVisible({ timeout: 45_000 })
@@ -182,10 +205,10 @@ test('cancelar a mitad deja el agente cancelado y ningún proceso vivo', async (
 
 /** Abre la ejecución y espera a que el agente esté usando herramientas. */
 async function openWhileRunning(page: Page, runId: string) {
-  await page.goto(`/runs/${runId}`)
+  await page.goto(`/runs/${runId}?view=events`)
   await expect(
     page
-      .getByRole('region', { name: 'Timeline' })
+      .getByRole('tabpanel', { name: /^Eventos/ })
       .getByRole('button', { name: /Read: / })
       .first(),
   ).toBeVisible({ timeout: 45_000 })

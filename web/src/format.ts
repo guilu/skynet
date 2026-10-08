@@ -29,6 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
   STALE: 'Sin latido',
   PASSED: 'Pasa',
   ERROR: 'Error',
+  INTERRUPTED: 'Sin respuesta',
 }
 
 export const statusLabel = (status: string) => STATUS_LABELS[status] ?? status
