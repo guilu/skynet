@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import agentRunDetail from '../../fixtures/contracts/agent-run-detail.json'
 import conversation from '../../fixtures/contracts/conversation.json'
+import dashboardMetrics from '../../fixtures/contracts/dashboard-metrics.json'
 import dashboardSummary from '../../fixtures/contracts/dashboard-summary.json'
 import runPage from '../../fixtures/contracts/run-page.json'
 import runView from '../../fixtures/contracts/run-view.json'
@@ -132,6 +133,70 @@ describe('App', () => {
     })
     renderAt('/', <App />)
     expect(await screen.findByText('Nada requiere atención ahora mismo.')).toBeInTheDocument()
+  })
+
+  it('las métricas del periodo enlazan a la lista filtrada y cambian de periodo', async () => {
+    const tz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)
+    const fetch = stubApi({
+      '/api/dashboard': dashboardSummary,
+      [`/api/dashboard/metrics?period=7d&tz=${tz}`]: { ...dashboardMetrics, bucket: 'day' },
+      [`/api/dashboard/metrics?period=24h&tz=${tz}`]: dashboardMetrics,
+    })
+    renderAt('/', <App />)
+    const metrics = await screen.findByRole('region', { name: 'Métricas' })
+    await within(metrics).findByText('Fallidas', { selector: 'dt' })
+    expect(
+      within(metrics)
+        .getByText('Fallidas', { selector: 'dt' })
+        .nextElementSibling?.querySelector('a'),
+    ).toHaveAttribute(
+      'href',
+      `/runs?status=FAILED&since=${encodeURIComponent(dashboardMetrics.since)}`,
+    )
+    expect(
+      within(metrics).getByText('Coste', { selector: 'dt' }).nextElementSibling,
+    ).toHaveTextContent('0,1234 US$')
+    expect(within(metrics).getByText('Duración mediana').nextElementSibling).toHaveTextContent(
+      '1 min 35 s',
+    )
+    expect(
+      within(metrics).getByRole('img', { name: /Ejecuciones por día: 3 en total/ }),
+    ).toBeInTheDocument()
+    // La misma información, en tabla.
+    expect(within(metrics).getAllByRole('row')).toHaveLength(3)
+
+    fireEvent.click(within(metrics).getByRole('button', { name: '24 horas' }))
+    expect(
+      await within(metrics).findByRole('img', { name: /Ejecuciones por hora/ }),
+    ).toBeInTheDocument()
+    expect(within(metrics).getByRole('button', { name: '24 horas' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/dashboard/metrics?period=24h&tz=${tz}`,
+      expect.anything(),
+    )
+  })
+
+  it('la lista de ejecuciones filtra por fecha de creación y se puede quitar', async () => {
+    const since = '2026-10-04T09:00:00Z'
+    const fetch = stubApi({
+      [`/api/workflow-runs?status=FAILED&since=${encodeURIComponent(since)}&page=0&size=25`]: {
+        ...runPage,
+        items: [],
+      },
+      '/api/workflow-runs?status=FAILED&page=0&size=25': runPage,
+    })
+    renderAt(`/runs?status=FAILED&since=${since}`, <App />)
+    expect(await screen.findByText(/Creadas desde/)).toBeInTheDocument()
+    expect(await screen.findByText('No hay ejecuciones.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar' }))
+    await waitFor(() => expect(screen.queryByText(/Creadas desde/)).toBeNull())
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/workflow-runs?status=FAILED&page=0&size=25',
+      expect.anything(),
+    )
   })
 
   it('la lista de ejecuciones lee el filtro de la URL', async () => {

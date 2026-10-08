@@ -234,6 +234,35 @@ export interface DashboardSummary {
   generatedAt: string
 }
 
+export type MetricsPeriod = '24h' | '7d' | '30d'
+
+/** Métricas de las ejecuciones creadas en un periodo (GET /api/dashboard/metrics). */
+export interface RunMetrics {
+  since: string
+  until: string
+  /** Tamaño de cada tramo de `buckets`. */
+  bucket: 'hour' | 'day'
+  total: number
+  active: number
+  succeeded: number
+  failed: number
+  cancelled: number
+  medianDurationSeconds: number | null
+  inputTokens: number | null
+  outputTokens: number | null
+  costUsd: number | null
+  buckets: MetricsBucket[]
+}
+
+export interface MetricsBucket {
+  start: string
+  total: number
+  succeeded: number
+  failed: number
+  cancelled: number
+  costUsd: number | null
+}
+
 export interface WorkflowDefinition {
   id: string
   key: string
@@ -455,10 +484,17 @@ export const api = {
   ) => request<WorkItem>('POST', `/api/projects/${projectId}/work-items`, body),
   runs: (workItemId: string) => request<Run[]>('GET', `/api/work-items/${workItemId}/runs`),
   run: (id: string) => request<Run>('GET', `/api/workflow-runs/${id}`),
-  listRuns: (query: { status?: RunStatus[]; projectId?: string; page?: number; size?: number }) => {
+  listRuns: (query: {
+    status?: RunStatus[]
+    projectId?: string
+    since?: string
+    page?: number
+    size?: number
+  }) => {
     const params = new URLSearchParams()
     query.status?.forEach((s) => params.append('status', s))
     if (query.projectId) params.set('projectId', query.projectId)
+    if (query.since) params.set('since', query.since)
     if (query.page !== undefined) params.set('page', String(query.page))
     if (query.size !== undefined) params.set('size', String(query.size))
     return request<RunPage>('GET', `/api/workflow-runs?${params}`)
@@ -489,6 +525,11 @@ export const api = {
     request<VerificationResult>('POST', `/api/agent-runs/${agentId}/verifications`),
   runners: () => request<Runner[]>('GET', '/api/runners'),
   dashboard: () => request<DashboardSummary>('GET', '/api/dashboard'),
+  dashboardMetrics: (period: MetricsPeriod, tz: string) =>
+    request<RunMetrics>(
+      'GET',
+      `/api/dashboard/metrics?period=${period}&tz=${encodeURIComponent(tz)}`,
+    ),
   workflowDefinitions: () => request<WorkflowDefinition[]>('GET', '/api/workflow-definitions'),
   event: (sequence: number) => request<StoredEvent>('GET', `/api/events/${sequence}`),
   eventsBefore: (query: { workflowRunId?: string; before: number; limit?: number }) => {

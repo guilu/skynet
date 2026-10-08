@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -69,14 +70,18 @@ class RunController {
     return service.runsOf(workItemId);
   }
 
-  /** Ejecuciones de más reciente a más antigua; {@code status} se puede repetir. */
+  /**
+   * Ejecuciones de más reciente a más antigua; {@code status} se puede repetir y {@code since} deja
+   * solo las creadas desde ese instante (ISO-8601).
+   */
   @GetMapping("/api/workflow-runs")
   RunPage list(
       @RequestParam(required = false) Set<WorkflowRunStatus> status,
       @RequestParam(required = false) UUID projectId,
+      @RequestParam(required = false) Instant since,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "50") int size) {
-    return service.list(status, projectId, Math.max(0, page), Math.clamp(size, 1, MAX_PAGE));
+    return service.list(status, projectId, since, Math.max(0, page), Math.clamp(size, 1, MAX_PAGE));
   }
 
   @GetMapping("/api/workflow-definitions")

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import agentRunDetail from '../../fixtures/contracts/agent-run-detail.json'
 import artifacts from '../../fixtures/contracts/artifacts.json'
 import conversation from '../../fixtures/contracts/conversation.json'
+import dashboardMetrics from '../../fixtures/contracts/dashboard-metrics.json'
 import dashboardSummary from '../../fixtures/contracts/dashboard-summary.json'
 import runPage from '../../fixtures/contracts/run-page.json'
 import runView from '../../fixtures/contracts/run-view.json'
@@ -20,8 +21,10 @@ import type {
   ConversationMessage,
   ConversationTurn,
   DashboardSummary,
+  MetricsBucket,
   Prompt,
   Run,
+  RunMetrics,
   RunPage,
   RunTotals,
   Runner,
@@ -140,6 +143,29 @@ const UNRESPONSIVE_AGENT: Keys<UnresponsiveAgent> = {
   workItemKey: true,
   lastActivityAt: true,
 }
+const METRICS: Keys<RunMetrics> = {
+  since: true,
+  until: true,
+  bucket: true,
+  total: true,
+  active: true,
+  succeeded: true,
+  failed: true,
+  cancelled: true,
+  medianDurationSeconds: true,
+  inputTokens: true,
+  outputTokens: true,
+  costUsd: true,
+  buckets: true,
+}
+const METRICS_BUCKET: Keys<MetricsBucket> = {
+  start: true,
+  total: true,
+  succeeded: true,
+  failed: true,
+  cancelled: true,
+  costUsd: true,
+}
 const DASHBOARD: Keys<DashboardSummary> = {
   activeRuns: true,
   activeRunsTotal: true,
@@ -241,6 +267,11 @@ describe('contratos con el backend', () => {
     ;(dashboardSummary.activeRuns as Run[]).forEach(expectRun)
     dashboardSummary.unresponsiveAgents.forEach((a) => expectShape(a, UNRESPONSIVE_AGENT))
     dashboardSummary.staleRunners.forEach((r) => expectShape(r, RUNNER))
+  })
+
+  it('métricas del dashboard', () => {
+    expectShape(dashboardMetrics, METRICS)
+    dashboardMetrics.buckets.forEach((b) => expectShape(b, METRICS_BUCKET))
   })
 
   it('evento', () => {

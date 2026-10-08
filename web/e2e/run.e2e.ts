@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
-import { execFileSync } from 'node:child_process'
-import { resolve } from 'node:path'
 import { startCuttableProxy } from './cuttableProxy.ts'
+import { fakeClaudeProcesses, launchViaApi, login, repoPath, service } from './helpers.ts'
 
 /**
  * Recorrido completo (issue #6): crear proyecto, repositorio y trabajo → lanzar un agente → ver
@@ -10,23 +9,6 @@ import { startCuttableProxy } from './cuttableProxy.ts'
  * El runner usa fake-claude con la grabación `02-tools` (Read, Edit, Bash y un mensaje final) y un
  * retardo entre líneas, para que haya tiempo de cortar la conexión a mitad de ejecución.
  */
-const repoPath = process.env.E2E_REPO_PATH ?? '/tmp/skynet-e2e-repo'
-const adminUser = process.env.SKYNET_ADMIN_USER ?? 'admin'
-const adminSecret = process.env.SKYNET_ADMIN_PASSWORD ?? 'e2e-admin'
-
-/** Entra con el usuario de la web desde la página en la que esté el login. */
-async function login(page: Page, password = adminSecret) {
-  await page.getByLabel('Usuario').fill(adminUser)
-  await page.getByLabel('Contraseña').fill(password)
-  await page.getByRole('button', { name: 'Entrar' }).click()
-}
-
-/** Cabecera CSRF para las llamadas a la API con la sesión del navegador. */
-async function csrf(page: Page): Promise<Record<string, string>> {
-  const cookie = (await page.context().cookies()).find((c) => c.name === 'XSRF-TOKEN')
-  return cookie ? { 'X-XSRF-TOKEN': cookie.value } : {}
-}
-
 let network: Awaited<ReturnType<typeof startCuttableProxy>>
 test.beforeAll(async () => {
   network = await startCuttableProxy(4100, { host: 'localhost', port: 4173 })
@@ -173,35 +155,6 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
   })
 })
 
-/** Procesos de fake-claude vivos en esta máquina. */
-function fakeClaudeProcesses(): string[] {
-  try {
-    return execFileSync('pgrep', ['-fa', 'dev[.]skynet[.]fakeclaude'], { encoding: 'utf8' })
-      .split('\n')
-      .filter(Boolean)
-  } catch {
-    return [] // pgrep sale con 1 si no encuentra ninguno.
-  }
-}
-
-async function launchViaApi(page: Page, prompt: string): Promise<string> {
-  const key = `C${Date.now().toString(36).toUpperCase().slice(-6)}`
-  const headers = await csrf(page)
-  const post = async (path: string, data: unknown) =>
-    (await page.request.post(path, { data, headers })).json()
-  const project = await post('/api/projects', { key, name: 'Cancelar' })
-  const repo = await post(`/api/projects/${project.id}/repositories`, {
-    name: 'demo',
-    localPath: repoPath,
-  })
-  const item = await post(`/api/projects/${project.id}/work-items`, {
-    title: 'Cancelar a mitad',
-    type: 'BUG',
-  })
-  const run = await post(`/api/work-items/${item.id}/runs`, { repositoryId: repo.id, prompt })
-  return run.id
-}
-
 test('cancelar a mitad deja el agente cancelado y ningún proceso vivo', async ({ page }) => {
   await page.goto('/')
   await login(page)
@@ -226,14 +179,6 @@ test('cancelar a mitad deja el agente cancelado y ningún proceso vivo', async (
   })
   await expect.poll(fakeClaudeProcesses, { timeout: 10_000 }).toHaveLength(0)
 })
-
-/** Para o arranca el control plane o el runner de las E2E (scripts/e2e-service.sh). */
-function service(action: 'start' | 'stop' | 'kill', name: 'control-plane' | 'runner') {
-  execFileSync(resolve(import.meta.dirname, '../../scripts/e2e-service.sh'), [action, name], {
-    stdio: 'ignore',
-    timeout: 120_000,
-  })
-}
 
 /** Abre la ejecución y espera a que el agente esté usando herramientas. */
 async function openWhileRunning(page: Page, runId: string) {
