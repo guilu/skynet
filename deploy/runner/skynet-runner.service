@@ -1,0 +1,26 @@
+# Runner de Skynet como servicio de usuario de systemd (Linux).
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/runner/skynet-runner.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now skynet-runner
+#   loginctl enable-linger "$USER"     # para que siga corriendo sin una sesión abierta
+#
+# Logs: journalctl --user -u skynet-runner -f
+[Unit]
+Description=Skynet runner
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=%h/.local/share/skynet-runner/skynet-runner.sh
+# Al parar se termina también el grupo de procesos de los agentes en curso; al volver a arrancar,
+# esos agentes quedan como «Fallida» («El runner se reinició durante la ejecución»).
+KillMode=control-group
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

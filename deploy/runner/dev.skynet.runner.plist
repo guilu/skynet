@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Runner de Skynet como agente de launchd (macOS). Cambia TU_USUARIO por tu usuario (launchd no
+  expande ~ ni $HOME) y cárgalo:
+
+    sed "s/TU_USUARIO/$USER/g" deploy/runner/dev.skynet.runner.plist > ~/Library/LaunchAgents/dev.skynet.runner.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.skynet.runner.plist
+
+  Parar y quitar:  launchctl bootout gui/$(id -u)/dev.skynet.runner
+  Reiniciar:       launchctl kickstart -k gui/$(id -u)/dev.skynet.runner
+  Logs:            tail -f ~/Library/Logs/skynet-runner.log
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.skynet.runner</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/TU_USUARIO/.local/share/skynet-runner/skynet-runner.sh</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <!-- Se vuelve a arrancar si termina con error, no si lo paras tú. -->
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>ExitTimeOut</key>
+  <integer>30</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/TU_USUARIO/Library/Logs/skynet-runner.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/TU_USUARIO/Library/Logs/skynet-runner.log</string>
+</dict>
+</plist>
