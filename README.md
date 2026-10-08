@@ -7,6 +7,8 @@ Plataforma web de control, ejecución, observabilidad y auditoría para flujos a
 La definición funcional y técnica inicial se encuentra en:
 
 - [`docs/agentic-orchestration-system.md`](docs/agentic-orchestration-system.md)
+- [`docs/implementation-plan.md`](docs/implementation-plan.md): plan por hitos y lo implementado en cada uno.
+- [`docs/mvp-checklist.md`](docs/mvp-checklist.md): los 12 criterios del MVP y cómo comprobarlos con Claude.
 
 ## Arquitectura prevista
 
@@ -82,7 +84,16 @@ En CI corre como job propio, con PostgreSQL como servicio.
 ### Aplicación completa con Docker
 
 ```bash
-SKYNET_ADMIN_PASSWORD=<contraseña> docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
+cp deploy/.env.example deploy/.env      # rellena SKYNET_ADMIN_PASSWORD y SKYNET_RUNNER_REGISTRATION_TOKEN
+docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
+```
+
+`deploy/.env.example` explica cada variable; `docker compose` lee `deploy/.env` solo (también valen variables de entorno). Los datos quedan en los volúmenes `postgres-data` y `artifacts-data`, los logs de los contenedores rotan (5 × 10 MB por servicio) y los servicios vuelven a arrancar solos tras un reinicio de Docker. PostgreSQL solo escucha en `127.0.0.1`.
+
+Con la aplicación levantada, `scripts/compose-smoke.sh` comprueba la instalación de punta a punta: arranca un runner en el host con fake-claude, que se registra a través de la web, lanza un agente en un repositorio de juguete y espera a que termine «Completada» con su diff subido. CI lo ejecuta en cada cambio. Usa una instalación recién levantada: con otros runners conectados, el agente podría ir a uno de ellos.
+
+```bash
+SKYNET_ADMIN_PASSWORD=<contraseña> SKYNET_RUNNER_REGISTRATION_TOKEN=<secreto> scripts/compose-smoke.sh
 ```
 
 | Servicio | URL | Variable para cambiar el puerto |
@@ -95,7 +106,7 @@ SKYNET_ADMIN_PASSWORD=<contraseña> docker compose -f deploy/docker-compose.yml 
 
 Credenciales de la base de datos: `SKYNET_DB_USER` / `SKYNET_DB_PASSWORD` (por defecto `skynet`/`skynet`). Los artefactos (diff, logs, informes de tests) se guardan en el volumen `artifacts-data`; fuera de Docker, en `SKYNET_ARTIFACTS_DIR` (por defecto `data/artifacts`), con un máximo por artefacto de `SKYNET_ARTIFACT_MAX_SIZE` (20 MB) y por subida de `SKYNET_ARTIFACT_MAX_UPLOAD` (64 MB). El comando de verificación tiene un tiempo máximo de `SKYNET_VERIFICATION_TIMEOUT` (30 min). Para que un runner pueda registrarse, define `SKYNET_RUNNER_REGISTRATION_TOKEN` con un secreto compartido; sin él, el registro de runners está desactivado. Para parar: `docker compose -f deploy/docker-compose.yml --profile app down` (añade `-v` para borrar los datos). El runner no va en contenedor: se ejecuta en el host porque necesita `claude` y los repositorios.
 
-### Probar la aplicación (estado actual: M4)
+### Probar la aplicación
 
 Con la aplicación levantada, abre la web. La navegación lateral da acceso al **Dashboard** (lo que requiere atención: ejecuciones activas, fallos recientes, agentes sin actividad y runners sin latido; y al pie, las métricas de las últimas 24 horas, 7 o 30 días, con cada cifra enlazada a la lista de ejecuciones filtrada), **Proyectos**, **Workflows**, **Ejecuciones** (filtrables por estado), **Runners** y **Actividad**. El tema claro/oscuro sigue al sistema o se elige arriba a la derecha.
 
@@ -116,7 +127,7 @@ Con la aplicación levantada, abre la web. La navegación lateral da acceso al *
 
 ### Runner local
 
-El runner se ejecuta en la máquina donde están los repositorios y `claude`. Se conecta al control plane (no hace falta abrir puertos) y guarda su estado en `~/.skynet-runner` (journal SQLite, logs NDJSON y worktrees).
+El runner se ejecuta en la máquina donde están los repositorios y `claude`. Se conecta al control plane (no hace falta abrir puertos) y guarda su estado en `~/.skynet-runner` (journal SQLite, logs NDJSON y worktrees). Necesita Java 21, `git` y Claude Code con sesión iniciada (`claude` y después `/login`) o `ANTHROPIC_API_KEY`.
 
 ```bash
 ./gradlew :runner:installDist
@@ -124,6 +135,42 @@ SKYNET_URL=http://localhost:8080 \
 SKYNET_RUNNER_REGISTRATION_TOKEN=<el mismo secreto que el control plane> \
 runner/build/install/skynet-runner/bin/skynet-runner
 ```
+
+#### Instalar el runner como servicio
+
+Para que arranque solo con el equipo, instálalo en `~/.local/share/skynet-runner` con su configuración en `~/.config/skynet-runner/runner.env`. Los ficheros de ejemplo están en `deploy/runner/`.
+
+```bash
+./gradlew :runner:installDist
+mkdir -p ~/.local/share ~/.config/skynet-runner
+rm -rf ~/.local/share/skynet-runner
+cp -R runner/build/install/skynet-runner ~/.local/share/
+cp deploy/runner/skynet-runner.sh ~/.local/share/skynet-runner/
+cp -n deploy/runner/runner.env.example ~/.config/skynet-runner/runner.env
+chmod 600 ~/.config/skynet-runner/runner.env    # y rellénalo: SKYNET_URL, el secreto y el PATH
+~/.local/share/skynet-runner/skynet-runner.sh  # prueba en primer plano; Ctrl+C cuando se registre
+```
+
+Un servicio no hereda el `PATH` de tu shell: pon en `runner.env` el directorio de `claude` (`dirname $(command -v claude)`), el de `git` y el de `java` (o `JAVA_HOME`). Después:
+
+- **Linux (systemd, servicio de usuario):**
+  ```bash
+  mkdir -p ~/.config/systemd/user
+  cp deploy/runner/skynet-runner.service ~/.config/systemd/user/
+  systemctl --user daemon-reload
+  systemctl --user enable --now skynet-runner
+  loginctl enable-linger "$USER"      # sigue corriendo sin sesión abierta
+  journalctl --user -u skynet-runner -f
+  ```
+- **macOS (launchd):**
+  ```bash
+  sed "s/TU_USUARIO/$USER/g" deploy/runner/dev.skynet.runner.plist > ~/Library/LaunchAgents/dev.skynet.runner.plist
+  launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.skynet.runner.plist
+  tail -f ~/Library/Logs/skynet-runner.log
+  ```
+  Parar: `launchctl bootout gui/$(id -u)/dev.skynet.runner`. Reiniciar: `launchctl kickstart -k gui/$(id -u)/dev.skynet.runner`.
+
+Para actualizarlo, repite los cinco primeros comandos de la instalación y reinicia el servicio: la configuración y el estado (`~/.skynet-runner`, con su token) se conservan. Si paras el servicio con agentes en curso, al volver acaban en «Fallida» («El runner se reinició durante la ejecución»).
 
 | Variable | Por defecto | Uso |
 |---|---|---|

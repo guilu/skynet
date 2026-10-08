@@ -465,6 +465,13 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 - E2E con `@axe-core/playwright` (WCAG 2.1 A y AA) en el login, todas las pestañas de una ejecución, el dashboard, Ejecuciones, Proyectos, Runners, Actividad, Workflows, un proyecto y un trabajo. Lo que encontró: el verde de «Completada» no llegaba a 4,5:1 sobre blanco (`--ok` pasa a `#1a7a43`).
 - E2E «ningún secreto llega al DOM»: el repositorio de prueba lleva un token de GitHub en `calc.py` y su `check.sh` imprime una clave de AWS; ni el HTML de cada pestaña ni la API de eventos los contienen, y el diff y el log de la verificación muestran `[REDACTED]`.
 
+**Implementado (M6-E), cierre del MVP:**
+
+- Docker Compose revisado: variables en `deploy/.env` (plantilla comentada en `deploy/.env.example`; `SKYNET_ADMIN_PASSWORD` obligatoria con el perfil `app`, comprobada por la API al arrancar para que `up` sin perfil siga funcionando sin `.env`), PostgreSQL publicado solo en `127.0.0.1`, `restart` y logs con rotación en todos los servicios, `stop_grace_period` en la API y paso de `SKYNET_SESSION_TIMEOUT`, `SKYNET_CORS_ORIGINS`, `SKYNET_WORKTREE_RETENTION` y `SKYNET_VERIFICATION_TIMEOUT`. nginx admite subidas de 64 MB para los runners que se conectan por la web.
+- `scripts/compose-smoke.sh`: un runner en el host con fake-claude se registra a través de la web, completa un agente y sube su diff. Corre en el job de CI «Docker Compose (app)».
+- Runner como servicio: `deploy/runner/` con la configuración de ejemplo (`runner.env.example`), el arranque que la carga (`skynet-runner.sh`), un servicio de usuario de systemd y un agente de launchd. Guía de instalación y actualización en el README.
+- [`docs/mvp-checklist.md`](mvp-checklist.md): los 12 criterios del §23 con cómo comprobarlos con Claude real y la prueba automática que ya los cubre, comprobaciones de cierre y registro de la prueba.
+
 **Duración estimada Fase 1: 9–11 semanas** para una persona; paralelizable en dos líneas (backend/runner y frontend) a partir de M1.
 
 ---
