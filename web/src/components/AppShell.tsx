@@ -1,39 +1,38 @@
+import * as Tooltip from '@radix-ui/react-tooltip'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Activity,
-  CirclePlay,
-  Folder,
-  House,
-  Server,
-  Sparkles,
-  Workflow,
-  type LucideIcon,
-} from 'lucide-react'
-import type { ReactNode } from 'react'
-import { NavLink } from 'react-router'
+import { Search } from 'lucide-react'
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { api, SESSION_KEY, type Session } from '../api'
-import { HealthIndicator } from '../HealthIndicator'
-import { useTheme, type ThemeChoice } from '../theme'
-import { Button } from './ui/Button'
+import { useTheme } from '../theme'
+import { Breadcrumbs } from './shell/Breadcrumbs'
+import { ThemeMenu, UserMenu } from './shell/Menus'
+import { MobileNav } from './shell/MobileNav'
+import { Sidebar } from './shell/Sidebar'
 
-const NAV: { to: string; label: string; icon: LucideIcon; end?: boolean }[] = [
-  { to: '/', label: 'Dashboard', icon: House, end: true },
-  { to: '/projects', label: 'Proyectos', icon: Folder },
-  { to: '/workflows', label: 'Workflows', icon: Workflow },
-  { to: '/runs', label: 'Ejecuciones', icon: CirclePlay },
-  { to: '/runners', label: 'Runners', icon: Server },
-  { to: '/activity', label: 'Actividad', icon: Activity },
-]
+// La paleta (cmdk) se descarga la primera vez que se abre.
+const CommandPalette = lazy(() =>
+  import('./shell/CommandPalette').then((m) => ({ default: m.CommandPalette })),
+)
 
-const THEMES: { value: ThemeChoice; label: string }[] = [
-  { value: 'system', label: 'Sistema' },
-  { value: 'light', label: 'Claro' },
-  { value: 'dark', label: 'Oscuro' },
-]
+const COLLAPSED_KEY = 'skynet.sidebar.collapsed'
 
-/** Estructura común: navegación global, estado del control plane, tema y contenido. */
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Estructura común: barra lateral (plegable) con las secciones, barra superior con migas,
+ * búsqueda ⌘K, tema y cuenta, y el contenido. En el móvil la barra lateral pasa a una barra
+ * inferior con un cajón para el resto.
+ */
 export function AppShell({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useTheme()
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const queryClient = useQueryClient()
   const session = useQuery<Session | null>({ queryKey: SESSION_KEY, enabled: false })
   const logout = useMutation({
@@ -43,58 +42,68 @@ export function AppShell({ children }: { children: ReactNode }) {
       queryClient.setQueryData(SESSION_KEY, null)
     },
   })
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen((o) => !o)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const toggleCollapsed = () => {
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem(COLLAPSED_KEY, c ? '0' : '1')
+      } catch {
+        // Sin almacenamiento: la preferencia dura lo que la pestaña.
+      }
+      return !c
+    })
+  }
+
   return (
-    <div className="shell">
-      <a className="skip-link" href="#main">
-        Saltar al contenido
-      </a>
-      <header className="topbar">
-        <span className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            <Sparkles size={20} strokeWidth={2.5} />
-          </span>
-          Skynet
-        </span>
-        <HealthIndicator />
-        <label className="theme-picker">
-          <span className="visually-hidden">Tema</span>
-          <select value={theme} onChange={(e) => setTheme(e.target.value as ThemeChoice)}>
-            {THEMES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {session.data && (
-          <span className="session">
-            <span className="muted small">{session.data.username}</span>{' '}
-            <Button
-              type="button"
-              variant="link"
-              onClick={() => logout.mutate()}
-              disabled={logout.isPending}
-            >
-              Salir
-            </Button>
-          </span>
+    <Tooltip.Provider delayDuration={200}>
+      <div className="shell" data-collapsed={collapsed || undefined}>
+        <a className="skip-link" href="#main">
+          Saltar al contenido
+        </a>
+        <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} />
+        <header className="topbar">
+          <Breadcrumbs />
+          <button
+            type="button"
+            className="search-btn"
+            onClick={() => setPaletteOpen(true)}
+            aria-label="Buscar o ejecutar una orden"
+            aria-keyshortcuts="Meta+K Control+K"
+          >
+            <Search size={20} strokeWidth={2.5} aria-hidden="true" />
+            <span className="search-label">Buscar ejecución, trabajo o runner…</span>
+            <kbd className="kbd">⌘K</kbd>
+          </button>
+          <ThemeMenu theme={theme} onChange={setTheme} />
+          {session.data && (
+            <UserMenu
+              username={session.data.username}
+              onLogout={() => logout.mutate()}
+              pending={logout.isPending}
+            />
+          )}
+        </header>
+        <main id="main" className="content" tabIndex={-1}>
+          {children}
+        </main>
+        <MobileNav />
+        {paletteOpen && (
+          <Suspense fallback={null}>
+            <CommandPalette open onOpenChange={setPaletteOpen} onTheme={setTheme} />
+          </Suspense>
         )}
-      </header>
-      <nav className="sidenav" aria-label="Navegación principal">
-        <ul>
-          {NAV.map((item) => (
-            <li key={item.to}>
-              <NavLink to={item.to} end={item.end}>
-                <item.icon size={24} strokeWidth={2.25} aria-hidden="true" />
-                {item.label}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-      </nav>
-      <main id="main" className="content" tabIndex={-1}>
-        {children}
-      </main>
-    </div>
+      </div>
+    </Tooltip.Provider>
   )
 }

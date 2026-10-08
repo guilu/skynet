@@ -251,7 +251,8 @@ test('login: una contraseña incorrecta no entra, salir cierra la sesión', asyn
   await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible()
   expect((await page.request.get('/api/projects')).status()).toBe(200)
 
-  await page.getByRole('button', { name: 'Salir' }).click()
+  await page.getByRole('button', { name: /^Cuenta:/ }).click()
+  await page.getByRole('menuitem', { name: 'Salir' }).click()
   await expect(page.getByLabel('Usuario')).toBeVisible()
   expect((await page.request.get('/api/projects')).status()).toBe(401)
   // Sin el token CSRF, una sesión no puede cambiar nada aunque sea válida.
