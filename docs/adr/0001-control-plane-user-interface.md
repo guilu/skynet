@@ -5,6 +5,7 @@
 - **Decisores:** equipo de Skynet
 - **Ámbito:** frontend web, APIs de lectura del control plane y modelo de interacción humana
 - **Hitos relacionados:** M2 (redacción), M3, M4, M5, M6, W1, W4, W5, W6, W7 y W8 de [`../implementation-plan.md`](../implementation-plan.md)
+- **Aplicación:** Fase A (M3) y Fase B (M4/M5) aplicadas, criterios 1–8 cumplidos. Fase C (W5/W7) y criterios 9–10 pendientes de la Fase 2.
 - **Especificación relacionada:** [`../agentic-orchestration-system.md`](../agentic-orchestration-system.md), especialmente §§3–6 y §13
 
 ## 1. Contexto
