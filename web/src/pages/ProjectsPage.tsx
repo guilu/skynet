@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { Folder } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { api, type Project } from '../api'
+import { ArchiveMenu, ArchivedToggle } from '../components/archive/Archive'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { DataTable, EmptyState, type Column } from '../components/list/DataTable'
 import { ListToolbar, SearchField } from '../components/list/Toolbar'
@@ -23,17 +24,45 @@ const COLUMNS: Column<Project>[] = [
   },
   { id: 'description', header: 'Descripción', cell: (p) => p.description ?? '—' },
   { id: 'created', header: 'Creado', cell: (p) => formatDateTime(p.createdAt) },
+  {
+    id: 'actions',
+    header: 'Acciones',
+    hiddenHeader: true,
+    hideable: false,
+    cell: (p) => (
+      <ArchiveMenu
+        size="sm"
+        target={{ kind: 'project', id: p.id }}
+        name={`${p.key} · ${p.name}`}
+        archivedAt={p.archivedAt}
+      />
+    ),
+  },
 ]
 
 const matches = (p: Project, text: string) =>
   `${p.key} ${p.name} ${p.description ?? ''}`.toLowerCase().includes(text.toLowerCase())
 
-/** Proyectos, con búsqueda por clave, nombre o descripción (en la URL), y el alta de uno nuevo. */
+/**
+ * Proyectos, con búsqueda por clave, nombre o descripción y el chip «Archivados» (en la URL), y el
+ * alta de uno nuevo.
+ */
 export function ProjectsPage() {
   const queryClient = useQueryClient()
   const [params, setParams] = useSearchParams()
   const q = params.get('q') ?? ''
-  const projects = useQuery({ queryKey: ['projects'], queryFn: api.projects })
+  const archived = params.get('archived') === 'true'
+  const projects = useQuery({
+    queryKey: archived ? ['projects', 'archived'] : ['projects'],
+    queryFn: () => api.projects(archived ? 'true' : undefined),
+  })
+  const setFilters = (next: { q?: string; archived?: boolean }) => {
+    const p = new URLSearchParams()
+    const text = next.q ?? q
+    if (text) p.set('q', text)
+    if (next.archived ?? archived) p.set('archived', 'true')
+    setParams(p, { replace: true })
+  }
   const [key, setKey] = useState('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -62,8 +91,9 @@ export function ProjectsPage() {
               label="Buscar proyectos"
               placeholder="Buscar proyecto"
               value={q}
-              onChange={(text) => setParams(text ? { q: text } : {}, { replace: true })}
+              onChange={(text) => setFilters({ q: text })}
             />
+            <ArchivedToggle on={archived} onChange={(on) => setFilters({ archived: on })} />
           </ListToolbar>
           <ErrorMessage error={projects.error} />
           {projects.isPending && <TableSkeleton label="los proyectos" columns={3} />}
@@ -76,9 +106,15 @@ export function ProjectsPage() {
               empty={
                 <EmptyState
                   icon={Folder}
-                  title={q ? 'Ningún proyecto coincide con la búsqueda.' : 'Aún no hay proyectos.'}
+                  title={
+                    q
+                      ? 'Ningún proyecto coincide con la búsqueda.'
+                      : archived
+                        ? 'No hay proyectos archivados.'
+                        : 'Aún no hay proyectos.'
+                  }
                 >
-                  {!q && <p>Crea el primero con el formulario «Nuevo proyecto».</p>}
+                  {!q && !archived && <p>Crea el primero con el formulario «Nuevo proyecto».</p>}
                 </EmptyState>
               }
             />

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Server } from 'lucide-react'
 import { useSearchParams } from 'react-router'
 import { api, type Runner } from '../api'
+import { ArchiveMenu, ArchivedToggle } from '../components/archive/Archive'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { ColumnsMenu, DataTable, EmptyState, type Column } from '../components/list/DataTable'
 import { useHiddenColumns } from '../components/list/columns'
@@ -40,15 +41,39 @@ const COLUMNS: Column<Runner>[] = [
     header: 'Acciones',
     hiddenHeader: true,
     hideable: false,
-    cell: (r) => <RevokeToken runner={r} />,
+    cell: (r) => (
+      <span className="row-actions">
+        {r.archivedAt == null && <RevokeToken runner={r} />}
+        <ArchiveMenu
+          size="sm"
+          target={{ kind: 'runner', id: r.id }}
+          name={r.name}
+          archivedAt={r.archivedAt}
+        />
+      </span>
+    ),
   },
 ]
 
-/** Runners registrados, su carga y si siguen enviando latidos; filtrables por estado (en la URL). */
+/**
+ * Runners registrados, su carga y si siguen enviando latidos; filtrables por estado y por
+ * olvidados (en la URL). Olvidar un runner que ya no existe lo quita de aquí y del dashboard.
+ */
 export function RunnersPage() {
-  const runners = useQuery({ queryKey: ['runners'], queryFn: api.runners, refetchInterval: 15_000 })
   const [params, setParams] = useSearchParams()
   const status = params.getAll('status')
+  const archived = params.get('archived') === 'true'
+  const runners = useQuery({
+    queryKey: archived ? ['runners', 'archived'] : ['runners'],
+    queryFn: () => api.runners(archived ? 'true' : undefined),
+    refetchInterval: 15_000,
+  })
+  const setFilters = (next: { status?: string[]; archived?: boolean }) => {
+    const p = new URLSearchParams()
+    ;(next.status ?? status).forEach((v) => p.append('status', v))
+    if (next.archived ?? archived) p.set('archived', 'true')
+    setParams(p, { replace: true })
+  }
   const [hidden, toggleColumn] = useHiddenColumns('runners')
   const rows = runners.data?.filter((r) => status.length === 0 || status.includes(r.status)) ?? []
   return (
@@ -56,23 +81,24 @@ export function RunnersPage() {
       <h1>Runners</h1>
       <ErrorMessage error={runners.error} />
       {runners.isPending && <TableSkeleton label="los runners" columns={5} rows={3} />}
-      {runners.data?.length === 0 && (
+      {runners.data?.length === 0 && !archived && (
         <EmptyState icon={Server} title="No hay runners registrados.">
           <p>Arranca uno en la máquina de los repositorios (README, «Runner local»).</p>
         </EmptyState>
       )}
-      {!!runners.data?.length && (
+      {(!!runners.data?.length || archived) && (
         <>
           <ListToolbar>
             <FilterChips
               label="Estado"
               options={STATUSES}
               selected={status}
-              onChange={(s) => {
-                const p = new URLSearchParams()
-                s.forEach((v) => p.append('status', v))
-                setParams(p, { replace: true })
-              }}
+              onChange={(s) => setFilters({ status: s })}
+            />
+            <ArchivedToggle
+              label="Olvidados"
+              on={archived}
+              onChange={(on) => setFilters({ archived: on })}
             />
             <span className="toolbar-end">
               <ColumnsMenu columns={COLUMNS} hidden={hidden} onToggle={toggleColumn} />
@@ -84,7 +110,16 @@ export function RunnersPage() {
             rows={rows}
             rowKey={(r) => r.id}
             hidden={hidden}
-            empty={<EmptyState icon={Server} title="Ningún runner con este estado." />}
+            empty={
+              <EmptyState
+                icon={Server}
+                title={
+                  archived && status.length === 0
+                    ? 'No hay runners olvidados.'
+                    : 'Ningún runner con este estado.'
+                }
+              />
+            }
           />
         </>
       )}

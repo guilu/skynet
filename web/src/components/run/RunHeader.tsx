@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Square } from 'lucide-react'
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { api, type Run } from '../../api'
 import { elapsed, formatCost, formatDuration, formatNumber, isTerminal } from '../../format'
 import { useNow } from '../../useNow'
 import type { StreamState } from '../../useEventStream'
 import { STREAM } from './stream'
+import { ArchivedBanner, ArchiveMenu } from '../archive/Archive'
 import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
 import { Button } from '../ui/Button'
@@ -19,12 +20,14 @@ import { headlineAgent } from './headlineAgent'
  */
 export function RunHeader({ run, stream }: { run: Run; stream: StreamState }) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const agent = headlineAgent(run)
   const running = run.finishedAt == null
   const now = useNow(running)
   const runners = useQuery({
-    queryKey: ['runners'],
-    queryFn: api.runners,
+    // También los olvidados: la ejecución puede ser de uno que ya no está.
+    queryKey: ['runners', 'all'],
+    queryFn: () => api.runners('all'),
     enabled: !!agent?.runnerId,
   })
   const runner = runners.data?.find((r) => r.id === agent?.runnerId)
@@ -66,7 +69,23 @@ export function RunHeader({ run, stream }: { run: Run; stream: StreamState }) {
             {connection.label}
           </Pill>
         </span>
+        {/* Solo se archiva una ejecución terminada. */}
+        {(!running || run.archivedAt) && (
+          <ArchiveMenu
+            target={{ kind: 'run', id: run.id }}
+            name={`${run.workItemKey ?? 'Ejecución'} · ${run.workItemTitle ?? ''}`}
+            archivedAt={run.archivedAt}
+            onDeleted={() => void navigate(`/work-items/${run.workItemId}`)}
+          />
+        )}
       </div>
+      {run.archivedAt && (
+        <ArchivedBanner
+          target={{ kind: 'run', id: run.id }}
+          archivedAt={run.archivedAt}
+          note="No sale en las listas ni en las métricas, y sus agentes no se pueden continuar."
+        />
+      )}
       <dl className="metrics">
         <div>
           <dt>Duración</dt>

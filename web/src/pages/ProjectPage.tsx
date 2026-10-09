@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FolderGit2, ListTodo, Plus, ShieldCheck, SlidersHorizontal } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api, WORK_ITEM_TYPES, type Repository, type WorkItem, type WorkItemType } from '../api'
+import { ArchivedBanner, ArchiveMenu, ArchivedToggle } from '../components/archive/Archive'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { DataTable, EmptyState, type Column } from '../components/list/DataTable'
+import { ListToolbar } from '../components/list/Toolbar'
 import {
   AgentPolicyForm,
   RegisterRepositoryForm,
@@ -36,31 +38,56 @@ const WORK_COLUMNS: Column<WorkItem>[] = [
   { id: 'type', header: 'Tipo', cell: (w) => TYPE_LABEL[w.type] ?? w.type },
   { id: 'status', header: 'Estado', cell: (w) => <StatusBadge status={w.status} /> },
   { id: 'created', header: 'Creado', cell: (w) => formatDateTime(w.createdAt) },
+  {
+    id: 'actions',
+    header: 'Acciones',
+    hiddenHeader: true,
+    hideable: false,
+    cell: (w) => (
+      <ArchiveMenu
+        size="sm"
+        target={{ kind: 'work-item', id: w.id }}
+        name={`${w.key} · ${w.title}`}
+        archivedAt={w.archivedAt}
+      />
+    ),
+  },
 ]
 
 /**
- * Proyecto: sus trabajos y sus repositorios en pestañas (la elegida, en la URL). Crear un trabajo,
- * registrar un repositorio y configurar su verificación o su política se hace en un panel lateral.
+ * Proyecto: sus trabajos y sus repositorios en pestañas (la elegida y el chip «Archivados», en la
+ * URL). Crear un trabajo, registrar un repositorio y configurar su verificación o su política se
+ * hace en un panel lateral. Archivado, es de solo lectura: solo se puede restaurar o eliminar.
  */
 export function ProjectPage() {
   const { projectId = '' } = useParams()
   const [params, setParams] = useSearchParams()
   const tab: ProjectTab = params.get('tab') === 'repos' ? 'repos' : 'work'
+  const showArchived = params.get('archived') === 'true'
+  const navigate = useNavigate()
   const [sheet, setSheet] = useState<SheetKind | null>(null)
   const project = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => api.project(projectId),
   })
+  const filter = showArchived ? 'true' : undefined
   const items = useQuery({
-    queryKey: ['work-items', projectId],
-    queryFn: () => api.workItems(projectId),
+    queryKey: ['work-items', projectId, filter],
+    queryFn: () => api.workItems(projectId, filter),
   })
   const repos = useQuery({
-    queryKey: ['repositories', projectId],
-    queryFn: () => api.repositories(projectId),
+    queryKey: ['repositories', projectId, filter],
+    queryFn: () => api.repositories(projectId, filter),
   })
-  const selectTab = (next: ProjectTab) =>
-    setParams(next === 'work' ? {} : { tab: next }, { replace: true })
+  const setView = (next: { tab?: ProjectTab; archived?: boolean }) => {
+    const p = new URLSearchParams()
+    if ((next.tab ?? tab) === 'repos') p.set('tab', 'repos')
+    if (next.archived ?? showArchived) p.set('archived', 'true')
+    setParams(p, { replace: true })
+  }
+  const selectTab = (next: ProjectTab) => setView({ tab: next })
+  const archivedAt = project.data?.archivedAt ?? null
+  const editable = !!project.data && archivedAt == null
   const closeSheet = () => setSheet(null)
 
   return (
@@ -72,16 +99,35 @@ export function ProjectPage() {
           {project.data?.description && <p className="muted">{project.data.description}</p>}
         </div>
         <div className="page-actions">
-          <Button variant="secondary" onClick={() => setSheet('repository')}>
-            <FolderGit2 size={18} strokeWidth={2.5} aria-hidden="true" />
-            Nuevo repositorio
-          </Button>
-          <Button onClick={() => setSheet('work-item')}>
-            <Plus size={18} strokeWidth={2.75} aria-hidden="true" />
-            Nuevo trabajo
-          </Button>
+          {editable && (
+            <>
+              <Button variant="secondary" onClick={() => setSheet('repository')}>
+                <FolderGit2 size={18} strokeWidth={2.5} aria-hidden="true" />
+                Nuevo repositorio
+              </Button>
+              <Button onClick={() => setSheet('work-item')}>
+                <Plus size={18} strokeWidth={2.75} aria-hidden="true" />
+                Nuevo trabajo
+              </Button>
+            </>
+          )}
+          {project.data && (
+            <ArchiveMenu
+              target={{ kind: 'project', id: projectId }}
+              name={`${project.data.key} · ${project.data.name}`}
+              archivedAt={archivedAt}
+              onDeleted={() => void navigate('/projects')}
+            />
+          )}
         </div>
       </div>
+      {archivedAt && (
+        <ArchivedBanner
+          target={{ kind: 'project', id: projectId }}
+          archivedAt={archivedAt}
+          note="Sus trabajos y ejecuciones no salen en las listas, y no se pueden crear trabajos ni lanzar agentes."
+        />
+      )}
 
       <TabList
         label="Secciones del proyecto"
@@ -95,6 +141,9 @@ export function ProjectPage() {
         panelId="project-panel"
       />
       <TabPanel id="project-panel" labelledBy={`project-tab-${tab}`} className="tab-body">
+        <ListToolbar>
+          <ArchivedToggle on={showArchived} onChange={(on) => setView({ archived: on })} />
+        </ListToolbar>
         {tab === 'work' ? (
           <>
             <ErrorMessage error={items.error} />
@@ -106,12 +155,18 @@ export function ProjectPage() {
                 rows={items.data}
                 rowKey={(w) => w.id}
                 empty={
-                  <EmptyState icon={ListTodo} title="Aún no hay trabajos.">
-                    <p>Un trabajo agrupa las ejecuciones de agentes sobre una misma tarea.</p>
-                    <Button size="sm" onClick={() => setSheet('work-item')}>
-                      Crear el primero
-                    </Button>
-                  </EmptyState>
+                  showArchived ? (
+                    <EmptyState icon={ListTodo} title="No hay trabajos archivados." />
+                  ) : (
+                    <EmptyState icon={ListTodo} title="Aún no hay trabajos.">
+                      <p>Un trabajo agrupa las ejecuciones de agentes sobre una misma tarea.</p>
+                      {editable && (
+                        <Button size="sm" onClick={() => setSheet('work-item')}>
+                          Crear el primero
+                        </Button>
+                      )}
+                    </EmptyState>
+                  )
                 }
               />
             )}
@@ -120,19 +175,29 @@ export function ProjectPage() {
           <>
             <ErrorMessage error={repos.error} />
             {repos.isPending && <CardsSkeleton label="los repositorios" />}
-            {repos.data?.length === 0 && (
-              <EmptyState icon={FolderGit2} title="Ningún repositorio registrado.">
-                <p>
-                  Los agentes trabajan en un worktree del repositorio, en la máquina del runner.
-                </p>
-                <Button size="sm" onClick={() => setSheet('repository')}>
-                  Registrar el primero
-                </Button>
-              </EmptyState>
-            )}
+            {repos.data?.length === 0 &&
+              (showArchived ? (
+                <EmptyState icon={FolderGit2} title="No hay repositorios archivados." />
+              ) : (
+                <EmptyState icon={FolderGit2} title="Ningún repositorio registrado.">
+                  <p>
+                    Los agentes trabajan en un worktree del repositorio, en la máquina del runner.
+                  </p>
+                  {editable && (
+                    <Button size="sm" onClick={() => setSheet('repository')}>
+                      Registrar el primero
+                    </Button>
+                  )}
+                </EmptyState>
+              ))}
             <div className="repo-grid">
               {repos.data?.map((r) => (
-                <RepositoryCard key={r.id} projectId={projectId} repository={r} />
+                <RepositoryCard
+                  key={r.id}
+                  projectId={projectId}
+                  repository={r}
+                  editable={editable && r.archivedAt == null}
+                />
               ))}
             </div>
           </>
@@ -174,9 +239,12 @@ export function ProjectPage() {
 function RepositoryCard({
   projectId,
   repository: r,
+  editable,
 }: {
   projectId: string
   repository: Repository
+  /** Ni el repositorio ni su proyecto están archivados. */
+  editable: boolean
 }) {
   const [sheet, setSheet] = useState<'verification' | 'policy' | null>(null)
   const policy = r.agentPolicy
@@ -198,6 +266,13 @@ function RepositoryCard({
           <code className="repo-path">{r.localPath}</code>
         </div>
         <span className="tag">rama {r.defaultBranch}</span>
+        {r.archivedAt && <span className="tag">archivado</span>}
+        <ArchiveMenu
+          size="sm"
+          target={{ kind: 'repository', id: r.id, projectId }}
+          name={r.name}
+          archivedAt={r.archivedAt}
+        />
       </header>
 
       <section className="repo-section" aria-label={`Verificación de ${r.name}`}>
@@ -205,14 +280,16 @@ function RepositoryCard({
           <h3>
             <ShieldCheck size={18} strokeWidth={2.5} aria-hidden="true" /> Verificación
           </h3>
-          <Button
-            size="sm"
-            variant="secondary"
-            aria-label={`Configurar verificación de ${r.name}`}
-            onClick={() => setSheet('verification')}
-          >
-            Configurar verificación
-          </Button>
+          {editable && (
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-label={`Configurar verificación de ${r.name}`}
+              onClick={() => setSheet('verification')}
+            >
+              Configurar verificación
+            </Button>
+          )}
         </div>
         {r.validationCommand ? (
           <p className="small">
@@ -234,14 +311,16 @@ function RepositoryCard({
               {r.agentPolicyCustom ? 'propia' : 'global'}
             </span>
           </h3>
-          <Button
-            size="sm"
-            variant="secondary"
-            aria-label={`Editar política de ${r.name}`}
-            onClick={() => setSheet('policy')}
-          >
-            Editar política
-          </Button>
+          {editable && (
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-label={`Editar política de ${r.name}`}
+              onClick={() => setSheet('policy')}
+            >
+              Editar política
+            </Button>
+          )}
         </div>
         <dl className="repo-facts small">
           <div>

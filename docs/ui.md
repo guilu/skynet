@@ -55,6 +55,7 @@ Las piezas base están en `web/src/components/ui/`. Las de listas, en `component
 | `Skeleton`, `TableSkeleton`, `CardsSkeleton`, `TilesSkeleton`, `RunSkeleton`, `LinesSkeleton` | Carga | Ocupan el sitio de lo que llega con su misma forma, y lo anuncian una vez a los lectores de pantalla («Cargando las ejecuciones…»). |
 | `JsonView` | Payloads | Plegable por niveles, cadenas largas recortadas y «Copiar JSON». |
 | `CodeView` | Diff, logs y código | Monaco diferido con el tema de la web; mientras llega, el mismo texto en un bloque normal. |
+| `ArchiveMenu`, `ArchivedBanner`, `ArchivedToggle`, `BulkRunActions` | Archivar y eliminar | En `components/archive/`. Menú «⋯» con Archivar, o Restaurar y «Eliminar…» sobre lo archivado; aviso de solo lectura con «Restaurar»; chip «Archivados» de las listas; barra de las ejecuciones seleccionadas. |
 
 ### Patrones
 
@@ -63,6 +64,8 @@ Las piezas base están en `web/src/components/ui/`. Las de listas, en `component
 - **Tarjeta de recurso.** Icono teñido, nombre, ruta en mono y una etiqueta (`.tag`); debajo, secciones separadas por una línea con su botón de configurar (repositorios, workflows).
 - **Formulario.** En un `Sheet`, etiquetas en negrita encima del campo, ayudas en `.hint`, grupos en `fieldset.limits` y acciones en `.form-actions`. Tras guardar, «Guardado.» en verde (`role="status"`); tras crear, el panel se cierra.
 - **Confirmación con coste.** Reintentar, bifurcar o eliminar explican qué harán en un aviso amarillo antes del botón, y el botón dice la acción («Eliminar», no «Aceptar»).
+- **Archivado.** Proyectos, repositorios, trabajos, ejecuciones y runners llevan un menú «⋯» (en la página y en cada fila). Archivar y restaurar se hacen al momento; los runners se «olvidan». Lo archivado sale de las listas salvo con el chip «Archivados» (en runners, «Olvidados»), y su página lleva un aviso de solo lectura con «Restaurar» y esconde lo que crea o lanza. Si lo archivado es el padre, el aviso lo dice y no hay botón.
+- **Eliminar.** Solo sobre lo archivado, desde «Eliminar…», que abre un `Sheet` con lo que se borraría (`deletion-preview`), los avisos y lo que lo impide. Si lo impiden worktrees vivos, el panel ofrece eliminarlos y vuelve a mirar cada 3 s hasta poder seguir. «Eliminar definitivamente» queda desactivado hasta entonces. En la lista de ejecuciones se pueden marcar varias para archivarlas, restaurarlas o eliminarlas de una vez; las que fallan se listan con su motivo.
 - **Ejecución.** Tres paneles redimensionables (pasos, actividad e inspector) que en el móvil pasan a pestañas. La actividad tiene conversación, cascada y eventos.
 
 ## 5. Movimiento

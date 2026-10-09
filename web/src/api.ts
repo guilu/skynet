@@ -375,6 +375,62 @@ export interface Appearance {
   updatedAt: string | null
 }
 
+/** Qué enseña una lista respecto a lo archivado: lo vigente (por defecto), lo archivado o todo. */
+export type ArchivedFilter = 'false' | 'true' | 'all'
+
+/** Algo que se puede archivar, restaurar y eliminar. */
+export type ArchiveTarget =
+  | { kind: 'project'; id: string }
+  | { kind: 'repository'; id: string; projectId: string }
+  | { kind: 'work-item'; id: string }
+  | { kind: 'run'; id: string }
+  | { kind: 'runner'; id: string }
+
+export interface ArchiveState {
+  id: string
+  archivedAt: string | null
+}
+
+/** Lo que se borraría al eliminar algo y lo que lo impide (GET …/deletion-preview). */
+export interface DeletionPreview {
+  deletable: boolean
+  blockers: string[]
+  warnings: string[]
+  /** Worktrees que siguen en su runner y solo usa lo que se elimina. */
+  liveWorkspaces: number
+  counts: DeletionCounts
+}
+
+export interface DeletionCounts {
+  repositories: number
+  workItems: number
+  runs: number
+  agents: number
+  artifacts: number
+  artifactBytes: number
+  events: number
+}
+
+/** Ruta de la API de lo que se archiva o elimina. */
+export function targetPath(target: ArchiveTarget): string {
+  switch (target.kind) {
+    case 'project':
+      return `/api/projects/${target.id}`
+    case 'repository':
+      return `/api/projects/${target.projectId}/repositories/${target.id}`
+    case 'work-item':
+      return `/api/work-items/${target.id}`
+    case 'run':
+      return `/api/workflow-runs/${target.id}`
+    case 'runner':
+      return `/api/runners/${target.id}`
+  }
+}
+
+/** `?archived=…` para una lista; nada con el valor por defecto. */
+const archivedQuery = (archived?: ArchivedFilter) =>
+  archived && archived !== 'false' ? `?archived=${archived}` : ''
+
 export class ApiError extends Error {
   readonly status: number
 
@@ -446,12 +502,16 @@ export const api = {
     request<Session>('POST', '/api/auth/login', { username, password }),
   logout: () => request<void>('POST', '/api/auth/logout'),
   revokeRunner: (id: string) => request<void>('POST', `/api/runners/${id}/revoke`),
-  projects: () => request<Project[]>('GET', '/api/projects'),
+  projects: (archived?: ArchivedFilter) =>
+    request<Project[]>('GET', `/api/projects${archivedQuery(archived)}`),
   project: (id: string) => request<Project>('GET', `/api/projects/${id}`),
   createProject: (body: { key: string; name: string; description?: string }) =>
     request<Project>('POST', '/api/projects', body),
-  repositories: (projectId: string) =>
-    request<Repository[]>('GET', `/api/projects/${projectId}/repositories`),
+  repositories: (projectId: string, archived?: ArchivedFilter) =>
+    request<Repository[]>(
+      'GET',
+      `/api/projects/${projectId}/repositories${archivedQuery(archived)}`,
+    ),
   registerRepository: (
     projectId: string,
     body: {
@@ -494,20 +554,22 @@ export const api = {
       'DELETE',
       `/api/projects/${projectId}/repositories/${repositoryId}/agent-policy`,
     ),
-  workItems: (projectId: string) =>
-    request<WorkItem[]>('GET', `/api/projects/${projectId}/work-items`),
+  workItems: (projectId: string, archived?: ArchivedFilter) =>
+    request<WorkItem[]>('GET', `/api/projects/${projectId}/work-items${archivedQuery(archived)}`),
   workItem: (id: string) => request<WorkItem>('GET', `/api/work-items/${id}`),
   createWorkItem: (
     projectId: string,
     body: { title: string; description?: string; type: WorkItemType },
   ) => request<WorkItem>('POST', `/api/projects/${projectId}/work-items`, body),
-  runs: (workItemId: string) => request<Run[]>('GET', `/api/work-items/${workItemId}/runs`),
+  runs: (workItemId: string, archived?: ArchivedFilter) =>
+    request<Run[]>('GET', `/api/work-items/${workItemId}/runs${archivedQuery(archived)}`),
   run: (id: string) => request<Run>('GET', `/api/workflow-runs/${id}`),
   listRuns: (query: {
     status?: RunStatus[]
     projectId?: string
     since?: string
     q?: string
+    archived?: ArchivedFilter
     page?: number
     size?: number
   }) => {
@@ -516,6 +578,7 @@ export const api = {
     if (query.projectId) params.set('projectId', query.projectId)
     if (query.since) params.set('since', query.since)
     if (query.q) params.set('q', query.q)
+    if (query.archived && query.archived !== 'false') params.set('archived', query.archived)
     if (query.page !== undefined) params.set('page', String(query.page))
     if (query.size !== undefined) params.set('size', String(query.size))
     return request<RunPage>('GET', `/api/workflow-runs?${params}`)
@@ -544,7 +607,19 @@ export const api = {
   /** Reejecuta solo la verificación del worktree del agente. */
   verify: (agentId: string) =>
     request<VerificationResult>('POST', `/api/agent-runs/${agentId}/verifications`),
-  runners: () => request<Runner[]>('GET', '/api/runners'),
+  runners: (archived?: ArchivedFilter) =>
+    request<Runner[]>('GET', `/api/runners${archivedQuery(archived)}`),
+  archive: (target: ArchiveTarget) =>
+    request<ArchiveState>('POST', `${targetPath(target)}/archive`),
+  restore: (target: ArchiveTarget) =>
+    request<ArchiveState>('POST', `${targetPath(target)}/restore`),
+  deletionPreview: (target: ArchiveTarget) =>
+    request<DeletionPreview>('GET', `${targetPath(target)}/deletion-preview`),
+  /** Elimina lo archivado con todo lo que cuelga de ello; devuelve lo borrado. */
+  delete: (target: ArchiveTarget) => request<DeletionCounts>('DELETE', targetPath(target)),
+  /** Pide eliminar los worktrees que impiden eliminar un proyecto, trabajo o ejecución. */
+  cleanupWorkspaces: (target: ArchiveTarget) =>
+    request<{ requested: number }>('POST', `${targetPath(target)}/workspaces/cleanup`),
   dashboard: () => request<DashboardSummary>('GET', '/api/dashboard'),
   dashboardMetrics: (period: MetricsPeriod, tz: string) =>
     request<RunMetrics>(

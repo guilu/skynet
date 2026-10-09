@@ -252,6 +252,8 @@ POST       /api/{projects,work-items,workflow-runs}/{id}/workspaces/cleanup   # 
 
 `DELETE` devuelve lo borrado (`counts`) o 409 con los motivos. Todo va en una transacción: es la única que puede borrar eventos (`SET LOCAL skynet.purge = 'on'`, V11) y deja un evento lápida (`project.purged`, `repository.purged`, `workitem.purged`, `workflow.purged` o `runner.purged`) con lo que se borró. Los blobs que ya no usa nadie se borran después del commit. Lo impiden los worktrees que siguen en su runner y solo usa lo que se elimina (los de un runner olvidado no cuentan). Una sesión que continúa en otra ejecución se conserva, pero pierde el enlace con su origen.
 
+En AE-C la web usa todo esto: menú «⋯» en páginas y filas, aviso en lo archivado, chip «Archivados» en las listas, panel de eliminar con la vista previa y acciones en bloque en la lista de ejecuciones (ver `docs/ui.md`, Patrones).
+
 Los errores siguen RFC 9457 (`ProblemDetail`): 400 validación, 401 sin sesión, 403 sin token CSRF, 404 inexistente, 409 transición no permitida, clave duplicada o conflicto de versión.
 
 ---
