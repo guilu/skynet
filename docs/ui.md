@@ -1,6 +1,6 @@
 # Guía de estilo de la interfaz
 
-Cómo se ve y cómo se construye la web de Skynet tras el rediseño (UI-A a UI-F, octubre de 2026). Su origen está en el lenguaje visual de [ADR-0001 §5.1](adr/0001-control-plane-user-interface.md) y en la maqueta [`docs/ui/maqueta.html`](ui/maqueta.html). Esta guía recoge lo que quedó implementado y las reglas para las pantallas nuevas.
+Cómo se ve y cómo se construye la web de Skynet tras el rediseño (UI-A a UI-F, octubre de 2026) y los colores personalizables (UI-G). Su origen está en el lenguaje visual de [ADR-0001 §5.1](adr/0001-control-plane-user-interface.md) y en la maqueta [`docs/ui/maqueta.html`](ui/maqueta.html). Esta guía recoge lo que quedó implementado y las reglas para las pantallas nuevas.
 
 | Claro | Oscuro |
 | --- | --- |
@@ -17,7 +17,7 @@ Cómo se ve y cómo se construye la web de Skynet tras el rediseño (UI-A a UI-F
 
 ## 2. Tokens
 
-Todos los colores, radios y profundidades son variables CSS en `web/src/index.css` (`:root`), con un bloque para el tema oscuro (`prefers-color-scheme` y `[data-theme='dark']`). Tailwind 4 los expone como utilidades (`bg-surface`, `text-muted`, `rounded-lg`…). **No se escriben colores sueltos en los componentes**: así el tema oscuro y la futura paleta personalizable cambian toda la web, Monaco incluido.
+Todos los colores, radios y profundidades son variables CSS en `web/src/index.css` (`:root`), con un bloque para el tema oscuro (`prefers-color-scheme` y `[data-theme='dark']`). Tailwind 4 los expone como utilidades (`bg-surface`, `text-muted`, `rounded-lg`…). **No se escriben colores sueltos en los componentes**: así el tema oscuro y la paleta personalizable (§9) cambian toda la web, Monaco incluido.
 
 | Grupo | Tokens | Uso |
 | --- | --- | --- |
@@ -109,7 +109,18 @@ Al cambiar una pantalla, vuelve a generarlas en la misma PR.
 | Cascada y diff | ![claro ejecucion cascada](ui/capturas/claro-ejecucion-cascada.png) | ![oscuro ejecucion cascada](ui/capturas/oscuro-ejecucion-cascada.png) |
 | Proyecto | ![claro proyecto](ui/capturas/claro-proyecto.png) | ![oscuro proyecto](ui/capturas/oscuro-proyecto.png) |
 | Lanzar agente | ![claro trabajo lanzar](ui/capturas/claro-trabajo-lanzar.png) | ![oscuro trabajo lanzar](ui/capturas/oscuro-trabajo-lanzar.png) |
+| Ajustes | ![claro ajustes](ui/capturas/claro-ajustes.png) | ![oscuro ajustes](ui/capturas/oscuro-ajustes.png) |
 
-## 9. Colores personalizables (pendiente)
+## 9. Colores personalizables
 
-Diego quiere poder cambiar la paleta, empezando por el verde, desde un panel de administración. Como todo sale de los *tokens*, basta con guardar los valores elegidos y aplicarlos sobre `:root` (y el bloque oscuro). El tema de Monaco ya los lee en tiempo de ejecución. Habrá que comprobar el contraste de cada combinación antes de guardarla.
+En **Ajustes** (`/settings`) se elige una paleta predefinida o un color base para el acento y cada estado. Lo guardado vale para toda la web y para todos los navegadores (UI-G).
+
+| Claro | Oscuro |
+| --- | --- |
+| ![Ajustes en claro](ui/capturas/claro-ajustes.png) | ![Ajustes en oscuro](ui/capturas/oscuro-ajustes.png) |
+
+- **Solo se guarda el color base** de cada pieza en el tema claro: `primary`, `ok`, `warn`, `bad`, `live` e `idle`. La guarda `PUT /api/settings/appearance`, en la tabla `app_setting`. Un color vacío es el de Skynet.
+- **El resto se deriva** en `web/src/lib/palette.ts`. Cada token (`-shade`, `-soft`, `-ink`, `-btn`, y todos los del tema oscuro) guarda con su base la misma relación en OKLCH que en la paleta de Skynet, así que con los colores por defecto sale exactamente `index.css`; un test lo comprueba. Los fondos suaves y la tinta conservan su luminosidad, porque son fondo y texto del tema.
+- **Contraste.** La tinta se oscurece (o se aclara en oscuro) hasta llegar a AA sobre su fondo suave y sobre las superficies, y los botones de estado hasta llegar a AA con su texto. El texto del botón principal pasa de blanco a oscuro si hace falta. Si ninguno de los dos llega, la página lo explica y no deja guardar.
+- **Aplicación.** `appearance.ts` escribe los tokens en una hoja `<style id="skynet-palette">` con `:root:root`, que gana a `index.css` en los dos temas, y marca `data-palette` en `<html>` para que Monaco relea los colores. La paleta se lee sin sesión, así que el login también sale con ella. La última que se vio se guarda en este navegador para pintar la carga siguiente sin esperar al servidor.
+- **Si cambias un token en `index.css`,** cámbialo también en `DEFAULTS` de `palette.ts`; el test lo avisa.

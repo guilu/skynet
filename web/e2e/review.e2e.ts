@@ -1,6 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
-import { launchViaApi, login } from './helpers.ts'
+import { csrf, launchViaApi, login } from './helpers.ts'
 
 /**
  * Revisión de la web (M6-D): accesibilidad con axe en las páginas principales y ningún secreto en
@@ -126,6 +126,7 @@ test('las páginas principales pasan axe', async ({ page }) => {
     ['/runners', 'Runners'],
     ['/activity', 'Actividad'],
     ['/workflows', 'Workflows'],
+    ['/settings', 'Ajustes'],
     ['/no-existe', 'Página no encontrada'],
   ]
   for (const [path, name] of pages) {
@@ -202,6 +203,7 @@ test('en tema oscuro las páginas también pasan axe', async ({ page }) => {
     ['/runners', 'Runners'],
     ['/activity', 'Actividad'],
     ['/workflows', 'Workflows'],
+    ['/settings', 'Ajustes'],
     ['/no-existe', 'Página no encontrada'],
   ]) {
     await page.goto(path)
@@ -218,4 +220,40 @@ test('en tema oscuro las páginas también pasan axe', async ({ page }) => {
   await page.getByRole('button', { name: 'Lanzar agente' }).click()
   await expect(page.getByRole('dialog', { name: 'Lanzar agente' })).toBeVisible()
   await expectAccessible(page, 'oscuro · panel de lanzar')
+})
+
+test('una paleta personalizada se guarda, se aplica a toda la web y pasa axe', async ({ page }) => {
+  test.setTimeout(120_000)
+  await page.goto('/settings')
+  await login(page)
+  await expect(page.getByRole('heading', { level: 1, name: 'Ajustes' })).toBeVisible()
+  try {
+    await page.getByText('Frambuesa').click()
+    await page.getByLabel('En curso').fill('#2f9bd6')
+    await page.getByRole('button', { name: 'Guardar' }).click()
+    await expect(page.getByText('Guardado.')).toBeVisible()
+
+    // Tras recargar (y en el login, que lee la paleta sin sesión) sigue aplicada.
+    await page.reload()
+    const primary = () =>
+      page.evaluate<string>(
+        `getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()`,
+      )
+    await expect.poll(primary).toBe('#c2255c')
+    await expect(page.getByRole('radio', { name: 'Frambuesa' })).not.toBeChecked()
+    await expectAccessible(page, 'ajustes con paleta propia')
+
+    await page.goto('/')
+    await expect(page.getByRole('heading', { level: 1, name: /^Dashboard/ })).toBeVisible()
+    await expectAccessible(page, 'dashboard con paleta propia')
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await expect.poll(primary).not.toBe('#c2255c')
+    await expectAccessible(page, 'oscuro · dashboard con paleta propia')
+  } finally {
+    // La paleta es de todo el servidor: se deja la de Skynet para el resto de tests.
+    await page.request.put('/api/settings/appearance', {
+      data: { colors: {} },
+      headers: await csrf(page),
+    })
+  }
 })

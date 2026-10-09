@@ -3656,6 +3656,199 @@
     }
   }
 
+  /* ---------- Ajustes: paleta personalizable (UI-G) ---------- */
+  .settings {
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .settings-section h2 {
+    margin-top: 0;
+  }
+
+  .settings-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+    gap: var(--space-4);
+    align-items: start;
+  }
+
+  .preset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--space-3);
+    border: 0;
+    padding: 0;
+    margin: var(--space-3) 0 0;
+  }
+
+  .preset {
+    position: relative;
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 2px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    box-shadow: 0 var(--lift-card) 0 var(--border);
+    cursor: pointer;
+    font-weight: 800;
+  }
+
+  .preset input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .preset:has(input:checked) {
+    border-color: var(--primary);
+    box-shadow: 0 var(--lift-card) 0 var(--primary-shade);
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+
+  .preset:has(input:focus-visible) {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .preset-swatches {
+    display: flex;
+  }
+
+  .swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid var(--surface);
+    margin-right: -6px;
+  }
+
+  .color-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .color-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .color-input {
+    width: 44px;
+    height: 44px;
+    padding: 3px;
+    border: 2px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    background: var(--surface);
+    cursor: pointer;
+  }
+
+  .color-text {
+    display: grid;
+  }
+
+  .color-text label {
+    font-weight: 800;
+  }
+
+  .color-hex {
+    color: var(--muted);
+  }
+
+  .palette-previews {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .palette-preview {
+    display: grid;
+    gap: var(--space-3);
+    margin: 0;
+    padding: var(--space-4);
+    border: 2px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--bg);
+    color: var(--fg);
+  }
+
+  .palette-preview figcaption {
+    font-weight: 800;
+    color: var(--muted);
+  }
+
+  .preview-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .palette-preview .btn {
+    cursor: default;
+  }
+
+  .preview-text {
+    margin: 0;
+  }
+
+  .preview-link {
+    color: var(--primary-ink);
+    font-weight: 700;
+    text-decoration: underline 2px;
+    text-underline-offset: 3px;
+  }
+
+  .preview-mark {
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+    border-radius: 4px;
+    padding: 0 3px;
+  }
+
+  .preview-bars {
+    display: flex;
+    gap: 3px;
+    height: 12px;
+  }
+
+  .preview-bars span {
+    border-radius: 999px;
+  }
+
+  .preview-diff {
+    display: grid;
+    margin: 0;
+    padding: var(--space-2);
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+  }
+
+  .preview-diff .diff-add {
+    background: var(--ok-soft);
+    color: var(--ok-ink);
+  }
+
+  .preview-diff .diff-del {
+    background: var(--bad-soft);
+    color: var(--bad-ink);
+  }
+
+  @media (max-width: 520px) {
+    .color-row {
+      grid-template-columns: auto 1fr;
+    }
+
+    .color-hex {
+      display: none;
+    }
+  }
+
   /* ---------- Movimiento (UI-F): corto, y nada con prefers-reduced-motion ---------- */
   .page {
     animation: page-in 220ms ease-out both;

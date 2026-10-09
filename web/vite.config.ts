@@ -20,5 +20,7 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['./src/test/setup.ts'],
+    // palette.test.ts lee los tokens de index.css (?raw) para compararlos con los suyos.
+    css: { include: [/index\.css/] },
   },
 })

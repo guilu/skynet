@@ -6,6 +6,7 @@ import {
   Monitor,
   Moon,
   Server,
+  Settings,
   Sun,
   Workflow,
   type LucideIcon,
@@ -29,6 +30,7 @@ export const NAV: NavItem[] = [
   { to: '/runs', label: 'Ejecuciones', icon: CirclePlay, mobile: true },
   { to: '/runners', label: 'Runners', icon: Server, mobile: true },
   { to: '/activity', label: 'Actividad', icon: Activity },
+  { to: '/settings', label: 'Ajustes', icon: Settings },
 ]
 
 export const THEMES: { value: ThemeChoice; label: string; icon: LucideIcon }[] = [

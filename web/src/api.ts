@@ -359,6 +359,12 @@ export interface LaunchRequest {
   timeoutMinutes?: number
 }
 
+/** Paleta guardada en el servidor: un color base `#rrggbb` por pieza, o `null` para el de Skynet. */
+export interface Appearance {
+  colors: Partial<Record<'primary' | 'ok' | 'warn' | 'bad' | 'live' | 'idle', string | null>>
+  updatedAt: string | null
+}
+
 export class ApiError extends Error {
   readonly status: number
 
@@ -423,6 +429,9 @@ async function artifactChunk(id: string, offset: number, limit: number): Promise
 
 export const api = {
   session: () => request<Session>('GET', '/api/auth/session'),
+  appearance: () => request<Appearance>('GET', '/api/settings/appearance'),
+  saveAppearance: (colors: Appearance['colors']) =>
+    request<Appearance>('PUT', '/api/settings/appearance', { colors }),
   login: (username: string, password: string) =>
     request<Session>('POST', '/api/auth/login', { username, password }),
   logout: () => request<void>('POST', '/api/auth/logout'),
