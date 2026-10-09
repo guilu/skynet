@@ -238,6 +238,20 @@ GET        …?archived=false|true|all                                          
 
 Responden `{id, archivedAt}` y son idempotentes. Una ejecución cuenta como archivada si lo está ella, su trabajo o su proyecto; restaurar algo cuyo padre sigue archivado da 409. Un runner olvidado que siga vivo se vuelve a registrar solo y reaparece. Eventos: `project.archived|restored`, `repository.…`, `workitem.…`, `workflow.…` y `runner.…`.
 
+Añadido en AE-B (eliminar no tiene vuelta atrás y solo se admite sobre lo archivado):
+
+```text
+GET        …/deletion-preview                                 # {deletable, blockers, warnings, liveWorkspaces, counts}
+DELETE     /api/projects/{id}                                 # con sus repositorios, trabajos y ejecuciones
+DELETE     /api/projects/{id}/repositories/{repositoryId}     # solo si ningún agente lo usó
+DELETE     /api/work-items/{id}                               # con sus ejecuciones
+DELETE     /api/workflow-runs/{id}                            # con fases, agentes, prompts, verificaciones, artefactos y eventos
+DELETE     /api/runners/{id}                                  # solo olvidado y si nunca ejecutó nada
+POST       /api/{projects,work-items,workflow-runs}/{id}/workspaces/cleanup   # pide eliminar los worktrees que lo impiden
+```
+
+`DELETE` devuelve lo borrado (`counts`) o 409 con los motivos. Todo va en una transacción: es la única que puede borrar eventos (`SET LOCAL skynet.purge = 'on'`, V11) y deja un evento lápida (`project.purged`, `repository.purged`, `workitem.purged`, `workflow.purged` o `runner.purged`) con lo que se borró. Los blobs que ya no usa nadie se borran después del commit. Lo impiden los worktrees que siguen en su runner y solo usa lo que se elimina (los de un runner olvidado no cuentan). Una sesión que continúa en otra ejecución se conserva, pero pierde el enlace con su origen.
+
 Los errores siguen RFC 9457 (`ProblemDetail`): 400 validación, 401 sin sesión, 403 sin token CSRF, 404 inexistente, 409 transición no permitida, clave duplicada o conflicto de versión.
 
 ---

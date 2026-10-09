@@ -57,6 +57,14 @@ class FileSystemBlobStore implements BlobStore {
     }
   }
 
+  @Override
+  public void delete(String uri) throws IOException {
+    if (!uri.startsWith(SCHEME)) {
+      throw new IOException("Uri de blob no soportada: " + uri);
+    }
+    Files.deleteIfExists(path(uri.substring(SCHEME.length())));
+  }
+
   private Path path(String sha256) throws IOException {
     if (!SHA256.matcher(sha256).matches()) {
       throw new IOException("sha256 no válido: " + sha256);
