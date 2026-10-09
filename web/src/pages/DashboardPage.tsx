@@ -8,6 +8,7 @@ import { RunsTable } from '../components/RunsTable'
 import { StatusBadge } from '../components/StatusBadge'
 import { formatDateTime } from '../format'
 import { useNow } from '../useNow'
+import { TableSkeleton } from '../components/ui/Skeleton'
 
 /**
  * Dashboard (ADR-0001 §3.2): primero lo que requiere atención, cada bloque enlazado a su lista
@@ -32,6 +33,7 @@ export function DashboardPage() {
     <>
       <h1>Dashboard</h1>
       <ErrorMessage error={summary.error} />
+      {summary.isPending && <TableSkeleton label="lo que requiere atención" columns={5} rows={3} />}
       {calm && (
         <p className="calm">
           <CircleCheck size={20} aria-hidden="true" />

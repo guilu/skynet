@@ -9,6 +9,7 @@ La definición funcional y técnica inicial se encuentra en:
 - [`docs/agentic-orchestration-system.md`](docs/agentic-orchestration-system.md)
 - [`docs/implementation-plan.md`](docs/implementation-plan.md): plan por hitos y lo implementado en cada uno.
 - [`docs/mvp-checklist.md`](docs/mvp-checklist.md): los 12 criterios del MVP y cómo comprobarlos con Claude.
+- [`docs/ui.md`](docs/ui.md): guía de estilo de la interfaz (tokens, componentes, movimiento, accesibilidad y capturas).
 
 ## Arquitectura prevista
 

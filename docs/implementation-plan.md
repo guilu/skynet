@@ -545,5 +545,5 @@ Se planificará con datos reales de las fases anteriores: descomposición dinám
 2. ~~Spike de M0 y ajuste de §4.2 con el NDJSON real.~~ Hecho.
 3. ~~Backlog de Fase 1 como issues en GitHub.~~ Hecho (épica #2 y una issue por hito).
 4. ~~Fase 1 (M0–M6).~~ Terminada el 2026-10-08.
-5. **Rediseño visual del control plane**, antes de la Fase 2: nuevas vistas, paneles y estilo a partir de un estudio de interfaces de orquestación agéntica. Su alcance se decidirá con ese estudio; respeta los principios y la arquitectura de información de [ADR-0001](adr/0001-control-plane-user-interface.md).
+5. ~~**Rediseño visual del control plane**, antes de la Fase 2.~~ Terminado con UI-A a UI-F (issue #37); el resultado está en la [guía de estilo](ui.md). Pendiente para más adelante: colores personalizables desde un panel de administración.
 6. Fase 2, empezando por W1 (definiciones) y W2 (motor) como primer hito.

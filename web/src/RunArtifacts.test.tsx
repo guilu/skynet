@@ -145,7 +145,12 @@ describe('artefactos y verificación', () => {
 
   it('muestra los archivos cambiados, su diff, los commits y los logs', async () => {
     openRun('artifacts')
-    const panel = await screen.findByRole('tabpanel', { name: 'Artefactos' })
+    const panel = await screen.findByRole(
+      'tabpanel',
+      { name: 'Artefactos' },
+      // La vista de la ejecución es diferida: la primera vez tarda más en importarse.
+      { timeout: 5000 },
+    )
     const files = await within(panel).findByRole('list', { name: 'Archivos modificados' })
     expect(within(files).getByRole('button', { name: /calc\.py/ })).toBeInTheDocument()
     expect(within(files).getByText('+1')).toBeInTheDocument()

@@ -2,6 +2,7 @@ import * as Tooltip from '@radix-ui/react-tooltip'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Search } from 'lucide-react'
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
+import { useLocation } from 'react-router'
 import { api, SESSION_KEY, type Session } from '../api'
 import { useTheme } from '../theme'
 import { Breadcrumbs } from './shell/Breadcrumbs'
@@ -30,6 +31,7 @@ function readCollapsed(): boolean {
  * inferior con un cajón para el resto.
  */
 export function AppShell({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation()
   const [theme, setTheme] = useTheme()
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -95,7 +97,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
         </header>
         <main id="main" className="content" tabIndex={-1}>
-          {children}
+          {/* Con la clave, cada página nueva entra con una animación corta (UI-F). */}
+          <div key={pathname} className="page">
+            {children}
+          </div>
         </main>
         <MobileNav />
         {paletteOpen && (

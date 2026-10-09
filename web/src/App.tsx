@@ -11,6 +11,8 @@ import { RunnersPage } from './pages/RunnersPage'
 import { RunsPage } from './pages/RunsPage'
 import { WorkflowsPage } from './pages/WorkflowsPage'
 import { WorkItemPage } from './pages/WorkItemPage'
+import { RunSkeleton } from './components/ui/Skeleton'
+import { NotFound } from './pages/NotFound'
 
 // La vista de una ejecución (paneles, cascada, conversación) se descarga al abrir la primera.
 const RunPage = lazy(() => import('./pages/RunPage').then((m) => ({ default: m.RunPage })))
@@ -29,7 +31,7 @@ export default function App() {
           <Route
             path="/runs/:runId"
             element={
-              <Suspense fallback={<p className="muted">Cargando la ejecución…</p>}>
+              <Suspense fallback={<RunSkeleton />}>
                 <RunPage />
               </Suspense>
             }
@@ -37,7 +39,7 @@ export default function App() {
           <Route path="/agent-runs/:agentId" element={<AgentRedirectPage />} />
           <Route path="/runners" element={<RunnersPage />} />
           <Route path="/activity" element={<ActivityPage />} />
-          <Route path="*" element={<p>Página no encontrada.</p>} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </AppShell>
     </AuthGate>

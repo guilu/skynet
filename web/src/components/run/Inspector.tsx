@@ -23,6 +23,7 @@ import { INSPECTOR_TABS, type InspectorTab } from './useRunSelection'
 import { VerificationTab } from './VerificationTab'
 import { Button } from '../ui/Button'
 import { TabList, TabPanel } from '../ui/Tabs'
+import { LinesSkeleton } from '../ui/Skeleton'
 
 interface Props {
   agent: AgentRun
@@ -120,7 +121,7 @@ function Summary({ agent, events }: { agent: AgentRun; events: StoredEvent[] }) 
 function Prompts({ agentId }: { agentId: string }) {
   const detail = useQuery({ queryKey: ['agent', agentId], queryFn: () => api.agent(agentId) })
   if (detail.error) return <ErrorMessage error={detail.error} />
-  if (!detail.data) return <p className="muted">Cargando…</p>
+  if (!detail.data) return <LinesSkeleton label="el agente" />
   if (detail.data.prompts.length === 0) return <p className="muted">Sin prompt registrado.</p>
   return (
     <>

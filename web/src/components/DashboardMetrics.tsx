@@ -17,6 +17,7 @@ import { formatCost, formatDuration, formatNumber } from '../format'
 import { cn } from '../lib/cn'
 import { ErrorMessage } from './ErrorMessage'
 import { bucketTitle } from './metricsFormat'
+import { TilesSkeleton } from './ui/Skeleton'
 
 const RunsChart = lazy(() => import('./RunsChart'))
 
@@ -69,6 +70,7 @@ export function DashboardMetrics() {
         </div>
       </div>
       <ErrorMessage error={metrics.error} />
+      {metrics.isPending && <TilesSkeleton />}
       {data && <Tiles data={data} />}
       {data && <RunsChartFigure data={data} />}
     </section>

@@ -11,6 +11,7 @@ import { Button } from '../components/ui/Button'
 import { Sheet } from '../components/ui/Sheet'
 import { formatDateTime } from '../format'
 import { useNow } from '../useNow'
+import { TableSkeleton } from '../components/ui/Skeleton'
 
 const TYPE_LABEL = Object.fromEntries(WORK_ITEM_TYPES.map((t) => [t.value, t.label]))
 
@@ -81,6 +82,7 @@ export function WorkItemPage() {
       <section aria-labelledby="runs-title">
         <h2 id="runs-title">Ejecuciones</h2>
         <ErrorMessage error={runs.error} />
+        {runs.isPending && <TableSkeleton label="las ejecuciones" columns={6} rows={3} />}
         {runs.data && (
           <DataTable
             label="Ejecuciones del trabajo"

@@ -85,3 +85,30 @@ describe('Página del proyecto', () => {
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
   })
 })
+
+describe('Carga y rutas desconocidas', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('mientras llegan los datos enseña un esqueleto que se anuncia', async () => {
+    // Los proyectos no llegan nunca: la lista se queda cargando.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) =>
+        String(input).endsWith('/api/projects')
+          ? new Promise<Response>(() => {})
+          : mockFetch({ '/api/auth/session': { username: 'admin' } })(input),
+      ),
+    )
+    renderAt('/projects', <App />)
+    expect(await screen.findByText('Cargando los proyectos…')).toHaveAttribute('role', 'status')
+  })
+
+  it('una ruta que no existe lo dice y enlaza al dashboard', async () => {
+    stubApi({})
+    renderAt('/no-existe', <App />)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Volver al dashboard' })).toHaveAttribute('href', '/')
+  })
+})

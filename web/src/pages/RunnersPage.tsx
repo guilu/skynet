@@ -10,6 +10,7 @@ import { FilterChips, ListToolbar, type ChipOption } from '../components/list/To
 import { StatusBadge } from '../components/StatusBadge'
 import { formatDateTime } from '../format'
 import { Button } from '../components/ui/Button'
+import { TableSkeleton } from '../components/ui/Skeleton'
 
 const STATUSES: ChipOption[] = [
   { value: 'ONLINE', label: 'En línea', tone: 'ok' },
@@ -54,6 +55,7 @@ export function RunnersPage() {
     <>
       <h1>Runners</h1>
       <ErrorMessage error={runners.error} />
+      {runners.isPending && <TableSkeleton label="los runners" columns={5} rows={3} />}
       {runners.data?.length === 0 && (
         <EmptyState icon={Server} title="No hay runners registrados.">
           <p>Arranca uno en la máquina de los repositorios (README, «Runner local»).</p>

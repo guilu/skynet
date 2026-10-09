@@ -1459,6 +1459,20 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* En el móvil, dos cifras por fila: una por fila llenaba la pantalla antes de los paneles. */
+  @media (max-width: 520px) {
+    .metrics {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-2);
+    }
+
+    .metrics > div {
+      padding: 8px 10px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+  }
+
   .agent-facts {
     display: grid;
     grid-template-columns: max-content 1fr;
@@ -3483,6 +3497,223 @@
     .page-actions .btn {
       flex: 1 1 0;
       justify-content: center;
+    }
+  }
+
+  /* ---------- Esqueletos de carga (UI-F) ---------- */
+  .skeleton {
+    display: block;
+    border-radius: 8px;
+    background: linear-gradient(
+        100deg,
+        transparent 20%,
+        color-mix(in oklab, var(--surface) 70%, transparent) 50%,
+        transparent 80%
+      )
+      var(--surface-2);
+    background-size: 200% 100%;
+    animation: skeleton-shine 1.4s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-shine {
+    from {
+      background-position: 150% 0;
+    }
+    to {
+      background-position: -50% 0;
+    }
+  }
+
+  .skeleton-text {
+    height: 12px;
+    width: 70%;
+  }
+
+  .skeleton-line {
+    height: 14px;
+  }
+
+  .skeleton-pill {
+    height: 24px;
+    width: 96px;
+    border-radius: 999px;
+  }
+
+  .skeleton-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--r-md);
+    flex: none;
+  }
+
+  .skeleton-number {
+    height: 22px;
+    width: 40%;
+  }
+
+  .skeleton-title {
+    height: 26px;
+    width: min(420px, 70%);
+  }
+
+  .skeleton-table {
+    display: grid;
+    gap: 6px;
+  }
+
+  .skeleton-row {
+    display: grid;
+    grid-template-columns: 2fr repeat(auto-fit, minmax(0, 1fr));
+    grid-auto-flow: column;
+    align-items: center;
+    gap: var(--space-4);
+    padding: 12px;
+    border-radius: var(--r-sm);
+    background: var(--surface);
+  }
+
+  .skeleton-head {
+    background: none;
+    padding-block: 6px;
+  }
+
+  .skeleton-card {
+    margin-top: 0;
+    padding: 18px 20px;
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .skeleton-card-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .skeleton-lines {
+    display: grid;
+    gap: 8px;
+    flex: 1;
+  }
+
+  .skeleton-kpi .skeleton-icon {
+    grid-area: icon;
+  }
+
+  .skeleton-kpi .skeleton-text {
+    grid-area: label;
+    margin-bottom: 6px;
+  }
+
+  .skeleton-kpi .skeleton-number {
+    grid-area: value;
+  }
+
+  .skeleton-run-head {
+    display: grid;
+    gap: var(--space-4);
+    padding: 20px;
+  }
+
+  .skeleton-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: var(--space-3);
+  }
+
+  .skeleton-fact {
+    height: 72px;
+    border-radius: var(--r-md);
+  }
+
+  .skeleton-panels {
+    display: flex;
+    gap: var(--space-4);
+    min-height: 360px;
+    padding: 20px;
+  }
+
+  .skeleton-panel {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .skeleton-lines-block {
+    display: grid;
+    gap: 12px;
+    padding: var(--space-3) 0;
+  }
+
+  @media (max-width: 900px) {
+    .skeleton-panels > :not(:first-child) {
+      display: none;
+    }
+
+    .skeleton-panels > :first-child {
+      flex-basis: 100% !important;
+    }
+  }
+
+  /* ---------- Movimiento (UI-F): corto, y nada con prefers-reduced-motion ---------- */
+  .page {
+    animation: page-in 220ms ease-out both;
+  }
+
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .tab-body > *,
+  .empty-state {
+    animation: fade-in 180ms ease-out both;
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .empty-icon {
+    animation: var(--animate-pop);
+  }
+
+  .repo-card,
+  .kpi {
+    transition:
+      transform 160ms var(--ease-pop),
+      box-shadow 160ms;
+  }
+
+  a.kpi:hover,
+  .repo-card:hover {
+    transform: translateY(-2px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .page,
+    .tab-body > *,
+    .empty-state,
+    .empty-icon,
+    .skeleton {
+      animation: none;
+    }
+
+    a.kpi:hover,
+    .repo-card:hover {
+      transform: none;
     }
   }
 }

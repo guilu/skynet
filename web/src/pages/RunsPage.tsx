@@ -18,6 +18,7 @@ import { runColumns } from '../components/runColumns'
 import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../format'
 import { useNow } from '../useNow'
+import { TableSkeleton } from '../components/ui/Skeleton'
 
 const PAGE_SIZE = 25
 
@@ -120,6 +121,7 @@ export function RunsPage() {
         </span>
       </ListToolbar>
       <ErrorMessage error={runs.error} />
+      {runs.isPending && <TableSkeleton label="las ejecuciones" columns={6} />}
       {runs.data && (
         <RunsTable
           runs={runs.data.items}

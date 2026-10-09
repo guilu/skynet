@@ -18,6 +18,7 @@ import {
 import { CodeView } from './CodeView'
 import { Button } from '../ui/Button'
 import { Pill } from '../ui/Pill'
+import { LinesSkeleton } from '../ui/Skeleton'
 
 const sum = (files: FileChange[], key: 'insertions' | 'deletions') =>
   files.reduce((n, f) => n + (f[key] ?? 0), 0)
@@ -32,7 +33,7 @@ export function ArtifactsTab({ agent }: { agent: AgentRun }) {
     queryFn: () => api.artifacts(agent.id),
   })
   if (artifacts.error) return <ErrorMessage error={artifacts.error} />
-  if (!artifacts.data) return <p className="muted">Cargando…</p>
+  if (!artifacts.data) return <LinesSkeleton label="los artefactos" />
   if (artifacts.data.length === 0) {
     return (
       <p className="muted">
@@ -75,7 +76,7 @@ function Changes({ changes, diff }: { changes: ArtifactSummary; diff?: ArtifactS
   const content = useArtifactText(changes)
   const [selected, setSelected] = useState<string | null>(null)
   if (content.error) return <ErrorMessage error={content.error} />
-  if (content.data == null) return <p className="muted">Cargando cambios…</p>
+  if (content.data == null) return <LinesSkeleton label="los cambios" lines={3} />
   let git: GitChanges
   try {
     git = JSON.parse(content.data) as GitChanges
