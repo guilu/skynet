@@ -913,8 +913,8 @@
 
   .content {
     grid-area: main;
+    /* Sin ancho máximo: el contenido ocupa todo el navegador. */
     width: 100%;
-    max-width: 1240px;
     padding: var(--space-4) var(--space-6) 64px;
     min-width: 0;
   }
@@ -3764,6 +3764,7 @@
 
   .palette-previews {
     display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
     gap: var(--space-3);
   }
 

@@ -85,6 +85,7 @@ Las piezas base están en `web/src/components/ui/`. Las de listas, en `component
 - Hasta 720 px, la barra lateral pasa a una barra inferior con las cuatro secciones principales y un cajón «Más».
 - Hasta 640 px, el panel lateral sube desde abajo y las acciones de la cabecera ocupan el ancho.
 - Hasta 520 px, las cifras del dashboard y de la ejecución van de dos en dos.
+- En pantallas grandes, el contenido ocupa todo el ancho del navegador, sin máximo.
 - Ninguna página se desplaza en horizontal: las tablas anchas se desplazan dentro de su bloque.
 
 | Dashboard | Ejecución |
