@@ -8,6 +8,7 @@ import { DataTable, EmptyState, type Column } from '../components/list/DataTable
 import { ListToolbar, SearchField } from '../components/list/Toolbar'
 import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../format'
+import { TableSkeleton } from '../components/ui/Skeleton'
 
 const COLUMNS: Column<Project>[] = [
   {
@@ -65,6 +66,7 @@ export function ProjectsPage() {
             />
           </ListToolbar>
           <ErrorMessage error={projects.error} />
+          {projects.isPending && <TableSkeleton label="los proyectos" columns={3} />}
           {projects.data && (
             <DataTable
               label="Proyectos"

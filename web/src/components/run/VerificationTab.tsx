@@ -10,6 +10,7 @@ import { artifactOf, type TestReport } from './artifacts'
 import { useNow } from '../../useNow'
 import { LongText } from './LongText'
 import { Button } from '../ui/Button'
+import { LinesSkeleton } from '../ui/Skeleton'
 
 /**
  * Lo que declara el agente frente a lo que comprobó Skynet al ejecutar el comando de verificación
@@ -54,7 +55,7 @@ export function VerificationTab({ agent, events }: { agent: AgentRun; events: St
           </h3>
           <ErrorMessage error={verifications.error} />
           {verifications.data == null && !verifications.error && (
-            <p className="muted small">Cargando…</p>
+            <LinesSkeleton label="las verificaciones" lines={3} />
           )}
           {verifications.data?.length === 0 && (
             <p className="muted small">

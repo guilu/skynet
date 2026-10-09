@@ -15,6 +15,7 @@ import { Button } from '../components/ui/Button'
 import { Sheet } from '../components/ui/Sheet'
 import { TabList, TabPanel } from '../components/ui/Tabs'
 import { formatDateTime } from '../format'
+import { CardsSkeleton, TableSkeleton } from '../components/ui/Skeleton'
 
 type ProjectTab = 'work' | 'repos'
 type SheetKind = 'work-item' | 'repository'
@@ -97,6 +98,7 @@ export function ProjectPage() {
         {tab === 'work' ? (
           <>
             <ErrorMessage error={items.error} />
+            {items.isPending && <TableSkeleton label="los trabajos" />}
             {items.data && (
               <DataTable
                 label="Trabajos"
@@ -117,6 +119,7 @@ export function ProjectPage() {
         ) : (
           <>
             <ErrorMessage error={repos.error} />
+            {repos.isPending && <CardsSkeleton label="los repositorios" />}
             {repos.data?.length === 0 && (
               <EmptyState icon={FolderGit2} title="Ningún repositorio registrado.">
                 <p>

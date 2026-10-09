@@ -22,6 +22,7 @@ import { TimelineFiltersBar } from '../components/timeline/TimelineFiltersBar'
 import { useEventStream } from '../useEventStream'
 import { useMediaQuery } from '../useMediaQuery'
 import { useNow } from '../useNow'
+import { RunSkeleton } from '../components/ui/Skeleton'
 
 /**
  * Ejecución en tres paneles redimensionables (ADR-0001 §3.4): el árbol de fases, agentes y
@@ -210,6 +211,7 @@ export function RunPage() {
   return (
     <>
       <ErrorMessage error={run.error} />
+      {run.isPending && <RunSkeleton />}
       {run.data && (
         <>
           <RunHeader run={run.data} stream={state} />

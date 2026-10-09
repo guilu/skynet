@@ -61,7 +61,8 @@ test('ningún secreto llega al DOM', async ({ page }) => {
   // Se busca el texto pintado y no el elemento con la etiqueta: mientras Monaco se descarga, la
   // etiqueta está en un bloque de texto, y después en el campo de edición de Monaco, que va vacío.
   await expect(panel.getByText(/return\s+a\s+\+\s+b/).first()).toBeVisible({ timeout: 30_000 })
-  await expect(panel.getByText(/token de pruebas:\s+\[REDACTED\]/).first()).toBeVisible()
+  // Monaco pinta los espacios como espacios duros: entre palabras va `\s+`, no un espacio.
+  await expect(panel.getByText(/token\s+de\s+pruebas:\s+\[REDACTED\]/).first()).toBeVisible()
   await expectNoSecrets(page, 'diff')
   // La salida de la verificación imprime el otro token.
   await panel.getByRole('button', { name: 'Salida de la verificación' }).first().click()
@@ -125,6 +126,7 @@ test('las páginas principales pasan axe', async ({ page }) => {
     ['/runners', 'Runners'],
     ['/activity', 'Actividad'],
     ['/workflows', 'Workflows'],
+    ['/no-existe', 'Página no encontrada'],
   ]
   for (const [path, name] of pages) {
     await page.goto(path)
@@ -176,4 +178,44 @@ test('las páginas principales pasan axe', async ({ page }) => {
   await expect(page.getByRole('dialog', { name: 'Lanzar agente' })).toBeVisible()
   await expectAccessible(page, 'panel de lanzar')
   await page.keyboard.press('Escape')
+})
+
+test('en tema oscuro las páginas también pasan axe', async ({ page }) => {
+  // Los tokens del tema oscuro tienen su propio contraste: se revisan aparte, con el tema del
+  // sistema en oscuro (el de la web por defecto).
+  test.setTimeout(180_000)
+  await page.emulateMedia({ colorScheme: 'dark' })
+  const runId = await completedRun(page)
+  await expectAccessible(page, 'oscuro · ejecución')
+  for (const tab of ['Artefactos', 'Resumen']) {
+    await page.getByRole('tab', { name: tab }).click()
+    await expect(page.getByRole('tabpanel', { name: tab })).toBeVisible()
+    await expectAccessible(page, `oscuro · ejecución · ${tab}`)
+  }
+  await page.getByRole('tab', { name: /^Cascada/ }).click()
+  await expectAccessible(page, 'oscuro · cascada')
+
+  for (const [path, name] of [
+    ['/', 'Dashboard'],
+    ['/runs', 'Ejecuciones'],
+    ['/projects', 'Proyectos'],
+    ['/runners', 'Runners'],
+    ['/activity', 'Actividad'],
+    ['/workflows', 'Workflows'],
+    ['/no-existe', 'Página no encontrada'],
+  ]) {
+    await page.goto(path)
+    await expect(
+      page.getByRole('heading', { level: 1, name: new RegExp(`^${name}`) }),
+    ).toBeVisible()
+    await expectAccessible(page, `oscuro · ${name}`)
+  }
+
+  await page.goto(`/runs/${runId}`)
+  await page.locator('header.run-header').getByRole('link').first().click()
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expectAccessible(page, 'oscuro · trabajo')
+  await page.getByRole('button', { name: 'Lanzar agente' }).click()
+  await expect(page.getByRole('dialog', { name: 'Lanzar agente' })).toBeVisible()
+  await expectAccessible(page, 'oscuro · panel de lanzar')
 })
