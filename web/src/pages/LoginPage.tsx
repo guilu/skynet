@@ -2,9 +2,9 @@ import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, type Session } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { BrandMark } from '../components/brand/Logo'
 import { Button } from '../components/ui/Button'
 import { Pill } from '../components/ui/Pill'
-import { Sparkles } from 'lucide-react'
 
 /** Entrada a la web con el usuario único del control plane. */
 export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) {
@@ -29,9 +29,7 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
     <main className="login">
       <div className="login-card">
         <section className="login-hero" aria-hidden="true">
-          <span className="brand-mark brand-mark-lg">
-            <Sparkles size={30} strokeWidth={2.5} />
-          </span>
+          <BrandMark large />
           <p className="login-tagline">Tus agentes, a la vista.</p>
           <ul className="login-states">
             <li>
@@ -49,6 +47,7 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
           <h1 ref={heading} tabIndex={-1}>
             Skynet
           </h1>
+          <p className="brand-tagline">Agentes · Flujos · Ejecuciones</p>
           <p className="muted">Entra con el usuario del control plane.</p>
           <form className="form" onSubmit={submit}>
             <label>

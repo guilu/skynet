@@ -1,10 +1,11 @@
 import * as Tooltip from '@radix-ui/react-tooltip'
 import { useQuery } from '@tanstack/react-query'
-import { PanelLeftClose, PanelLeftOpen, Sparkles } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import type { ReactElement } from 'react'
-import { NavLink } from 'react-router'
+import { Link, NavLink } from 'react-router'
 import { api } from '../../api'
 import { HealthIndicator } from '../../HealthIndicator'
+import { BrandMark } from '../brand/Logo'
 import { NAV } from './nav'
 
 /**
@@ -15,12 +16,10 @@ import { NAV } from './nav'
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   return (
     <aside className="sidebar" data-collapsed={collapsed || undefined}>
-      <span className="brand">
-        <span className="brand-mark" aria-hidden="true">
-          <Sparkles size={20} strokeWidth={2.5} />
-        </span>
+      <Link to="/" className="brand" aria-label="Skynet: ir al Dashboard">
+        <BrandMark />
         <span className="brand-name">Skynet</span>
-      </span>
+      </Link>
       <nav className="sidenav" aria-label="Navegación principal">
         <ul>
           {NAV.map((item) => (

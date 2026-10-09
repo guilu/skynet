@@ -106,6 +106,10 @@ describe('App', () => {
       'aria-current',
       'page',
     )
+    expect(screen.getByRole('link', { name: 'Skynet: ir al Dashboard' })).toHaveAttribute(
+      'href',
+      '/',
+    )
     expect(screen.getByRole('link', { name: 'Saltar al contenido' })).toHaveAttribute(
       'href',
       '#main',
