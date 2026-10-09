@@ -8,7 +8,7 @@ self.MonacoEnvironment = { getWorker: () => new EditorWorker() }
 
 let registered = false
 
-/** Lenguaje `diff` (no viene en el editor base) y temas con sus colores. */
+/** Lenguajes `diff` y `json`, que no vienen en el editor base. */
 function register() {
   if (registered) return
   registered = true
@@ -35,28 +35,6 @@ function register() {
       ],
     },
   })
-  const rules = (dark: boolean): monaco.editor.ITokenThemeRule[] => [
-    { token: 'inserted', foreground: dark ? '7ee787' : '116329' },
-    { token: 'deleted', foreground: dark ? 'ffa198' : 'a40e26' },
-    { token: 'meta', foreground: dark ? '79c0ff' : '0550ae' },
-    { token: 'header', foreground: dark ? '8b949e' : '57606a', fontStyle: 'bold' },
-    { token: 'key', foreground: dark ? '79c0ff' : '0550ae' },
-    { token: 'string', foreground: dark ? 'a5d6ff' : '0a3069' },
-    { token: 'number', foreground: dark ? 'ffa657' : '953800' },
-    { token: 'keyword', foreground: dark ? 'ff7b72' : 'cf222e' },
-  ]
-  monaco.editor.defineTheme('skynet-light', {
-    base: 'vs',
-    inherit: true,
-    rules: rules(false),
-    colors: {},
-  })
-  monaco.editor.defineTheme('skynet-dark', {
-    base: 'vs-dark',
-    inherit: true,
-    rules: rules(true),
-    colors: {},
-  })
 }
 
 /** Tema de la web: `data-theme` en `<html>` o, si no hay, el del sistema. */
@@ -64,6 +42,64 @@ function isDark(): boolean {
   const theme = document.documentElement.getAttribute('data-theme')
   if (theme) return theme === 'dark'
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
+}
+
+let probe: CanvasRenderingContext2D | null | undefined
+
+/** Un color CSS cualquiera como `#rrggbb`, que es lo que entiende Monaco. */
+function toHex(color: string): string {
+  if (/^#[0-9a-f]{6}$/i.test(color)) return color
+  probe ??= document.createElement('canvas').getContext('2d')
+  if (!probe) return color
+  probe.fillStyle = '#000000'
+  probe.fillStyle = color
+  return probe.fillStyle
+}
+
+/**
+ * Tema `skynet` con los colores de la web, leídos de sus tokens CSS: así el editor sigue al tema
+ * claro u oscuro y, más adelante, a una paleta personalizada.
+ */
+function defineTheme() {
+  const style = getComputedStyle(document.documentElement)
+  const token = (name: string) => toHex(style.getPropertyValue(name).trim()).replace('#', '')
+  const c = (name: string) => `#${token(name)}`
+  monaco.editor.defineTheme('skynet', {
+    base: isDark() ? 'vs-dark' : 'vs',
+    inherit: true,
+    rules: [
+      { token: '', foreground: token('--fg') },
+      { token: 'inserted', foreground: token('--ok-ink') },
+      { token: 'deleted', foreground: token('--bad-ink') },
+      { token: 'meta', foreground: token('--live-ink'), fontStyle: 'bold' },
+      { token: 'header', foreground: token('--muted'), fontStyle: 'bold' },
+      { token: 'key', foreground: token('--primary-ink') },
+      { token: 'string', foreground: token('--ok-ink') },
+      { token: 'number', foreground: token('--warn-ink') },
+      { token: 'keyword', foreground: token('--live-ink') },
+    ],
+    colors: {
+      'editor.background': c('--surface-2'),
+      'editor.foreground': c('--fg'),
+      'editorLineNumber.foreground': c('--muted'),
+      'editorLineNumber.activeForeground': c('--fg'),
+      'editor.lineHighlightBackground': c('--surface'),
+      'editor.lineHighlightBorder': c('--surface'),
+      'editor.selectionBackground': c('--primary-soft'),
+      'editor.inactiveSelectionBackground': c('--primary-soft'),
+      'editorCursor.foreground': c('--primary'),
+      'editorWidget.background': c('--surface'),
+      'editorWidget.border': c('--border'),
+      'scrollbarSlider.background': `${c('--border-strong')}99`,
+      'scrollbarSlider.hoverBackground': c('--border-strong'),
+      'scrollbarSlider.activeBackground': c('--idle'),
+    },
+  })
+}
+
+function applyTheme() {
+  defineTheme()
+  monaco.editor.setTheme('skynet')
 }
 
 interface Props {
@@ -81,6 +117,7 @@ export default function MonacoView({ text, language, label, height = 420 }: Prop
 
   useEffect(() => {
     register()
+    defineTheme()
     const instance = monaco.editor.create(container.current!, {
       readOnly: true,
       domReadOnly: true,
@@ -90,12 +127,15 @@ export default function MonacoView({ text, language, label, height = 420 }: Prop
       wordWrap: language === 'plaintext' ? 'on' : 'off',
       renderWhitespace: 'none',
       ariaLabel: label,
-      theme: isDark() ? 'skynet-dark' : 'skynet-light',
+      theme: 'skynet',
       fontSize: 13,
+      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      padding: { top: 10, bottom: 10 },
+      renderLineHighlight: 'none',
     })
     editor.current = instance
     const media = window.matchMedia?.('(prefers-color-scheme: dark)')
-    const retheme = () => monaco.editor.setTheme(isDark() ? 'skynet-dark' : 'skynet-light')
+    const retheme = applyTheme
     const observer = new MutationObserver(retheme)
     observer.observe(document.documentElement, {
       attributes: true,

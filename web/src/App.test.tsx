@@ -398,6 +398,9 @@ describe('App', () => {
       [`/api/workflow-runs/${runningRun.id}`]: runningRun,
     })
     renderAt('/work-items/w1', <App />)
+    const open = await screen.findByRole('button', { name: 'Lanzar agente' })
+    await waitFor(() => expect(open).toBeEnabled())
+    fireEvent.click(open)
     fireEvent.change(await screen.findByLabelText('Prompt'), { target: { value: 'Haz X' } })
     fireEvent.change(screen.getByLabelText('Turnos máximos'), { target: { value: '7' } })
     await waitFor(() => expect(screen.getByRole('button', { name: 'Lanzar' })).toBeEnabled())
