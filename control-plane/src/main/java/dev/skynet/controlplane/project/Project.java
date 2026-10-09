@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.PersistenceCreator;
+import org.springframework.data.annotation.ReadOnlyProperty;
 import org.springframework.data.annotation.Version;
 import org.springframework.data.relational.core.mapping.Table;
 
@@ -16,6 +17,10 @@ public class Project {
   private String name;
   private String description;
   private final Instant createdAt;
+
+  /** Lo escribe solo el archivado (UPDATE directo); el resto de guardados no lo toca. */
+  @ReadOnlyProperty private Instant archivedAt;
+
   @Version private Long version;
 
   @PersistenceCreator
@@ -50,6 +55,10 @@ public class Project {
 
   public Instant getCreatedAt() {
     return createdAt;
+  }
+
+  public Instant getArchivedAt() {
+    return archivedAt;
   }
 
   public Long getVersion() {

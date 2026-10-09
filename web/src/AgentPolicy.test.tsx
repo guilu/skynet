@@ -23,6 +23,7 @@ const repository: Repository = {
   },
   agentPolicyCustom: false,
   createdAt: '',
+  archivedAt: null,
 }
 
 function stubApi(routes: Record<string, unknown>) {

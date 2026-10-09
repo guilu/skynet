@@ -8,6 +8,7 @@ import java.util.UUID;
  *
  * @param activeAgents agentes asignados que aún no han terminado
  * @param status {@code ONLINE} si ha enviado un latido recientemente; {@code STALE} si no
+ * @param archivedAt cuándo se olvidó, o {@code null}
  */
 public record RunnerView(
     UUID id,
@@ -18,7 +19,8 @@ public record RunnerView(
     String providerVersion,
     Instant registeredAt,
     Instant lastHeartbeatAt,
-    Status status) {
+    Status status,
+    Instant archivedAt) {
 
   public enum Status {
     ONLINE,

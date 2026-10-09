@@ -225,6 +225,19 @@ GET        /api/dashboard/metrics?period=24h|7d|30d&tz=<zona IANA>  # RunMetrics
 GET        /api/workflow-runs?since=<instante>                       # filtro por fecha de creación, combinable con status y projectId
 ```
 
+Añadido en AE-A (archivar es reversible; lo archivado es de solo lectura y sale de las listas, del dashboard y de las métricas):
+
+```text
+POST       /api/projects/{id}/archive|restore                                 # 409 con ejecuciones en curso
+POST       /api/projects/{id}/repositories/{repositoryId}/archive|restore     # 409 con agentes en curso
+POST       /api/work-items/{id}/archive|restore                               # 409 con ejecuciones en curso
+POST       /api/workflow-runs/{id}/archive|restore                            # solo terminadas
+POST       /api/runners/{id}/archive|restore                                  # «olvidar»: invalida el token; 409 con agentes en marcha
+GET        …?archived=false|true|all                                          # en proyectos, repositorios, trabajos, ejecuciones y runners; por defecto false
+```
+
+Responden `{id, archivedAt}` y son idempotentes. Una ejecución cuenta como archivada si lo está ella, su trabajo o su proyecto; restaurar algo cuyo padre sigue archivado da 409. Un runner olvidado que siga vivo se vuelve a registrar solo y reaparece. Eventos: `project.archived|restored`, `repository.…`, `workitem.…`, `workflow.…` y `runner.…`.
+
 Los errores siguen RFC 9457 (`ProblemDetail`): 400 validación, 401 sin sesión, 403 sin token CSRF, 404 inexistente, 409 transición no permitida, clave duplicada o conflicto de versión.
 
 ---

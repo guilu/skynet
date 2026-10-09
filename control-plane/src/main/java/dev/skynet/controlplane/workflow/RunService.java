@@ -4,6 +4,9 @@ import dev.skynet.controlplane.project.AgentDefaults;
 import dev.skynet.controlplane.project.AgentPolicy;
 import dev.skynet.controlplane.project.CodeRepository;
 import dev.skynet.controlplane.project.ProjectService;
+import dev.skynet.controlplane.shared.ArchiveState;
+import dev.skynet.controlplane.shared.Archived;
+import dev.skynet.controlplane.shared.Archiving;
 import dev.skynet.controlplane.shared.ConflictException;
 import dev.skynet.controlplane.shared.InvalidRequestException;
 import dev.skynet.controlplane.shared.NotFoundException;
@@ -246,6 +249,27 @@ public class RunService {
     }
   }
 
+  /**
+   * Lo archivado es de solo lectura: no se lanzan agentes en un trabajo, proyecto o repositorio
+   * archivado, ni se continúa un agente de una ejecución archivada.
+   */
+  private void requireActive(WorkItem workItem, CodeRepository repository, AgentRun parent) {
+    workItems.requireActive(workItem);
+    projects.requireActive(repository);
+    if (parent != null) {
+      WorkflowRun run = runOf(parent);
+      if (run.getArchivedAt() != null) {
+        throw new ConflictException(
+            "La ejecución " + run.getId() + " está archivada: restáurala para continuar");
+      }
+    }
+  }
+
+  private WorkflowRun runOf(AgentRun agent) {
+    StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
+    return workflowRuns.findById(stage.getWorkflowRunId()).orElseThrow();
+  }
+
   private WorkItem workItemOf(AgentRun agent) {
     StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
     WorkflowRun run = workflowRuns.findById(stage.getWorkflowRunId()).orElseThrow();
@@ -284,6 +308,7 @@ public class RunService {
   private WorkflowRun spawn(WorkItem workItem, CodeRepository repository, Invocation invocation) {
     Instant now = time.now();
     AgentRun parent = invocation.parent();
+    requireActive(workItem, repository, parent);
     AgentPolicy policy = projects.agentPolicy(repository);
 
     WorkflowRun run = WorkflowRun.create(workItem.getId(), adhocDefinitionId(), now);
@@ -475,9 +500,67 @@ public class RunService {
   }
 
   @Transactional(readOnly = true)
-  public List<RunView> runsOf(UUID workItemId) {
+  public List<RunView> runsOf(UUID workItemId, Archived archived) {
     workItems.get(workItemId);
-    return views(workflowRuns.findByWorkItemIdOrderByCreatedAtDesc(workItemId));
+    return views(
+        workflowRuns.findByWorkItemIdOrderByCreatedAtDesc(workItemId).stream()
+            .filter(r -> archived.accepts(r.getArchivedAt()))
+            .toList());
+  }
+
+  /**
+   * Archiva la ejecución: sale de las listas, del dashboard y de las métricas, y sus agentes no se
+   * pueden continuar hasta que se restaure. Solo se archiva una ejecución terminada.
+   */
+  @Transactional
+  public ArchiveState archive(UUID workflowRunId) {
+    WorkflowRun run = runEntity(workflowRunId);
+    if (run.getArchivedAt() != null) {
+      return new ArchiveState(workflowRunId, run.getArchivedAt());
+    }
+    if (!run.getStatus().isTerminal()) {
+      throw new ConflictException(
+          "La ejecución "
+              + workflowRunId
+              + " sigue en curso ("
+              + run.getStatus()
+              + "): cancélala o espera a que termine antes de archivarla");
+    }
+    Instant now = time.now();
+    Archiving.set(jdbc, "workflow_run", workflowRunId, now);
+    append(
+        "workflow_run",
+        workflowRunId,
+        "workflow.archived",
+        workflowRunId,
+        Map.of("workItemId", run.getWorkItemId()),
+        now);
+    return new ArchiveState(workflowRunId, now);
+  }
+
+  /** Restaura la ejecución; ni su trabajo ni su proyecto pueden estar archivados. */
+  @Transactional
+  public ArchiveState restore(UUID workflowRunId) {
+    WorkflowRun run = runEntity(workflowRunId);
+    if (run.getArchivedAt() == null) {
+      return new ArchiveState(workflowRunId, null);
+    }
+    workItems.requireActive(workItems.get(run.getWorkItemId()));
+    Archiving.set(jdbc, "workflow_run", workflowRunId, null);
+    append(
+        "workflow_run",
+        workflowRunId,
+        "workflow.restored",
+        workflowRunId,
+        Map.of("workItemId", run.getWorkItemId()),
+        time.now());
+    return new ArchiveState(workflowRunId, null);
+  }
+
+  private WorkflowRun runEntity(UUID workflowRunId) {
+    return workflowRuns
+        .findById(workflowRunId)
+        .orElseThrow(() -> new NotFoundException("Ejecución", workflowRunId));
   }
 
   @Transactional(readOnly = true)
@@ -581,7 +664,8 @@ public class RunService {
 
   /**
    * Ejecuciones de más reciente a más antigua, filtradas por estado y proyecto (vacío o {@code
-   * null}: sin filtro).
+   * null}: sin filtro). Una ejecución cuenta como archivada si lo está ella, su trabajo o su
+   * proyecto.
    */
   @Transactional(readOnly = true)
   public RunPage list(
@@ -589,12 +673,15 @@ public class RunService {
       UUID projectId,
       Instant since,
       String query,
+      Archived archived,
       int page,
       int size) {
     String text = query == null || query.isBlank() ? null : query.strip();
     String where =
         " FROM workflow_run r JOIN work_item w ON w.id = r.work_item_id"
+            + " JOIN project p ON p.id = w.project_id"
             + " WHERE (CAST(:project AS uuid) IS NULL OR w.project_id = :project)"
+            + archived.sql("r.archived_at", "w.archived_at", "p.archived_at")
             + " AND (CAST(:since AS timestamptz) IS NULL OR r.created_at >= :since)"
             + (statuses == null || statuses.isEmpty() ? "" : " AND r.status IN (:statuses)")
             + (text == null
@@ -649,7 +736,11 @@ public class RunService {
             + " ON s.id = a.stage_run_id WHERE s.workflow_run_id = r.id) AS output_tokens,"
             + " (SELECT sum(a.cost_usd) FROM agent_run a JOIN stage_run s"
             + " ON s.id = a.stage_run_id WHERE s.workflow_run_id = r.id) AS cost_usd"
-            + " FROM workflow_run r WHERE r.created_at >= :since AND r.created_at <= :until)";
+            + " FROM workflow_run r JOIN work_item w ON w.id = r.work_item_id"
+            + " JOIN project p ON p.id = w.project_id"
+            + " WHERE r.created_at >= :since AND r.created_at <= :until"
+            + Archived.EXCLUDE.sql("r.archived_at", "w.archived_at", "p.archived_at")
+            + ")";
     RunMetrics totals =
         jdbc.sql(
                 runs

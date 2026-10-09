@@ -12,6 +12,7 @@ import java.util.UUID;
  * @param currentStageRunId fase que no ha terminado, o {@code null} si todas han terminado
  * @param currentAgentRunId agente que no ha terminado (en cola, arrancando o trabajando), o {@code
  *     null}
+ * @param archivedAt cuándo se archivó la ejecución; no cuenta el archivado de su trabajo o proyecto
  * @param totals tokens y coste sumados de todos los agentes
  */
 public record RunView(
@@ -24,6 +25,7 @@ public record RunView(
     Instant createdAt,
     Instant startedAt,
     Instant finishedAt,
+    Instant archivedAt,
     UUID currentStageRunId,
     UUID currentAgentRunId,
     RunTotals totals,
@@ -41,6 +43,7 @@ public record RunView(
         r.getCreatedAt(),
         r.getStartedAt(),
         r.getFinishedAt(),
+        r.getArchivedAt(),
         stages.stream()
             .filter(s -> !s.status().isTerminal())
             .map(StageRunView::id)

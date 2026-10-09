@@ -118,6 +118,7 @@ const RUN: Keys<Run> = {
   createdAt: true,
   startedAt: true,
   finishedAt: true,
+  archivedAt: true,
   currentStageRunId: true,
   currentAgentRunId: true,
   totals: true,
@@ -136,6 +137,7 @@ const RUNNER: Keys<Runner> = {
   registeredAt: true,
   lastHeartbeatAt: true,
   status: true,
+  archivedAt: true,
 }
 const UNRESPONSIVE_AGENT: Keys<UnresponsiveAgent> = {
   agentRunId: true,

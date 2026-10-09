@@ -1,6 +1,7 @@
 package dev.skynet.controlplane.dashboard;
 
 import dev.skynet.controlplane.runner.RunnerDirectory;
+import dev.skynet.controlplane.shared.Archived;
 import dev.skynet.controlplane.shared.InvalidRequestException;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.controlplane.workflow.RunMetrics;
@@ -43,11 +44,16 @@ class DashboardController {
             null,
             null,
             null,
+            Archived.EXCLUDE,
             0,
             LIMIT);
     Instant since = now.minus(FAILURE_WINDOW);
     List<RunView> failures =
-        runs.list(EnumSet.of(WorkflowRunStatus.FAILED), null, null, null, 0, LIMIT).items().stream()
+        runs
+            .list(
+                EnumSet.of(WorkflowRunStatus.FAILED), null, null, null, Archived.EXCLUDE, 0, LIMIT)
+            .items()
+            .stream()
             .filter(r -> r.finishedAt() != null && r.finishedAt().isAfter(since))
             .toList();
     return new DashboardSummary(

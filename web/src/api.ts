@@ -18,6 +18,8 @@ export interface Project {
   name: string
   description: string | null
   createdAt: string
+  /** Cuándo se archivó; null si no lo está. */
+  archivedAt: string | null
 }
 
 export interface Repository {
@@ -36,6 +38,8 @@ export interface Repository {
   /** Si el repositorio tiene política propia. */
   agentPolicyCustom: boolean
   createdAt: string
+  /** Cuándo se archivó; null si no lo está. */
+  archivedAt: string | null
 }
 
 /** Lo que pueden usar y gastar los agentes de un repositorio. */
@@ -70,6 +74,8 @@ export interface WorkItem {
   externalRef: string | null
   status: 'OPEN' | 'CLOSED'
   createdAt: string
+  /** Cuándo se archivó; null si no lo está. */
+  archivedAt: string | null
 }
 
 export type AgentStatus =
@@ -192,6 +198,8 @@ export interface Run {
   createdAt: string
   startedAt: string | null
   finishedAt: string | null
+  /** Cuándo se archivó la ejecución; no cuenta el archivado de su trabajo o proyecto. */
+  archivedAt: string | null
   /** Fase y agente que aún no han terminado; null cuando todo ha terminado. */
   currentStageRunId: string | null
   currentAgentRunId: string | null
@@ -216,6 +224,8 @@ export interface Runner {
   registeredAt: string
   lastHeartbeatAt: string | null
   status: 'ONLINE' | 'STALE'
+  /** Cuándo se olvidó; null si no. */
+  archivedAt: string | null
 }
 
 export interface UnresponsiveAgent {

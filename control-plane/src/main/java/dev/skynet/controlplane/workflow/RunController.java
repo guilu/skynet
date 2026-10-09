@@ -1,5 +1,7 @@
 package dev.skynet.controlplane.workflow;
 
+import dev.skynet.controlplane.shared.ArchiveState;
+import dev.skynet.controlplane.shared.Archived;
 import dev.skynet.protocol.WorkflowRunStatus;
 import dev.skynet.protocol.runner.AgentLimits;
 import jakarta.validation.Valid;
@@ -66,8 +68,9 @@ class RunController {
   }
 
   @GetMapping("/api/work-items/{workItemId}/runs")
-  List<RunView> runsOf(@PathVariable UUID workItemId) {
-    return service.runsOf(workItemId);
+  List<RunView> runsOf(
+      @PathVariable UUID workItemId, @RequestParam(defaultValue = "false") String archived) {
+    return service.runsOf(workItemId, Archived.of(archived));
   }
 
   /**
@@ -81,10 +84,27 @@ class RunController {
       @RequestParam(required = false) UUID projectId,
       @RequestParam(required = false) Instant since,
       @RequestParam(required = false) @Size(max = 200) String q,
+      @RequestParam(defaultValue = "false") String archived,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "50") int size) {
     return service.list(
-        status, projectId, since, q, Math.max(0, page), Math.clamp(size, 1, MAX_PAGE));
+        status,
+        projectId,
+        since,
+        q,
+        Archived.of(archived),
+        Math.max(0, page),
+        Math.clamp(size, 1, MAX_PAGE));
+  }
+
+  @PostMapping("/api/workflow-runs/{id}/archive")
+  ArchiveState archive(@PathVariable UUID id) {
+    return service.archive(id);
+  }
+
+  @PostMapping("/api/workflow-runs/{id}/restore")
+  ArchiveState restore(@PathVariable UUID id) {
+    return service.restore(id);
   }
 
   @GetMapping("/api/workflow-definitions")

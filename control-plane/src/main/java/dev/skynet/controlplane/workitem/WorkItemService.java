@@ -4,6 +4,10 @@ import dev.skynet.controlplane.event.EventDraft;
 import dev.skynet.controlplane.event.EventStore;
 import dev.skynet.controlplane.project.Project;
 import dev.skynet.controlplane.project.ProjectService;
+import dev.skynet.controlplane.shared.ArchiveState;
+import dev.skynet.controlplane.shared.Archived;
+import dev.skynet.controlplane.shared.Archiving;
+import dev.skynet.controlplane.shared.ConflictException;
 import dev.skynet.controlplane.shared.NotFoundException;
 import dev.skynet.controlplane.shared.TimeSource;
 import java.time.Instant;
@@ -11,6 +15,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,19 +26,26 @@ public class WorkItemService {
   private final ProjectService projects;
   private final EventStore events;
   private final TimeSource time;
+  private final JdbcClient jdbc;
 
   WorkItemService(
-      WorkItemRepository workItems, ProjectService projects, EventStore events, TimeSource time) {
+      WorkItemRepository workItems,
+      ProjectService projects,
+      EventStore events,
+      TimeSource time,
+      JdbcClient jdbc) {
     this.workItems = workItems;
     this.projects = projects;
     this.events = events;
     this.time = time;
+    this.jdbc = jdbc;
   }
 
   @Transactional
   public WorkItem create(
       UUID projectId, String title, String description, WorkItemType type, String externalRef) {
     Project project = projects.get(projectId);
+    projects.requireActive(project);
     int number = projects.nextWorkItemNumber(projectId);
     Instant now = time.now();
     WorkItem item =
@@ -53,9 +65,77 @@ public class WorkItemService {
   }
 
   @Transactional(readOnly = true)
-  public List<WorkItem> list(UUID projectId) {
+  public List<WorkItem> list(UUID projectId, Archived archived) {
     projects.get(projectId);
-    return workItems.findByProjectIdOrderByNumberDesc(projectId);
+    return workItems.findByProjectIdOrderByNumberDesc(projectId).stream()
+        .filter(w -> archived.accepts(w.getArchivedAt()))
+        .toList();
+  }
+
+  /**
+   * Archiva el trabajo: sale de las listas junto con sus ejecuciones y no admite lanzar agentes
+   * hasta que se restaure. No se archiva con ejecuciones en curso.
+   */
+  @Transactional
+  public ArchiveState archive(UUID id) {
+    WorkItem item = get(id);
+    if (item.getArchivedAt() != null) {
+      return new ArchiveState(id, item.getArchivedAt());
+    }
+    long active =
+        jdbc.sql(
+                "SELECT count(*) FROM workflow_run WHERE work_item_id = ?"
+                    + " AND status IN ('PENDING', 'RUNNING')")
+            .param(id)
+            .query(Long.class)
+            .single();
+    if (active > 0) {
+      throw new ConflictException(
+          "El trabajo "
+              + item.getKey()
+              + " tiene ejecuciones en curso: cancélalas o espera a que terminen antes de"
+              + " archivarlo");
+    }
+    Instant now = time.now();
+    Archiving.set(jdbc, "work_item", id, now);
+    events.append(
+        EventDraft.of(
+            "work_item",
+            id,
+            "workitem.archived",
+            null,
+            Map.of("projectId", item.getProjectId(), "key", item.getKey()),
+            now));
+    return new ArchiveState(id, now);
+  }
+
+  /** Restaura el trabajo; su proyecto no puede estar archivado. */
+  @Transactional
+  public ArchiveState restore(UUID id) {
+    WorkItem item = get(id);
+    if (item.getArchivedAt() == null) {
+      return new ArchiveState(id, null);
+    }
+    projects.requireActive(projects.get(item.getProjectId()));
+    Archiving.set(jdbc, "work_item", id, null);
+    events.append(
+        EventDraft.of(
+            "work_item",
+            id,
+            "workitem.restored",
+            null,
+            Map.of("projectId", item.getProjectId(), "key", item.getKey()),
+            time.now()));
+    return new ArchiveState(id, null);
+  }
+
+  /** Falla si el trabajo o su proyecto están archivados: no se lanzan agentes en ellos. */
+  public void requireActive(WorkItem item) {
+    projects.requireActive(projects.get(item.getProjectId()));
+    if (item.getArchivedAt() != null) {
+      throw new ConflictException(
+          "El trabajo " + item.getKey() + " está archivado: restáuralo para lanzar agentes");
+    }
   }
 
   @Transactional(readOnly = true)
