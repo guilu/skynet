@@ -47,6 +47,11 @@ class SecurityIT extends IntegrationTest {
     assertThat(response.headers().firstValue(HttpHeaders.WWW_AUTHENTICATE)).isEmpty();
 
     assertThat(send("GET", "/actuator/health", null, false).statusCode()).isEqualTo(200);
+    // La paleta se lee sin sesión (el login ya sale con ella), pero no se cambia.
+    assertThat(send("GET", "/api/settings/appearance", null, false).statusCode()).isEqualTo(200);
+    send("GET", "/api/auth/session", null, false);
+    assertThat(send("PUT", "/api/settings/appearance", "{\"colors\":{}}", true).statusCode())
+        .isEqualTo(401);
   }
 
   @Test

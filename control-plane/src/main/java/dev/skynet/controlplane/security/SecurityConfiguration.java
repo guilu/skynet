@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
@@ -32,10 +33,10 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
- * Todo exige sesión salvo la salud, el login y la API del runner, que lleva su propio token. Las
- * peticiones con cabecera {@code Authorization} (HTTP Basic de un script, o el runner) no usan
- * cookies y no necesitan CSRF. Un 401 nunca lleva {@code WWW-Authenticate}, para que el navegador
- * no abra su diálogo de usuario y contraseña.
+ * Todo exige sesión salvo la salud, el login, leer la paleta y la API del runner, que lleva su
+ * propio token. Las peticiones con cabecera {@code Authorization} (HTTP Basic de un script, o el
+ * runner) no usan cookies y no necesitan CSRF. Un 401 nunca lleva {@code WWW-Authenticate}, para
+ * que el navegador no abra su diálogo de usuario y contraseña.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(SecurityProperties.class)
@@ -52,6 +53,9 @@ class SecurityConfiguration {
                 requests
                     .requestMatchers(
                         "/api/runner/**", "/api/auth/login", "/actuator/health/**", "/error")
+                    .permitAll()
+                    // La paleta se lee antes de entrar, para pintar el login con ella.
+                    .requestMatchers(HttpMethod.GET, "/api/settings/appearance")
                     .permitAll()
                     .anyRequest()
                     .authenticated())

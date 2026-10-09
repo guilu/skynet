@@ -187,6 +187,7 @@ const repository = {
 // La primera ruta que encaja responde; el orden importa.
 const ROUTES = [
   [/\/api\/auth\/session/, { username: 'admin' }],
+  [/\/api\/settings\/appearance/, { colors: {}, updatedAt: null }],
   [/\/api\/dashboard\/metrics/, fixture('dashboard-metrics')],
   [/\/api\/dashboard$/, fixture('dashboard-summary')],
   [/\/api\/runners$/, fixture('runners')],
@@ -230,6 +231,8 @@ const SHOTS = [
   ['ejecucion-cascada', `${run}&view=waterfall&tab=artifacts`],
   ['proyecto', '/projects/p1?tab=repos'],
   ['trabajo-lanzar', '/work-items/w1', 'Lanzar agente'],
+  // Ajustes con la paleta Frambuesa elegida (sin guardar), para que se vea la vista previa.
+  ['ajustes', '/settings', null, 'Frambuesa'],
 ]
 const MODES = [
   ['claro', { width: 1440, height: 900 }, 'light', SHOTS],
@@ -260,10 +263,11 @@ for (const [mode, viewport, colorScheme, shots] of MODES) {
     const match = ROUTES.find(([re]) => re.test(url))
     return match ? route.fulfill({ json: match[1] }) : route.fulfill({ status: 404, json: {} })
   })
-  for (const [name, target, button] of shots) {
+  for (const [name, target, button, radio] of shots) {
     await page.goto(base + target)
     await page.waitForLoadState('networkidle')
     if (button) await page.getByRole('button', { name: button }).click()
+    if (radio) await page.getByText(radio, { exact: true }).click()
     await page.waitForTimeout(800)
     await page.screenshot({ path: path.join(out, `${mode}-${name}.png`) })
     console.log(`${mode}-${name}.png`)

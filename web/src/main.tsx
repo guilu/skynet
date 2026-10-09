@@ -10,7 +10,10 @@ import '@fontsource/nunito/latin-600.css'
 import '@fontsource/nunito/latin-700.css'
 import '@fontsource/nunito/latin-800.css'
 import App from './App.tsx'
+import { applyCachedPalette } from './appearance'
 import './index.css'
+
+applyCachedPalette()
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false } },

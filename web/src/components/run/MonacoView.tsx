@@ -139,7 +139,7 @@ export default function MonacoView({ text, language, label, height = 420 }: Prop
     const observer = new MutationObserver(retheme)
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['data-theme'],
+      attributeFilter: ['data-theme', 'data-palette'],
     })
     media?.addEventListener('change', retheme)
     return () => {
