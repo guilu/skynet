@@ -1,5 +1,7 @@
 package dev.skynet.controlplane.project;
 
+import dev.skynet.controlplane.shared.ArchiveState;
+import dev.skynet.controlplane.shared.Archived;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Digits;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -43,10 +46,16 @@ class ProjectController {
       @NotBlank @Size(max = 200) String name,
       @Size(max = 2000) String description) {}
 
-  record ProjectView(UUID id, String key, String name, String description, Instant createdAt) {
+  record ProjectView(
+      UUID id, String key, String name, String description, Instant createdAt, Instant archivedAt) {
     static ProjectView of(Project p) {
       return new ProjectView(
-          p.getId(), p.getKey(), p.getName(), p.getDescription(), p.getCreatedAt());
+          p.getId(),
+          p.getKey(),
+          p.getName(),
+          p.getDescription(),
+          p.getCreatedAt(),
+          p.getArchivedAt());
     }
   }
 
@@ -126,7 +135,8 @@ class ProjectController {
       List<String> testReportPaths,
       AgentPolicy agentPolicy,
       boolean agentPolicyCustom,
-      Instant createdAt) {
+      Instant createdAt,
+      Instant archivedAt) {
     static RepositoryView of(CodeRepository r, AgentPolicy policy) {
       return new RepositoryView(
           r.getId(),
@@ -139,7 +149,8 @@ class ProjectController {
           r.getTestReportPaths(),
           policy,
           r.hasCustomAgentPolicy(),
-          r.getCreatedAt());
+          r.getCreatedAt(),
+          r.getArchivedAt());
     }
   }
 
@@ -154,13 +165,23 @@ class ProjectController {
   }
 
   @GetMapping
-  List<ProjectView> list() {
-    return service.list().stream().map(ProjectView::of).toList();
+  List<ProjectView> list(@RequestParam(defaultValue = "false") String archived) {
+    return service.list(Archived.of(archived)).stream().map(ProjectView::of).toList();
   }
 
   @GetMapping("/{id}")
   ProjectView get(@PathVariable UUID id) {
     return ProjectView.of(service.get(id));
+  }
+
+  @PostMapping("/{id}/archive")
+  ArchiveState archive(@PathVariable UUID id) {
+    return service.archive(id);
+  }
+
+  @PostMapping("/{id}/restore")
+  ArchiveState restore(@PathVariable UUID id) {
+    return service.restore(id);
   }
 
   @PostMapping("/{id}/repositories")
@@ -207,7 +228,18 @@ class ProjectController {
   }
 
   @GetMapping("/{id}/repositories")
-  List<RepositoryView> repositories(@PathVariable UUID id) {
-    return service.repositories(id).stream().map(this::view).toList();
+  List<RepositoryView> repositories(
+      @PathVariable UUID id, @RequestParam(defaultValue = "false") String archived) {
+    return service.repositories(id, Archived.of(archived)).stream().map(this::view).toList();
+  }
+
+  @PostMapping("/{id}/repositories/{repositoryId}/archive")
+  ArchiveState archiveRepository(@PathVariable UUID id, @PathVariable UUID repositoryId) {
+    return service.archiveRepository(id, repositoryId);
+  }
+
+  @PostMapping("/{id}/repositories/{repositoryId}/restore")
+  ArchiveState restoreRepository(@PathVariable UUID id, @PathVariable UUID repositoryId) {
+    return service.restoreRepository(id, repositoryId);
   }
 }

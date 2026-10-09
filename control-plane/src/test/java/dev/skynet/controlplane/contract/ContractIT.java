@@ -280,6 +280,7 @@ class ContractIT extends IntegrationTest {
           at(0),
           at(0),
           finishedAt,
+          null,
           currentStage,
           currentAgent,
           new RunTotals(
@@ -314,7 +315,8 @@ class ContractIT extends IntegrationTest {
           "2.1.288",
           at(-3600),
           at(30),
-          RunnerView.Status.ONLINE);
+          RunnerView.Status.ONLINE,
+          null);
     }
 
     static RunnerView staleRunner() {
@@ -327,7 +329,8 @@ class ContractIT extends IntegrationTest {
           "2.1.288",
           at(-7200),
           at(-600),
-          RunnerView.Status.STALE);
+          RunnerView.Status.STALE,
+          null);
     }
 
     static DashboardSummary dashboard() {

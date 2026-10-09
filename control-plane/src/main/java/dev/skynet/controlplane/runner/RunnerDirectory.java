@@ -1,5 +1,6 @@
 package dev.skynet.controlplane.runner;
 
+import dev.skynet.controlplane.shared.Archived;
 import dev.skynet.controlplane.shared.TimeSource;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -23,20 +24,23 @@ public class RunnerDirectory {
     this.properties = properties;
   }
 
-  /** Runners por nombre. */
+  /** Runners por nombre; los olvidados (archivados) según {@code archived}. */
   @Transactional(readOnly = true)
-  public List<RunnerView> list() {
+  public List<RunnerView> list(Archived archived) {
     Instant staleBefore = time.now().minus(properties.staleAfter());
     return jdbc.sql(
             "SELECT r.id, r.name, r.capacity, r.runner_version, r.provider_version,"
-                + " r.registered_at, r.last_heartbeat_at,"
+                + " r.registered_at, r.last_heartbeat_at, r.archived_at,"
                 + " (SELECT count(*) FROM agent_run a WHERE a.runner_id = r.id"
                 + " AND a.status NOT IN ('COMPLETED', 'FAILED', 'CANCELLED')) AS active_agents"
-                + " FROM runner r ORDER BY r.name")
+                + " FROM runner r WHERE true"
+                + archived.sql("r.archived_at")
+                + " ORDER BY r.name")
         .query(
             (rs, row) -> {
               Timestamp heartbeat = rs.getTimestamp("last_heartbeat_at");
               Instant lastHeartbeat = heartbeat == null ? null : heartbeat.toInstant();
+              Timestamp archivedAt = rs.getTimestamp("archived_at");
               return new RunnerView(
                   rs.getObject("id", UUID.class),
                   rs.getString("name"),
@@ -48,13 +52,16 @@ public class RunnerDirectory {
                   lastHeartbeat,
                   lastHeartbeat != null && !lastHeartbeat.isBefore(staleBefore)
                       ? RunnerView.Status.ONLINE
-                      : RunnerView.Status.STALE);
+                      : RunnerView.Status.STALE,
+                  archivedAt == null ? null : archivedAt.toInstant());
             })
         .list();
   }
 
-  /** Runners sin latido reciente. */
+  /** Runners sin latido reciente, sin contar los olvidados. */
   public List<RunnerView> stale() {
-    return list().stream().filter(r -> r.status() == RunnerView.Status.STALE).toList();
+    return list(Archived.EXCLUDE).stream()
+        .filter(r -> r.status() == RunnerView.Status.STALE)
+        .toList();
   }
 }

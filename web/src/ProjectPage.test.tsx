@@ -14,6 +14,7 @@ const workItem: WorkItem = {
   externalRef: null,
   status: 'OPEN',
   createdAt: '2026-10-08T10:00:00Z',
+  archivedAt: null,
 }
 
 function stubApi(routes: Record<string, unknown>) {
