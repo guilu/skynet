@@ -1,6 +1,5 @@
-import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
-import { csrf, launchViaApi, login } from './helpers.ts'
+import { csrf, expectAccessible, launchViaApi, login } from './helpers.ts'
 
 /**
  * Revisión de la web (M6-D): accesibilidad con axe en las páginas principales y ningún secreto en
@@ -77,25 +76,6 @@ test('ningún secreto llega al DOM', async ({ page }) => {
   ).text()
   for (const secret of SECRETS) expect(events).not.toContain(secret)
 })
-
-/** Reglas WCAG 2.1 A y AA. */
-async function expectAccessible(page: Page, what: string) {
-  // Menús y diálogos entran con una animación de opacidad: a medias, axe mide un contraste falso.
-  // (Las e2e no cargan los tipos del DOM: va como texto.)
-  await page.evaluate(`Promise.all(
-    document.getAnimations()
-      .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-      .map((a) => a.finished.catch(() => undefined)),
-  )`)
-  const results = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .analyze()
-  const summary = results.violations.map(
-    (v) =>
-      `${v.id} (${v.impact}): ${v.help} → ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`,
-  )
-  expect(summary, `${what}: problemas de accesibilidad`).toEqual([])
-}
 
 test('las páginas principales pasan axe', async ({ page }) => {
   test.setTimeout(240_000)

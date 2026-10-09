@@ -205,8 +205,9 @@ function Composer({ last }: { last: AgentRun }) {
   const navigate = useNavigate()
   const [text, setText] = useState('')
   const runners = useQuery({
-    queryKey: ['runners'],
-    queryFn: api.runners,
+    // También los olvidados: la ejecución puede ser de uno que ya no está.
+    queryKey: ['runners', 'all'],
+    queryFn: () => api.runners('all'),
     enabled: !!last.workspace,
   })
   const send = useMutation({

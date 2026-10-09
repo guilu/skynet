@@ -1,7 +1,9 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { CirclePlay } from 'lucide-react'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { api, type RunStatus } from '../api'
+import { ArchivedToggle, BulkRunActions } from '../components/archive/Archive'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { ColumnsMenu, EmptyState } from '../components/list/DataTable'
 import { useHiddenColumns } from '../components/list/columns'
@@ -33,7 +35,8 @@ const STATUSES: (ChipOption & { value: RunStatus })[] = [
 
 /**
  * Todas las ejecuciones: búsqueda por clave o título del trabajo, estados, proyecto, fecha de
- * creación y página, todo en la URL para poder enlazarlo.
+ * creación, archivadas y página, todo en la URL para poder enlazarlo. Las filas se pueden
+ * seleccionar para archivarlas, restaurarlas o eliminarlas de una vez.
  */
 export function RunsPage() {
   const [params, setParams] = useSearchParams()
@@ -41,17 +44,34 @@ export function RunsPage() {
   const since = params.get('since') ?? undefined
   const projectId = params.get('projectId') ?? undefined
   const q = params.get('q') ?? ''
+  const archived = params.get('archived') === 'true'
   const page = Math.max(0, Number(params.get('page') ?? 0) || 0)
   const runs = useQuery({
-    queryKey: ['runs', 'list', status.join(','), projectId, since, q, page],
-    queryFn: () => api.listRuns({ status, projectId, since, q, page, size: PAGE_SIZE }),
+    queryKey: ['runs', 'list', status.join(','), projectId, since, q, archived, page],
+    queryFn: () =>
+      api.listRuns({
+        status,
+        projectId,
+        since,
+        q,
+        archived: archived ? 'true' : undefined,
+        page,
+        size: PAGE_SIZE,
+      }),
     placeholderData: keepPreviousData,
     refetchInterval: 10_000,
   })
-  const projects = useQuery({ queryKey: ['projects'], queryFn: api.projects })
+  const projects = useQuery({ queryKey: ['projects'], queryFn: () => api.projects() })
   const now = useNow(true)
   const columns = runColumns(now)
   const [hidden, toggleColumn] = useHiddenColumns('runs')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const selectedRuns = (runs.data?.items ?? [])
+    .filter((r) => selected.has(r.id))
+    .map((r) => ({
+      id: r.id,
+      name: `${r.workItemKey ?? 'Ejecución'} · ${formatDateTime(r.createdAt)}`,
+    }))
 
   /** Cambia los filtros indicados y vuelve a la primera página. */
   const go = (
@@ -60,9 +80,11 @@ export function RunsPage() {
       since?: string | null
       projectId?: string | null
       q?: string
+      archived?: boolean
       page?: number
     } = {},
   ) => {
+    setSelected(new Set())
     const p = new URLSearchParams()
     for (const s of next.status ?? status) p.append('status', s)
     const project = next.projectId === undefined ? projectId : next.projectId
@@ -71,10 +93,11 @@ export function RunsPage() {
     if (from) p.set('since', from)
     const text = next.q ?? q
     if (text) p.set('q', text)
+    if (next.archived ?? archived) p.set('archived', 'true')
     if (next.page) p.set('page', String(next.page))
     setParams(p)
   }
-  const filtered = status.length > 0 || !!since || !!projectId || !!q
+  const filtered = status.length > 0 || !!since || !!projectId || !!q || archived
 
   return (
     <>
@@ -108,6 +131,7 @@ export function RunsPage() {
             </select>
           </label>
         )}
+        <ArchivedToggle on={archived} onChange={(on) => go({ archived: on })} />
         {since && (
           <RemovableChip
             onRemove={() => go({ since: null })}
@@ -122,15 +146,34 @@ export function RunsPage() {
       </ListToolbar>
       <ErrorMessage error={runs.error} />
       {runs.isPending && <TableSkeleton label="las ejecuciones" columns={6} />}
+      {selectedRuns.length > 0 && (
+        <BulkRunActions
+          runs={selectedRuns}
+          archivedView={archived}
+          onDone={() => setSelected(new Set())}
+        />
+      )}
       {runs.data && (
         <RunsTable
           runs={runs.data.items}
           now={now}
           hidden={hidden}
+          selection={{
+            selected,
+            onChange: setSelected,
+            rowLabel: (r) =>
+              `Seleccionar ${r.workItemKey ?? 'ejecución'} del ${formatDateTime(r.createdAt)}`,
+          }}
           empty={
             <EmptyState
               icon={CirclePlay}
-              title={filtered ? 'Ninguna ejecución con estos filtros.' : 'No hay ejecuciones.'}
+              title={
+                archived && !(status.length > 0 || !!since || !!projectId || !!q)
+                  ? 'No hay ejecuciones archivadas.'
+                  : filtered
+                    ? 'Ninguna ejecución con estos filtros.'
+                    : 'No hay ejecuciones.'
+              }
             >
               {filtered && (
                 <Button

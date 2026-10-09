@@ -15,9 +15,18 @@ export interface Column<T> {
   hiddenHeader?: boolean
 }
 
+/** Selección de filas con casillas, para las acciones en bloque. */
+export interface RowSelection<T> {
+  selected: Set<string>
+  onChange: (selected: Set<string>) => void
+  /** Nombre de la fila para su casilla («Seleccionar TKM-1»). */
+  rowLabel: (row: T) => string
+}
+
 /**
  * Tabla de una lista: filas en bloques redondeados, columnas que se pueden ocultar (`hidden`) y un
- * estado vacío con icono, texto y, si hace falta, una acción.
+ * estado vacío con icono, texto y, si hace falta, una acción. Con `selection`, cada fila lleva una
+ * casilla y la cabecera otra para todas las visibles.
  */
 export function DataTable<T>({
   label,
@@ -27,6 +36,7 @@ export function DataTable<T>({
   hidden,
   empty,
   rowClassName,
+  selection,
 }: {
   label: string
   columns: Column<T>[]
@@ -35,14 +45,36 @@ export function DataTable<T>({
   hidden?: Set<string>
   empty: ReactNode
   rowClassName?: (row: T) => string | undefined
+  selection?: RowSelection<T>
 }) {
   const visible = columns.filter((c) => !hidden?.has(c.id))
   if (rows.length === 0) return <>{empty}</>
+  const keys = rows.map(rowKey)
+  const allSelected = !!selection && keys.every((k) => selection.selected.has(k))
+  const toggle = (key: string, on: boolean) => {
+    if (!selection) return
+    const next = new Set(selection.selected)
+    if (on) next.add(key)
+    else next.delete(key)
+    selection.onChange(next)
+  }
   return (
     <div className="table-scroll">
       <table className="table data-table" aria-label={label}>
         <thead>
           <tr>
+            {selection && (
+              <th scope="col" className="row-check">
+                <input
+                  type="checkbox"
+                  aria-label="Seleccionar todas"
+                  checked={allSelected}
+                  onChange={(e) =>
+                    selection.onChange(e.target.checked ? new Set(keys) : new Set<string>())
+                  }
+                />
+              </th>
+            )}
             {visible.map((c) => (
               <th key={c.id} scope="col" className={cn(c.numeric && 'num')}>
                 {c.hiddenHeader ? <span className="visually-hidden">{c.header}</span> : c.header}
@@ -53,6 +85,16 @@ export function DataTable<T>({
         <tbody>
           {rows.map((row) => (
             <tr key={rowKey(row)} className={rowClassName?.(row)}>
+              {selection && (
+                <td className="row-check">
+                  <input
+                    type="checkbox"
+                    aria-label={selection.rowLabel(row)}
+                    checked={selection.selected.has(rowKey(row))}
+                    onChange={(e) => toggle(rowKey(row), e.target.checked)}
+                  />
+                </td>
+              )}
               {visible.map((c) => (
                 <td key={c.id} className={cn(c.numeric && 'num')}>
                   {c.cell(row)}

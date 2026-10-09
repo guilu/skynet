@@ -89,7 +89,7 @@ describe('App', () => {
   })
 
   it('ofrece la navegación global y marca la sección actual', async () => {
-    stubApi({ '/api/runners': runners })
+    stubApi({ '/api/runners': runners, '/api/runners?archived=all': runners })
     renderAt('/runners', <App />)
     const nav = await screen.findByRole('navigation', { name: 'Navegación principal' })
     for (const name of [
@@ -282,7 +282,7 @@ describe('App', () => {
   })
 
   it('la página de runners filtra por estado con chips', async () => {
-    stubApi({ '/api/runners': runners })
+    stubApi({ '/api/runners': runners, '/api/runners?archived=all': runners })
     renderAt('/runners', <App />)
     await screen.findByText('runner-02')
     fireEvent.click(screen.getByRole('button', { name: 'Sin latido' }))
@@ -291,7 +291,7 @@ describe('App', () => {
   })
 
   it('la página de runners distingue los que no envían latidos', async () => {
-    stubApi({ '/api/runners': runners })
+    stubApi({ '/api/runners': runners, '/api/runners?archived=all': runners })
     renderAt('/runners', <App />)
     const stale = (await screen.findByText('runner-02')).closest('tr')!
     expect(within(stale).getByText('Sin latido')).toBeInTheDocument()
@@ -310,6 +310,7 @@ describe('App', () => {
         prompts: [],
       },
       '/api/runners': runners,
+      '/api/runners?archived=all': runners,
       [`POST /api/agent-runs/${agentId}/cancel`]: {
         agent: {},
         workflowRunId: runningRun.id,
@@ -348,6 +349,7 @@ describe('App', () => {
         prompts: [],
       },
       '/api/runners': runners,
+      '/api/runners?archived=all': runners,
     })
     renderAt(`/runs/${runView.id}`, <App />)
     expect((await screen.findAllByText('Completada')).length).toBeGreaterThan(0)
@@ -435,7 +437,7 @@ describe('App', () => {
   })
 
   it('el menú de tema fija data-theme en el documento', async () => {
-    stubApi({ '/api/runners': runners })
+    stubApi({ '/api/runners': runners, '/api/runners?archived=all': runners })
     renderAt('/runners', <App />)
     fireEvent.keyDown(await screen.findByRole('button', { name: 'Tema: Sistema' }), {
       key: 'Enter',
@@ -450,7 +452,7 @@ describe('App', () => {
   })
 
   it('la barra lateral se pliega, lo recuerda y los enlaces conservan su nombre', async () => {
-    stubApi({ '/api/runners': runners })
+    stubApi({ '/api/runners': runners, '/api/runners?archived=all': runners })
     renderAt('/runners', <App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Plegar la barra lateral' }))
     expect(screen.getByRole('button', { name: 'Desplegar la barra lateral' })).toHaveAttribute(
@@ -494,6 +496,7 @@ describe('App', () => {
       '/api/projects/p1/work-items': [workItem],
       '/api/workflow-runs?size=30': runPage,
       '/api/runners': runners,
+      '/api/runners?archived=all': runners,
       '/api/work-items/w1': workItem,
       '/api/work-items/w1/runs': [],
       '/api/projects/p1/repositories': [],
@@ -533,6 +536,7 @@ describe('App', () => {
         [`/api/workflow-runs/${runId}`]: runView,
         [`/api/agent-runs/${agent.id}`]: agentRunDetail,
         '/api/runners': runners,
+        '/api/runners?archived=all': runners,
         [`/api/events/${toolCompleted.sequence}`]: toolCompleted,
         [`/api/events/${toolStarted.sequence}`]: toolStarted,
         ...routes,
@@ -888,6 +892,7 @@ describe('App', () => {
       [`/api/workflow-runs/${runningRun.id}`]: runningRun,
       [`/api/agent-runs/${agentId}`]: agentRunDetail,
       '/api/runners': runners,
+      '/api/runners?archived=all': runners,
     })
     renderAt(`/runs/${runningRun.id}`, <App />)
     const title = await screen.findByRole('heading', { level: 1, name: /Add model pricing/ })
@@ -928,6 +933,7 @@ describe('App', () => {
       [`/api/workflow-runs/${runView.id}`]: runView,
       [`/api/agent-runs/${runView.stages[0].agents[0].id}`]: agentRunDetail,
       '/api/runners': runners,
+      '/api/runners?archived=all': runners,
       [`/api/events/${storedEvent.sequence}`]: storedEvent,
     })
     renderAt('/activity', <App />)

@@ -61,7 +61,11 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
 /** Resumen de los runners: cuántos están en línea y cuántos agentes llevan. */
 export function RunnerSummary() {
-  const runners = useQuery({ queryKey: ['runners'], queryFn: api.runners, refetchInterval: 15_000 })
+  const runners = useQuery({
+    queryKey: ['runners'],
+    queryFn: () => api.runners(),
+    refetchInterval: 15_000,
+  })
   if (!runners.data || runners.data.length === 0) return null
   const online = runners.data.filter((r) => r.status === 'ONLINE')
   const agents = online.reduce((sum, r) => sum + r.activeAgents, 0)

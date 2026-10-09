@@ -3896,6 +3896,110 @@
     transform: translateY(-2px);
   }
 
+  /* ---------- Archivar y eliminar (AE-C) ---------- */
+  .archive-menu {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-1);
+  }
+
+  .icon-btn-sm {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+    box-shadow: 0 2px 0 var(--border);
+  }
+
+  .menu-danger {
+    color: var(--bad-ink);
+  }
+
+  .menu-danger[data-highlighted] {
+    background: var(--bad-soft);
+    color: var(--bad-ink);
+  }
+
+  .archived-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-4);
+    border: 2px solid color-mix(in oklab, var(--warn) 55%, var(--border));
+    border-radius: var(--r-md);
+    background: var(--warn-soft);
+    color: var(--fg);
+  }
+
+  .archived-banner > span {
+    flex: 1 1 18rem;
+  }
+
+  .delete-panel {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .delete-panel p {
+    margin: 0;
+  }
+
+  .delete-warnings,
+  .delete-blockers ul {
+    margin: 0;
+    padding-left: 1.25rem;
+  }
+
+  .delete-blockers {
+    display: grid;
+    gap: var(--space-2);
+    justify-items: start;
+    padding: var(--space-3) var(--space-4);
+    border: 2px solid color-mix(in oklab, var(--bad) 45%, var(--border));
+    border-radius: var(--r-md);
+    background: var(--bad-soft);
+    color: var(--fg);
+  }
+
+  .row-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .row-archived td {
+    color: var(--muted);
+  }
+
+  .row-check {
+    width: 2.25rem;
+  }
+
+  .row-check input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+  }
+
+  .bulk-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    margin-bottom: var(--space-3);
+    border: 2px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--surface-2);
+  }
+
+  .bulk-bar .bulk-count {
+    font-weight: 800;
+    margin-right: auto;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .page,
     .tab-body > *,

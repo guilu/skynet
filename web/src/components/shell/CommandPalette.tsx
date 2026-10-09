@@ -23,7 +23,11 @@ export function CommandPalette({
   onTheme: (theme: ThemeChoice) => void
 }) {
   const navigate = useNavigate()
-  const projects = useQuery({ queryKey: ['projects'], queryFn: api.projects, enabled: open })
+  const projects = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.projects(),
+    enabled: open,
+  })
   const workItems = useQueries({
     queries: (projects.data ?? []).map((p) => ({
       queryKey: ['work-items', p.id],
@@ -36,7 +40,7 @@ export function CommandPalette({
     queryFn: () => api.listRuns({ size: 30 }),
     enabled: open,
   })
-  const runners = useQuery({ queryKey: ['runners'], queryFn: api.runners, enabled: open })
+  const runners = useQuery({ queryKey: ['runners'], queryFn: () => api.runners(), enabled: open })
 
   const go = (to: string) => {
     onOpenChange(false)
