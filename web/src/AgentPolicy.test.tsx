@@ -39,6 +39,8 @@ function stubApi(routes: Record<string, unknown>) {
   return fetch
 }
 
+const renderRepos = () => renderAt('/projects/p1?tab=repos', <App />)
+
 const sent = (fetch: ReturnType<typeof stubApi>, method: string) =>
   fetch.mock.calls.find(([, init]) => init?.method === method)
 
@@ -55,9 +57,9 @@ describe('Política de agentes del repositorio', () => {
       '/api/projects/p1/repositories': [repository],
       'PUT /api/projects/p1/repositories/repo1/agent-policy': custom,
     })
-    renderAt('/projects/p1', <App />)
-
-    fireEvent.click(await screen.findByText(/Política de agentes: global/))
+    renderRepos()
+    expect(await screen.findByText('global')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Editar política de demo' }))
     expect(screen.getByLabelText(/Herramientas permitidas/)).toHaveValue(
       'Read\nGlob\nGrep\nEdit\nWrite',
     )
@@ -95,9 +97,9 @@ describe('Política de agentes del repositorio', () => {
       '/api/projects/p1/repositories': [custom],
       'DELETE /api/projects/p1/repositories/repo1/agent-policy': repository,
     })
-    renderAt('/projects/p1', <App />)
-
-    fireEvent.click(await screen.findByText(/Política de agentes: propia/))
+    renderRepos()
+    expect(await screen.findByText('propia')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Editar política de demo' }))
     fireEvent.click(screen.getByRole('button', { name: 'Volver a la política global' }))
 
     await waitFor(() => expect(sent(fetch, 'DELETE')).toBeDefined())

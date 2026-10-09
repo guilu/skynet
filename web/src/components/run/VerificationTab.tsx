@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Bot, RotateCw, ShieldCheck } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { api, type AgentRun, type StoredEvent, type VerificationResult } from '../../api'
 import { elapsed, formatDateTime, formatDuration, isTerminal, workspaceUsable } from '../../format'
@@ -34,8 +35,10 @@ export function VerificationTab({ agent, events }: { agent: AgentRun; events: St
   return (
     <>
       <div className="side-by-side">
-        <section aria-labelledby="declared-title">
-          <h3 id="declared-title">Declarado por el agente</h3>
+        <section className="verify-card" aria-labelledby="declared-title">
+          <h3 id="declared-title">
+            <Bot size={18} strokeWidth={2.5} aria-hidden="true" /> Declarado por el agente
+          </h3>
           <p className="small">
             Resultado: <code>{agent.resultSubtype ?? '—'}</code>
           </p>
@@ -45,8 +48,10 @@ export function VerificationTab({ agent, events }: { agent: AgentRun; events: St
             <p className="muted small">Sin respuesta final.</p>
           )}
         </section>
-        <section aria-labelledby="verified-title">
-          <h3 id="verified-title">Verificado por Skynet</h3>
+        <section className="verify-card" aria-labelledby="verified-title">
+          <h3 id="verified-title">
+            <ShieldCheck size={18} strokeWidth={2.5} aria-hidden="true" /> Verificado por Skynet
+          </h3>
           <ErrorMessage error={verifications.error} />
           {verifications.data == null && !verifications.error && (
             <p className="muted small">Cargando…</p>
@@ -60,12 +65,14 @@ export function VerificationTab({ agent, events }: { agent: AgentRun; events: St
           {latest && <Verification verification={latest} agentId={agent.id} />}
         </section>
       </div>
-      <p>
+      <p className="verify-actions">
         <Button
           type="button"
+          variant="secondary"
           onClick={() => rerun.mutate()}
           disabled={!canRerun || rerun.isPending}
         >
+          <RotateCw size={16} strokeWidth={2.5} aria-hidden="true" />
           {rerun.isPending ? 'Encolando…' : 'Reejecutar verificación'}
         </Button>{' '}
         {live && <span className="muted small">Hay una verificación en curso.</span>}
@@ -134,11 +141,26 @@ function Verification({
           </div>
         ))}
       </dl>
+      {v.tests && v.tests.total > 0 && <TestsBar tests={v.tests} />}
       {v.error && <p className="error small">{v.error}</p>}
       {v.tests && v.tests.failed + v.tests.errors > 0 && (
         <Failures verificationId={v.id} agentId={agentId} />
       )}
     </>
+  )
+}
+
+/** Barra de los tests: pasados, fallidos y omitidos, en proporción. El texto ya va en los datos. */
+function TestsBar({ tests }: { tests: NonNullable<VerificationResult['tests']> }) {
+  const failed = tests.failed + tests.errors
+  const passed = Math.max(0, tests.total - failed - tests.skipped)
+  const pct = (n: number) => `${(n / tests.total) * 100}%`
+  return (
+    <div className="tests-bar" aria-hidden="true">
+      <i className="tests-passed" style={{ width: pct(passed) }} />
+      <i className="tests-failed" style={{ width: pct(failed) }} />
+      <i className="tests-skipped" style={{ width: pct(tests.skipped) }} />
+    </div>
   )
 }
 

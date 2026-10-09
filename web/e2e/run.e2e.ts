@@ -37,21 +37,33 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
   })
 
   await test.step('registrar repositorio y crear trabajo', async () => {
-    await page.getByLabel('Nombre', { exact: true }).fill('demo')
-    await page.getByLabel('Ruta local (en la máquina del runner)').fill(repoPath)
-    await page.getByLabel('Comando de verificación (opcional)').fill('sh check.sh')
-    await page.getByRole('button', { name: 'Registrar repositorio' }).click()
+    await page.getByRole('button', { name: 'Nuevo repositorio' }).click()
+    const repoSheet = page.getByRole('dialog', { name: 'Registrar repositorio' })
+    await repoSheet.getByLabel('Nombre', { exact: true }).fill('demo')
+    await repoSheet.getByLabel('Ruta local (en la máquina del runner)').fill(repoPath)
+    await repoSheet.getByLabel('Comando de verificación (opcional)').fill('sh check.sh')
+    await repoSheet.getByRole('button', { name: 'Registrar repositorio' }).click()
+    await expect(repoSheet).toBeHidden()
+    await expect(page.getByRole('tab', { name: /Repositorios/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
     await expect(page.getByText(repoPath)).toBeVisible()
 
-    await page.getByLabel('Título').fill('Arreglar la suma')
-    await page.getByRole('button', { name: 'Crear trabajo' }).click()
+    await page.getByRole('button', { name: 'Nuevo trabajo' }).click()
+    const workSheet = page.getByRole('dialog', { name: 'Nuevo trabajo' })
+    await workSheet.getByLabel('Título').fill('Arreglar la suma')
+    await workSheet.getByRole('button', { name: 'Crear trabajo' }).click()
+    await expect(workSheet).toBeHidden()
     await page.getByRole('link', { name: `${key}-1 Arreglar la suma` }).click()
   })
 
   await test.step('lanzar con límites', async () => {
-    await page.getByLabel('Prompt').fill('La función add de calc.py resta: arréglala')
-    await page.getByLabel('Turnos máximos').fill('5')
-    await page.getByRole('button', { name: 'Lanzar' }).click()
+    await page.getByRole('button', { name: 'Lanzar agente' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Lanzar agente' })
+    await sheet.getByLabel('Prompt').fill('La función add de calc.py resta: arréglala')
+    await sheet.getByLabel('Turnos máximos').fill('5')
+    await sheet.getByRole('button', { name: 'Lanzar', exact: true }).click()
     await expect(page.getByRole('heading', { level: 1, name: /Arreglar la suma/ })).toBeVisible()
   })
 

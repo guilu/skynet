@@ -5,6 +5,7 @@ import { api, type AgentRun, type Run } from '../../api'
 import { formatDateTime, isTerminal, workspaceUsable } from '../../format'
 import { ErrorMessage } from '../ErrorMessage'
 import { Button } from '../ui/Button'
+import { Sheet } from '../ui/Sheet'
 
 type Action = 'retry' | 'fork' | 'cleanup'
 
@@ -21,26 +22,19 @@ export function AgentActions({ agent }: { agent: AgentRun }) {
   const canRetry = agent.kind === 'START' || agent.kind === 'RETRY'
   const canFork = !!agent.providerSessionId && usable
   if (!canRetry && !canFork && !agent.workspace) return null
+  const close = (isOpen: boolean) => !isOpen && setOpen(null)
 
   return (
     <div className="agent-actions">
       <WorkspaceState agent={agent} />
       <div className="run-actions">
         {canRetry && (
-          <Button
-            type="button"
-            aria-expanded={open === 'retry'}
-            onClick={() => setOpen(open === 'retry' ? null : 'retry')}
-          >
+          <Button type="button" aria-haspopup="dialog" onClick={() => setOpen('retry')}>
             Reintentar…
           </Button>
         )}
         {canFork && (
-          <Button
-            type="button"
-            aria-expanded={open === 'fork'}
-            onClick={() => setOpen(open === 'fork' ? null : 'fork')}
-          >
+          <Button type="button" aria-haspopup="dialog" onClick={() => setOpen('fork')}>
             Bifurcar…
           </Button>
         )}
@@ -48,16 +42,22 @@ export function AgentActions({ agent }: { agent: AgentRun }) {
           <Button
             type="button"
             variant="secondary-danger"
-            aria-expanded={open === 'cleanup'}
-            onClick={() => setOpen(open === 'cleanup' ? null : 'cleanup')}
+            aria-haspopup="dialog"
+            onClick={() => setOpen('cleanup')}
           >
             Eliminar worktree…
           </Button>
         )}
       </div>
-      {open === 'retry' && <RetryPanel agent={agent} onClose={() => setOpen(null)} />}
-      {open === 'fork' && <ForkPanel agent={agent} onClose={() => setOpen(null)} />}
-      {open === 'cleanup' && <CleanupPanel agent={agent} onClose={() => setOpen(null)} />}
+      <Sheet open={open === 'retry'} onOpenChange={close} title="Reintentar el agente">
+        <RetryPanel agent={agent} onClose={() => setOpen(null)} />
+      </Sheet>
+      <Sheet open={open === 'fork'} onOpenChange={close} title="Bifurcar la sesión">
+        {canFork && <ForkPanel agent={agent} onClose={() => setOpen(null)} />}
+      </Sheet>
+      <Sheet open={open === 'cleanup'} onOpenChange={close} title="Eliminar el worktree">
+        {usable && <CleanupPanel agent={agent} onClose={() => setOpen(null)} />}
+      </Sheet>
     </div>
   )
 }
@@ -102,9 +102,8 @@ function CleanupPanel({ agent, onClose }: { agent: AgentRun; onClose: () => void
   })
   const workspace = agent.workspace!
   return (
-    <section className="action-panel" role="group" aria-labelledby="cleanup-title">
-      <h3 id="cleanup-title">Eliminar el worktree</h3>
-      <ul className="small">
+    <div className="action-panel">
+      <ul>
         <li>
           Borra <code>{workspace.path}</code> en el runner, cambios sin confirmar incluidos.
         </li>
@@ -116,7 +115,7 @@ function CleanupPanel({ agent, onClose }: { agent: AgentRun; onClose: () => void
           worktree nuevo.
         </li>
       </ul>
-      <div className="run-actions">
+      <div className="form-actions">
         <Button
           variant="danger"
           type="button"
@@ -130,7 +129,7 @@ function CleanupPanel({ agent, onClose }: { agent: AgentRun; onClose: () => void
         </Button>
       </div>
       <ErrorMessage error={cleanup.error} />
-    </section>
+    </div>
   )
 }
 
@@ -143,16 +142,15 @@ function RetryPanel({ agent, onClose }: { agent: AgentRun; onClose: () => void }
   const goTo = useGoToRun()
   const retry = useMutation({ mutationFn: () => api.retryAgent(agent.id), onSuccess: goTo })
   return (
-    <section className="action-panel" role="group" aria-labelledby="retry-title">
-      <h3 id="retry-title">Reintentar el agente</h3>
-      <ul className="small">
+    <div className="action-panel">
+      <ul>
         <li>Lanza un agente nuevo con el mismo prompt y los mismos límites.</li>
         <li>
           Usa un worktree nuevo desde la rama base y una sesión nueva: no ve lo que hizo este.
         </li>
         <li>Su coste se suma aparte del de este agente.</li>
       </ul>
-      <div className="run-actions">
+      <div className="form-actions">
         <Button onClick={() => retry.mutate()} disabled={retry.isPending}>
           {retry.isPending ? 'Reintentando…' : 'Reintentar'}
         </Button>
@@ -161,7 +159,7 @@ function RetryPanel({ agent, onClose }: { agent: AgentRun; onClose: () => void }
         </Button>
       </div>
       <ErrorMessage error={retry.error} />
-    </section>
+    </div>
   )
 }
 
@@ -174,9 +172,8 @@ function ForkPanel({ agent, onClose }: { agent: AgentRun; onClose: () => void })
     if (text.trim()) fork.mutate()
   }
   return (
-    <form className="action-panel form" aria-labelledby="fork-title" onSubmit={submit}>
-      <h3 id="fork-title">Bifurcar la sesión</h3>
-      <ul className="small">
+    <form className="action-panel form" onSubmit={submit}>
+      <ul>
         <li>
           Continúa una copia de la conversación con tu mensaje; la original no cambia y puedes
           seguir con ella.
@@ -191,7 +188,7 @@ function ForkPanel({ agent, onClose }: { agent: AgentRun; onClose: () => void })
         Mensaje para el fork
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} required />
       </label>
-      <div className="run-actions">
+      <div className="form-actions">
         <Button type="submit" disabled={!text.trim() || fork.isPending}>
           {fork.isPending ? 'Bifurcando…' : 'Bifurcar'}
         </Button>

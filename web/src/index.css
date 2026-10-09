@@ -2923,4 +2923,566 @@
     border-left: 4px solid var(--primary);
     padding-left: var(--space-2);
   }
+
+  /* ---------- Panel lateral (Sheet) ---------- */
+  .sheet-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: color-mix(in oklab, #0b1022 45%, transparent);
+  }
+
+  .sheet {
+    position: fixed;
+    z-index: 50;
+    inset: 0 0 0 auto;
+    width: min(560px, 100vw);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-6) var(--space-6);
+    border-left: 2px solid var(--border);
+    border-radius: var(--r-lg) 0 0 var(--r-lg);
+    background: var(--surface);
+    box-shadow: -4px 0 0 var(--border);
+    animation: sheet-in 260ms var(--ease-pop) both;
+  }
+
+  .sheet:focus {
+    outline: none;
+  }
+
+  .sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .sheet-title {
+    margin: 0;
+    font-size: 1.35rem;
+  }
+
+  .sheet-description {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .sheet-body {
+    min-width: 0;
+  }
+
+  .sheet .form {
+    max-width: none;
+  }
+
+  @keyframes sheet-in {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  /* En el móvil sube desde abajo, como el cajón «Más». */
+  @media (max-width: 640px) {
+    .sheet {
+      inset: auto 0 0 0;
+      width: auto;
+      max-height: 92dvh;
+      padding: var(--space-4) var(--space-4) calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+      border-left: none;
+      border-top: 2px solid var(--border);
+      border-radius: var(--r-lg) var(--r-lg) 0 0;
+      box-shadow: none;
+      animation-name: drawer-in;
+    }
+  }
+
+  /* ---------- Formularios: acciones, ayudas e interruptor ---------- */
+  .form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .hint {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--muted);
+  }
+
+  .saved {
+    color: var(--ok-ink);
+    font-weight: 800;
+  }
+
+  .form label.switch {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+  }
+
+  .switch input[type='checkbox'] {
+    appearance: none;
+    flex: none;
+    width: 52px;
+    height: 30px;
+    margin: 0;
+    border: none;
+    border-radius: 999px;
+    background: var(--border-strong);
+    position: relative;
+    cursor: pointer;
+    transition: background 160ms;
+  }
+
+  .switch input[type='checkbox']::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 2px 0 rgb(0 0 0 / 0.18);
+    transition: transform 220ms var(--ease-pop);
+  }
+
+  .switch input[type='checkbox']:checked {
+    background: var(--ok-btn);
+  }
+
+  .switch input[type='checkbox']:checked::after {
+    transform: translateX(22px);
+  }
+
+  .switch input[type='checkbox']:focus-visible {
+    box-shadow: 0 0 0 4px var(--primary-soft);
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  .policy-note {
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+  }
+
+  /* ---------- Cabecera de página con acciones ---------- */
+  .page-title {
+    flex: 1 1 320px;
+    min-width: 0;
+  }
+
+  .page-title h1 {
+    margin-bottom: 4px;
+  }
+
+  .page-title p {
+    margin: 0;
+  }
+
+  .page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  .page-head + .tabs,
+  .page-head + .card {
+    margin-top: var(--space-4);
+  }
+
+  .tab-body {
+    margin-top: var(--space-4);
+  }
+
+  .tab-body:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 4px;
+    border-radius: var(--r-sm);
+  }
+
+  .description-card {
+    padding: 4px 20px;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border: 2px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: 0.8125rem;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .tag-on {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+
+  /* ---------- Repositorios del proyecto ---------- */
+  .repo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+    gap: 20px;
+  }
+
+  .repo-card {
+    margin-top: 0;
+    padding: 18px 20px;
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .repo-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .repo-icon {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--r-md);
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+
+  .repo-title h2 {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+
+  .repo-path {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
+  .repo-section {
+    border-top: 2px solid var(--border);
+    padding-top: var(--space-3);
+  }
+
+  .repo-section p {
+    margin: var(--space-2) 0 0;
+    overflow-wrap: anywhere;
+  }
+
+  .repo-section-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .repo-section-head h3 {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .repo-facts {
+    display: grid;
+    gap: 6px;
+    margin: var(--space-2) 0 0;
+  }
+
+  .repo-facts > div {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+
+  .repo-facts dt {
+    color: var(--muted);
+    font-weight: 800;
+  }
+
+  .repo-facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .tool-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .tool-chip {
+    padding: 1px 8px;
+    border-radius: 8px;
+    background: var(--surface-2);
+    border: 2px solid var(--border);
+    font-size: 0.75rem;
+  }
+
+  @media (max-width: 520px) {
+    .repo-facts > div {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
+    }
+  }
+
+  /* ---------- Acciones del agente en el panel lateral ---------- */
+  .sheet .action-panel {
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .sheet .action-panel ul {
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-3) var(--space-3) 2rem;
+    border: 2px solid color-mix(in oklab, var(--warn) 55%, var(--border));
+    border-radius: var(--r-md);
+    background: var(--warn-soft);
+    color: var(--fg);
+    margin-bottom: var(--space-4);
+  }
+
+  /* ---------- Cambios de git ---------- */
+  .git-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+
+  .git-stats {
+    font-weight: 700;
+  }
+
+  .changed-files {
+    display: grid;
+    gap: 4px;
+  }
+
+  .changed-files li {
+    padding: 0;
+  }
+
+  .changed-files .btn-link {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: 6px 8px;
+    border: 2px solid transparent;
+    border-radius: var(--r-sm);
+    color: var(--fg);
+    text-align: left;
+    text-decoration: none;
+    font-weight: 700;
+  }
+
+  .changed-files .btn-link:hover {
+    background: var(--surface-2);
+  }
+
+  .changed-files .btn-link.selected {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+
+  .file-path {
+    overflow-wrap: anywhere;
+  }
+
+  .file-delta {
+    white-space: nowrap;
+    font-family: var(--font-mono);
+  }
+
+  .file-status {
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+    background: var(--idle-soft);
+    color: var(--idle-ink);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-weight: 800;
+  }
+
+  .file-status-A {
+    background: var(--ok-soft);
+    color: var(--ok-ink);
+  }
+
+  .file-status-M {
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+
+  .file-status-D {
+    background: var(--bad-soft);
+    color: var(--bad-ink);
+  }
+
+  .file-status-R,
+  .file-status-C {
+    background: var(--live-soft);
+    color: var(--live-ink);
+  }
+
+  .commit-list,
+  .log-list {
+    display: grid;
+    gap: 4px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .commit-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px var(--space-2);
+    padding: 8px 10px;
+    border: 2px solid var(--border);
+    border-radius: var(--r-sm);
+    background: var(--surface);
+  }
+
+  .commit-list svg {
+    color: var(--muted);
+  }
+
+  .sha {
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: var(--surface-2);
+  }
+
+  .commit-subject {
+    font-weight: 800;
+    overflow-wrap: anywhere;
+  }
+
+  .log-list > li {
+    padding: 6px 0;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .log-list > li:last-child {
+    border-bottom: none;
+  }
+
+  .log-list .btn-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .log-chevron {
+    transition: transform 160ms;
+  }
+
+  [aria-expanded='true'] > .log-chevron {
+    transform: rotate(90deg);
+  }
+
+  /* ---------- Verificación ---------- */
+  .verify-card {
+    border: 2px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 4px var(--space-4) var(--space-3);
+    background: var(--surface);
+  }
+
+  .verify-card h3 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .verify-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+  }
+
+  .tests-bar {
+    display: flex;
+    height: 12px;
+    margin: var(--space-2) 0;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--surface-2);
+  }
+
+  .tests-bar i {
+    display: block;
+    height: 100%;
+  }
+
+  .tests-passed {
+    background: var(--ok);
+  }
+
+  .tests-failed {
+    background: var(--bad);
+  }
+
+  .tests-skipped {
+    background: var(--idle);
+  }
+
+  /* En un panel estrecho (el inspector), la lista de archivos va encima del diff. */
+  @container (max-width: 720px) {
+    .changes,
+    .side-by-side {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .limits label {
+    grid-template-rows: 1fr auto;
+    align-items: end;
+  }
+
+  @media (max-width: 640px) {
+    .page-actions {
+      width: 100%;
+    }
+
+    .page-actions .btn {
+      flex: 1 1 0;
+      justify-content: center;
+    }
+  }
 }

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { ChevronRight, FileText, GitBranch, GitCommitHorizontal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { api, type AgentRun, type ArtifactSummary } from '../../api'
 import { formatBytes, formatDateTime, isTerminal } from '../../format'
@@ -16,6 +17,10 @@ import {
 } from './artifacts'
 import { CodeView } from './CodeView'
 import { Button } from '../ui/Button'
+import { Pill } from '../ui/Pill'
+
+const sum = (files: FileChange[], key: 'insertions' | 'deletions') =>
+  files.reduce((n, f) => n + (f[key] ?? 0), 0)
 
 /** Lo que se lee de un log de una vez. */
 export const LOG_PAGE = 512 * 1024
@@ -82,13 +87,26 @@ function Changes({ changes, diff }: { changes: ArtifactSummary; diff?: ArtifactS
   return (
     <>
       <h3>Cambios</h3>
-      <p className="small">
-        Rama <code>{git.branch}</code> · <code>{git.baseCommit.slice(0, 8)}</code> →{' '}
-        <code>{git.headCommit.slice(0, 8)}</code>
+      <div className="git-summary">
+        <span className="tag">
+          <GitBranch size={14} strokeWidth={2.5} aria-hidden="true" /> {git.branch}
+        </span>
+        <span className="small">
+          <code>{git.baseCommit.slice(0, 8)}</code> → <code>{git.headCommit.slice(0, 8)}</code>
+        </span>
+        <span className="git-stats small">
+          {git.files.length} {git.files.length === 1 ? 'archivo' : 'archivos'} ·{' '}
+          <span className="inserted">+{sum(git.files, 'insertions')}</span>{' '}
+          <span className="deleted">−{sum(git.files, 'deletions')}</span> · {git.commits.length}{' '}
+          {git.commits.length === 1 ? 'commit' : 'commits'}
+        </span>
         {git.uncommittedFiles > 0 && (
-          <span className="attention"> · {git.uncommittedFiles} archivos sin confirmar</span>
+          <Pill tone="warn">
+            {git.uncommittedFiles}{' '}
+            {git.uncommittedFiles === 1 ? 'archivo sin confirmar' : 'archivos sin confirmar'}
+          </Pill>
         )}
-      </p>
+      </div>
       {git.files.length === 0 ? (
         <p className="muted">La invocación no cambió ningún archivo.</p>
       ) : (
@@ -103,19 +121,24 @@ function Changes({ changes, diff }: { changes: ArtifactSummary; diff?: ArtifactS
                   aria-current={f === file ? 'true' : undefined}
                   onClick={() => setSelected(f.path)}
                 >
-                  <span className="file-status" title={fileStatusLabel(f.status)}>
+                  <span
+                    className={`file-status file-status-${f.status}`}
+                    title={fileStatusLabel(f.status)}
+                  >
                     {f.status}
-                  </span>{' '}
-                  {f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}
-                </Button>{' '}
-                {f.binary ? (
-                  <span className="muted small">binario</span>
-                ) : (
-                  <span className="small">
-                    <span className="inserted">+{f.insertions}</span>{' '}
-                    <span className="deleted">−{f.deletions}</span>
                   </span>
-                )}
+                  <span className="file-path">
+                    {f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}
+                  </span>
+                  {f.binary ? (
+                    <span className="muted small">binario</span>
+                  ) : (
+                    <span className="file-delta small">
+                      <span className="inserted">+{f.insertions}</span>{' '}
+                      <span className="deleted">−{f.deletions}</span>
+                    </span>
+                  )}
+                </Button>
               </li>
             ))}
           </ul>
@@ -126,12 +149,14 @@ function Changes({ changes, diff }: { changes: ArtifactSummary; diff?: ArtifactS
       {git.commits.length === 0 ? (
         <p className="muted small">Sin commits nuevos.</p>
       ) : (
-        <ol className="commits small">
+        <ol className="commit-list small">
           {git.commits.map((c) => (
             <li key={c.sha}>
-              <code>{c.sha.slice(0, 8)}</code> {c.subject}{' '}
+              <GitCommitHorizontal size={18} strokeWidth={2.5} aria-hidden="true" />
+              <code className="sha">{c.sha.slice(0, 8)}</code>
+              <span className="commit-subject">{c.subject}</span>
               <span className="muted">
-                · {c.author} · {formatDateTime(c.date)}
+                {c.author} · {formatDateTime(c.date)}
               </span>
             </li>
           ))}
@@ -171,7 +196,7 @@ function Logs({ artifacts }: { artifacts: ArtifactSummary[] }) {
   return (
     <>
       <h3>Logs</h3>
-      <ul className="list small">
+      <ul className="log-list small">
         {artifacts.map((a) => (
           <li key={a.id}>
             <Button
@@ -180,6 +205,13 @@ function Logs({ artifacts }: { artifacts: ArtifactSummary[] }) {
               aria-expanded={open === a.id}
               onClick={() => setOpen(open === a.id ? null : a.id)}
             >
+              <ChevronRight
+                className="log-chevron"
+                size={16}
+                strokeWidth={2.75}
+                aria-hidden="true"
+              />
+              <FileText size={16} strokeWidth={2.5} aria-hidden="true" />
               {artifactLabel(a)}
             </Button>{' '}
             <span className="muted">
