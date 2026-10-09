@@ -1,6 +1,6 @@
 # Guía de estilo de la interfaz
 
-Cómo se ve y cómo se construye la web de Skynet tras el rediseño (UI-A a UI-F, octubre de 2026) y los colores personalizables (UI-G). Su origen está en el lenguaje visual de [ADR-0001 §5.1](adr/0001-control-plane-user-interface.md) y en la maqueta [`docs/ui/maqueta.html`](ui/maqueta.html). Esta guía recoge lo que quedó implementado y las reglas para las pantallas nuevas.
+Cómo se ve y cómo se construye la web de Skynet tras el rediseño (UI-A a UI-F, octubre de 2026), los colores personalizables (UI-G) y la identidad visual (UI-H). Su origen está en el lenguaje visual de [ADR-0001 §5.1](adr/0001-control-plane-user-interface.md) y en la maqueta [`docs/ui/maqueta.html`](ui/maqueta.html). Esta guía recoge lo que quedó implementado y las reglas para las pantallas nuevas.
 
 | Claro | Oscuro |
 | --- | --- |
@@ -128,3 +128,17 @@ En **Ajustes** (`/settings`) se elige una paleta predefinida o un color base par
 - **Contraste.** La tinta se oscurece (o se aclara en oscuro) hasta llegar a AA sobre su fondo suave y sobre las superficies, y los botones de estado hasta llegar a AA con su texto. El texto del botón principal pasa de blanco a oscuro si hace falta. Si ninguno de los dos llega, la página lo explica y no deja guardar.
 - **Aplicación.** `appearance.ts` escribe los tokens en una hoja `<style id="skynet-palette">` con `:root:root`, que gana a `index.css` en los dos temas, y marca `data-palette` en `<html>` para que Monaco relea los colores. La paleta se lee sin sesión, así que el login también sale con ella. La última que se vio se guarda en este navegador para pintar la carga siguiente sin esperar al servidor.
 - **Si cambias un token en `index.css`,** cámbialo también en `DEFAULTS` de `palette.ts`; el test lo avisa.
+
+## 10. Marca
+
+El logo sale del estudio de imagen corporativa de octubre de 2026, variante «Principal» (UI-H): tres nodos unidos a un anillo central, sobre una baldosa redondeada del color de acento.
+
+![Isotipo](ui/marca-isotipo.png)
+
+- **Un solo dibujo.** La geometría del isotipo está en `web/src/lib/brand.ts`. De ahí salen el componente `Logo` (SVG con `currentColor`) y el favicon (`faviconSvg`). No se usa el PNG del estudio.
+- **Baldosa.** `BrandMark` pone el isotipo sobre `--brand-tile` con un degradado blanco suave y la sombra corta de siempre (`--brand-tile-shade`). En claro, la baldosa es el acento y el isotipo va en `--on-primary`. En oscuro baja al tono sombra para que el isotipo siga en blanco. Como todo sale de los tokens, sigue a los colores personalizables.
+- **Dónde aparece.** En la barra lateral, como enlace al Dashboard (se ilumina al pasar el ratón, se hunde al pulsar y tiene foco visible; con la barra plegada solo queda la baldosa). En el login aparece la baldosa grande, y bajo el nombre va el lema «Agentes · Flujos · Ejecuciones».
+- **Nombre.** «Skynet» en Baloo 2 800, la tipografía de títulos.
+- **Favicon e iconos.** `public/favicon.svg` es `faviconSvg` con el azul por defecto, y un test lo comprueba. `public/apple-touch-icon.png`, `icon-192.png` e `icon-512.png` (los del manifiesto) se generan desde él con `node scripts/iconos.mjs`. Con un acento propio, `appearance.ts` cambia el favicon por uno generado al vuelo con ese color.
+- **Tamaño mínimo.** 16 px en el favicon y 36 px de baldosa en la interfaz. Por debajo de eso, el hueco del anillo deja de leerse.
+- **Fuera.** Las demás variantes del estudio (minimalista, oscura, acento IA, outline, horizontal) no se usan. La oscura y la neutra ya salen con las paletas.

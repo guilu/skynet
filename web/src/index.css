@@ -22,6 +22,10 @@
   --primary-soft: #e4ecff;
   --primary-ink: #2346b0;
   --on-primary: #ffffff;
+  /* Baldosa de la marca: el acento con el isotipo en el color del texto de los botones */
+  --brand-tile: var(--primary);
+  --brand-tile-shade: var(--primary-shade);
+  --brand-on: var(--on-primary);
   --ok: #22a45a;
   --ok-shade: #187d44;
   --ok-soft: #e1f6e9;
@@ -90,6 +94,10 @@
     --primary-soft: #1f2d52;
     --primary-ink: #a9c1ff;
     --on-primary: #0b1022;
+    /* En oscuro, la baldosa baja al tono sombra para que el isotipo siga en blanco */
+    --brand-tile: var(--primary-shade);
+    --brand-tile-shade: color-mix(in oklab, var(--primary-shade), #000 40%);
+    --brand-on: #ffffff;
     --ok: #3cd389;
     --ok-shade: #22a466;
     --ok-soft: #14352a;
@@ -132,6 +140,9 @@
   --primary-soft: #1f2d52;
   --primary-ink: #a9c1ff;
   --on-primary: #0b1022;
+  --brand-tile: var(--primary-shade);
+  --brand-tile-shade: color-mix(in oklab, var(--primary-shade), #000 40%);
+  --brand-on: #ffffff;
   --ok: #3cd389;
   --ok-shade: #22a466;
   --ok-soft: #14352a;
@@ -385,11 +396,30 @@
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    padding: 4px 8px 14px;
+    margin-bottom: 10px;
+    padding: 4px 8px;
+    border-radius: var(--r-md);
     font-family: var(--font-display);
     font-weight: 800;
     font-size: 1.5rem;
     line-height: 1;
+    color: var(--fg);
+    text-decoration: none;
+  }
+
+  /* Estados del estudio de marca: se ilumina al pasar, se hunde al pulsar. */
+  .brand:hover .brand-mark {
+    filter: brightness(1.08) saturate(1.1);
+  }
+
+  .brand:active .brand-mark {
+    transform: translateY(3px);
+    box-shadow: 0 0 0 var(--brand-tile-shade);
+  }
+
+  .brand:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
   }
 
   .brand-mark {
@@ -399,16 +429,31 @@
     border-radius: 12px;
     display: grid;
     place-items: center;
-    background: var(--primary);
-    color: var(--on-primary);
-    box-shadow: 0 3px 0 var(--primary-shade);
+    /* Degradado suave sobre el acento: sale de los tokens, así sigue a la paleta y al tema. */
+    background:
+      linear-gradient(160deg, rgb(255 255 255 / 0.22), rgb(255 255 255 / 0) 55%), var(--brand-tile);
+    color: var(--brand-on);
+    box-shadow: 0 3px 0 var(--brand-tile-shade);
+    transition:
+      transform 0.12s var(--ease-pop),
+      box-shadow 0.12s ease,
+      filter 0.12s ease;
   }
 
   .brand-mark-lg {
-    width: 64px;
-    height: 64px;
-    border-radius: 20px;
-    box-shadow: 0 5px 0 var(--primary-shade);
+    width: 84px;
+    height: 84px;
+    border-radius: 26px;
+    box-shadow: 0 5px 0 var(--brand-tile-shade);
+  }
+
+  .brand-tagline {
+    margin: -6px 0 var(--space-4);
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
   }
 
   .sidenav ul {
@@ -508,7 +553,7 @@
   }
 
   .sidebar[data-collapsed] .brand {
-    padding: 4px 0 14px;
+    padding: 4px 0;
   }
 
   .sidebar[data-collapsed] .sidenav a,
