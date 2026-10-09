@@ -6,6 +6,7 @@ import dev.skynet.controlplane.shared.ConflictException;
 import dev.skynet.controlplane.shared.NotFoundException;
 import dev.skynet.controlplane.shared.TimeSource;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -79,6 +80,30 @@ public class WorkspaceCleanup {
               + ": espera a que termine o cancélala");
     }
     request(agent, workspace, "manual", time.now());
+  }
+
+  /**
+   * Pide eliminar varios worktrees a la vez, por ejemplo los que impiden eliminar una ejecución. Se
+   * salta los que ya están eliminados o pedidos y los que tienen algo en curso.
+   *
+   * @return cuántos se han pedido ahora
+   */
+  @Transactional
+  public int requestAll(Collection<UUID> workspaceIds) {
+    Instant now = time.now();
+    int requested = 0;
+    for (UUID id : workspaceIds) {
+      workspaces.lock(id);
+      WorkspaceView workspace = workspaces.find(id).orElse(null);
+      UUID agentRunId = workspaces.lastAgentOf(id).orElse(null);
+      if (workspace == null || agentRunId == null || workspaces.hasLiveInvocation(id)) {
+        continue;
+      }
+      if (request(agentRuns.findById(agentRunId).orElseThrow(), workspace, "manual", now)) {
+        requested++;
+      }
+    }
+    return requested;
   }
 
   /** Pide eliminar los worktrees que han pasado la retención. Devuelve cuántos. */
