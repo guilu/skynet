@@ -37,6 +37,8 @@ export interface ToolCall {
   isError: boolean
   output: string | null
   outputTruncated: boolean
+  /** Si la lanzó un subagente, la herramienta (Task) que lo lanzó. */
+  parentToolUseId: string | null
 }
 
 /** Llamadas a herramientas: cada inicio emparejado con su resultado por `toolUseId`. */
@@ -57,6 +59,7 @@ export function toolCallsOf(events: StoredEvent[]): ToolCall[] {
         isError: false,
         output: null,
         outputTruncated: false,
+        parentToolUseId: stringOrNull(e.payload.parentToolUseId),
       })
     } else if (e.type === 'agent.tool.completed') {
       const call = calls.get(id)

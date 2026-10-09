@@ -136,7 +136,7 @@ function CleanupPanel({ agent, onClose }: { agent: AgentRun; onClose: () => void
 
 function useGoToRun() {
   const navigate = useNavigate()
-  return (run: Run) => navigate(`/runs/${run.id}?tab=conversation`)
+  return (run: Run) => navigate(`/runs/${run.id}`)
 }
 
 function RetryPanel({ agent, onClose }: { agent: AgentRun; onClose: () => void }) {

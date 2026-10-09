@@ -1,13 +1,16 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { Bot, ChevronDown, User, Wrench } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { api, type AgentRun, type ConversationTurn, type StoredEvent } from '../../api'
-import { formatCost, formatTime, isTerminal, workspaceUsable } from '../../format'
+import { formatCost, formatTime, isTerminal, toolSummary, workspaceUsable } from '../../format'
 import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
-import { messagesOf } from './agentEvents'
+import { messagesOf, toolCallsOf, type ToolCall } from './agentEvents'
+import { JsonView } from './JsonView'
 import { LongText } from './LongText'
 import { Button } from '../ui/Button'
+import { Pill } from '../ui/Pill'
 
 const KIND_LABELS: Record<AgentRun['kind'], string> = {
   START: 'Lanzamiento',
@@ -47,6 +50,7 @@ export function Conversation({
   const live: Message[] = messagesOf(events)
     .filter((m) => m.parentToolUseId == null)
     .map(({ sequence, occurredAt, text }) => ({ sequence, occurredAt, text }))
+  const calls = toolCallsOf(events).filter((c) => c.parentToolUseId == null)
   const loaded = conversation.data?.turns ?? []
   const turns: ConversationTurn[] = loaded.some((t) => t.agent.id === agent.id)
     ? loaded
@@ -58,38 +62,63 @@ export function Conversation({
       <ol className="conversation">
         {turns.map((turn) => {
           const current = turn.agent.id === agent.id
-          // Del agente elegido, lo que ya ha llegado por el stream va por delante de la consulta.
+          // Del agente elegido, lo que ya ha llegado por el stream va por delante de la consulta, y
+          // sus herramientas se intercalan con los mensajes en el orden en que llegaron.
           const messages = current && live.length > 0 ? live : turn.messages
+          const items: Item[] = [
+            ...messages.map((m) => ({
+              kind: 'message' as const,
+              sequence: m.sequence,
+              message: m,
+            })),
+            ...(current
+              ? calls.map((c) => ({ kind: 'tool' as const, sequence: c.startedSequence, call: c }))
+              : []),
+          ].sort((a, b) => a.sequence - b.sequence)
           return (
             <li key={turn.agent.id} className={current ? 'turn current' : 'turn'}>
               <TurnHeader turn={turn} current={current} />
               {turn.prompt && (
-                <div className="bubble bubble-user">
-                  <p className="muted small">Tú</p>
-                  <LongText text={turn.prompt} />
+                <div className="msg msg-user">
+                  <span className="avatar avatar-user" aria-hidden="true">
+                    <User size={20} />
+                  </span>
+                  <div className="bubble bubble-user">
+                    <p className="bubble-meta">Tú</p>
+                    <LongText text={turn.prompt} />
+                  </div>
                 </div>
               )}
-              {messages.map((m) => (
-                <div key={m.sequence} className="bubble bubble-agent">
-                  <p className="muted small">
-                    Agente · {formatTime(m.occurredAt)}
-                    {current && (
-                      <>
-                        {' · '}
-                        <Button
-                          type="button"
-                          variant="link"
-                          onClick={() => onShowEvent(m.sequence)}
-                        >
-                          Ver evento #{m.sequence}
-                        </Button>
-                      </>
-                    )}
-                  </p>
-                  <LongText text={m.text} />
-                </div>
-              ))}
-              {messages.length === 0 && (
+              {items.map((item) =>
+                item.kind === 'message' ? (
+                  <div key={item.sequence} className="msg">
+                    <span className="avatar avatar-agent" aria-hidden="true">
+                      <Bot size={20} />
+                    </span>
+                    <div className="bubble bubble-agent">
+                      <p className="bubble-meta">
+                        Agente · {formatTime(item.message.occurredAt)}
+                        {current && (
+                          <>
+                            {' · '}
+                            <Button
+                              type="button"
+                              variant="link"
+                              onClick={() => onShowEvent(item.sequence)}
+                            >
+                              Ver evento #{item.sequence}
+                            </Button>
+                          </>
+                        )}
+                      </p>
+                      <LongText text={item.message.text} />
+                    </div>
+                  </div>
+                ) : (
+                  <ToolCard key={item.call.toolUseId} call={item.call} onShowEvent={onShowEvent} />
+                ),
+              )}
+              {items.length === 0 && (
                 <p className="muted small">
                   {isTerminal(turn.agent.status) ? 'Sin mensajes.' : 'Sin mensajes todavía.'}
                 </p>
@@ -101,6 +130,49 @@ export function Conversation({
       <ErrorMessage error={conversation.error} />
       <Composer last={last} />
     </>
+  )
+}
+
+type Item =
+  | { kind: 'message'; sequence: number; message: Message }
+  | { kind: 'tool'; sequence: number; call: ToolCall }
+
+/** Llamada a una herramienta dentro de la conversación, plegada: nombre, argumento y estado. */
+function ToolCard({
+  call,
+  onShowEvent,
+}: {
+  call: ToolCall
+  onShowEvent: (sequence: number) => void
+}) {
+  const running = call.completedSequence == null
+  const tone = running ? 'active' : call.isError ? 'bad' : 'ok'
+  return (
+    <details className="tool-card">
+      <summary>
+        <span className={`tool-card-icon icon-${tone}`} aria-hidden="true">
+          <Wrench size={16} />
+        </span>
+        <span className="tool-card-name">
+          <strong>{call.name}</strong>
+          <span className="tool-card-arg">{toolSummary(call.input).replace(/^: /, '')}</span>
+        </span>
+        <Pill tone={tone}>{running ? 'En curso' : call.isError ? 'Error' : 'Hecha'}</Pill>
+        <ChevronDown size={18} className="tool-card-chevron" aria-hidden="true" />
+      </summary>
+      <div className="tool-card-body">
+        <JsonView value={call.input} label="Entrada" />
+        <p className="muted small">Salida</p>
+        {call.output == null ? (
+          <p className="muted small">{running ? 'En curso…' : 'Sin salida.'}</p>
+        ) : (
+          <LongText text={call.output} code />
+        )}
+        <Button type="button" variant="link" onClick={() => onShowEvent(call.startedSequence)}>
+          Ver evento #{call.startedSequence}
+        </Button>
+      </div>
+    </details>
   )
 }
 
@@ -116,9 +188,7 @@ function TurnHeader({ turn, current }: { turn: ConversationTurn; current: boolea
         turn.workflowRunId && (
           <>
             {' · '}
-            <Link to={`/runs/${turn.workflowRunId}?agent=${turn.agent.id}&tab=conversation`}>
-              Ver invocación
-            </Link>
+            <Link to={`/runs/${turn.workflowRunId}?agent=${turn.agent.id}`}>Ver invocación</Link>
           </>
         )
       )}
@@ -143,7 +213,7 @@ function Composer({ last }: { last: AgentRun }) {
     mutationFn: () => api.sendMessage(last.id, text),
     onSuccess: (run) => {
       setText('')
-      void navigate(`/runs/${run.id}?tab=conversation`)
+      void navigate(`/runs/${run.id}`)
     },
   })
   const ready =

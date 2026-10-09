@@ -48,7 +48,7 @@ test('ningún secreto llega al DOM', async ({ page }) => {
   test.setTimeout(240_000)
   expect(SECRETS, 'scripts/e2e.sh define E2E_SECRET_GITHUB y E2E_SECRET_AWS').toHaveLength(2)
   const runId = await completedRun(page)
-  const panel = page.getByRole('tabpanel')
+  const panel = page.getByRole('region', { name: 'Inspector del agente' }).getByRole('tabpanel')
 
   await expectNoSecrets(page, 'Verificación')
   for (const tab of ['Resumen', 'Prompt', 'Conversación', 'Herramientas']) {
@@ -104,11 +104,19 @@ test('las páginas principales pasan axe', async ({ page }) => {
 
   const runId = await completedRun(page)
   await expectAccessible(page, 'ejecución · Verificación')
-  for (const tab of ['Resumen', 'Prompt', 'Conversación', 'Herramientas', 'Coste', 'Artefactos']) {
+  for (const tab of ['Resumen', 'Prompt', 'Herramientas', 'Coste', 'Artefactos']) {
     await page.getByRole('tab', { name: tab }).click()
-    await expect(page.getByRole('tabpanel')).toBeVisible()
+    await expect(page.getByRole('tabpanel', { name: tab })).toBeVisible()
     await expectAccessible(page, `ejecución · ${tab}`)
   }
+  // Las tres vistas de la actividad, con una herramienta abierta en la conversación.
+  for (const view of ['Cascada', 'Eventos', 'Conversación']) {
+    await page.getByRole('tab', { name: new RegExp(`^${view}`) }).click()
+    await expect(page.getByRole('tabpanel', { name: new RegExp(`^${view}`) })).toBeVisible()
+    await expectAccessible(page, `ejecución · ${view}`)
+  }
+  await page.locator('.tool-card summary').first().click()
+  await expectAccessible(page, 'ejecución · herramienta en la conversación')
 
   const pages: [string, string][] = [
     ['/', 'Dashboard'],

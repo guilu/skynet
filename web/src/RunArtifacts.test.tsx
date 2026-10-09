@@ -145,7 +145,7 @@ describe('artefactos y verificación', () => {
 
   it('muestra los archivos cambiados, su diff, los commits y los logs', async () => {
     openRun('artifacts')
-    const panel = await screen.findByRole('tabpanel')
+    const panel = await screen.findByRole('tabpanel', { name: 'Artefactos' })
     const files = await within(panel).findByRole('list', { name: 'Archivos modificados' })
     expect(within(files).getByRole('button', { name: /calc\.py/ })).toBeInTheDocument()
     expect(within(files).getByText('+1')).toBeInTheDocument()
@@ -162,7 +162,7 @@ describe('artefactos y verificación', () => {
 
   it('compara lo declarado con lo verificado y reejecuta la verificación', async () => {
     const fetch = openRun('verification')
-    const panel = await screen.findByRole('tabpanel')
+    const panel = await screen.findByRole('tabpanel', { name: 'Verificación' })
     expect(
       within(panel).getByRole('heading', { name: 'Declarado por el agente' }),
     ).toBeInTheDocument()

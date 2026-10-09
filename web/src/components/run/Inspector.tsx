@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { api, type AgentRun, type StoredEvent } from '../../api'
 import {
   elapsed,
@@ -16,12 +16,13 @@ import { Pill } from '../ui/Pill'
 import { AgentActions } from './AgentActions'
 import { ArtifactsTab } from './ArtifactsTab'
 import { agentOutcome, toolCallsOf, type ToolCall } from './agentEvents'
-import { Conversation } from './Conversation'
+import { JsonView } from './JsonView'
 import { CostTab } from './CostTab'
 import { LongText } from './LongText'
 import { INSPECTOR_TABS, type InspectorTab } from './useRunSelection'
 import { VerificationTab } from './VerificationTab'
 import { Button } from '../ui/Button'
+import { TabList, TabPanel } from '../ui/Tabs'
 
 interface Props {
   agent: AgentRun
@@ -29,6 +30,8 @@ interface Props {
   events: StoredEvent[]
   tab: InspectorTab
   sequence: number | null
+  /** Llamada elegida en el árbol o en la cascada: se abre en Herramientas. */
+  toolUseId: string | null
   onTab: (tab: InspectorTab) => void
   onShowEvent: (sequence: number) => void
 }
@@ -37,59 +40,29 @@ interface Props {
  * Inspector del agente elegido (ADR-0001 §3.6). El texto de los agentes se pinta siempre como
  * texto: React lo escapa y aquí no se usa HTML crudo en ningún sitio.
  */
-export function Inspector({ agent, events, tab, sequence, onTab, onShowEvent }: Props) {
-  const tabs = useRef<(HTMLButtonElement | null)[]>([])
-  const current = INSPECTOR_TABS.findIndex((t) => t.id === tab)
-
-  // Patrón de pestañas de WAI-ARIA: las flechas mueven el foco y activan la pestaña.
-  function onKeyDown(e: KeyboardEvent) {
-    const last = INSPECTOR_TABS.length - 1
-    const target = {
-      ArrowRight: current === last ? 0 : current + 1,
-      ArrowLeft: current === 0 ? last : current - 1,
-      Home: 0,
-      End: last,
-    }[e.key]
-    if (target === undefined) return
-    e.preventDefault()
-    onTab(INSPECTOR_TABS[target].id)
-    tabs.current[target]?.focus()
-  }
-
+export function Inspector({ agent, events, tab, sequence, toolUseId, onTab, onShowEvent }: Props) {
   return (
-    <section className="run-inspector card" aria-label="Inspector del agente">
+    <section className="run-inspector" aria-label="Inspector del agente">
       <AgentActions agent={agent} />
-      <div role="tablist" aria-label="Detalle del agente" className="tabs" onKeyDown={onKeyDown}>
-        {INSPECTOR_TABS.map((t, i) => (
-          <button
-            key={t.id}
-            ref={(el) => {
-              tabs.current[i] = el
-            }}
-            type="button"
-            role="tab"
-            id={`tab-${t.id}`}
-            aria-selected={t.id === tab}
-            aria-controls="inspector-panel"
-            tabIndex={t.id === tab ? 0 : -1}
-            onClick={() => onTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      <div role="tabpanel" id="inspector-panel" aria-labelledby={`tab-${tab}`} tabIndex={0}>
+      <TabList
+        label="Detalle del agente"
+        tabs={INSPECTOR_TABS}
+        selected={tab}
+        onSelect={onTab}
+        idPrefix="tab"
+        panelId="inspector-panel"
+      />
+      <TabPanel id="inspector-panel" labelledBy={`tab-${tab}`}>
         {tab === 'summary' && <Summary agent={agent} events={events} />}
         {tab === 'prompt' && <Prompts agentId={agent.id} />}
-        {tab === 'conversation' && (
-          <Conversation agent={agent} events={events} onShowEvent={onShowEvent} />
+        {tab === 'tools' && (
+          <Tools events={events} selected={toolUseId} onShowEvent={onShowEvent} />
         )}
-        {tab === 'tools' && <Tools events={events} onShowEvent={onShowEvent} />}
         {tab === 'artifacts' && <ArtifactsTab agent={agent} />}
         {tab === 'verification' && <VerificationTab agent={agent} events={events} />}
         {tab === 'cost' && <CostTab agent={agent} />}
         {tab === 'event' && <OriginalEvent sequence={sequence} />}
-      </div>
+      </TabPanel>
     </section>
   )
 }
@@ -165,18 +138,29 @@ function Prompts({ agentId }: { agentId: string }) {
 
 function Tools({
   events,
+  selected,
   onShowEvent,
 }: {
   events: StoredEvent[]
+  selected: string | null
   onShowEvent: (sequence: number) => void
 }) {
   const calls = toolCallsOf(events)
+  const selectedRef = useRef<HTMLLIElement>(null)
+  // La llamada elegida en el árbol o en la cascada se abre y se trae a la vista.
+  useEffect(() => {
+    selectedRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [selected])
   if (calls.length === 0) return <p className="muted">Sin herramientas todavía.</p>
   return (
     <ol className="tool-calls">
       {calls.map((call) => (
-        <li key={call.toolUseId}>
-          <details>
+        <li
+          key={call.toolUseId}
+          ref={call.toolUseId === selected ? selectedRef : undefined}
+          className={call.toolUseId === selected ? 'selected' : undefined}
+        >
+          <details open={call.toolUseId === selected || undefined}>
             <summary>
               <ToolState call={call} /> <strong>{call.name}</strong>
               <span className="muted">{toolSummary(call.input)}</span>
@@ -187,8 +171,7 @@ function Tools({
                   ` · ${formatDuration(elapsed(call.startedAt, call.completedAt, 0))}`}
               </span>
             </summary>
-            <h3>Entrada</h3>
-            <LongText text={JSON.stringify(call.input, null, 2)} code />
+            <JsonView value={call.input} label="Entrada" />
             <h3>Salida</h3>
             {call.output == null ? (
               <p className="muted small">{call.completedSequence ? 'Sin salida.' : 'En curso…'}</p>
@@ -242,7 +225,7 @@ function OriginalEvent({ sequence }: { sequence: number | null }) {
   if (sequence == null) {
     return (
       <p className="muted">
-        Elige un evento en el timeline, o «Ver evento» en Conversación o Herramientas.
+        Elige un evento en Eventos, o «Ver evento» en Conversación o Herramientas.
       </p>
     )
   }
@@ -254,7 +237,7 @@ function OriginalEvent({ sequence }: { sequence: number | null }) {
         <code>{event.data.type}</code> · #{event.data.sequence} ·{' '}
         {formatDateTime(event.data.occurredAt)}
       </p>
-      <LongText text={JSON.stringify(event.data, null, 2)} code />
+      <JsonView value={event.data} label={`Evento #${event.data.sequence}`} />
     </>
   )
 }
