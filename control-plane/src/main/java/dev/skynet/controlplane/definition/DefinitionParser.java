@@ -86,6 +86,9 @@ public final class DefinitionParser {
           "project.key",
           "project.name");
 
+  /** Ids que chocarían con rutas de la API ({@code /api/workflows/schema}) o de la web. */
+  static final Set<String> RESERVED_KEYS = Set.of("schema", "validate", "new");
+
   static final Pattern KEY = Pattern.compile("[a-z][a-z0-9-]{1,48}");
   static final Pattern NAME = Pattern.compile("[a-z][a-z0-9-]{0,63}");
   static final Pattern INPUT_NAME = Pattern.compile("[A-Za-z]\\w{0,63}");
@@ -248,6 +251,10 @@ public final class DefinitionParser {
                 + key
                 + "` no vale como id: usa de 2 a 49 minúsculas, números y guiones, empezando por"
                 + " una letra");
+        return null;
+      }
+      if (RESERVED_KEYS.contains(key)) {
+        error(entry.value(), "id", "`" + key + "` está reservado: elige otro id");
         return null;
       }
       if (expect.key() != null && !expect.key().equals(key)) {

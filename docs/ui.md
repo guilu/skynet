@@ -114,6 +114,8 @@ Al cambiar una pantalla, vuelve a generarlas en la misma PR.
 | Proyecto | ![claro proyecto](ui/capturas/claro-proyecto.png) | ![oscuro proyecto](ui/capturas/oscuro-proyecto.png) |
 | Lanzar agente | ![claro trabajo lanzar](ui/capturas/claro-trabajo-lanzar.png) | ![oscuro trabajo lanzar](ui/capturas/oscuro-trabajo-lanzar.png) |
 | Ajustes | ![claro ajustes](ui/capturas/claro-ajustes.png) | ![oscuro ajustes](ui/capturas/oscuro-ajustes.png) |
+| Workflows | ![claro workflows](ui/capturas/claro-workflows.png) | ![oscuro workflows](ui/capturas/oscuro-workflows.png) |
+| Workflow (borrador) | ![claro workflow](ui/capturas/claro-workflow.png) | ![oscuro workflow](ui/capturas/oscuro-workflow.png) |
 
 ## 9. Colores personalizables
 

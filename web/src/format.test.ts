@@ -23,6 +23,16 @@ describe('describeEvent', () => {
       'Proceso terminado: Se agotó el tiempo máximo',
     )
   })
+
+  it('resume los eventos de las definiciones y distingue qué se archiva', () => {
+    expect(describeEvent('workflow.definition.published', { key: 'revisar', version: 2 })).toBe(
+      'revisar v2 publicado',
+    )
+    expect(describeEvent('workflow.archived', { key: 'revisar' })).toBe(
+      'Workflow revisar archivado',
+    )
+    expect(describeEvent('workflow.archived', { workItemId: 'w1' })).toBe('Ejecución archivada')
+  })
 })
 
 describe('statusTone', () => {

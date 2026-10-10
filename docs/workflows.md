@@ -2,7 +2,7 @@
 
 Un workflow describe las fases de un trabajo y qué agente hace cada una (§11 de la [especificación](agentic-orchestration-system.md)). Se escribe en YAML, se guarda como borrador y, cuando no tiene errores, se publica como una versión que ya no cambia. Las ejecuciones guardan la versión exacta con la que arrancaron.
 
-El editor de la web (W1-B) autocompleta y valida con el JSON Schema de [`protocol/.../workflow-definition.schema.json`](../protocol/src/main/resources/dev/skynet/protocol/workflow-definition.schema.json). El control plane hace además las comprobaciones que un schema no expresa.
+En la web se escriben en **Workflows**: el editor autocompleta con el JSON Schema de [`protocol/.../workflow-definition.schema.json`](../protocol/src/main/resources/dev/skynet/protocol/workflow-definition.schema.json) y, mientras se escribe, el control plane valida el texto con los mismos mensajes que al guardar (también lo que un schema no expresa) y los marca en su línea.
 
 ## Ejemplo
 
@@ -42,7 +42,7 @@ stages:
 
 ## Referencia
 
-**Raíz:** `id` (obligatorio; de 2 a 49 minúsculas, números y guiones), `version`, `name`, `description`, `inputs`, `agents` y `stages` (obligatorio, al menos una fase).
+**Raíz:** `id` (obligatorio; de 2 a 49 minúsculas, números y guiones; `new`, `schema` y `validate` están reservados), `version`, `name`, `description`, `inputs`, `agents` y `stages` (obligatorio, al menos una fase).
 
 **`inputs.<nombre>`:** `type` (`string` por defecto), `required`, `default` y `description`. Los prompts los usan como `{{inputs.<nombre>}}`.
 
@@ -57,7 +57,7 @@ stages:
 - `id` (obligatorio, único) y `type` (obligatorio).
 - `agent`: un agente de `agents`. Sin él, la fase usa la política del repositorio.
 - `prompt`: el de la fase; si falta, el del agente. Uno de los dos tiene que existir.
-- `dependsOn`: fases que tienen que terminar antes. Con `?` al final (`plan?`) es opcional: también vale si esa fase se omite.
+- `dependsOn`: fases que tienen que terminar antes. Con `?` al final (`plan?`) es opcional: también vale si esa fase se omite. Entre corchetes va entre comillas (`dependsOn: ["plan?"]`), porque YAML lee `?` como otra cosa.
 - `workspace`: `inherit` (por defecto) continúa el worktree de la fase con agente de la que depende, sesión nueva pero mismos ficheros; sin ninguna, empieza uno nuevo. `isolated-worktree` empieza siempre uno nuevo desde la rama por defecto.
 - `workspaceFrom`: obligatorio si la fase depende de varias fases con agente y no es `isolated-worktree`; dice cuál continúa.
 
@@ -91,7 +91,8 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 |---|---|---|
 | `GET` | `/api/workflows?archived=` | Lista los workflows con su última versión publicada y su borrador |
 | `POST` | `/api/workflows` | Crea un workflow con el YAML (`sourceYaml`) como borrador de la versión 1 |
-| `POST` | `/api/workflows/validate` | Valida un YAML sin guardarlo |
+| `POST` | `/api/workflows/validate` | Valida un YAML sin guardarlo; con `key` y `version`, como el borrador de esa versión |
+| `GET` | `/api/workflows/schema` | El JSON Schema, para el editor |
 | `GET` | `/api/workflows/{key}` | El workflow con todas sus versiones |
 | `POST` | `/api/workflows/{key}/draft` | Abre (o devuelve) el borrador de la versión siguiente |
 | `POST` | `/api/workflows/{key}/archive` y `/restore` | Archiva o restaura (`adhoc` no se archiva) |

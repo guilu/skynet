@@ -1,5 +1,6 @@
 package dev.skynet.controlplane.definition;
 
+import com.fasterxml.jackson.annotation.JsonValue;
 import java.util.Arrays;
 import java.util.Optional;
 
@@ -28,7 +29,8 @@ public enum StageType {
     this.milestone = milestone;
   }
 
-  /** Nombre en el YAML, p. ej. {@code human-approval}. */
+  /** Nombre en el YAML, p. ej. {@code human-approval}; también el de la API. */
+  @JsonValue
   public String yaml() {
     return yaml;
   }

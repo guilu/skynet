@@ -177,6 +177,28 @@ class WorkflowDefinitionsIT extends IntegrationTest {
   }
 
   @Test
+  void validateCanCheckADraftOfAKnownWorkflow() {
+    JsonNode result =
+        post("/api/workflows/validate", Map.of("sourceYaml", REVIEW, "key", "otro", "version", 2));
+    assertThat(
+            result.path("validation").path("problems").findValues("message").stream()
+                .map(JsonNode::asString))
+        .containsExactly(
+            "El id de un workflow no se puede cambiar: este es `otro`",
+            "La versión la pone Skynet: esta se guardará como la 2, no la 1");
+    // El tipo de fase sale con el nombre del YAML.
+    assertThat(result.path("definition").path("stages").get(0).path("type").asString())
+        .isEqualTo("agent");
+  }
+
+  @Test
+  void theSchemaIsServedForTheEditor() {
+    JsonNode schema = get("/api/workflows/schema");
+    assertThat(schema.path("title").asString()).isEqualTo("Workflow de Skynet");
+    assertThat(schema.path("required").get(0).asString()).isEqualTo("id");
+  }
+
+  @Test
   void archivedWorkflowsLeaveTheListAndCannotBeEdited() {
     JsonNode draft = post("/api/workflows", Map.of("sourceYaml", REVIEW));
     post("/api/workflows/revisar/archive", Map.of());

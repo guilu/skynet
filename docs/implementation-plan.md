@@ -529,6 +529,13 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 - Migración `V12`: tabla `workflow` (clave, archivado) y estado (`DRAFT`, `VALIDATED`, `PUBLISHED`), nombre, fechas y `revision` en `workflow_definition`; como mucho un borrador por workflow, y un trigger que impide modificar o borrar una versión publicada salvo en una purga. `adhoc` v1 pide el prompt como `inputs.prompt`.
 - API `/api/workflows` y `/api/workflow-versions` (crear, validar, guardar con `revision`, publicar, versión siguiente, descartar, archivar). Eventos `workflow.definition.created`, `.published` (con el `sha256` del YAML), `.discarded`, `workflow.archived` y `workflow.restored`. `/api/workflow-definitions` lista solo las versiones publicadas.
 
+**Implementado (W1-B), definiciones en la web:**
+
+- Menú **Workflows** (`/workflows`): lista con la versión publicada y el borrador, búsqueda y archivados. **Nuevo workflow** (`/workflows/new`) parte de una plantilla o de un archivo importado y lo guarda como borrador de la v1.
+- Página de un workflow (`/workflows/<id>`): chips de versiones, YAML en Monaco con `monaco-yaml` (autocompletado y ayuda del JSON Schema, que sirve `GET /api/workflows/schema`), validación mientras se escribe con `POST /api/workflows/validate` (con `key` y `version`, los mismos mensajes que al guardar), problemas marcados en su línea y en una lista que lleva a ellos, y un resumen de fases, datos y agentes. Un borrador se guarda (Ctrl+S), se importa, se publica (con confirmación y sus avisos) o se descarta; una versión publicada solo se lee y **Editar** abre el borrador de la siguiente.
+- `new`, `schema` y `validate` quedan reservados como id de workflow. Los tipos de fase salen en la API con su nombre del YAML (`agent`, `human-approval`…).
+- Contratos `workflows`, `workflow` y `workflow-version`; E2E `workflows.e2e.ts` (importar, error en vivo, publicar, editar y descartar, con axe).
+
 ---
 
 ## 8. Fase 3 — SDD completo

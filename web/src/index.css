@@ -4059,4 +4059,174 @@
       transform: none;
     }
   }
+
+  /* ---------- Workflows (W1-B) ---------- */
+  .definition-editor {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
+    gap: 20px;
+    align-items: start;
+  }
+
+  @media (max-width: 1100px) {
+    .definition-editor {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .definition-source {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .definition-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .definition-aside {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+  }
+
+  .definition-aside .card {
+    margin: 0;
+  }
+
+  .definition-aside h2 {
+    margin-bottom: 4px;
+  }
+
+  .definition-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .definition-summary h3 {
+    font-size: 0.9375rem;
+    margin: 0 0 6px;
+  }
+
+  .definition-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .definition-list .tag {
+    margin-left: 6px;
+  }
+
+  .problem-list {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .problem-item {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    width: 100%;
+    padding: 8px 10px;
+    border: 2px solid var(--border);
+    border-radius: var(--r-sm);
+    background: var(--surface);
+    color: var(--fg);
+    font: inherit;
+    font-size: 0.875rem;
+    text-align: left;
+  }
+
+  button.problem-item {
+    cursor: pointer;
+  }
+
+  button.problem-item:hover {
+    border-color: var(--border-strong);
+  }
+
+  .problem-icon {
+    flex: none;
+    margin-top: 2px;
+  }
+
+  .problem-text {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 8px;
+    min-width: 0;
+  }
+
+  .problem-kind {
+    font-weight: 800;
+  }
+
+  .problem-where {
+    color: var(--muted);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.8125rem;
+  }
+
+  .problem-message {
+    flex-basis: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .problem-error .problem-item {
+    border-color: var(--bad);
+    background: var(--bad-soft);
+  }
+
+  .problem-error .problem-icon,
+  .problem-error .problem-kind {
+    color: var(--bad-ink);
+  }
+
+  .problem-unsupported .problem-item {
+    border-color: var(--warn);
+    background: var(--warn-soft);
+  }
+
+  .problem-unsupported .problem-icon,
+  .problem-unsupported .problem-kind {
+    color: var(--warn-ink);
+  }
+
+  .problem-warning .problem-icon,
+  .problem-warning .problem-kind {
+    color: var(--live-ink);
+  }
+
+  .version-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .version-tabs .chip {
+    padding: 4px 10px 4px 4px;
+  }
+
+  .version-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    margin-bottom: 12px;
+  }
 }

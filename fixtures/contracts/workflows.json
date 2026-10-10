@@ -1,0 +1,24 @@
+[ {
+  "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a12",
+  "key" : "revisar-y-corregir",
+  "name" : "Revisar y corregir",
+  "description" : "Un agente revisa el cambio y otro corrige lo que encuentre.",
+  "published" : {
+    "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a13",
+    "version" : 1,
+    "status" : "PUBLISHED",
+    "createdAt" : "2026-10-05T09:00:00Z",
+    "updatedAt" : "2026-10-05T09:01:00Z",
+    "publishedAt" : "2026-10-05T09:01:00Z"
+  },
+  "draft" : {
+    "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a14",
+    "version" : 2,
+    "status" : "VALIDATED",
+    "createdAt" : "2026-10-05T09:02:00Z",
+    "updatedAt" : "2026-10-05T09:03:00Z",
+    "publishedAt" : null
+  },
+  "createdAt" : "2026-10-05T09:00:00Z",
+  "archivedAt" : null
+} ]
