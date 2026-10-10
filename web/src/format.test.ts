@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { describeEvent, formatDuration, statusTone } from './format'
 
 describe('describeEvent', () => {
+  it('describe las fases que mueve el motor', () => {
+    expect(describeEvent('stage.pending', { stageKey: 'fix', dependsOn: ['plan?', 'tests'] })).toBe(
+      'Fase fix en espera de plan?, tests',
+    )
+    expect(describeEvent('stage.pending', { stageKey: 'plan', dependsOn: [] })).toBe(
+      'Fase plan en espera',
+    )
+    expect(describeEvent('stage.start.failed', { stageKey: 'fix', error: 'sin prompt' })).toBe(
+      'La fase fix no pudo arrancar: sin prompt',
+    )
+  })
+
   it('resume los cambios de estado', () => {
     expect(
       describeEvent('agent.status.changed', { previousStatus: 'QUEUED', status: 'CANCELLED' }),

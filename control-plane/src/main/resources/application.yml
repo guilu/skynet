@@ -46,6 +46,15 @@ skynet:
     retention: ${SKYNET_WORKTREE_RETENTION:7d}
     # Cada cuánto se buscan worktrees que han pasado la retención.
     check-interval: ${SKYNET_WORKTREE_CHECK_INTERVAL:1h}
+  engine:
+    # Evaluaciones del motor de workflows a la vez en este control plane.
+    workers: ${SKYNET_ENGINE_WORKERS:2}
+    # Cada cuánto se buscan ejecuciones pendientes de evaluar (tras un fallo o un reinicio).
+    poll-interval: ${SKYNET_ENGINE_POLL_INTERVAL:1s}
+    # Tiempo que un worker se queda una ejecución; si cae, otro la retoma al vencer.
+    lease: ${SKYNET_ENGINE_LEASE:2m}
+    # Espera antes de reintentar una evaluación que falló o tuvo que esperar a su worktree.
+    retry-delay: ${SKYNET_ENGINE_RETRY_DELAY:5s}
   verification:
     # Tiempo máximo del comando de validación de un repositorio.
     timeout: ${SKYNET_VERIFICATION_TIMEOUT:30m}

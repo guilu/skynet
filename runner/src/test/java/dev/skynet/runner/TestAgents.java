@@ -5,6 +5,7 @@ import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerCommandType;
 import dev.skynet.protocol.runner.StartAgent;
+import dev.skynet.protocol.runner.WorkspaceRef;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -69,6 +70,34 @@ public final class TestAgents {
         agentRunId,
         Instant.now(),
         invocation(repository, sessionId, "Añade un test", AgentLimits.none(), from),
+        null,
+        null);
+  }
+
+  /** Orden START con una sesión nueva en el worktree existente {@code workspace}. */
+  public static RunnerCommand continueIn(
+      UUID agentRunId, String repository, WorkspaceRef workspace) {
+    StartAgent base =
+        invocation(repository, UUID.randomUUID(), "Corrige lo revisado", AgentLimits.none(), null);
+    return new RunnerCommand(
+        UUID.randomUUID(),
+        RunnerCommandType.START,
+        agentRunId,
+        Instant.now(),
+        new StartAgent(
+            base.workflowRunId(),
+            base.workItemKey(),
+            base.repositoryPath(),
+            base.baseBranch(),
+            base.sessionId(),
+            base.prompt(),
+            base.allowedTools(),
+            base.permissionMode(),
+            base.model(),
+            base.limits(),
+            null,
+            base.environment(),
+            workspace),
         null,
         null);
   }

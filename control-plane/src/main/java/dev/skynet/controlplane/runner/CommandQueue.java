@@ -157,8 +157,8 @@ class CommandQueue {
   /**
    * Reclama las órdenes que corresponden al runner: las suyas pendientes, las entregadas hace más
    * de {@code redeliverAfter} sin confirmar y, mientras tenga capacidad libre, sus reanudaciones
-   * pendientes y arranques sin asignar. Una invocación reclamada pasa el agente a {@code STARTING}
-   * en la misma transacción.
+   * pendientes (y arranques en un worktree suyo) y arranques sin asignar. Una invocación reclamada
+   * pasa el agente a {@code STARTING} en la misma transacción.
    */
   @Transactional
   List<RunnerCommand> claim(UUID runnerId) {
@@ -176,15 +176,17 @@ class CommandQueue {
             RunnerCommandType.RESUME.name())
         .update();
     List<Row> claimed = new ArrayList<>();
-    // Las reanudaciones aún no entregadas esperan a que haya capacidad, como los arranques.
+    // Las invocaciones para este runner (reanudaciones y arranques en un worktree suyo) aún no
+    // entregadas esperan a que haya capacidad, como los arranques sin asignar.
     claimed.addAll(
         jdbc.sql(
                 "SELECT * FROM runner_command WHERE runner_id = ? AND ((status = ? AND NOT"
-                    + " (type = ? AND delivery_count = 0)) OR (status = ? AND delivered_at < ?))"
-                    + " ORDER BY created_at FOR UPDATE SKIP LOCKED")
+                    + " (type IN (?, ?) AND delivery_count = 0)) OR (status = ? AND delivered_at"
+                    + " < ?)) ORDER BY created_at FOR UPDATE SKIP LOCKED")
             .params(
                 runnerId,
                 PENDING,
+                RunnerCommandType.START.name(),
                 RunnerCommandType.RESUME.name(),
                 DELIVERED,
                 Timestamp.from(now.minus(properties.redeliverAfter())))
@@ -196,12 +198,13 @@ class CommandQueue {
       List<Row> invocations =
           jdbc.sql(
                   "SELECT * FROM runner_command WHERE status = ? AND ((runner_id IS NULL AND type"
-                      + " = ?) OR (runner_id = ? AND type = ? AND delivery_count = 0))"
+                      + " = ?) OR (runner_id = ? AND type IN (?, ?) AND delivery_count = 0))"
                       + " ORDER BY created_at LIMIT ? FOR UPDATE SKIP LOCKED")
               .params(
                   PENDING,
                   RunnerCommandType.START.name(),
                   runnerId,
+                  RunnerCommandType.START.name(),
                   RunnerCommandType.RESUME.name(),
                   free)
               .query(this::row)

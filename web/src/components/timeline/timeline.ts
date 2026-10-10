@@ -66,7 +66,10 @@ export function kindOf(type: string): EventKind {
     case 'agent.result':
       return 'result'
     case 'workflow.started':
+    case 'stage.pending':
     case 'stage.ready':
+    case 'stage.skipped':
+    case 'stage.start.failed':
     case 'agent.spawned':
       return 'status'
     case 'agent.session.started':
@@ -105,6 +108,8 @@ export function severityOf(event: StoredEvent): Severity {
       return p.isError === true ? 'error' : 'info'
     case 'agent.permission.denied':
       return 'warn'
+    case 'stage.start.failed':
+      return 'error'
     case 'agent.rate_limit':
       return p.status === 'allowed' ? 'info' : 'warn'
     case 'agent.verification.completed': {

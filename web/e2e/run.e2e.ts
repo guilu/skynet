@@ -123,9 +123,14 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
         name: /calc\.py/,
       }),
     ).toBeVisible({ timeout: 30_000 })
-    await expect(panel.getByLabel('Diff de calc.py')).toContainText('return a + b', {
-      timeout: 30_000,
-    })
+    // El texto visible del diff: las líneas que pinta Monaco o, mientras carga, el bloque de texto.
+    // La etiqueta está en la entrada del editor, que con EditContext no lleva el texto.
+    await expect(panel.locator('.monaco-view .view-lines, pre.code-fallback')).toContainText(
+      'return a + b',
+      {
+        timeout: 30_000,
+      },
+    )
     await expect(panel.getByText('fix add')).toBeVisible()
   })
 

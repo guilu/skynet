@@ -50,8 +50,9 @@ public class WorkspaceManager {
   }
 
   /**
-   * Worktree de una invocación anterior, para reanudar en él su sesión. Tiene que estar bajo la
-   * raíz de worktrees del runner: la ruta llega del control plane y no se aceptan otras.
+   * Worktree de una invocación anterior, para reanudar en él su sesión o arrancar otra (una fase
+   * que continúa el trabajo de la anterior). Tiene que estar bajo la raíz de worktrees del runner:
+   * la ruta llega del control plane y no se aceptan otras.
    */
   public Workspace existing(Path path) throws IOException, InterruptedException {
     Path worktree = owned(path);

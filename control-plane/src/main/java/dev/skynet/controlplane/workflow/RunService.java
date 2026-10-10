@@ -1,6 +1,10 @@
 package dev.skynet.controlplane.workflow;
 
-import dev.skynet.controlplane.project.AgentDefaults;
+import dev.skynet.controlplane.definition.AgentDefinition;
+import dev.skynet.controlplane.definition.PublishedDefinition;
+import dev.skynet.controlplane.definition.StageDefinition;
+import dev.skynet.controlplane.definition.WorkflowDefinition;
+import dev.skynet.controlplane.definition.WorkflowDefinitions;
 import dev.skynet.controlplane.project.AgentPolicy;
 import dev.skynet.controlplane.project.CodeRepository;
 import dev.skynet.controlplane.project.ProjectService;
@@ -18,7 +22,6 @@ import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
 import dev.skynet.protocol.runner.AgentLimits;
 import dev.skynet.protocol.runner.ResumeFrom;
-import dev.skynet.protocol.runner.StartAgent;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -36,6 +39,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Crea y gobierna ejecuciones. Todas las transiciones se validan contra las máquinas de estados y
@@ -55,8 +59,10 @@ public class RunService {
   private final TimeSource time;
   private final JdbcClient jdbc;
   private final RunTransitions transitions;
-  private final AgentDefaults defaults;
   private final Workspaces workspaces;
+  private final AgentQueue agentQueue;
+  private final WorkflowDefinitions definitions;
+  private final ObjectMapper json;
   private final ApplicationEventPublisher publisher;
 
   RunService(
@@ -69,8 +75,10 @@ public class RunService {
       TimeSource time,
       JdbcClient jdbc,
       RunTransitions transitions,
-      AgentDefaults defaults,
       Workspaces workspaces,
+      AgentQueue agentQueue,
+      WorkflowDefinitions definitions,
+      ObjectMapper json,
       ApplicationEventPublisher publisher) {
     this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
@@ -81,34 +89,129 @@ public class RunService {
     this.time = time;
     this.jdbc = jdbc;
     this.transitions = transitions;
-    this.defaults = defaults;
     this.workspaces = workspaces;
+    this.agentQueue = agentQueue;
+    this.definitions = definitions;
+    this.json = json;
     this.publisher = publisher;
   }
 
   /**
-   * Lanza una ejecución {@code adhoc}: un workflow con una fase y un agente en cola. El agente
-   * queda en {@code QUEUED} hasta que un runner reclame su orden de arranque. Los límites que
-   * falten (o todos, con {@code null}) se toman de la política del repositorio, y ninguno puede
-   * superar los suyos.
+   * Qué se lanza.
+   *
+   * @param definitionId versión publicada del workflow, o {@code null} para la última de {@code
+   *     adhoc}
+   * @param inputs datos de entrada del workflow; {@code null} si no pide ninguno
+   * @param prompt atajo para el dato {@code prompt} (el de {@code adhoc}), o {@code null}
+   * @param limits límites para los agentes que no fijan los suyos; los que falten (o todos, con
+   *     {@code null}) se toman de la política del repositorio, y ninguno puede superar los suyos
    */
+  public record Launch(
+      UUID repositoryId,
+      UUID definitionId,
+      Map<String, Object> inputs,
+      String prompt,
+      AgentLimits limits) {}
+
+  /** Lanza {@code adhoc}: una fase con un agente y ese prompt. */
   @Transactional
   public WorkflowRun launch(
       UUID workItemId, UUID repositoryId, String promptText, AgentLimits limits) {
+    return launch(workItemId, new Launch(repositoryId, null, null, promptText, limits));
+  }
+
+  /**
+   * Lanza una versión publicada de un workflow sobre un trabajo y un repositorio. Crea la ejecución
+   * con todas sus fases en {@code PENDING}; el motor activa las que pueden empezar.
+   */
+  @Transactional
+  public WorkflowRun launch(UUID workItemId, Launch launch) {
     WorkItem workItem = workItems.get(workItemId);
-    CodeRepository repository = projects.getRepository(repositoryId);
+    CodeRepository repository = projects.getRepository(launch.repositoryId());
     if (!repository.getProjectId().equals(workItem.getProjectId())) {
       throw new ConflictException(
           "El repositorio " + repository.getName() + " no pertenece al proyecto del trabajo");
     }
-    return spawn(
-        workItem,
-        repository,
-        Invocation.fresh(
-            AgentRunKind.START,
-            null,
-            promptText,
-            withinPolicy(limits, projects.agentPolicy(repository))));
+    requireActive(workItem, repository, null);
+    PublishedDefinition definition =
+        launch.definitionId() == null
+            ? definitions.latestLaunchable(WorkflowDefinitions.ADHOC)
+            : definitions.launchable(launch.definitionId());
+    Map<String, Object> given =
+        new LinkedHashMap<>(launch.inputs() == null ? Map.of() : launch.inputs());
+    if (launch.prompt() != null) {
+      boolean asksPrompt =
+          definition.definition().inputs().stream().anyMatch(i -> i.name().equals("prompt"));
+      if (!asksPrompt) {
+        throw new InvalidRequestException(
+            "El workflow " + definition.key() + " no pide un prompt: rellena sus datos");
+      }
+      given.putIfAbsent("prompt", launch.prompt());
+    }
+    Map<String, Object> inputs = LaunchInputs.resolve(definition.definition().inputs(), given);
+    AgentLimits limits = withinPolicy(launch.limits(), projects.agentPolicy(repository));
+    Instant now = time.now();
+
+    WorkflowRun run = WorkflowRun.create(workItem.getId(), definition.id(), now);
+    run.transitionTo(WorkflowRunStatus.RUNNING, now);
+    run = workflowRuns.save(run);
+    jdbc.sql(
+            "UPDATE workflow_run SET repository_id = ?, inputs = CAST(? AS jsonb),"
+                + " launch_limits = CAST(? AS jsonb) WHERE id = ?")
+        .params(
+            repository.getId(),
+            json.writeValueAsString(inputs),
+            json.writeValueAsString(limitsJson(limits)),
+            run.getId())
+        .update();
+    Map<String, Object> started = new LinkedHashMap<>();
+    started.put("workItemId", workItem.getId());
+    started.put("definition", definition.key());
+    started.put("definitionVersion", definition.version());
+    started.put("definitionId", definition.id());
+    started.put("status", run.getStatus());
+    append("workflow_run", run.getId(), "workflow.started", run.getId(), started, now);
+    for (StageDefinition stageDefinition : definition.definition().stages()) {
+      StageRun stage = stageRuns.save(StageRun.create(run.getId(), stageDefinition.id(), now));
+      Map<String, Object> pending = new LinkedHashMap<>();
+      pending.put("stageKey", stage.getStageKey());
+      pending.put("attempt", stage.getAttempt());
+      pending.put("dependsOn", stageDefinition.dependsOn().stream().map(Object::toString).toList());
+      append("stage_run", stage.getId(), "stage.pending", run.getId(), pending, now);
+    }
+    publisher.publishEvent(new WorkflowRunChanged(run.getId()));
+    return run;
+  }
+
+  /**
+   * Lo que se le permite a una invocación que sigue a {@code parent} (reintento, mensaje o
+   * bifurcación): lo mismo que a su agente del YAML con la política actual del repositorio, y los
+   * límites de {@code parent} rebajados a esa política.
+   */
+  private EffectivePolicy inheritedPolicy(AgentRun parent, CodeRepository repository) {
+    AgentPolicy policy = projects.agentPolicy(repository);
+    AgentLimits limits = cappedByPolicy(parent.limits(), policy);
+    StageRun stage = stageRuns.findById(parent.getStageRunId()).orElseThrow();
+    WorkflowDefinition definition =
+        definitions.published(runEntity(stage.getWorkflowRunId()).getDefinitionId()).definition();
+    AgentDefinition agent =
+        definition
+            .stage(stage.getStageKey())
+            .map(StageDefinition::agent)
+            .flatMap(definition::agent)
+            .orElse(null);
+    EffectivePolicy effective = EffectivePolicy.of(policy, agent, limits);
+    return new EffectivePolicy(
+        effective.allowedTools(), effective.permissionMode(), effective.environment(), limits);
+  }
+
+  /** Límites como se guardan en {@code launch_limits}. */
+  static Map<String, Object> limitsJson(AgentLimits limits) {
+    Map<String, Object> out = new LinkedHashMap<>();
+    out.put("maxTurns", limits.maxTurns());
+    out.put("maxBudgetUsd", limits.maxBudgetUsd());
+    out.put("timeoutMinutes", limits.timeout() == null ? null : limits.timeout().toMinutes());
+    return out;
   }
 
   /**
@@ -154,10 +257,7 @@ public class RunService {
         workItemOf(parent),
         repository,
         Invocation.fresh(
-            AgentRunKind.RETRY,
-            parent,
-            promptText,
-            cappedByPolicy(parent.limits(), projects.agentPolicy(repository))));
+            AgentRunKind.RETRY, parent, promptText, inheritedPolicy(parent, repository)));
   }
 
   private WorkflowRun continueSession(UUID agentRunId, String text, boolean fork) {
@@ -196,10 +296,11 @@ public class RunService {
             parent,
             sessionId,
             text,
-            cappedByPolicy(parent.limits(), projects.agentPolicy(repository)),
+            inheritedPolicy(parent, repository),
             fork ? null : workspace.id(),
             new ResumeFrom(
                 parent.getProviderSessionId(), fork, workspace.path(), workspace.branch()),
+            null,
             parent.getRunnerId()));
   }
 
@@ -277,121 +378,42 @@ public class RunService {
   }
 
   /**
-   * Invocación por crear.
-   *
-   * @param parent invocación de la que parte, o {@code null} en un lanzamiento
-   * @param workspaceId worktree que reutiliza (solo al reanudar)
-   * @param resume sesión y worktree de partida (reanudar y bifurcar)
-   * @param runnerId runner que debe ejecutarla, o {@code null} si vale cualquiera
-   */
-  private record Invocation(
-      AgentRunKind kind,
-      AgentRun parent,
-      UUID sessionId,
-      String prompt,
-      AgentLimits limits,
-      UUID workspaceId,
-      ResumeFrom resume,
-      UUID runnerId) {
-
-    /** Invocación con sesión y worktree nuevos, en cualquier runner. */
-    static Invocation fresh(AgentRunKind kind, AgentRun parent, String prompt, AgentLimits limits) {
-      return new Invocation(kind, parent, UUID.randomUUID(), prompt, limits, null, null, null);
-    }
-  }
-
-  /**
-   * Crea la ejecución {@code adhoc} con su fase y su agente en cola, y publica la orden. Las
-   * herramientas, el modo de permisos y el entorno son los de la política actual del repositorio,
-   * también al continuar una sesión.
+   * Crea una ejecución {@code adhoc} hija con su fase lista y su agente en cola, y publica la
+   * orden: continuar, bifurcar o reintentar un agente no toca la ejecución de la que parte. Las
+   * herramientas, el modo de permisos y el entorno son los de la política actual del repositorio.
    */
   private WorkflowRun spawn(WorkItem workItem, CodeRepository repository, Invocation invocation) {
     Instant now = time.now();
     AgentRun parent = invocation.parent();
     requireActive(workItem, repository, parent);
-    AgentPolicy policy = projects.agentPolicy(repository);
+    PublishedDefinition adhoc = definitions.latestLaunchable(WorkflowDefinitions.ADHOC);
 
-    WorkflowRun run = WorkflowRun.create(workItem.getId(), adhocDefinitionId(), now);
+    WorkflowRun run = WorkflowRun.create(workItem.getId(), adhoc.id(), now);
     run.transitionTo(WorkflowRunStatus.RUNNING, now);
     run = workflowRuns.save(run);
+    jdbc.sql(
+            "UPDATE workflow_run SET repository_id = ?, inputs = CAST(? AS jsonb),"
+                + " launch_limits = CAST(? AS jsonb) WHERE id = ?")
+        .params(
+            repository.getId(),
+            json.writeValueAsString(Map.of("prompt", invocation.prompt())),
+            json.writeValueAsString(limitsJson(invocation.policy().limits())),
+            run.getId())
+        .update();
     Map<String, Object> started = new LinkedHashMap<>();
     started.put("workItemId", workItem.getId());
-    started.put("definition", "adhoc");
+    started.put("definition", adhoc.key());
+    started.put("definitionVersion", adhoc.version());
+    started.put("definitionId", adhoc.id());
     started.put("status", run.getStatus());
     if (parent != null) {
       started.put("parentAgentRunId", parent.getId());
     }
     append("workflow_run", run.getId(), "workflow.started", run.getId(), started, now);
 
-    StageRun stage = StageRun.create(run.getId(), ADHOC_STAGE, now);
-    stage.transitionTo(StageStatus.READY, now);
-    stage = stageRuns.save(stage);
-    append(
-        "stage_run",
-        stage.getId(),
-        "stage.ready",
-        run.getId(),
-        Map.of("stageKey", stage.getStageKey(), "attempt", stage.getAttempt()),
-        now);
-
-    AgentRun agent =
-        agentRuns.save(
-            parent == null
-                ? AgentRun.queued(
-                    stage.getId(),
-                    repository.getId(),
-                    AgentRun.PROVIDER_CLAUDE_CODE,
-                    invocation.sessionId(),
-                    invocation.limits(),
-                    now)
-                : AgentRun.queued(
-                    stage.getId(),
-                    parent,
-                    invocation.kind(),
-                    invocation.sessionId(),
-                    invocation.workspaceId(),
-                    invocation.limits(),
-                    now));
-    Prompt prompt =
-        prompts.save(Prompt.of(agent.getId(), Prompt.ROLE_USER, invocation.prompt(), now));
-    Map<String, Object> spawned = new LinkedHashMap<>();
-    spawned.put("stageRunId", stage.getId());
-    spawned.put("repositoryId", repository.getId());
-    spawned.put("provider", agent.getProvider());
-    spawned.put("kind", agent.getKind());
-    spawned.put("status", agent.getStatus());
-    spawned.put("promptId", prompt.getId());
-    spawned.put("promptSha256", prompt.getSha256());
-    spawned.put("allowedTools", policy.allowedTools());
-    spawned.put("permissionMode", policy.permissionMode());
-    Map<String, Object> limits = new LinkedHashMap<>();
-    limits.put("maxTurns", invocation.limits().maxTurns());
-    limits.put("maxBudgetUsd", invocation.limits().maxBudgetUsd());
-    limits.put(
-        "timeoutMinutes",
-        invocation.limits().timeout() == null ? null : invocation.limits().timeout().toMinutes());
-    spawned.put("limits", limits);
-    if (parent != null) {
-      spawned.put("parentAgentRunId", parent.getId());
-    }
-    append("agent_run", agent.getId(), "agent.spawned", run.getId(), spawned, now);
-    publisher.publishEvent(
-        new AgentRunQueued(
-            agent.getId(),
-            new StartAgent(
-                run.getId(),
-                workItem.getKey(),
-                repository.getLocalPath(),
-                repository.getDefaultBranch(),
-                invocation.sessionId(),
-                invocation.prompt(),
-                policy.allowedTools(),
-                policy.permissionMode(),
-                defaults.model(),
-                invocation.limits(),
-                invocation.resume(),
-                policy.environment()),
-            invocation.runnerId()));
+    StageRun stage = stageRuns.save(StageRun.create(run.getId(), ADHOC_STAGE, now));
+    stage = transitions.readyStage(stage, now);
+    agentQueue.queue(run, stage, workItem, repository, invocation, now);
     return run;
   }
 
@@ -411,8 +433,9 @@ public class RunService {
       agent =
           transitions.agent(
               agent, AgentObservableStatus.CANCELLED, run.getId(), "cancelled-by-user", now);
-      transitions.finishAdhoc(stage, run, AgentObservableStatus.CANCELLED, now);
+      transitions.finishStage(stage, AgentObservableStatus.CANCELLED, now);
       publisher.publishEvent(new AgentRunWithdrawn(agent.getId()));
+      publisher.publishEvent(new WorkflowRunChanged(run.getId()));
       return agent;
     }
     if (agent.getStatus().isTerminal()) {
@@ -431,6 +454,74 @@ public class RunService {
       publisher.publishEvent(new AgentCancelRequested(agent.getId(), agent.getRunnerId()));
     }
     return agent;
+  }
+
+  /**
+   * Cancela la ejecución: las fases que no han empezado se cancelan, los agentes en cola se retiran
+   * y a los que ya están en un runner se les ordena terminar. Queda cancelada cuando terminan todas
+   * sus fases. Pedirlo otra vez mientras tanto no tiene efecto.
+   */
+  @Transactional
+  public RunView cancelRun(UUID workflowRunId) {
+    lockRun(workflowRunId);
+    WorkflowRun run = runEntity(workflowRunId);
+    if (run.getStatus().isTerminal()) {
+      throw new ConflictException(
+          "La ejecución " + workflowRunId + " ya ha terminado (" + run.getStatus() + ")");
+    }
+    Instant now = time.now();
+    for (StageRun stage :
+        stageRuns.findByWorkflowRunIdInOrderByCreatedAtAsc(List.of(run.getId()))) {
+      cancelStage(stage, "cancelled-by-user", now);
+    }
+    publisher.publishEvent(new WorkflowRunChanged(run.getId()));
+    return run(workflowRunId);
+  }
+
+  /**
+   * Cancela una fase que no ha terminado. Sin agente, o con él aún en cola, queda cancelada en el
+   * acto; con el agente en un runner, se le ordena terminar y la fase se cierra cuando acabe.
+   * Devuelve si la fase ha cambiado de estado.
+   */
+  boolean cancelStage(StageRun stage, String reason, Instant now) {
+    if (stage.getStatus().isTerminal()) {
+      return false;
+    }
+    boolean running = false;
+    for (AgentRun agent : agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()))) {
+      if (agent.getStatus() == AgentObservableStatus.QUEUED) {
+        transitions.agent(
+            agent, AgentObservableStatus.CANCELLED, stage.getWorkflowRunId(), reason, now);
+        publisher.publishEvent(new AgentRunWithdrawn(agent.getId()));
+      } else if (!agent.getStatus().isTerminal()) {
+        running = true;
+        if (agent.requestCancel(now)) {
+          agent = agentRuns.save(agent);
+          append(
+              "agent_run",
+              agent.getId(),
+              "agent.cancel.requested",
+              stage.getWorkflowRunId(),
+              Map.of("runnerId", agent.getRunnerId()),
+              now);
+          publisher.publishEvent(new AgentCancelRequested(agent.getId(), agent.getRunnerId()));
+        }
+      }
+    }
+    if (running) {
+      return false;
+    }
+    transitions.advanceStage(stage, StageStatus.CANCELLED, reason, now);
+    return true;
+  }
+
+  /** Bloquea la ejecución hasta el final de la transacción: el motor la evalúa de una en una. */
+  void lockRun(UUID workflowRunId) {
+    jdbc.sql("SELECT id FROM workflow_run WHERE id = ? FOR UPDATE")
+        .param(workflowRunId)
+        .query(UUID.class)
+        .optional()
+        .orElseThrow(() -> new NotFoundException("Ejecución", workflowRunId));
   }
 
   /**
@@ -469,8 +560,9 @@ public class RunService {
     AgentObservableStatus outcome =
         agent.exited(null, null, "El proceso ya no existe en el runner");
     agent = transitions.advanceAgent(agent, outcome, run.getId(), "process-lost", now);
-    transitions.finishAdhoc(stage, run, outcome, now);
+    transitions.finishStage(stage, outcome, now);
     agentRuns.save(agent);
+    publisher.publishEvent(new WorkflowRunChanged(run.getId()));
     return true;
   }
 
@@ -972,12 +1064,6 @@ public class RunService {
       return value == null ? maximum : value;
     }
     return value.compareTo(maximum) <= 0 ? value : maximum;
-  }
-
-  private UUID adhocDefinitionId() {
-    return jdbc.sql("SELECT id FROM workflow_definition WHERE key = 'adhoc' AND version = 1")
-        .query(UUID.class)
-        .single();
   }
 
   private void append(

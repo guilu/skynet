@@ -10,6 +10,7 @@ import dev.skynet.protocol.runner.CleanupWorkspace;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
+import dev.skynet.protocol.runner.WorkspaceRef;
 import dev.skynet.runner.TestAgents;
 import dev.skynet.runner.TestRepos;
 import dev.skynet.runner.journal.Journal;
@@ -307,6 +308,36 @@ class AgentExecutorTest {
         .containsEntry("branch", ready.get("branch"));
     assertThat(events.get(1).type()).isEqualTo(AgentEventType.SESSION_STARTED);
     assertThat(events.get(1).payload()).containsEntry("sessionId", session.toString());
+  }
+
+  @Test
+  void aNewSessionCanStartInTheWorktreeOfAPreviousOne() throws Exception {
+    UUID first = UUID.randomUUID();
+    RunnerCommand start = TestAgents.start(first, repo.toString(), null);
+    executor("02-tools").start(start);
+    awaitExit(first);
+    Map<String, Object> ready = eventsOf(first).getFirst().payload();
+    Path worktree = Path.of((String) ready.get("path"));
+    Files.writeString(worktree.resolve("notas.txt"), "sin confirmar\n");
+
+    UUID next = UUID.randomUUID();
+    RunnerCommand command =
+        TestAgents.continueIn(
+            next,
+            repo.toString(),
+            new WorkspaceRef(worktree.toString(), (String) ready.get("branch")));
+    executor.start(command);
+    NormalizedEvent exit = awaitExit(next);
+
+    assertThat(exit.payload()).containsEntry("exitCode", 0).doesNotContainKey("error");
+    List<NormalizedEvent> events = eventsOf(next);
+    assertThat(events.getFirst().payload())
+        .containsEntry("path", ready.get("path"))
+        .containsEntry("branch", ready.get("branch"));
+    // Sesión nueva (no --resume), y los cambios sin confirmar de la anterior siguen ahí.
+    assertThat(events.get(1).payload())
+        .containsEntry("sessionId", command.start().sessionId().toString());
+    assertThat(worktree.resolve("notas.txt")).hasContent("sin confirmar");
   }
 
   @Test

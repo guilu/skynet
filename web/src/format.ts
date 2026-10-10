@@ -83,8 +83,16 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `Trabajo ${p('key')} creado: ${p('title')}`
     case 'workflow.started':
       return `Ejecución iniciada (workflow ${p('definition')})`
+    case 'stage.pending': {
+      const deps = Array.isArray(payload.dependsOn) ? payload.dependsOn.map(String) : []
+      return `Fase ${p('stageKey')} en espera${deps.length ? ` de ${deps.join(', ')}` : ''}`
+    }
     case 'stage.ready':
       return `Fase ${p('stageKey')} preparada (intento ${p('attempt')})`
+    case 'stage.skipped':
+      return `Fase ${p('stageKey')} omitida: no se ejecutó una fase de la que depende`
+    case 'stage.start.failed':
+      return `La fase ${p('stageKey')} no pudo arrancar: ${p('error')}`
     case 'agent.spawned':
       return `Agente ${p('provider')} en cola`
     case 'agent.workspace.ready':

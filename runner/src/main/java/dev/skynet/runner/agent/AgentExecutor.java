@@ -245,12 +245,15 @@ public final class AgentExecutor implements AutoCloseable {
   }
 
   /**
-   * Worktree de la invocación: uno nuevo para un arranque, el de la invocación anterior para
-   * reanudar y uno nuevo desde ese para bifurcar, con la sesión copiada para que {@code --resume}
-   * la encuentre desde allí.
+   * Worktree de la invocación: uno nuevo para un arranque, el indicado para una fase que continúa
+   * el de otra, el de la invocación anterior para reanudar y uno nuevo desde ese para bifurcar, con
+   * la sesión copiada para que {@code --resume} la encuentre desde allí.
    */
   private Workspace prepare(UUID id, StartAgent start) throws IOException, InterruptedException {
     ResumeFrom resume = start.resume();
+    if (resume == null && start.workspace() != null) {
+      return workspaces.existing(Path.of(start.workspace().path()));
+    }
     if (resume == null) {
       return workspaces.create(
           Path.of(start.repositoryPath()),

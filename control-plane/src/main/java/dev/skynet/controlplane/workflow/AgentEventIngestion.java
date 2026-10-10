@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,7 +40,7 @@ public class AgentEventIngestion {
 
   private final AgentRunRepository agentRuns;
   private final StageRunRepository stageRuns;
-  private final WorkflowRunRepository workflowRuns;
+  private final ApplicationEventPublisher publisher;
   private final RunTransitions transitions;
   private final EventStore events;
   private final PayloadRedactor redactor;
@@ -50,7 +51,7 @@ public class AgentEventIngestion {
   AgentEventIngestion(
       AgentRunRepository agentRuns,
       StageRunRepository stageRuns,
-      WorkflowRunRepository workflowRuns,
+      ApplicationEventPublisher publisher,
       RunTransitions transitions,
       EventStore events,
       PayloadRedactor redactor,
@@ -59,7 +60,7 @@ public class AgentEventIngestion {
       TimeSource time) {
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
-    this.workflowRuns = workflowRuns;
+    this.publisher = publisher;
     this.transitions = transitions;
     this.events = events;
     this.redactor = redactor;
@@ -109,6 +110,10 @@ public class AgentEventIngestion {
     if (verificationRunId != null) {
       // La verificación llega cuando el agente ya ha terminado y no cambia su estado.
       verifications.apply(verificationRunId, event.type(), redacted, event.occurredAt());
+      if (event.type() == AgentEventType.VERIFICATION_COMPLETED) {
+        // Libera el worktree: la fase que lo continúa puede arrancar.
+        publisher.publishEvent(new WorkflowRunChanged(stage.getWorkflowRunId()));
+      }
     } else if (event.type() == AgentEventType.WORKSPACE_REMOVED) {
       // También llega con el agente terminado: solo cambia el worktree.
       UUID workspaceId = uuid(redacted.get("workspaceId"));
@@ -175,7 +180,7 @@ public class AgentEventIngestion {
         AgentObservableStatus outcome =
             agent.exited(integer(p.get("exitCode")), string(p, "signal"), string(p, "error"));
         agent = transitions.advanceAgent(agent, outcome, runId, "process-exited", now);
-        transitions.finishAdhoc(stage, workflowRuns.findById(runId).orElseThrow(), outcome, now);
+        transitions.finishStage(stage, outcome, now);
         if (agent.getStatus() == AgentObservableStatus.COMPLETED) {
           verifications.afterCompletion(agent, now);
         }
@@ -184,6 +189,11 @@ public class AgentEventIngestion {
     }
     // Actividad, sesión, resultado o código de salida aunque no haya habido transición.
     agentRuns.save(agent);
+    if (event.type() == AgentEventType.PROCESS_EXITED) {
+      // Después de poner en cola la verificación: una fase que continúe este worktree espera a
+      // que termine.
+      publisher.publishEvent(new WorkflowRunChanged(runId));
+    }
   }
 
   /** Pasa el agente a un estado activo y, con él, su fase a {@code RUNNING}. */
