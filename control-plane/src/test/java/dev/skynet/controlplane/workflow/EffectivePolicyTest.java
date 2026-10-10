@@ -64,7 +64,8 @@ class EffectivePolicyTest {
   @Test
   void anAgentsLimitsAreCappedByThePolicy() {
     AgentDefinition agent =
-        new AgentDefinition("a", null, null, null, null, 200, new BigDecimal("1"), null);
+        new AgentDefinition(
+            "a", null, null, null, null, 200, new BigDecimal("1"), null, null, null);
 
     AgentLimits limits = EffectivePolicy.of(POLICY, agent, LAUNCH).limits();
 
@@ -74,6 +75,6 @@ class EffectivePolicyTest {
   }
 
   private static AgentDefinition agent(List<String> tools, String mode) {
-    return new AgentDefinition("a", null, null, tools, mode, null, null, null);
+    return new AgentDefinition("a", null, null, tools, mode, null, null, null, null, null);
   }
 }

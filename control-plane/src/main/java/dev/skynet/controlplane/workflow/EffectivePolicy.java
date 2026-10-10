@@ -11,12 +11,16 @@ import java.util.Map;
  * Lo que se le permite a una invocación: lo que pide su agente del YAML, recortado a la política
  * del repositorio. Un agente nunca obtiene herramientas, un modo de permisos ni límites que el
  * repositorio no le dé.
+ *
+ * @param model modelo que pide el agente, o {@code null} para el global ({@code
+ *     skynet.agent.model})
  */
 record EffectivePolicy(
     List<String> allowedTools,
     String permissionMode,
     List<String> environment,
-    AgentLimits limits) {
+    AgentLimits limits,
+    String model) {
 
   /** Del menos al más permisivo; {@code default} y {@code dontAsk} solo usan lo permitido. */
   private static final Map<String, Integer> PERMISSIVENESS =
@@ -25,7 +29,7 @@ record EffectivePolicy(
   /** La política del repositorio tal cual, con los límites de la invocación. */
   static EffectivePolicy of(AgentPolicy policy, AgentLimits limits) {
     return new EffectivePolicy(
-        policy.allowedTools(), policy.permissionMode(), policy.environment(), limits);
+        policy.allowedTools(), policy.permissionMode(), policy.environment(), limits, null);
   }
 
   /**
@@ -56,7 +60,12 @@ record EffectivePolicy(
                 ? launch.maxBudgetUsd()
                 : min(agent.maxBudgetUsd(), policy.maxBudgetUsd()),
             agentTimeout == null ? launch.timeout() : min(agentTimeout, policy.timeout()));
-    return new EffectivePolicy(tools, mode, policy.environment(), limits);
+    return new EffectivePolicy(tools, mode, policy.environment(), limits, agent.model());
+  }
+
+  /** La misma política con otros límites. */
+  EffectivePolicy withLimits(AgentLimits other) {
+    return new EffectivePolicy(allowedTools, permissionMode, environment, other, model);
   }
 
   /** {@code Bash(git:*)} cabe en {@code Bash}; {@code Bash} no cabe en {@code Bash(git:*)}. */

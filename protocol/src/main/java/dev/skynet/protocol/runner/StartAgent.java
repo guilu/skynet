@@ -23,6 +23,8 @@ import java.util.UUID;
  *     que el runner permite ({@code SKYNET_AGENT_ENV}); {@code null} para todas las permitidas
  * @param workspace worktree existente en el que arranca la sesión nueva, o {@code null} para crear
  *     uno; no se combina con {@code resume}
+ * @param command comando de shell de una fase {@code command}: el runner lo ejecuta con {@code sh
+ *     -c} en el worktree en lugar de lanzar el agente; {@code null} para un agente
  */
 public record StartAgent(
     UUID workflowRunId,
@@ -37,7 +39,8 @@ public record StartAgent(
     AgentLimits limits,
     ResumeFrom resume,
     List<String> environment,
-    WorkspaceRef workspace) {
+    WorkspaceRef workspace,
+    String command) {
 
   public StartAgent {
     Objects.requireNonNull(workflowRunId, "workflowRunId");
@@ -50,6 +53,41 @@ public record StartAgent(
     if (resume != null && workspace != null) {
       throw new IllegalArgumentException("Una reanudación ya trae su worktree");
     }
+    if (command != null && resume != null) {
+      throw new IllegalArgumentException("Un comando no se reanuda");
+    }
+  }
+
+  /** Invocación de un agente (no un comando). */
+  public StartAgent(
+      UUID workflowRunId,
+      String workItemKey,
+      String repositoryPath,
+      String baseBranch,
+      UUID sessionId,
+      String prompt,
+      List<String> allowedTools,
+      String permissionMode,
+      String model,
+      AgentLimits limits,
+      ResumeFrom resume,
+      List<String> environment,
+      WorkspaceRef workspace) {
+    this(
+        workflowRunId,
+        workItemKey,
+        repositoryPath,
+        baseBranch,
+        sessionId,
+        prompt,
+        allowedTools,
+        permissionMode,
+        model,
+        limits,
+        resume,
+        environment,
+        workspace,
+        null);
   }
 
   /** Invocación que no parte de un worktree existente (o que lo trae en {@code resume}). */
@@ -79,6 +117,7 @@ public record StartAgent(
         limits,
         resume,
         environment,
+        null,
         null);
   }
 }

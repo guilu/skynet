@@ -1,21 +1,40 @@
 [ {
   "stage" : "review",
   "name" : "Revisión",
+  "type" : "agent",
   "agent" : "reviewer",
   "allowedTools" : [ "Read", "Grep" ],
   "permissionMode" : "plan",
   "environment" : null,
   "maxTurns" : 10,
   "maxBudgetUsd" : 2.50,
-  "timeoutMinutes" : null
+  "timeoutMinutes" : null,
+  "model" : "claude-haiku-4-5",
+  "command" : null
 }, {
   "stage" : "fix",
   "name" : null,
+  "type" : "agent",
   "agent" : null,
   "allowedTools" : [ "Read", "Edit", "Bash" ],
   "permissionMode" : "dontAsk",
   "environment" : [ ],
   "maxTurns" : null,
   "maxBudgetUsd" : null,
-  "timeoutMinutes" : null
+  "timeoutMinutes" : null,
+  "model" : null,
+  "command" : null
+}, {
+  "stage" : "tests",
+  "name" : "Tests",
+  "type" : "command",
+  "agent" : null,
+  "allowedTools" : [ "Read", "Edit", "Bash" ],
+  "permissionMode" : "dontAsk",
+  "environment" : [ ],
+  "maxTurns" : null,
+  "maxBudgetUsd" : null,
+  "timeoutMinutes" : null,
+  "model" : null,
+  "command" : "./gradlew test"
 } ]

@@ -10,7 +10,8 @@ import java.util.List;
  * @param prompt plantilla del prompt de la fase; si es {@code null} se usa la del agente
  * @param dependsOn fases que tienen que terminar antes, en el orden del YAML
  * @param workspace de dónde sale su worktree
- * @param workspaceFrom fase cuyo worktree continúa, cuando depende de varias con agente
+ * @param workspaceFrom fase cuyo worktree continúa, cuando depende de varias con worktree
+ * @param command comando de shell de una fase {@code command}; {@code null} en las demás
  */
 public record StageDefinition(
     String id,
@@ -20,7 +21,8 @@ public record StageDefinition(
     String prompt,
     List<Dependency> dependsOn,
     WorkspaceMode workspace,
-    String workspaceFrom) {
+    String workspaceFrom,
+    String command) {
 
   public StageDefinition {
     dependsOn = List.copyOf(dependsOn);
@@ -38,9 +40,9 @@ public record StageDefinition(
     }
   }
 
-  /** De dónde sale el worktree de una fase con agente. */
+  /** De dónde sale el worktree de una fase con agente o comando. */
   public enum WorkspaceMode {
-    /** Continúa el de la fase de la que depende; sin ninguna, uno nuevo. */
+    /** Continúa el de la fase de la que depende (agente o comando); sin ninguna, uno nuevo. */
     INHERIT("inherit"),
     /** Siempre uno nuevo desde la rama por defecto. */
     ISOLATED("isolated-worktree");

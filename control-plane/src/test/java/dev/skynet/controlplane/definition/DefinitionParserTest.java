@@ -128,7 +128,6 @@ class DefinitionParserTest {
     assertThat(messages(parsed, Severity.UNSUPPORTED))
         .contains(
             "El tipo `human-approval` todavía no se ejecuta: llega en W5",
-            "El tipo `command` todavía no se ejecuta: llega en W3",
             "El tipo `parallel` todavía no se ejecuta: llega en W3",
             "El tipo `github-pr` todavía no se ejecuta: llega en S2",
             "`promptTemplate` todavía no se usa: llega en S3",
@@ -144,6 +143,127 @@ class DefinitionParserTest {
     assertThat(developer.maxBudgetUsd()).isEqualByComparingTo(new BigDecimal("3"));
     assertThat(definition.stage("implementation").orElseThrow().workspace())
         .isEqualTo(StageDefinition.WorkspaceMode.ISOLATED);
+  }
+
+  @Test
+  void commandStagesRunAShellCommandInTheWorktreeTheyContinue() {
+    Parsed parsed =
+        parse(
+            """
+            id: comandos
+            stages:
+              - id: implement
+                type: agent
+                prompt: Implementa
+              - id: tests
+                type: command
+                command: ./gradlew test
+                dependsOn: [implement]
+              - id: review
+                type: agent
+                prompt: Revisa
+                dependsOn: [implement, tests]
+                workspaceFrom: tests
+            """);
+    assertThat(parsed.validation().problems()).isEmpty();
+    assertThat(parsed.validation().publishable()).isTrue();
+    StageDefinition tests = parsed.definition().stage("tests").orElseThrow();
+    assertThat(tests.type()).isEqualTo(StageType.COMMAND);
+    assertThat(tests.command()).isEqualTo("./gradlew test");
+    assertThat(tests.agent()).isNull();
+  }
+
+  @Test
+  void aCommandStageHasACommandAndNothingElse() {
+    Parsed parsed =
+        parse(
+            """
+            id: comandos
+            agents:
+              dev:
+                prompt: hola
+            stages:
+              - id: sin-comando
+                type: command
+              - id: con-agente
+                type: command
+                agent: dev
+                prompt: hola
+                command: make
+              - id: con-variables
+                type: command
+                command: "git checkout {{inputs.rama}}"
+              - id: agente
+                type: agent
+                agent: dev
+                command: make
+              - id: varios
+                type: agent
+                prompt: x
+                dependsOn: [con-agente, con-variables]
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .containsExactly(
+            "A esta fase le falta `command`, el comando que se ejecuta en el worktree, p. ej."
+                + " `command: ./gradlew test`",
+            "Una fase `command` ejecuta un comando, no un agente: quita `agent`",
+            "Una fase `command` ejecuta un comando, no un agente: quita `prompt`",
+            "Los comandos no admiten variables `{{...}}`: un dato de entrada podría colar otro"
+                + " comando. Escríbelo tal cual",
+            "`command` solo vale en fases `type: command`; esta es `agent`",
+            "La fase `varios` depende de varias fases con worktree (con-agente, con-variables):"
+                + " indica con `workspaceFrom` cuál continúa, o pon `workspace: isolated-worktree`"
+                + " para empezar un worktree nuevo");
+  }
+
+  @Test
+  void agentsChooseTheirModelAndOnlyClaudeCodeRunsForNow() {
+    Parsed parsed =
+        parse(
+            """
+            id: modelos
+            agents:
+              rapido:
+                prompt: hola
+                model: claude-haiku-4-5
+              listo:
+                prompt: hola
+                model: opus
+                provider: claude-code
+              otro:
+                prompt: hola
+                provider: codex
+              raro:
+                prompt: hola
+                provider: gpt
+                model: "con espacios"
+            stages:
+              - id: a
+                type: agent
+                agent: rapido
+              - id: b
+                type: agent
+                agent: listo
+              - id: c
+                type: agent
+                agent: otro
+              - id: d
+                type: agent
+                agent: raro
+            """);
+    WorkflowDefinition definition = parsed.definition();
+    assertThat(definition.agent("rapido").orElseThrow().model()).isEqualTo("claude-haiku-4-5");
+    assertThat(definition.agent("rapido").orElseThrow().provider()).isEqualTo("claude-code");
+    assertThat(definition.agent("listo").orElseThrow().model()).isEqualTo("opus");
+    assertThat(messages(parsed, Severity.UNSUPPORTED))
+        .containsExactly(
+            "El proveedor `codex` todavía no se ejecuta: llega con el hito de proveedores. Por"
+                + " ahora solo `claude-code`");
+    assertThat(messages(parsed, Severity.ERROR))
+        .containsExactly(
+            "Proveedor `gpt` desconocido. Admite: claude-code, codex, gemini, opencode",
+            "`con espacios` no vale como modelo: escribe su nombre o su alias, p. ej."
+                + " `claude-sonnet-4-5` o `opus`");
   }
 
   @Test
@@ -341,7 +461,7 @@ class DefinitionParserTest {
         """;
     assertThat(messages(parse(base), Severity.ERROR))
         .containsExactly(
-            "La fase `join` depende de varias fases con agente (back, front): indica con"
+            "La fase `join` depende de varias fases con worktree (back, front): indica con"
                 + " `workspaceFrom` cuál continúa, o pon `workspace: isolated-worktree` para"
                 + " empezar un worktree nuevo");
     assertThat(errors(parse(base + "    workspaceFrom: back\n"))).isEmpty();

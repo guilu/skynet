@@ -155,6 +155,9 @@ const STAGE_POLICY: Keys<StagePolicy> = {
   maxTurns: true,
   maxBudgetUsd: true,
   timeoutMinutes: true,
+  type: true,
+  model: true,
+  command: true,
 }
 const RUN_PAGE: Keys<RunPage> = { items: true, page: true, size: true, total: true }
 const PROMPT: Keys<Prompt> = { id: true, role: true, content: true, sha256: true, createdAt: true }
@@ -323,6 +326,8 @@ const AGENT_DEFINITION: Keys<AgentDefinition> = {
   maxTurns: true,
   maxBudgetUsd: true,
   timeoutMinutes: true,
+  model: true,
+  provider: true,
 }
 const STAGE_DEFINITION: Keys<StageDefinition> = {
   id: true,
@@ -333,6 +338,7 @@ const STAGE_DEFINITION: Keys<StageDefinition> = {
   dependsOn: true,
   workspace: true,
   workspaceFrom: true,
+  command: true,
 }
 
 function expectSummary(summary: WorkflowSummary) {
@@ -367,7 +373,8 @@ describe('contratos con el backend', () => {
 
   it('política efectiva por fase', () => {
     ;(effectivePolicy as StagePolicy[]).forEach((p) => expectShape(p, STAGE_POLICY))
-    expect(effectivePolicy.map((p) => p.agent)).toEqual(['reviewer', null])
+    expect(effectivePolicy.map((p) => p.agent)).toEqual(['reviewer', null, null])
+    expect(effectivePolicy.map((p) => p.type)).toEqual(['agent', 'agent', 'command'])
   })
 
   it('página de ejecuciones', () => {

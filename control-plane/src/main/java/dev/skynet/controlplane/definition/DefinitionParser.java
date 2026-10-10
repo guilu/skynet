@@ -49,7 +49,7 @@ public final class DefinitionParser {
       Set.of("id", "version", "name", "description", "inputs", "agents", "stages");
   static final Set<String> INPUT_KEYS = Set.of("type", "required", "default", "description");
   static final Set<String> AGENT_KEYS =
-      Set.of("description", "prompt", "tools", "permissionMode", "limits");
+      Set.of("description", "prompt", "tools", "permissionMode", "limits", "model", "provider");
   static final Set<String> LIMIT_KEYS = Set.of("maxTurns", "maxBudgetUsd", "timeoutMinutes");
   static final Set<String> STAGE_KEYS =
       Set.of(
@@ -61,7 +61,8 @@ public final class DefinitionParser {
           "prompt",
           "dependsOn",
           "workspace",
-          "workspaceFrom");
+          "workspaceFrom",
+          "command");
 
   /** Claves de §11 que llegan con hitos posteriores, con el hito que las ejecuta. */
   static final Map<String, String> FUTURE_STAGE_KEYS =
@@ -72,8 +73,7 @@ public final class DefinitionParser {
           "retry", "W6",
           "timeout", "W6",
           "condition", "W3",
-          "children", "W3",
-          "command", "W3");
+          "children", "W3");
 
   /** Variables que puede usar un prompt, además de {@code inputs.<nombre>}. */
   static final List<String> CONTEXT_VARIABLES =
@@ -93,6 +93,11 @@ public final class DefinitionParser {
   static final Pattern NAME = Pattern.compile("[a-z][a-z0-9-]{0,63}");
   static final Pattern INPUT_NAME = Pattern.compile("[A-Za-z]\\w{0,63}");
   static final Pattern TOOL = Pattern.compile("[A-Za-z]\\w*(\\(.+\\))?");
+  static final Pattern MODEL = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:/\\[\\]-]{0,99}");
+
+  /** Proveedores que llegan con el hito de proveedores, después de W3. */
+  static final Set<String> FUTURE_PROVIDERS = Set.of("codex", "gemini", "opencode");
+
   private static final Pattern VARIABLE = Pattern.compile("\\{\\{([^{}]*)}}");
 
   private DefinitionParser() {}
@@ -390,6 +395,8 @@ public final class DefinitionParser {
             String prompt = text(fields.get("prompt"), path + ".prompt");
             List<String> tools = tools(fields.get("tools"), path + ".tools");
             String permissionMode = permissionMode(fields.get("permissionMode"), path);
+            String model = model(fields.get("model"), path + ".model");
+            String provider = provider(fields.get("provider"), path + ".provider");
             Integer maxTurns = null;
             BigDecimal maxBudgetUsd = null;
             Integer timeoutMinutes = null;
@@ -418,9 +425,57 @@ public final class DefinitionParser {
                     permissionMode,
                     maxTurns,
                     maxBudgetUsd,
-                    timeoutMinutes));
+                    timeoutMinutes,
+                    model,
+                    provider));
           });
       return agents;
+    }
+
+    private String model(Entry entry, String path) {
+      String model = text(entry, path);
+      if (model != null && !MODEL.matcher(model).matches()) {
+        error(
+            entry.value(),
+            path,
+            "`"
+                + model
+                + "` no vale como modelo: escribe su nombre o su alias, p. ej. `claude-sonnet-4-5`"
+                + " o `opus`");
+        return null;
+      }
+      return model;
+    }
+
+    private String provider(Entry entry, String path) {
+      String provider = text(entry, path);
+      if (provider == null || provider.equals(AgentDefinition.CLAUDE_CODE)) {
+        return AgentDefinition.CLAUDE_CODE;
+      }
+      if (FUTURE_PROVIDERS.contains(provider)) {
+        add(
+            Severity.UNSUPPORTED,
+            path,
+            entry.value(),
+            "El proveedor `"
+                + provider
+                + "` todavía no se ejecuta: llega con el hito de proveedores. Por ahora solo `"
+                + AgentDefinition.CLAUDE_CODE
+                + "`");
+        return provider;
+      }
+      List<String> known = new ArrayList<>(List.of(AgentDefinition.CLAUDE_CODE));
+      known.addAll(new java.util.TreeSet<>(FUTURE_PROVIDERS));
+      error(
+          entry.value(),
+          path,
+          "Proveedor `"
+              + provider
+              + "` desconocido"
+              + suggestion(provider, known)
+              + ". Admite: "
+              + String.join(", ", known));
+      return null;
     }
 
     private List<String> tools(Entry entry, String path) {
@@ -567,7 +622,7 @@ public final class DefinitionParser {
         }
       }
 
-      if (type == StageType.AGENT) {
+      if (type.executable()) {
         for (Map.Entry<String, String> future : FUTURE_STAGE_KEYS.entrySet()) {
           Entry used = fields.get(future.getKey());
           if (used != null) {
@@ -630,6 +685,7 @@ public final class DefinitionParser {
         }
       }
 
+      String command = command(fields, type, node, path);
       StageDefinition stage =
           new StageDefinition(
               id,
@@ -639,8 +695,60 @@ public final class DefinitionParser {
               text(fields.get("prompt"), path + ".prompt"),
               dependsOn,
               workspace,
-              text(fields.get("workspaceFrom"), path + ".workspaceFrom"));
+              text(fields.get("workspaceFrom"), path + ".workspaceFrom"),
+              command);
       return new StageAt(stage, path, node, fields, dependencyNodes);
+    }
+
+    /**
+     * El comando de una fase {@code command}: obligatorio, sin agente ni prompt, y sin variables
+     * (un dato de entrada metido en un comando de shell podría ejecutar otra cosa). En las demás
+     * fases, {@code command} no vale.
+     */
+    private String command(Map<String, Entry> fields, StageType type, Node node, String path) {
+      Entry entry = fields.get("command");
+      if (type != StageType.COMMAND) {
+        if (entry != null && type.executable()) {
+          error(
+              entry.key(),
+              path + ".command",
+              "`command` solo vale en fases `type: command`; esta es `" + type.yaml() + "`");
+        }
+        return null;
+      }
+      for (String key : List.of("agent", "prompt")) {
+        Entry used = fields.get(key);
+        if (used != null) {
+          error(
+              used.key(),
+              path + "." + key,
+              "Una fase `command` ejecuta un comando, no un agente: quita `" + key + "`");
+        }
+      }
+      if (entry == null || isNull(entry.value())) {
+        error(
+            node,
+            path + ".command",
+            "A esta fase le falta `command`, el comando que se ejecuta en el worktree, p. ej."
+                + " `command: ./gradlew test`");
+        return null;
+      }
+      String command = text(entry, path + ".command");
+      if (command == null) {
+        return null;
+      }
+      if (command.isBlank()) {
+        error(entry.value(), path + ".command", "El comando está vacío");
+        return null;
+      }
+      if (VARIABLE.matcher(command).find()) {
+        error(
+            entry.value(),
+            path + ".command",
+            "Los comandos no admiten variables `{{...}}`: un dato de entrada podría colar otro"
+                + " comando. Escríbelo tal cual");
+      }
+      return command;
     }
 
     /** Lo que relaciona las fases entre sí y con los agentes y los datos. */
@@ -683,6 +791,10 @@ public final class DefinitionParser {
                     + "`"
                     + suggestion(dep.stage(), byId.keySet()));
           }
+        }
+        if (stage.type() == StageType.COMMAND) {
+          checkWorkspace(at, byId);
+          continue;
         }
         if (stage.type() != StageType.AGENT) {
           continue;
@@ -743,7 +855,7 @@ public final class DefinitionParser {
       List<String> agentDeps =
           stage.dependsOn().stream()
               .map(Dependency::stage)
-              .filter(d -> byId.containsKey(d) && byId.get(d).stage().type() == StageType.AGENT)
+              .filter(d -> byId.containsKey(d) && byId.get(d).stage().type().hasWorkspace())
               .toList();
       if (stage.workspaceFrom() != null) {
         Node node = at.fields().get("workspaceFrom").value();
@@ -766,7 +878,10 @@ public final class DefinitionParser {
               "`workspaceFrom` tiene que ser una de las fases de `dependsOn`"
                   + (agentDeps.isEmpty() ? "" : ": " + String.join(", ", agentDeps)));
         } else if (!agentDeps.contains(dep.stage())) {
-          error(node, path, "`" + dep.stage() + "` no es una fase con agente: no tiene worktree");
+          error(
+              node,
+              path,
+              "`" + dep.stage() + "` no es una fase con agente ni comando: no tiene worktree");
         } else if (dep.optional()) {
           error(
               node,
@@ -783,7 +898,7 @@ public final class DefinitionParser {
             at.path() + ".workspace",
             "La fase `"
                 + stage.id()
-                + "` depende de varias fases con agente ("
+                + "` depende de varias fases con worktree ("
                 + String.join(", ", agentDeps)
                 + "): indica con `workspaceFrom` cuál continúa, o pon `workspace: isolated-worktree`"
                 + " para empezar un worktree nuevo");

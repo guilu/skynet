@@ -10,7 +10,7 @@ import java.util.Optional;
  */
 public enum StageType {
   AGENT("agent", null),
-  COMMAND("command", "W3"),
+  COMMAND("command", null),
   PARALLEL("parallel", "W3"),
   CONDITIONAL("conditional", "W3"),
   VERIFICATION("verification", "W4"),
@@ -37,7 +37,12 @@ public enum StageType {
 
   /** Si el motor ya ejecuta fases de este tipo. */
   public boolean executable() {
-    return this == AGENT;
+    return this == AGENT || this == COMMAND;
+  }
+
+  /** Si la fase trabaja en un worktree, que las siguientes pueden continuar. */
+  public boolean hasWorkspace() {
+    return this == AGENT || this == COMMAND;
   }
 
   /** Hito en el que se podrá ejecutar, o {@code null} si todavía no está planificado. */

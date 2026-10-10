@@ -10,6 +10,8 @@ import java.util.List;
  * @param prompt plantilla del prompt, con variables {@code {{...}}}, o {@code null}
  * @param tools herramientas permitidas, o {@code null} para las del repositorio
  * @param permissionMode modo de permisos, o {@code null} para el del repositorio
+ * @param model modelo, o {@code null} para el global ({@code skynet.agent.model})
+ * @param provider proveedor; por ahora solo {@code claude-code}
  */
 public record AgentDefinition(
     String name,
@@ -19,7 +21,12 @@ public record AgentDefinition(
     String permissionMode,
     Integer maxTurns,
     BigDecimal maxBudgetUsd,
-    Integer timeoutMinutes) {
+    Integer timeoutMinutes,
+    String model,
+    String provider) {
+
+  /** Proveedor por defecto, y por ahora el único que se ejecuta. */
+  public static final String CLAUDE_CODE = "claude-code";
 
   public AgentDefinition {
     tools = tools == null ? null : List.copyOf(tools);
