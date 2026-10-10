@@ -90,6 +90,34 @@ class RunTransitions {
     return saved;
   }
 
+  /** La fase pasa de {@code PENDING} a {@code READY}: sus dependencias han terminado bien. */
+  StageRun readyStage(StageRun stage, Instant now) {
+    stage.transitionTo(StageStatus.READY, now);
+    StageRun saved = stageRuns.save(stage);
+    append(
+        "stage_run",
+        stage.getId(),
+        "stage.ready",
+        stage.getWorkflowRunId(),
+        Map.of("stageKey", stage.getStageKey(), "attempt", stage.getAttempt()),
+        now);
+    return saved;
+  }
+
+  /** La fase no se ejecutará: una dependencia que necesitaba se ha omitido. */
+  StageRun skipStage(StageRun stage, String reason, Instant now) {
+    stage.transitionTo(StageStatus.SKIPPED, now);
+    StageRun saved = stageRuns.save(stage);
+    append(
+        "stage_run",
+        stage.getId(),
+        "stage.skipped",
+        stage.getWorkflowRunId(),
+        Map.of("stageKey", stage.getStageKey(), "reason", reason),
+        now);
+    return saved;
+  }
+
   WorkflowRun advanceRun(WorkflowRun run, WorkflowRunStatus next, String reason, Instant now) {
     if (run.getStatus() == next || !run.getStatus().canTransitionTo(next)) {
       return run;
@@ -107,25 +135,16 @@ class RunTransitions {
   }
 
   /**
-   * Cierra la fase y la ejecución {@code adhoc} con el resultado del agente. En la Fase 2 esta
-   * decisión pasa al motor de workflows.
+   * Cierra la fase con el resultado de su agente. La ejecución la cierra el motor, que decide qué
+   * viene después: quien llama publica {@link WorkflowRunChanged}.
    */
-  void finishAdhoc(StageRun stage, WorkflowRun run, AgentObservableStatus outcome, Instant now) {
+  StageRun finishStage(StageRun stage, AgentObservableStatus outcome, Instant now) {
     String reason = "agent-" + outcome.name().toLowerCase(java.util.Locale.ROOT);
-    switch (outcome) {
-      case COMPLETED -> {
-        advanceStage(stage, StageStatus.SUCCEEDED, reason, now);
-        advanceRun(run, WorkflowRunStatus.SUCCEEDED, reason, now);
-      }
-      case CANCELLED -> {
-        advanceStage(stage, StageStatus.CANCELLED, reason, now);
-        advanceRun(run, WorkflowRunStatus.CANCELLED, reason, now);
-      }
-      default -> {
-        advanceStage(stage, StageStatus.FAILED, reason, now);
-        advanceRun(run, WorkflowRunStatus.FAILED, reason, now);
-      }
-    }
+    return switch (outcome) {
+      case COMPLETED -> advanceStage(stage, StageStatus.SUCCEEDED, reason, now);
+      case CANCELLED -> advanceStage(stage, StageStatus.CANCELLED, reason, now);
+      default -> advanceStage(stage, StageStatus.FAILED, reason, now);
+    };
   }
 
   void append(

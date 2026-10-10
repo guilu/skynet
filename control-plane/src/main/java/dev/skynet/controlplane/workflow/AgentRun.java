@@ -136,11 +136,26 @@ public class AgentRun {
       UUID sessionId,
       AgentLimits limits,
       Instant now) {
+    return queued(stageRunId, repositoryId, provider, sessionId, null, limits, now);
+  }
+
+  /**
+   * Lanzamiento en cola con sesión nueva; con {@code workspaceId}, en ese worktree (una fase que
+   * continúa el de la fase de la que depende) en vez de en uno nuevo.
+   */
+  static AgentRun queued(
+      UUID stageRunId,
+      UUID repositoryId,
+      String provider,
+      UUID sessionId,
+      UUID workspaceId,
+      AgentLimits limits,
+      Instant now) {
     return create(
         stageRunId,
         new Origin(null, repositoryId, AgentRunKind.START, provider),
         sessionId,
-        null,
+        workspaceId,
         limits,
         now);
   }

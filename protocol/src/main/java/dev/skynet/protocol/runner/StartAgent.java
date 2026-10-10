@@ -21,6 +21,8 @@ import java.util.UUID;
  * @param resume sesión y worktree de partida; solo en {@link RunnerCommandType#RESUME}
  * @param environment variables de entorno adicionales que recibe el agente, siempre dentro de las
  *     que el runner permite ({@code SKYNET_AGENT_ENV}); {@code null} para todas las permitidas
+ * @param workspace worktree existente en el que arranca la sesión nueva, o {@code null} para crear
+ *     uno; no se combina con {@code resume}
  */
 public record StartAgent(
     UUID workflowRunId,
@@ -34,7 +36,8 @@ public record StartAgent(
     String model,
     AgentLimits limits,
     ResumeFrom resume,
-    List<String> environment) {
+    List<String> environment,
+    WorkspaceRef workspace) {
 
   public StartAgent {
     Objects.requireNonNull(workflowRunId, "workflowRunId");
@@ -44,5 +47,38 @@ public record StartAgent(
     allowedTools = allowedTools == null ? List.of() : List.copyOf(allowedTools);
     limits = limits == null ? AgentLimits.none() : limits;
     environment = environment == null ? null : List.copyOf(environment);
+    if (resume != null && workspace != null) {
+      throw new IllegalArgumentException("Una reanudación ya trae su worktree");
+    }
+  }
+
+  /** Invocación que no parte de un worktree existente (o que lo trae en {@code resume}). */
+  public StartAgent(
+      UUID workflowRunId,
+      String workItemKey,
+      String repositoryPath,
+      String baseBranch,
+      UUID sessionId,
+      String prompt,
+      List<String> allowedTools,
+      String permissionMode,
+      String model,
+      AgentLimits limits,
+      ResumeFrom resume,
+      List<String> environment) {
+    this(
+        workflowRunId,
+        workItemKey,
+        repositoryPath,
+        baseBranch,
+        sessionId,
+        prompt,
+        allowedTools,
+        permissionMode,
+        model,
+        limits,
+        resume,
+        environment,
+        null);
   }
 }

@@ -9,7 +9,14 @@ import { isTerminal } from '../../format'
  */
 export type Refetch = 'none' | 'soon' | 'now'
 
-const STRUCTURAL = ['workflow.started', 'stage.ready', 'agent.spawned']
+const STRUCTURAL = [
+  'workflow.started',
+  'stage.pending',
+  'stage.ready',
+  'stage.skipped',
+  'stage.start.failed',
+  'agent.spawned',
+]
 const FINISHING = ['agent.result', 'agent.process.exited', 'workflow.status.changed']
 const WITH_USAGE = ['agent.message.received', 'agent.tool.started']
 

@@ -2,6 +2,7 @@ package dev.skynet.controlplane.workflow;
 
 import dev.skynet.controlplane.shared.ArchiveState;
 import dev.skynet.controlplane.shared.Archived;
+import dev.skynet.controlplane.workflow.RunService.Launch;
 import dev.skynet.protocol.WorkflowRunStatus;
 import dev.skynet.protocol.runner.AgentLimits;
 import jakarta.validation.Valid;
@@ -15,6 +16,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -40,12 +42,16 @@ class RunController {
   }
 
   /**
-   * Lanzamiento de un agente. Los límites son opcionales: sin ellos se aplican los de {@code
-   * skynet.agent}.
+   * Lanzamiento de un workflow publicado ({@code definitionId}; sin él, la última versión de {@code
+   * adhoc}) con sus datos de entrada. {@code prompt} es un atajo para el dato {@code prompt} de los
+   * workflows que lo piden, como {@code adhoc}. Los límites son opcionales: sin ellos se aplican
+   * los de {@code skynet.agent}, y valen para los agentes que no fijan los suyos.
    */
   record LaunchRun(
       @NotNull UUID repositoryId,
-      @NotBlank @Size(max = 100_000) String prompt,
+      UUID definitionId,
+      @Size(max = 100) Map<String, Object> inputs,
+      @Size(max = 100_000) String prompt,
       @Positive @Max(1_000) Integer maxTurns,
       @Positive @DecimalMax("1000") BigDecimal maxBudgetUsd,
       @Positive @Max(24 * 60) Integer timeoutMinutes) {
@@ -63,7 +69,14 @@ class RunController {
   RunView launch(@PathVariable UUID workItemId, @Valid @RequestBody LaunchRun request) {
     return service.run(
         service
-            .launch(workItemId, request.repositoryId(), request.prompt(), request.limits())
+            .launch(
+                workItemId,
+                new Launch(
+                    request.repositoryId(),
+                    request.definitionId(),
+                    request.inputs(),
+                    request.prompt(),
+                    request.limits()))
             .getId());
   }
 
@@ -100,6 +113,15 @@ class RunController {
   @PostMapping("/api/workflow-runs/{id}/archive")
   ArchiveState archive(@PathVariable UUID id) {
     return service.archive(id);
+  }
+
+  /**
+   * Cancela la ejecución: las fases sin empezar se cancelan y a los agentes en marcha se les ordena
+   * terminar.
+   */
+  @PostMapping("/api/workflow-runs/{id}/cancel")
+  RunView cancelRun(@PathVariable UUID id) {
+    return service.cancelRun(id);
   }
 
   @PostMapping("/api/workflow-runs/{id}/restore")

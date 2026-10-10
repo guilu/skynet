@@ -278,10 +278,10 @@ class ReadProjectionsIT extends IntegrationTest {
     List<Long> sequences = new ArrayList<>();
     get("/api/events?workflowRunId=" + run.runId())
         .forEach(e -> sequences.add(e.path("sequence").asLong()));
-    // workflow.started, stage.ready, agent.spawned
-    assertThat(sequences).hasSize(3);
+    // workflow.started, stage.pending, stage.ready, agent.spawned
+    assertThat(sequences).hasSize(4);
 
-    JsonNode spawned = get("/api/events/" + sequences.get(2));
+    JsonNode spawned = get("/api/events/" + sequences.get(3));
     assertThat(spawned.path("type").asString()).isEqualTo("agent.spawned");
     assertThat(spawned.path("payload").path("promptSha256").asString()).hasSize(64);
     assertThatThrownBy(() -> get("/api/events/999999999"))
@@ -290,11 +290,11 @@ class ReadProjectionsIT extends IntegrationTest {
             e -> assertThat(e.getStatusCode().value()).isEqualTo(404));
 
     List<Long> before = new ArrayList<>();
-    get("/api/events?workflowRunId=" + run.runId() + "&before=" + sequences.get(2) + "&limit=1")
+    get("/api/events?workflowRunId=" + run.runId() + "&before=" + sequences.get(3) + "&limit=1")
         .forEach(e -> before.add(e.path("sequence").asLong()));
-    assertThat(before).containsExactly(sequences.get(1));
+    assertThat(before).containsExactly(sequences.get(2));
     before.clear();
-    get("/api/events?workflowRunId=" + run.runId() + "&before=" + (sequences.get(2) + 1))
+    get("/api/events?workflowRunId=" + run.runId() + "&before=" + (sequences.get(3) + 1))
         .forEach(e -> before.add(e.path("sequence").asLong()));
     assertThat(before).containsExactlyElementsOf(sequences);
   }

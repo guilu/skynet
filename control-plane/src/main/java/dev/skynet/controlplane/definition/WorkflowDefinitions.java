@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +42,9 @@ public class WorkflowDefinitions {
   private final JdbcClient jdbc;
   private final EventStore events;
   private final TimeSource time;
+
+  /** Las versiones publicadas no cambian: se leen una vez. */
+  private final Map<UUID, PublishedDefinition> published = new ConcurrentHashMap<>();
 
   WorkflowDefinitions(JdbcClient jdbc, EventStore events, TimeSource time) {
     this.jdbc = jdbc;
@@ -72,6 +76,69 @@ public class WorkflowDefinitions {
     DefinitionRow row = definitionRow(id);
     Parsed parsed = parse(row);
     return detail(row, parsed);
+  }
+
+  /**
+   * La versión publicada {@code id}, para lanzarla: su workflow no puede estar archivado.
+   *
+   * @throws NotFoundException si no existe
+   * @throws ConflictException si no está publicada o su workflow está archivado
+   */
+  @Transactional(readOnly = true)
+  public PublishedDefinition launchable(UUID id) {
+    PublishedDefinition definition = published(id);
+    requireLaunchable(definition.key());
+    return definition;
+  }
+
+  /** La última versión publicada del workflow {@code key}, para lanzarla. */
+  @Transactional(readOnly = true)
+  public PublishedDefinition latestLaunchable(String key) {
+    requireLaunchable(key);
+    UUID id =
+        jdbc.sql(
+                "SELECT id FROM workflow_definition WHERE key = ? AND status = 'PUBLISHED'"
+                    + " ORDER BY version DESC LIMIT 1")
+            .param(key)
+            .query(UUID.class)
+            .optional()
+            .orElseThrow(
+                () ->
+                    new ConflictException("El workflow " + key + " no tiene versiones publicadas"));
+    return published(id);
+  }
+
+  /**
+   * La versión publicada {@code id}, leída. La usa el motor para seguir una ejecución, así que vale
+   * aunque su workflow se haya archivado después de lanzarla.
+   *
+   * @throws ConflictException si no está publicada
+   */
+  public PublishedDefinition published(UUID id) {
+    PublishedDefinition cached = published.get(id);
+    if (cached != null) {
+      return cached;
+    }
+    DefinitionRow row = definitionRow(id);
+    if (row.status() != DefinitionStatus.PUBLISHED) {
+      throw new ConflictException(
+          "La versión " + row.version() + " de " + row.key() + " no está publicada");
+    }
+    Parsed parsed = parse(row);
+    if (parsed.definition() == null) {
+      throw new IllegalStateException("La versión publicada " + id + " no se puede leer");
+    }
+    PublishedDefinition definition =
+        new PublishedDefinition(id, row.key(), row.version(), parsed.definition());
+    published.put(id, definition);
+    return definition;
+  }
+
+  private void requireLaunchable(String key) {
+    if (workflowRow(key).archivedAt() != null) {
+      throw new ConflictException(
+          "El workflow " + key + " está archivado: restáuralo para lanzarlo");
+    }
   }
 
   /**

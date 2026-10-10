@@ -42,6 +42,49 @@ class RunnerMessagesJsonTest {
   }
 
   @Test
+  void startInAnExistingWorktreeRoundTrip() {
+    StartAgent start =
+        new StartAgent(
+            UUID.randomUUID(),
+            "TKM-1",
+            "/home/dev/demo",
+            "main",
+            UUID.randomUUID(),
+            "Arregla lo que encontró la revisión",
+            List.of("Read", "Edit"),
+            "acceptEdits",
+            null,
+            AgentLimits.none(),
+            null,
+            null,
+            new WorkspaceRef("/w/run/review", "skynet/tkm-1/abcd1234"));
+    RunnerCommand command = RunnerCommand.start(UUID.randomUUID(), UUID.randomUUID(), NOW, start);
+
+    assertThat(roundTrip(command, RunnerCommand.class)).isEqualTo(command);
+  }
+
+  @Test
+  void aStartCannotBothResumeAndUseAWorktree() {
+    assertThatThrownBy(
+            () ->
+                new StartAgent(
+                    UUID.randomUUID(),
+                    "TKM-1",
+                    "/r",
+                    "main",
+                    UUID.randomUUID(),
+                    "p",
+                    List.of(),
+                    "dontAsk",
+                    null,
+                    AgentLimits.none(),
+                    new ResumeFrom("s", false, "/w/a", "b"),
+                    null,
+                    new WorkspaceRef("/w/a", "b")))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
   void resumeCommandRoundTrip() {
     StartAgent start =
         new StartAgent(

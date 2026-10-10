@@ -355,11 +355,12 @@ class PurgeService {
     }
     long used =
         count("SELECT count(*) FROM agent_run WHERE repository_id IN (:ids)", List.of(id))
-            + count("SELECT count(*) FROM workspace WHERE repository_id IN (:ids)", List.of(id));
+            + count("SELECT count(*) FROM workspace WHERE repository_id IN (:ids)", List.of(id))
+            + count("SELECT count(*) FROM workflow_run WHERE repository_id IN (:ids)", List.of(id));
     if (used > 0) {
       blockers.add(
-          "Hay agentes que trabajaron en este repositorio: se queda archivado para conservar"
-              + " sus ejecuciones");
+          "Hay ejecuciones o agentes que trabajaron en este repositorio: se queda archivado para"
+              + " conservar sus ejecuciones");
     }
     Map<String, Object> identity = new LinkedHashMap<>();
     identity.put("projectId", projectId);

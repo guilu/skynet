@@ -57,8 +57,8 @@ class RunLifecycleIT extends IntegrationTest {
       assertThat(agent.path("kind").asString()).isEqualTo("START");
 
       // project.created, repository.registered, 2× workitem.created, workflow.started,
-      // stage.ready, agent.spawned
-      List<SseClient.Message> messages = sse.await(7, Duration.ofSeconds(10));
+      // stage.pending, stage.ready, agent.spawned
+      List<SseClient.Message> messages = sse.await(8, Duration.ofSeconds(10));
       assertThat(messages)
           .extracting(m -> m.data().path("type").asString())
           .containsExactly(
@@ -67,6 +67,7 @@ class RunLifecycleIT extends IntegrationTest {
               "workitem.created",
               "workitem.created",
               "workflow.started",
+              "stage.pending",
               "stage.ready",
               "agent.spawned");
 
@@ -98,12 +99,13 @@ class RunLifecycleIT extends IntegrationTest {
         .extracting(e -> e.path("type").asString())
         .containsExactly(
             "workflow.started",
+            "stage.pending",
             "stage.ready",
             "agent.spawned",
             "agent.status.changed",
             "stage.status.changed",
             "workflow.status.changed");
-    assertThat(events.get(3).path("payload").path("previousStatus").asString()).isEqualTo("QUEUED");
+    assertThat(events.get(4).path("payload").path("previousStatus").asString()).isEqualTo("QUEUED");
 
     // Un agente cancelado no admite más transiciones.
     assertStatus(
