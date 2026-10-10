@@ -522,6 +522,13 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Estimación: 8–10 semanas, sin contar W8.**
 
+**Implementado (W1-A), definiciones en el backend:**
+
+- Módulo `definition`: `DefinitionParser` lee el YAML con SnakeYAML (posición de cada nodo) y lo valida: claves desconocidas con sugerencia, ids, tipos, dependencias inexistentes, a sí misma y ciclos (con la cadena), agentes, herramientas, modo de permisos, límites, variables de los prompts (línea y columna exactas dentro de un bloque `|`) y el worktree de las fases con varias dependencias (`workspaceFrom`). Lo que el motor aún no ejecuta es `UNSUPPORTED`: válido, pero no publicable. El formato está en [`workflows.md`](workflows.md).
+- JSON Schema en `protocol` (`workflow-definition.schema.json`) para el editor de W1-B; `SchemaConsistencyTest` comprueba que coincide con el parser.
+- Migración `V12`: tabla `workflow` (clave, archivado) y estado (`DRAFT`, `VALIDATED`, `PUBLISHED`), nombre, fechas y `revision` en `workflow_definition`; como mucho un borrador por workflow, y un trigger que impide modificar o borrar una versión publicada salvo en una purga. `adhoc` v1 pide el prompt como `inputs.prompt`.
+- API `/api/workflows` y `/api/workflow-versions` (crear, validar, guardar con `revision`, publicar, versión siguiente, descartar, archivar). Eventos `workflow.definition.created`, `.published` (con el `sha256` del YAML), `.discarded`, `workflow.archived` y `workflow.restored`. `/api/workflow-definitions` lista solo las versiones publicadas.
+
 ---
 
 ## 8. Fase 3 — SDD completo

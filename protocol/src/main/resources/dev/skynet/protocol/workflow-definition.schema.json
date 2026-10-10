@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skynet.dev/schemas/workflow-definition.schema.json",
+  "title": "Workflow de Skynet",
+  "description": "Definición declarativa de un workflow (§11 de la especificación). El control plane hace además las comprobaciones que el schema no expresa: referencias entre fases y agentes, ciclos, variables de los prompts y tipos que el motor aún no ejecuta.",
+  "type": "object",
+  "required": ["id", "stages"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "description": "Clave del workflow. No cambia entre versiones.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,48}$"
+    },
+    "version": {
+      "description": "Número de versión. Lo pone Skynet al guardar; si no coincide, solo es un aviso.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "name": { "description": "Nombre para mostrar.", "type": "string", "minLength": 1 },
+    "description": { "description": "Para qué sirve el workflow.", "type": "string", "minLength": 1 },
+    "inputs": {
+      "description": "Datos que se piden al lanzar. Los prompts los usan como {{inputs.nombre}}.",
+      "type": "object",
+      "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$" },
+      "additionalProperties": { "$ref": "#/$defs/input" }
+    },
+    "agents": {
+      "description": "Agentes con nombre que usan las fases.",
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+      "additionalProperties": { "$ref": "#/$defs/agent" }
+    },
+    "stages": {
+      "description": "Fases del workflow.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/stage" }
+    }
+  },
+  "$defs": {
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "description": "string (una línea), text (varias), number o boolean. Por defecto string.",
+          "enum": ["string", "text", "number", "boolean"]
+        },
+        "required": { "description": "Si hay que rellenarlo al lanzar.", "type": "boolean" },
+        "default": { "description": "Valor por defecto.", "type": ["string", "number", "boolean"] },
+        "description": { "description": "Qué se pide.", "type": "string", "minLength": 1 }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": { "description": "Qué hace el agente.", "type": "string", "minLength": 1 },
+        "prompt": {
+          "description": "Plantilla del prompt, con variables {{workItem.title}}, {{inputs.nombre}}, etc.",
+          "type": "string",
+          "minLength": 1
+        },
+        "tools": {
+          "description": "Herramientas permitidas, dentro de las del repositorio. Por defecto, las del repositorio.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\(.+\\))?$" }
+        },
+        "permissionMode": {
+          "description": "Modo de permisos de Claude Code. Por defecto, el del repositorio.",
+          "enum": ["dontAsk", "acceptEdits", "default", "plan"]
+        },
+        "limits": {
+          "description": "Límites de cada invocación, nunca por encima de los del repositorio.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxTurns": { "type": "integer", "minimum": 1, "maximum": 1000 },
+            "maxBudgetUsd": { "type": "number", "minimum": 0.01, "maximum": 1000 },
+            "timeoutMinutes": { "type": "integer", "minimum": 1, "maximum": 1440 }
+          }
+        }
+      }
+    },
+    "stage": {
+      "type": "object",
+      "required": ["id", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Id de la fase, único en el workflow.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "name": { "description": "Nombre para mostrar.", "type": "string", "minLength": 1 },
+        "description": { "description": "Qué hace la fase.", "type": "string", "minLength": 1 },
+        "type": {
+          "description": "Tipo de fase. Por ahora el motor solo ejecuta agent.",
+          "enum": [
+            "agent",
+            "command",
+            "parallel",
+            "conditional",
+            "verification",
+            "human-approval",
+            "github-pr",
+            "github-check",
+            "github-merge",
+            "merge",
+            "deploy"
+          ]
+        },
+        "agent": { "description": "Agente de `agents` que la ejecuta.", "type": "string" },
+        "prompt": {
+          "description": "Prompt de la fase. Si falta, se usa el del agente.",
+          "type": "string",
+          "minLength": 1
+        },
+        "dependsOn": {
+          "description": "Fases que tienen que terminar antes. Con ? al final, la dependencia es opcional: también vale si se omite.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}\\??$" }
+        },
+        "workspace": {
+          "description": "inherit (por defecto) continúa el worktree de la fase de la que depende; isolated-worktree empieza uno nuevo.",
+          "enum": ["inherit", "isolated-worktree"]
+        },
+        "workspaceFrom": {
+          "description": "Con varias dependencias con agente, cuál de ellas continúa su worktree.",
+          "type": "string"
+        },
+        "promptTemplate": { "description": "Llega en S3.", "type": "string" },
+        "outputSchema": { "description": "Llega en W4.", "type": "string" },
+        "artifacts": { "description": "Llega en W4.", "type": "array", "items": { "type": "string" } },
+        "retry": { "description": "Llega en W6.", "type": "object" },
+        "timeout": { "description": "Llega en W6." },
+        "condition": { "description": "Llega en W3.", "type": "string" },
+        "children": { "description": "Llega en W3.", "type": "array" },
+        "command": { "description": "Llega en W3.", "type": "string" }
+      }
+    }
+  }
+}

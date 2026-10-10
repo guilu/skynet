@@ -65,6 +65,14 @@ public abstract class IntegrationTest {
             "TRUNCATE app_setting, event, runner_command, artifact, verification_run, prompt, agent_run, workspace, runner, stage_run, workflow_run, work_item, repository,"
                 + " project")
         .update();
+    // Los workflows de los tests; adhoc viene de las migraciones y se queda. Las versiones
+    // publicadas solo se borran dentro de una purga.
+    jdbc.sql(
+            "DO $$ BEGIN PERFORM set_config('skynet.purge', 'on', true);"
+                + " DELETE FROM workflow_definition WHERE key <> 'adhoc';"
+                + " DELETE FROM workflow WHERE key <> 'adhoc';"
+                + " UPDATE workflow SET archived_at = NULL; END $$")
+        .update();
     baseline =
         jdbc.sql("SELECT last_value FROM event_sequence WHERE id = 1").query(Long.class).single();
     http =
