@@ -102,16 +102,19 @@ public class RunSteps {
 
   /**
    * Bloquea la ejecución hasta el final de la transacción y devuelve su estado, o vacío si ya no
-   * existe (se eliminó).
+   * existe (se eliminó). Con {@code skipIfBusy}, si otra transacción la tiene bloqueada no espera y
+   * devuelve vacío (ver {@link #exists}).
    */
-  public Optional<RunState> lock(UUID runId) {
-    boolean exists =
-        jdbc.sql("SELECT id FROM workflow_run WHERE id = ? FOR UPDATE")
+  public Optional<RunState> lock(UUID runId, boolean skipIfBusy) {
+    boolean locked =
+        jdbc.sql(
+                "SELECT id FROM workflow_run WHERE id = ? FOR UPDATE"
+                    + (skipIfBusy ? " SKIP LOCKED" : ""))
             .param(runId)
             .query(UUID.class)
             .optional()
             .isPresent();
-    if (!exists) {
+    if (!locked) {
       return Optional.empty();
     }
     WorkflowRun run = workflowRuns.findById(runId).orElseThrow();
@@ -123,6 +126,15 @@ public class RunSteps {
           stage.getStageKey(), new StageState(stage.getStageKey(), stage.getStatus(), hasAgent));
     }
     return Optional.of(new RunState(runId, run.getDefinitionId(), run.getStatus(), stages));
+  }
+
+  /** Si la ejecución existe, sin bloquearla. */
+  public boolean exists(UUID runId) {
+    return jdbc.sql("SELECT count(*) FROM workflow_run WHERE id = ?")
+            .param(runId)
+            .query(Integer.class)
+            .single()
+        > 0;
   }
 
   /** La fase puede empezar: sus dependencias han terminado bien. */

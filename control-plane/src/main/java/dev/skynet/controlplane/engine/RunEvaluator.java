@@ -33,7 +33,10 @@ class RunEvaluator {
   enum Outcome {
     /** No queda nada que hacer hasta el próximo cambio (o la ejecución ha terminado). */
     DONE,
-    /** Una fase espera a que se libere su worktree: hay que volver a evaluarla más tarde. */
+    /**
+     * Una fase espera a que se libere su worktree, o la ejecución estaba ocupada: hay que volver a
+     * evaluarla más tarde.
+     */
     RETRY_LATER
   }
 
@@ -48,22 +51,28 @@ class RunEvaluator {
   /** Evalúa en su propia transacción (los workers). */
   @Transactional
   public Outcome evaluate(UUID runId) {
-    return run(runId);
+    return run(runId, false);
   }
 
   /**
    * Evalúa dentro de la transacción del cambio, en un punto de guardado: si falla, se deshace solo
-   * lo de la evaluación y el trabajo queda para los workers.
+   * lo de la evaluación y el trabajo queda para los workers. Si otra transacción tiene la ejecución
+   * bloqueada (un worker evaluándola), no la espera y la deja para los workers: esta transacción ya
+   * ha registrado eventos, y esperar mientras el worker espera para registrar los suyos sería un
+   * interbloqueo.
    */
   @Transactional(propagation = Propagation.NESTED)
   public Outcome evaluateNested(UUID runId) {
-    return run(runId);
+    return run(runId, true);
   }
 
-  private Outcome run(UUID runId) {
+  private Outcome run(UUID runId, boolean skipIfBusy) {
     for (int pass = 0; pass < MAX_PASSES; pass++) {
-      Optional<RunState> locked = steps.lock(runId);
-      if (locked.isEmpty() || locked.get().status().isTerminal()) {
+      Optional<RunState> locked = steps.lock(runId, skipIfBusy);
+      if (locked.isEmpty()) {
+        return skipIfBusy && steps.exists(runId) ? Outcome.RETRY_LATER : Outcome.DONE;
+      }
+      if (locked.get().status().isTerminal()) {
         return Outcome.DONE;
       }
       RunState state = locked.get();
