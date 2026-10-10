@@ -22,6 +22,7 @@ import dev.skynet.controlplane.workflow.RunMetrics;
 import dev.skynet.controlplane.workflow.RunPage;
 import dev.skynet.controlplane.workflow.RunTotals;
 import dev.skynet.controlplane.workflow.RunView;
+import dev.skynet.controlplane.workflow.StagePolicy;
 import dev.skynet.controlplane.workflow.StageRunView;
 import dev.skynet.controlplane.workflow.UnresponsiveAgent;
 import dev.skynet.controlplane.workflow.VerificationResult;
@@ -81,7 +82,8 @@ class ContractIT extends IntegrationTest {
         Arguments.of("workflow-version", Samples.reviewDraftDetail()),
         Arguments.of("conversation", Samples.conversation()),
         Arguments.of("artifacts", Samples.artifacts()),
-        Arguments.of("verifications", Samples.verifications()));
+        Arguments.of("verifications", Samples.verifications()),
+        Arguments.of("effective-policy", Samples.effectivePolicy()));
   }
 
   @ParameterizedTest(name = "{0}")
@@ -260,7 +262,17 @@ class ContractIT extends IntegrationTest {
           at(42),
           null,
           null,
-          new StageRunView(STAGE, "agent", StageStatus.SUCCEEDED, 1, at(2), at(42), List.of(agent)),
+          new StageRunView(
+              STAGE,
+              "agent",
+              null,
+              null,
+              List.of(),
+              StageStatus.SUCCEEDED,
+              1,
+              at(2),
+              at(42),
+              List.of(agent)),
           agent);
     }
 
@@ -271,7 +283,17 @@ class ContractIT extends IntegrationTest {
           null,
           STAGE,
           AGENT,
-          new StageRunView(STAGE, "agent", StageStatus.RUNNING, 1, at(2), null, List.of(agent)),
+          new StageRunView(
+              STAGE,
+              "agent",
+              null,
+              null,
+              List.of(),
+              StageStatus.RUNNING,
+              1,
+              at(2),
+              null,
+              List.of(agent)),
           agent);
     }
 
@@ -301,7 +323,32 @@ class ContractIT extends IntegrationTest {
               agent.cacheReadTokens(),
               agent.cacheCreationTokens(),
               agent.costUsd()),
+          new RunView.WorkflowRef("adhoc", 1, "Agente suelto"),
           List.of(stage));
+    }
+
+    static List<StagePolicy> effectivePolicy() {
+      return List.of(
+          new StagePolicy(
+              "review",
+              "Revisión",
+              "reviewer",
+              List.of("Read", "Grep"),
+              "plan",
+              null,
+              10,
+              new BigDecimal("2.50"),
+              null),
+          new StagePolicy(
+              "fix",
+              null,
+              null,
+              List.of("Read", "Edit", "Bash"),
+              "dontAsk",
+              List.of(),
+              null,
+              null,
+              null));
     }
 
     static AgentRunDetail agentDetail() {

@@ -32,6 +32,35 @@ export function fakeClaudeProcesses(): string[] {
   }
 }
 
+/** POST a la API con la sesión del navegador; devuelve el JSON de la respuesta. */
+export async function postApi(page: Page, path: string, data: unknown) {
+  const response = await page.request.post(path, { data, headers: await csrf(page) })
+  expect(response.ok(), `POST ${path}: ${response.status()}`).toBe(true)
+  return response.json()
+}
+
+/**
+ * Crea proyecto, repositorio (con comando de verificación si se pide) y trabajo. Devuelve los ids
+ * del trabajo y del repositorio.
+ */
+export async function workItemViaApi(
+  page: Page,
+  options: { validationCommand?: string } = {},
+): Promise<{ workItemId: string; repositoryId: string }> {
+  const key = `C${Date.now().toString(36).toUpperCase().slice(-6)}`
+  const project = await postApi(page, '/api/projects', { key, name: 'E2E por API' })
+  const repo = await postApi(page, `/api/projects/${project.id}/repositories`, {
+    name: 'demo',
+    localPath: repoPath,
+    validationCommand: options.validationCommand,
+  })
+  const item = await postApi(page, `/api/projects/${project.id}/work-items`, {
+    title: 'Trabajo por API',
+    type: 'BUG',
+  })
+  return { workItemId: item.id, repositoryId: repo.id }
+}
+
 /**
  * Crea proyecto, repositorio (con comando de verificación si se pide) y trabajo, y lanza un agente.
  * Devuelve el id de la ejecución.
@@ -41,22 +70,16 @@ export async function launchViaApi(
   prompt: string,
   options: { validationCommand?: string } = {},
 ): Promise<string> {
-  const key = `C${Date.now().toString(36).toUpperCase().slice(-6)}`
-  const headers = await csrf(page)
-  const post = async (path: string, data: unknown) =>
-    (await page.request.post(path, { data, headers })).json()
-  const project = await post('/api/projects', { key, name: 'E2E por API' })
-  const repo = await post(`/api/projects/${project.id}/repositories`, {
-    name: 'demo',
-    localPath: repoPath,
-    validationCommand: options.validationCommand,
-  })
-  const item = await post(`/api/projects/${project.id}/work-items`, {
-    title: 'Trabajo por API',
-    type: 'BUG',
-  })
-  const run = await post(`/api/work-items/${item.id}/runs`, { repositoryId: repo.id, prompt })
+  const { workItemId, repositoryId } = await workItemViaApi(page, options)
+  const run = await postApi(page, `/api/work-items/${workItemId}/runs`, { repositoryId, prompt })
   return run.id
+}
+
+/** Crea un workflow con ese YAML y publica su versión 1; devuelve el id de la versión. */
+export async function publishWorkflowViaApi(page: Page, sourceYaml: string): Promise<string> {
+  const draft = await postApi(page, '/api/workflows', { sourceYaml })
+  await postApi(page, `/api/workflow-versions/${draft.id}/publish`, { revision: draft.revision })
+  return draft.id
 }
 
 /** Para o arranca el control plane o el runner de las E2E (scripts/e2e-service.sh). */

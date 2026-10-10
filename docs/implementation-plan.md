@@ -542,8 +542,15 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 - Migración `V13`: `repository_id`, `inputs` y `launch_limits` en `workflow_run` (el motor arranca cada fase con ellos, aunque sea tras un reinicio) y la tabla `workflow_job` (un trabajo por ejecución con `generation`, `run_after`, alquiler `locked_until`, intentos y último error). El cambio se evalúa en su transacción, en un punto de guardado; lo que falla o espera lo recogen los workers con `SKIP LOCKED` y alquiler, con reintentos crecientes, y al arrancar se encolan las ejecuciones sin terminar.
 - Lanzar con `definitionId` e `inputs` (validados contra el YAML), prompts con variables (`{{workItem.*}}`, `{{project.*}}`, `{{inputs.*}}`), política efectiva por agente (herramientas, modo de permisos y límites recortados a la política del repositorio) y `POST /api/workflow-runs/{id}/cancel`. `adhoc` (y reanudar, bifurcar o reintentar) pasa por el mismo modelo: la ejecución guarda sus datos y el motor la cierra.
 - Fail-fast: una fase fallida o cancelada cancela las demás. Una fase continúa el worktree de su dependencia (`StartAgent.workspace`): sesión nueva en el worktree existente, en su runner, y espera si hay una verificación en curso. Las órdenes de arranque fijadas a un runner esperan capacidad como las reanudaciones.
-- Eventos nuevos `stage.pending`, `stage.skipped` y `stage.start.failed`; `workflow.started` lleva `definitionId`. La web los describe en la actividad y la línea de tiempo; lanzar un workflow desde la web y la vista de fases llegan en W2-B.
+- Eventos nuevos `stage.pending`, `stage.skipped` y `stage.start.failed`; `workflow.started` lleva `definitionId`. La web los describe en la actividad y la línea de tiempo.
 - Tests: `PlannerTest`, `EffectivePolicyTest`, `LaunchInputsTest` y `WorkflowEngineIT` (fases en paralelo con dependencia opcional y worktree heredado, espera a la verificación, fail-fast, trabajo con el alquiler vencido retomado una sola vez, cancelar y validar los datos).
+
+**Implementado (W2-B), motor en la web:**
+
+- Lanzar desde un trabajo: **Lanzar workflow** con el workflow publicado (por defecto `adhoc`), sus datos de entrada por tipo, el repositorio, los límites y la política efectiva de cada fase (`GET /api/workflow-versions/{id}/effective-policy?repositoryId=`).
+- Vista de ejecución: `RunView` lleva `workflow` (clave, versión y nombre) y cada fase su `name`, su `agent` y su `dependsOn`, en el orden del YAML. El árbol enseña todas las fases desde el principio con «Pendiente», «Lista» y «Omitida», a qué fase espera cada una, la cascada (omitida o cancelada por otra fase) y resalta todas las fases en marcha. Con varias fases, la cabecera cancela la ejecución entera.
+- E2E `engine.e2e.ts`: un workflow de tres fases (dos en paralelo y una que las une) lanzado desde la web termina «Completada» con un agente por fase aunque se reinicie el control plane a mitad. Es el criterio de aceptación de W2.
+- Contrato nuevo `effective-policy`; `run-view` con `workflow`, `name`, `agent` y `dependsOn`.
 
 ---
 

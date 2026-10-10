@@ -113,8 +113,8 @@ Con la aplicación levantada, abre la web. La navegación lateral da acceso al *
 
 1. **Proyectos** → crea un proyecto (p. ej. clave `TKM`).
 2. En el proyecto, **registra un repositorio** (ruta absoluta en la máquina del runner) y **crea un trabajo** (`TKM-1`).
-3. En el trabajo, **lanza un agente** con un prompt y, si quieres, límites de turnos, presupuesto o tiempo (vacíos = valores por defecto). Se crea la ejecución con su fase y el agente queda **en cola** hasta que un runner conectado (ver abajo) lo recoge, crea un worktree y ejecuta Claude Code en él.
-4. La ejecución abre con una **cabecera operativa**: estado, duración, agente y herramienta en curso, runner, tokens (con caché), coste y estado de la conexión en vivo, con el botón **Cancelar agente**, que pide confirmación. Cancelar mata el agente y todos sus procesos (en Linux, su grupo de procesos entero). Debajo hay tres paneles:
+3. En el trabajo, **Lanzar workflow**: elige el workflow (por defecto `adhoc`, un agente con el prompt que escribas), rellena sus datos y, si quieres, límites de turnos, presupuesto o tiempo (vacíos = valores por defecto). Se crea la ejecución con todas sus fases y cada agente queda **en cola** hasta que un runner conectado (ver abajo) lo recoge, crea un worktree y ejecuta Claude Code en él. Para un workflow propio, mira el ejemplo de abajo.
+4. La ejecución abre con una **cabecera operativa**: estado, duración, agente y herramienta en curso, runner, tokens (con caché), coste y estado de la conexión en vivo, con el workflow que sigue y el botón **Cancelar agente** (o **Cancelar ejecución** si tiene varias fases), que pide confirmación. Cancelar mata el agente y todos sus procesos (en Linux, su grupo de procesos entero). Debajo hay tres paneles:
    - **Fases** y sus agentes; al elegir uno se abre en el inspector (por defecto, el que está en curso). Una reanudación, un reintento o un fork enlaza con el agente del que parte.
    - **Inspector** con pestañas: Resumen (modelo, sesión, rama, tokens, coste y respuesta final), Prompt, Conversación, Herramientas (cada llamada con su entrada, su salida y su duración) y Evento original (el evento guardado, leído de la API). Los textos largos salen recortados con «Ver completo». Las flechas recorren las pestañas.
    - **Timeline en vivo** (SSE), agrupado: cada herramienta es una entrada con su inicio y su fin, y las llamadas seguidas a la misma herramienta se agrupan («Leídos 14 ficheros»). Cada entrada se abre para ver sus eventos originales, y al elegir uno se abre en el inspector. Se filtra por fase, agente, tipo, severidad y origen, y sigue lo último que llega salvo que hayas elegido un evento.
@@ -125,6 +125,45 @@ Con la aplicación levantada, abre la web. La navegación lateral da acceso al *
 
    El agente, la pestaña, el evento elegido y los filtros van en la URL (`?agent=…&tab=tools&seq=123&f.kind=tool`), así que se puede compartir el enlace o recargar sin perder la vista. Los secretos reconocibles (claves de API, tokens, contraseñas) se guardan como `[REDACTED]`.
 5. **Actividad** muestra todos los eventos del sistema en tiempo real; los de una ejecución abren su inspector. Si recargas o se corta la conexión, el stream continúa desde el último evento recibido. Cada cliente del stream tiene su propia cola (`skynet.events.subscriber-queue`, 1000 eventos): si se queda atrás, el servidor cierra su conexión y el navegador se pone al día desde el histórico, sin frenar a los demás.
+
+### Un workflow de ejemplo
+
+En **Workflows → Nuevo workflow**, pega este YAML y publícalo. Revisa y prueba en paralelo, y después corrige en el worktree de la revisión con un agente que solo puede leer y editar:
+
+```yaml
+id: revisar-y-corregir
+name: Revisar y corregir
+description: Revisión y tests en paralelo; después, la corrección.
+
+inputs:
+  objetivo:
+    type: string
+    required: true
+    description: Qué hay que revisar.
+
+agents:
+  corrector:
+    tools: [Read, Edit]
+    limits:
+      maxTurns: 20
+
+stages:
+  - id: revision
+    type: agent
+    prompt: "Revisa {{inputs.objetivo}} en {{workItem.key}} y anota los problemas en REVIEW.md"
+  - id: tests
+    type: agent
+    prompt: "Escribe tests que cubran {{inputs.objetivo}}"
+    workspace: isolated-worktree
+  - id: correccion
+    type: agent
+    agent: corrector
+    prompt: "Corrige lo que dice REVIEW.md"
+    dependsOn: [revision, tests]
+    workspaceFrom: revision
+```
+
+Al lanzarlo desde un trabajo, la web pide `Objetivo` y enseña lo que se le permitirá a cada fase. En la ejecución, `correccion` sale desde el principio «Pendiente» con «Espera a revision y tests», y arranca cuando las dos terminan. El formato completo está en [`docs/workflows.md`](docs/workflows.md).
 
 ### Runner local
 

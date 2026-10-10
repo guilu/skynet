@@ -38,10 +38,15 @@ export function RunHeader({ run, stream }: { run: Run; stream: StreamState }) {
     enabled: agent != null && isTerminal(agent.status),
   })
   const verification = verifications.data?.[0]
-  const cancellable = run.currentAgentRunId != null
+  // Con varias fases se cancela la ejecución entera; con una, su agente.
+  const wholeRun = run.stages.length > 1
+  const cancellable = wholeRun ? run.finishedAt == null : run.currentAgentRunId != null
   const [confirming, setConfirming] = useState(false)
   const cancel = useMutation({
-    mutationFn: () => api.cancelAgent(run.currentAgentRunId!),
+    mutationFn: async () => {
+      if (wholeRun) await api.cancelRun(run.id)
+      else await api.cancelAgent(run.currentAgentRunId!)
+    },
     onSuccess: () => {
       setConfirming(false)
       void queryClient.invalidateQueries({ queryKey: ['run', run.id] })
@@ -87,6 +92,19 @@ export function RunHeader({ run, stream }: { run: Run; stream: StreamState }) {
         />
       )}
       <dl className="metrics">
+        {run.workflow && (
+          <div>
+            <dt>Workflow</dt>
+            <dd>
+              <Link to={`/workflows/${encodeURIComponent(run.workflow.key)}`}>
+                {run.workflow.name ?? run.workflow.key}
+              </Link>{' '}
+              <span className="muted small">
+                {run.workflow.name && `${run.workflow.key} `}v{run.workflow.version}
+              </span>
+            </dd>
+          </div>
+        )}
         <div>
           <dt>Duración</dt>
           <dd>{formatDuration(elapsed(run.startedAt ?? run.createdAt, run.finishedAt, now))}</dd>
@@ -151,8 +169,11 @@ export function RunHeader({ run, stream }: { run: Run; stream: StreamState }) {
           {confirming ? (
             <span className="confirm" role="group" aria-label="Confirmar la cancelación">
               <span className="small">
-                ¿Cancelar el agente? Se detiene su proceso; lo hecho hasta ahora se queda en el
-                worktree.
+                {wholeRun
+                  ? '¿Cancelar la ejecución? Se detienen sus agentes y no arranca ninguna fase más;' +
+                    ' lo hecho se queda en los worktrees.'
+                  : '¿Cancelar el agente? Se detiene su proceso; lo hecho hasta ahora se queda en' +
+                    ' el worktree.'}
               </span>
               <Button variant="danger" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
                 {cancel.isPending ? 'Cancelando…' : 'Sí, cancelar'}
@@ -165,13 +186,14 @@ export function RunHeader({ run, stream }: { run: Run; stream: StreamState }) {
             !cancel.isSuccess && (
               <Button variant="secondary-danger" onClick={() => setConfirming(true)}>
                 <Square size={16} strokeWidth={2.75} aria-hidden="true" />
-                Cancelar agente
+                {wholeRun ? 'Cancelar ejecución' : 'Cancelar agente'}
               </Button>
             )
           )}
           {cancel.isSuccess && (
             <span role="status" className="small">
-              Cancelación solicitada: el agente se detendrá en unos segundos.
+              Cancelación solicitada:{' '}
+              {wholeRun ? 'los agentes se detendrán' : 'el agente se detendrá'} en unos segundos.
             </span>
           )}
         </div>

@@ -59,8 +59,8 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
   })
 
   await test.step('lanzar con límites', async () => {
-    await page.getByRole('button', { name: 'Lanzar agente' }).click()
-    const sheet = page.getByRole('dialog', { name: 'Lanzar agente' })
+    await page.getByRole('button', { name: 'Lanzar workflow' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Lanzar workflow' })
     await sheet.getByLabel('Prompt').fill('La función add de calc.py resta: arréglala')
     await sheet.getByLabel('Turnos máximos').fill('5')
     await sheet.getByRole('button', { name: 'Lanzar', exact: true }).click()

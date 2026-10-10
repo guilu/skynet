@@ -37,7 +37,7 @@ export function runSpans(run: Run, toolsOf: (agentId: string) => ToolCall[]): Sp
   return run.stages.map((stage) => ({
     id: stage.id,
     kind: 'stage',
-    label: stage.stageKey,
+    label: stage.name ?? stage.stageKey,
     detail: stage.attempt > 1 ? `intento ${stage.attempt}` : '',
     status: stage.status,
     tone: statusTone(stage.status),

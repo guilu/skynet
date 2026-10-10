@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { CirclePlay, Play } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
-import { api, WORK_ITEM_TYPES, type Repository, type Run } from '../api'
+import { api, WORK_ITEM_TYPES, type Run } from '../api'
 import {
   ArchivedBanner,
   ArchiveMenu,
@@ -10,6 +10,7 @@ import {
   InheritedArchiveBanner,
 } from '../components/archive/Archive'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { LaunchForm } from '../components/launch/LaunchForm'
 import { DataTable, EmptyState, type Column } from '../components/list/DataTable'
 import { runColumns } from '../components/runColumns'
 import { StatusBadge } from '../components/StatusBadge'
@@ -39,8 +40,8 @@ function columns(now: number): Column<Run>[] {
 }
 
 /**
- * Trabajo: su descripción, sus ejecuciones y el lanzamiento de un agente en un panel lateral.
- * Archivado (él o su proyecto), no se lanzan agentes.
+ * Trabajo: su descripción, sus ejecuciones y el lanzamiento de un workflow en un panel lateral.
+ * Archivado (él o su proyecto), no se lanza nada.
  */
 export function WorkItemPage() {
   const { workItemId = '' } = useParams()
@@ -93,7 +94,7 @@ export function WorkItemPage() {
           {canLaunch && (
             <Button onClick={() => setLaunching(true)}>
               <Play size={18} strokeWidth={2.75} aria-hidden="true" />
-              Lanzar agente
+              Lanzar workflow
             </Button>
           )}
           {item.data && (
@@ -149,7 +150,7 @@ export function WorkItemPage() {
                 <EmptyState icon={CirclePlay} title="Todavía no se ha lanzado ninguna.">
                   {canLaunch && (
                     <Button size="sm" onClick={() => setLaunching(true)}>
-                      Lanzar el primer agente
+                      Lanzar el primero
                     </Button>
                   )}
                 </EmptyState>
@@ -162,8 +163,8 @@ export function WorkItemPage() {
       <Sheet
         open={launching}
         onOpenChange={setLaunching}
-        title="Lanzar agente"
-        description="El agente queda en cola hasta que un runner conectado lo recoge."
+        title="Lanzar workflow"
+        description="Cada fase con agente queda en cola hasta que un runner conectado la recoge."
       >
         {repos.data?.length === 0 ? (
           <p className="muted">
@@ -177,122 +178,3 @@ export function WorkItemPage() {
     </>
   )
 }
-
-function LaunchForm({
-  workItemId,
-  repositories,
-}: {
-  workItemId: string
-  repositories: Repository[]
-}) {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const [repositoryId, setRepositoryId] = useState('')
-  const [prompt, setPrompt] = useState('')
-  const [maxTurns, setMaxTurns] = useState('')
-  const [maxBudgetUsd, setMaxBudgetUsd] = useState('')
-  const [timeoutMinutes, setTimeoutMinutes] = useState('')
-  const repository = repositories.find((r) => r.id === repositoryId) ?? repositories[0]
-  const policy = repository?.agentPolicy
-  const launch = useMutation({
-    mutationFn: () =>
-      api.launchRun(workItemId, {
-        repositoryId: repository!.id,
-        prompt,
-        maxTurns: optionalNumber(maxTurns),
-        maxBudgetUsd: optionalNumber(maxBudgetUsd),
-        timeoutMinutes: optionalNumber(timeoutMinutes),
-      }),
-    onSuccess: (run) => {
-      void queryClient.invalidateQueries({ queryKey: ['runs', workItemId] })
-      void navigate(`/runs/${run.id}`)
-    },
-  })
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
-    launch.mutate()
-  }
-
-  return (
-    <form className="form" onSubmit={submit}>
-      <label>
-        Repositorio
-        <select value={repository?.id ?? ''} onChange={(e) => setRepositoryId(e.target.value)}>
-          {repositories.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Prompt
-        <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={7} required />
-      </label>
-      {policy && (
-        <p className="small muted policy-note">
-          Política {repository.agentPolicyCustom ? 'del repositorio' : 'global'}: herramientas{' '}
-          {policy.allowedTools.length > 0 ? (
-            <code>{policy.allowedTools.join(', ')}</code>
-          ) : (
-            'ninguna'
-          )}
-          , modo <code>{policy.permissionMode}</code>, entorno{' '}
-          {policy.environment === null
-            ? 'el que permite el runner'
-            : policy.environment.length > 0
-              ? policy.environment.join(', ')
-              : 'sin variables extra'}
-          .
-        </p>
-      )}
-      <fieldset className="limits">
-        <legend>Límites (opcionales; vacío = el máximo del repositorio)</legend>
-        <label>
-          Turnos máximos{policy?.maxTurns != null && ` (hasta ${policy.maxTurns})`}
-          <input
-            type="number"
-            min={1}
-            max={policy?.maxTurns ?? 1000}
-            step={1}
-            value={maxTurns}
-            onChange={(e) => setMaxTurns(e.target.value)}
-          />
-        </label>
-        <label>
-          Presupuesto (US$){policy?.maxBudgetUsd != null && ` (hasta ${policy.maxBudgetUsd})`}
-          <input
-            type="number"
-            min={0.01}
-            max={policy?.maxBudgetUsd ?? 1000}
-            step={0.01}
-            value={maxBudgetUsd}
-            onChange={(e) => setMaxBudgetUsd(e.target.value)}
-          />
-        </label>
-        <label>
-          Tiempo máximo (min)
-          {policy?.timeoutMinutes != null && ` (hasta ${policy.timeoutMinutes})`}
-          <input
-            type="number"
-            min={1}
-            max={policy?.timeoutMinutes ?? 1440}
-            step={1}
-            value={timeoutMinutes}
-            onChange={(e) => setTimeoutMinutes(e.target.value)}
-          />
-        </label>
-      </fieldset>
-      <div className="form-actions">
-        <Button type="submit" disabled={launch.isPending || !repository}>
-          <Play size={18} strokeWidth={2.75} aria-hidden="true" />
-          {launch.isPending ? 'Lanzando…' : 'Lanzar'}
-        </Button>
-      </div>
-      <p className="hint">Si no hay ninguno conectado, mira «Runner local» en el README.</p>
-      <ErrorMessage error={launch.error} />
-    </form>
-  )
-}
-
-const optionalNumber = (value: string) => (value.trim() === '' ? undefined : Number(value))

@@ -1,0 +1,21 @@
+[ {
+  "stage" : "review",
+  "name" : "Revisión",
+  "agent" : "reviewer",
+  "allowedTools" : [ "Read", "Grep" ],
+  "permissionMode" : "plan",
+  "environment" : null,
+  "maxTurns" : 10,
+  "maxBudgetUsd" : 2.50,
+  "timeoutMinutes" : null
+}, {
+  "stage" : "fix",
+  "name" : null,
+  "agent" : null,
+  "allowedTools" : [ "Read", "Edit", "Bash" ],
+  "permissionMode" : "dontAsk",
+  "environment" : [ ],
+  "maxTurns" : null,
+  "maxBudgetUsd" : null,
+  "timeoutMinutes" : null
+} ]

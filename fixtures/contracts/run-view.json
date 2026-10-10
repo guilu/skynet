@@ -18,9 +18,17 @@
     "cacheCreationTokens" : 4830,
     "costUsd" : 0.0574210000
   },
+  "workflow" : {
+    "key" : "adhoc",
+    "version" : 1,
+    "name" : "Agente suelto"
+  },
   "stages" : [ {
     "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a05",
     "stageKey" : "agent",
+    "name" : null,
+    "agent" : null,
+    "dependsOn" : [ ],
     "status" : "SUCCEEDED",
     "attempt" : 1,
     "startedAt" : "2026-10-05T09:00:02Z",

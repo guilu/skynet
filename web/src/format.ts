@@ -9,7 +9,7 @@ export const formatTime = (iso: string) => time.format(new Date(iso))
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Pendiente',
-  READY: 'Preparada',
+  READY: 'Lista',
   STARTING: 'Arrancando',
   RUNNING: 'En curso',
   QUEUED: 'En cola',

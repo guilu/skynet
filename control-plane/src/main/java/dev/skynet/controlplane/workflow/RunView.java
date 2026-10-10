@@ -14,6 +14,7 @@ import java.util.UUID;
  *     null}
  * @param archivedAt cuándo se archivó la ejecución; no cuenta el archivado de su trabajo o proyecto
  * @param totals tokens y coste sumados de todos los agentes
+ * @param workflow workflow y versión que sigue, o {@code null} si la versión ya no se puede leer
  */
 public record RunView(
     UUID id,
@@ -29,9 +30,14 @@ public record RunView(
     UUID currentStageRunId,
     UUID currentAgentRunId,
     RunTotals totals,
+    WorkflowRef workflow,
     List<StageRunView> stages) {
 
-  static RunView of(WorkflowRun r, WorkItem workItem, List<StageRunView> stages) {
+  /** El workflow que sigue una ejecución: su clave, su versión y su nombre (o {@code null}). */
+  public record WorkflowRef(String key, int version, String name) {}
+
+  static RunView of(
+      WorkflowRun r, WorkItem workItem, WorkflowRef workflow, List<StageRunView> stages) {
     List<AgentRunView> agents = stages.stream().flatMap(s -> s.agents().stream()).toList();
     return new RunView(
         r.getId(),
@@ -55,6 +61,7 @@ public record RunView(
             .reduce((first, last) -> last)
             .orElse(null),
         RunTotals.of(agents),
+        workflow,
         stages);
   }
 }

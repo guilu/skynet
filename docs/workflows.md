@@ -108,6 +108,8 @@ La ejecución nace `RUNNING` con todas sus fases en `PENDING` (`stage.pending`, 
 | `SKYNET_ENGINE_LEASE` | `2m` | Tiempo que un worker se queda un trabajo; si cae, otro lo retoma al vencer |
 | `SKYNET_ENGINE_RETRY_DELAY` | `5s` | Espera antes de reintentar (crece con los intentos, hasta 12 veces) |
 
+**En la web.** En un trabajo, **Lanzar workflow** pide el workflow (por defecto `adhoc`), el repositorio y los datos de entrada según su tipo (texto, número o casilla), y enseña la política del repositorio y, si el workflow tiene agentes con nombre, lo que se le permitirá a cada fase. La ejecución lista todas sus fases desde el principio, en el orden del YAML: las que esperan dicen a qué fases («Espera a izquierda y derecha»), las omitidas por qué («Omitida porque se omitió build»), las canceladas sin arrancar qué fase falló, y las demás detrás de cuáles van. La cabecera enlaza con el workflow y su versión; con varias fases, **Cancelar ejecución** cancela la ejecución entera.
+
 ## Estados y versiones
 
 - **Borrador** (`DRAFT`): se guarda aunque tenga errores.
@@ -132,6 +134,7 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `POST` | `/api/workflow-versions/{id}/publish` | Publica un borrador (`revision`); 409 con `problems` si no se puede |
 | `DELETE` | `/api/workflow-versions/{id}` | Descarta un borrador; si era la única versión, el workflow desaparece |
 | `POST` | `/api/work-items/{id}/runs` | Lanza una versión publicada (`definitionId`, `inputs`; ver arriba) |
+| `GET` | `/api/workflow-versions/{id}/effective-policy?repositoryId=` | Lo que se permitirá al agente de cada fase en ese repositorio (los límites que no fija el agente, `null`, salen del lanzamiento) |
 | `POST` | `/api/workflow-runs/{id}/cancel` | Cancela una ejecución y sus agentes |
 
 Cada problema lleva `severity` (`ERROR`, `UNSUPPORTED` o `WARNING`), `path` (p. ej. `stages.fix.dependsOn[0]`), `line`, `column` y `message`.
