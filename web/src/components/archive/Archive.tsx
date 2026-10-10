@@ -17,6 +17,7 @@ const WORDS: Record<ArchiveTarget['kind'], { archive: string; restore: string; n
   'work-item': { archive: 'Archivar', restore: 'Restaurar', noun: 'el trabajo' },
   run: { archive: 'Archivar', restore: 'Restaurar', noun: 'la ejecución' },
   runner: { archive: 'Olvidar', restore: 'Volver a enseñar', noun: 'el runner' },
+  workflow: { archive: 'Archivar', restore: 'Restaurar', noun: 'el workflow' },
 }
 
 /** Tras archivar, restaurar o eliminar cambia casi todo (listas, dashboard, métricas): se relee. */
@@ -84,10 +85,13 @@ export function ArchiveMenu({
                   <ArchiveRestore size={18} strokeWidth={2.25} aria-hidden="true" />
                   {words.restore}
                 </Menu.Item>
-                <Menu.Item className="menu-item menu-danger" onSelect={() => setDeleting(true)}>
-                  <Trash2 size={18} strokeWidth={2.25} aria-hidden="true" />
-                  Eliminar…
-                </Menu.Item>
+                {/* Las versiones publicadas de un workflow no se borran: solo se archiva. */}
+                {target.kind !== 'workflow' && (
+                  <Menu.Item className="menu-item menu-danger" onSelect={() => setDeleting(true)}>
+                    <Trash2 size={18} strokeWidth={2.25} aria-hidden="true" />
+                    Eliminar…
+                  </Menu.Item>
+                )}
               </>
             )}
           </Menu.Content>

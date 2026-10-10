@@ -18,6 +18,7 @@ export function Breadcrumbs() {
   const projectId = matchPath('/projects/:projectId', pathname)?.params.projectId
   const workItemId = matchPath('/work-items/:workItemId', pathname)?.params.workItemId
   const runId = matchPath('/runs/:runId', pathname)?.params.runId
+  const workflowKey = matchPath('/workflows/:key', pathname)?.params.key
 
   const item = useQuery({
     queryKey: ['work-item', workItemId],
@@ -53,6 +54,11 @@ export function Breadcrumbs() {
     crumbs = [
       { label: 'Ejecuciones', to: '/runs' },
       { label: run.data?.workItemKey ?? 'Ejecución' },
+    ]
+  else if (workflowKey)
+    crumbs = [
+      { label: 'Workflows', to: '/workflows' },
+      { label: workflowKey === 'new' ? 'Nuevo' : workflowKey },
     ]
   else {
     const section = NAV.find((n) => (n.end ? pathname === n.to : pathname.startsWith(n.to)))

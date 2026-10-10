@@ -281,6 +281,118 @@ export interface WorkflowDefinition {
   createdAt: string
 }
 
+/** Estado de una versión de un workflow. */
+export type DefinitionStatus = 'DRAFT' | 'VALIDATED' | 'PUBLISHED'
+
+/** Una versión de un workflow, sin su YAML. */
+export interface VersionView {
+  id: string
+  version: number
+  status: DefinitionStatus
+  createdAt: string
+  updatedAt: string
+  publishedAt: string | null
+}
+
+/** Un workflow en la lista: su última versión publicada y su borrador, si lo tiene. */
+export interface WorkflowSummary {
+  id: string
+  key: string
+  name: string | null
+  description: string | null
+  published: VersionView | null
+  draft: VersionView | null
+  createdAt: string
+  archivedAt: string | null
+}
+
+export interface WorkflowView {
+  workflow: WorkflowSummary
+  /** De la más reciente a la más antigua. */
+  versions: VersionView[]
+}
+
+/** Algo que corregir en una definición; `line` y `column` empiezan en 1. */
+export interface Problem {
+  severity: 'ERROR' | 'UNSUPPORTED' | 'WARNING'
+  path: string
+  line: number | null
+  column: number | null
+  message: string
+}
+
+export interface Validation {
+  /** Sin errores. */
+  valid: boolean
+  /** Válida y sin nada que el motor aún no ejecute. */
+  publishable: boolean
+  problems: Problem[]
+}
+
+export interface InputDefinition {
+  name: string
+  type: 'string' | 'text' | 'number' | 'boolean'
+  required: boolean
+  defaultValue: string | number | boolean | null
+  description: string | null
+}
+
+export interface AgentDefinition {
+  name: string
+  description: string | null
+  prompt: string | null
+  tools: string[] | null
+  permissionMode: PermissionMode | null
+  maxTurns: number | null
+  maxBudgetUsd: number | null
+  timeoutMinutes: number | null
+}
+
+export interface StageDefinition {
+  id: string
+  name: string | null
+  type: string
+  agent: string | null
+  prompt: string | null
+  dependsOn: { stage: string; optional: boolean }[]
+  workspace: 'INHERIT' | 'ISOLATED'
+  workspaceFrom: string | null
+}
+
+/** El workflow leído del YAML. */
+export interface WorkflowModel {
+  key: string
+  name: string | null
+  description: string | null
+  inputs: InputDefinition[]
+  agents: AgentDefinition[]
+  stages: StageDefinition[]
+}
+
+/** Una versión con su YAML, su validación y el workflow leído. */
+export interface DefinitionDetail {
+  id: string
+  workflowId: string
+  key: string
+  version: number
+  status: DefinitionStatus
+  sourceYaml: string
+  /** Hay que enviarla al guardar o publicar: si otro cambió el borrador, se rechaza. */
+  revision: number
+  createdAt: string
+  updatedAt: string
+  publishedAt: string | null
+  archivedAt: string | null
+  validation: Validation
+  definition: WorkflowModel | null
+}
+
+export interface ValidationView {
+  key: string | null
+  validation: Validation
+  definition: WorkflowModel | null
+}
+
 export interface Prompt {
   id: string
   role: string
@@ -385,6 +497,8 @@ export type ArchiveTarget =
   | { kind: 'work-item'; id: string }
   | { kind: 'run'; id: string }
   | { kind: 'runner'; id: string }
+  /** `id` es la clave del workflow. */
+  | { kind: 'workflow'; id: string }
 
 export interface ArchiveState {
   id: string
@@ -424,6 +538,8 @@ export function targetPath(target: ArchiveTarget): string {
       return `/api/workflow-runs/${target.id}`
     case 'runner':
       return `/api/runners/${target.id}`
+    case 'workflow':
+      return `/api/workflows/${encodeURIComponent(target.id)}`
   }
 }
 
@@ -433,10 +549,13 @@ const archivedQuery = (archived?: ArchivedFilter) =>
 
 export class ApiError extends Error {
   readonly status: number
+  /** Problemas de un YAML rechazado (p. ej. al publicar un borrador con errores). */
+  readonly problems: Problem[]
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, problems: Problem[] = []) {
     super(message)
     this.status = status
+    this.problems = problems
   }
 }
 
@@ -472,13 +591,19 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
   if (!res.ok) {
     let message = `${res.status} ${res.statusText}`
+    let problems: Problem[] = []
     try {
-      const problem = (await res.json()) as { detail?: string; title?: string }
+      const problem = (await res.json()) as {
+        detail?: string
+        title?: string
+        problems?: Problem[]
+      }
       message = problem.detail ?? problem.title ?? message
+      problems = problem.problems ?? []
     } catch {
       // Respuesta sin cuerpo JSON.
     }
-    throw new ApiError(res.status, message)
+    throw new ApiError(res.status, message, problems)
   }
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
@@ -627,6 +752,28 @@ export const api = {
       `/api/dashboard/metrics?period=${period}&tz=${encodeURIComponent(tz)}`,
     ),
   workflowDefinitions: () => request<WorkflowDefinition[]>('GET', '/api/workflow-definitions'),
+  workflows: (archived?: ArchivedFilter) =>
+    request<WorkflowSummary[]>('GET', `/api/workflows${archivedQuery(archived)}`),
+  workflow: (key: string) =>
+    request<WorkflowView>('GET', `/api/workflows/${encodeURIComponent(key)}`),
+  /** Crea un workflow con el YAML como borrador de su versión 1. */
+  createWorkflow: (sourceYaml: string) =>
+    request<DefinitionDetail>('POST', '/api/workflows', { sourceYaml }),
+  /** Abre (o devuelve) el borrador de la versión siguiente. */
+  draftWorkflow: (key: string) =>
+    request<DefinitionDetail>('POST', `/api/workflows/${encodeURIComponent(key)}/draft`),
+  /** Valida sin guardar; con `key` y `version`, como borrador de esa versión. */
+  validateWorkflow: (body: { sourceYaml: string; key?: string; version?: number }) =>
+    request<ValidationView>('POST', '/api/workflows/validate', body),
+  /** JSON Schema del YAML, para el autocompletado del editor. */
+  workflowSchema: () => request<object>('GET', '/api/workflows/schema'),
+  workflowVersion: (id: string) => request<DefinitionDetail>('GET', `/api/workflow-versions/${id}`),
+  saveWorkflowVersion: (id: string, sourceYaml: string, revision: number) =>
+    request<DefinitionDetail>('PUT', `/api/workflow-versions/${id}`, { sourceYaml, revision }),
+  publishWorkflowVersion: (id: string, revision: number) =>
+    request<DefinitionDetail>('POST', `/api/workflow-versions/${id}/publish`, { revision }),
+  /** Descarta un borrador; si era la única versión, el workflow desaparece. */
+  discardWorkflowVersion: (id: string) => request<void>('DELETE', `/api/workflow-versions/${id}`),
   event: (sequence: number) => request<StoredEvent>('GET', `/api/events/${sequence}`),
   eventsBefore: (query: { workflowRunId?: string; before: number; limit?: number }) => {
     const params = new URLSearchParams({ before: String(query.before) })

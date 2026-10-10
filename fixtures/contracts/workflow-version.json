@@ -1,0 +1,80 @@
+{
+  "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a14",
+  "workflowId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a12",
+  "key" : "revisar-y-corregir",
+  "version" : 2,
+  "status" : "VALIDATED",
+  "sourceYaml" : "id: revisar-y-corregir\nversion: 2\nname: Revisar y corregir\ndescription: Un agente revisa el cambio y otro corrige lo que encuentre.\n\ninputs:\n  foco:\n    type: string\n    required: false\n    default: seguridad\n    description: En qué fijarse.\n\nagents:\n  reviewer:\n    description: Revisor exigente.\n    prompt: |\n      Revisa {{workItem.key}} ({{workItem.title}}) poniendo el foco en {{inputs.foco}}.\n    tools: [Read, Grep, Glob]\n    permissionMode: dontAsk\n    limits:\n      maxTurns: 30\n      maxBudgetUsd: 1.5\n      timeoutMinutes: 20\n\nstages:\n  - id: review\n    type: agent\n    agent: reviewer\n  - id: fix\n    type: agent\n    prompt: Corrige lo que encontró la revisión.\n    dependsOn: [review]\n  - id: verify\n    type: verification\n    dependsOn: [\"fix?\"]\n",
+  "revision" : 3,
+  "createdAt" : "2026-10-05T09:02:00Z",
+  "updatedAt" : "2026-10-05T09:03:00Z",
+  "publishedAt" : null,
+  "archivedAt" : null,
+  "validation" : {
+    "valid" : true,
+    "publishable" : false,
+    "problems" : [ {
+      "severity" : "UNSUPPORTED",
+      "path" : "stages.verify.type",
+      "line" : 34,
+      "column" : 11,
+      "message" : "El tipo `verification` todavía no se ejecuta: llega en W4"
+    } ]
+  },
+  "definition" : {
+    "key" : "revisar-y-corregir",
+    "name" : "Revisar y corregir",
+    "description" : "Un agente revisa el cambio y otro corrige lo que encuentre.",
+    "inputs" : [ {
+      "name" : "foco",
+      "type" : "string",
+      "required" : false,
+      "defaultValue" : "seguridad",
+      "description" : "En qué fijarse."
+    } ],
+    "agents" : [ {
+      "name" : "reviewer",
+      "description" : "Revisor exigente.",
+      "prompt" : "Revisa {{workItem.key}} ({{workItem.title}}) poniendo el foco en {{inputs.foco}}.\n",
+      "tools" : [ "Read", "Grep", "Glob" ],
+      "permissionMode" : "dontAsk",
+      "maxTurns" : 30,
+      "maxBudgetUsd" : 1.5,
+      "timeoutMinutes" : 20
+    } ],
+    "stages" : [ {
+      "id" : "review",
+      "name" : null,
+      "type" : "agent",
+      "agent" : "reviewer",
+      "prompt" : null,
+      "dependsOn" : [ ],
+      "workspace" : "INHERIT",
+      "workspaceFrom" : null
+    }, {
+      "id" : "fix",
+      "name" : null,
+      "type" : "agent",
+      "agent" : null,
+      "prompt" : "Corrige lo que encontró la revisión.",
+      "dependsOn" : [ {
+        "stage" : "review",
+        "optional" : false
+      } ],
+      "workspace" : "INHERIT",
+      "workspaceFrom" : null
+    }, {
+      "id" : "verify",
+      "name" : null,
+      "type" : "verification",
+      "agent" : null,
+      "prompt" : null,
+      "dependsOn" : [ {
+        "stage" : "fix",
+        "optional" : true
+      } ],
+      "workspace" : "INHERIT",
+      "workspaceFrom" : null
+    } ]
+  }
+}

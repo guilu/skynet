@@ -201,6 +201,10 @@ const ROUTES = [
   [/\/api\/events\/\d+/, EVENTS[2]],
   [/\/api\/events\?/, EVENTS],
   [/\/api\/workflow-definitions/, fixture('workflow-definitions')],
+  [/\/api\/workflows$/, fixture('workflows')],
+  [/\/api\/workflows\/schema$/, {}],
+  [/\/api\/workflows\/revisar-y-corregir$/, fixture('workflow')],
+  [/\/api\/workflow-versions\//, fixture('workflow-version')],
   [/\/api\/projects$/, [project]],
   [/\/api\/projects\/p1\/work-items/, [workItem]],
   [/\/api\/projects\/p1\/repositories/, [repository]],
@@ -231,6 +235,8 @@ const SHOTS = [
   ['ejecucion-cascada', `${run}&view=waterfall&tab=artifacts`],
   ['proyecto', '/projects/p1?tab=repos'],
   ['trabajo-lanzar', '/work-items/w1', 'Lanzar agente'],
+  ['workflows', '/workflows'],
+  ['workflow', '/workflows/revisar-y-corregir'],
   // Ajustes con la paleta Frambuesa elegida (sin guardar), para que se vea la vista previa.
   ['ajustes', '/settings', null, 'Frambuesa'],
 ]

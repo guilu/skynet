@@ -13,7 +13,11 @@ import runners from '../../fixtures/contracts/runners.json'
 import storedEvent from '../../fixtures/contracts/stored-event.json'
 import verifications from '../../fixtures/contracts/verifications.json'
 import workflowDefinitions from '../../fixtures/contracts/workflow-definitions.json'
+import workflowVersion from '../../fixtures/contracts/workflow-version.json'
+import workflow from '../../fixtures/contracts/workflow.json'
+import workflows from '../../fixtures/contracts/workflows.json'
 import type {
+  AgentDefinition,
   AgentRun,
   AgentRunDetail,
   ArtifactSummary,
@@ -21,19 +25,28 @@ import type {
   ConversationMessage,
   ConversationTurn,
   DashboardSummary,
+  DefinitionDetail,
+  InputDefinition,
   MetricsBucket,
+  Problem,
   Prompt,
   Run,
   RunMetrics,
   RunPage,
   RunTotals,
   Runner,
+  StageDefinition,
   StageRun,
   StoredEvent,
   TestTotals,
   UnresponsiveAgent,
+  Validation,
   VerificationResult,
+  VersionView,
   WorkflowDefinition,
+  WorkflowModel,
+  WorkflowSummary,
+  WorkflowView,
   Workspace,
 } from './api'
 
@@ -225,6 +238,90 @@ const VERIFICATION: Keys<VerificationResult> = {
 }
 const TEST_TOTALS: Keys<TestTotals> = { total: true, failed: true, errors: true, skipped: true }
 
+const VERSION: Keys<VersionView> = {
+  id: true,
+  version: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  publishedAt: true,
+}
+const WORKFLOW_SUMMARY: Keys<WorkflowSummary> = {
+  id: true,
+  key: true,
+  name: true,
+  description: true,
+  published: true,
+  draft: true,
+  createdAt: true,
+  archivedAt: true,
+}
+const WORKFLOW_VIEW: Keys<WorkflowView> = { workflow: true, versions: true }
+const DEFINITION_DETAIL: Keys<DefinitionDetail> = {
+  id: true,
+  workflowId: true,
+  key: true,
+  version: true,
+  status: true,
+  sourceYaml: true,
+  revision: true,
+  createdAt: true,
+  updatedAt: true,
+  publishedAt: true,
+  archivedAt: true,
+  validation: true,
+  definition: true,
+}
+const VALIDATION: Keys<Validation> = { valid: true, publishable: true, problems: true }
+const PROBLEM: Keys<Problem> = {
+  severity: true,
+  path: true,
+  line: true,
+  column: true,
+  message: true,
+}
+const WORKFLOW_MODEL: Keys<WorkflowModel> = {
+  key: true,
+  name: true,
+  description: true,
+  inputs: true,
+  agents: true,
+  stages: true,
+}
+const INPUT: Keys<InputDefinition> = {
+  name: true,
+  type: true,
+  required: true,
+  defaultValue: true,
+  description: true,
+}
+const AGENT_DEFINITION: Keys<AgentDefinition> = {
+  name: true,
+  description: true,
+  prompt: true,
+  tools: true,
+  permissionMode: true,
+  maxTurns: true,
+  maxBudgetUsd: true,
+  timeoutMinutes: true,
+}
+const STAGE_DEFINITION: Keys<StageDefinition> = {
+  id: true,
+  name: true,
+  type: true,
+  agent: true,
+  prompt: true,
+  dependsOn: true,
+  workspace: true,
+  workspaceFrom: true,
+}
+
+function expectSummary(summary: WorkflowSummary) {
+  expectShape(summary, WORKFLOW_SUMMARY)
+  if (summary.published) expectShape(summary.published, VERSION)
+  if (summary.draft) expectShape(summary.draft, VERSION)
+}
+
 const keysOf = (value: object) => Object.keys(value).sort()
 const expectShape = (value: object, shape: object) => expect(keysOf(value)).toEqual(keysOf(shape))
 
@@ -293,6 +390,27 @@ describe('contratos con el backend', () => {
   it('definiciones de workflow', () => {
     workflowDefinitions.forEach((d) => expectShape(d, WORKFLOW_DEFINITION))
   })
+  it('workflows', () => {
+    ;(workflows as WorkflowSummary[]).forEach(expectSummary)
+    expectShape(workflow, WORKFLOW_VIEW)
+    expectSummary(workflow.workflow as WorkflowSummary)
+    workflow.versions.forEach((v) => expectShape(v, VERSION))
+  })
+
+  it('versión de un workflow', () => {
+    const detail = workflowVersion as DefinitionDetail
+    expectShape(detail, DEFINITION_DETAIL)
+    expectShape(detail.validation, VALIDATION)
+    expect(detail.validation.problems).not.toHaveLength(0)
+    detail.validation.problems.forEach((p) => expectShape(p, PROBLEM))
+    const model = detail.definition!
+    expectShape(model, WORKFLOW_MODEL)
+    model.inputs.forEach((i) => expectShape(i, INPUT))
+    model.agents.forEach((a) => expectShape(a, AGENT_DEFINITION))
+    model.stages.forEach((s) => expectShape(s, STAGE_DEFINITION))
+    expect(model.stages.map((s) => s.type)).toEqual(['agent', 'agent', 'verification'])
+  })
+
   it('artefactos', () => {
     expect(artifacts.map((a) => a.type)).toEqual(['DIFF', 'TEST_REPORT'])
     artifacts.forEach((a) => expectShape(a, ARTIFACT))

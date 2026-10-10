@@ -74,9 +74,13 @@ public class WorkflowDefinitions {
     return detail(row, parsed);
   }
 
-  /** Valida un YAML sin guardarlo. */
-  public ValidationView validate(String sourceYaml) {
-    Parsed parsed = DefinitionParser.parse(sourceYaml, Expectations.NONE);
+  /**
+   * Valida un YAML sin guardarlo. Con {@code key} y {@code version}, como si se guardara en esa
+   * versión de ese workflow (el editor de un borrador): avisa si el id cambia o la versión no es la
+   * suya.
+   */
+  public ValidationView validate(String sourceYaml, String key, Integer version) {
+    Parsed parsed = DefinitionParser.parse(sourceYaml, new Expectations(key, version));
     return new ValidationView(parsed.key(), parsed.validation(), parsed.definition());
   }
 

@@ -4,9 +4,14 @@ import dev.skynet.controlplane.shared.ArchiveState;
 import dev.skynet.controlplane.shared.Archived;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -27,6 +32,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 class WorkflowDefinitionController {
 
+  private static final String SCHEMA = loadSchema();
+
   private final WorkflowDefinitions definitions;
 
   WorkflowDefinitionController(WorkflowDefinitions definitions) {
@@ -34,6 +41,9 @@ class WorkflowDefinitionController {
   }
 
   record Source(@NotNull String sourceYaml) {}
+
+  /** YAML que validar; {@code key} y {@code version}, si es el borrador de un workflow. */
+  record ValidateRequest(@NotNull String sourceYaml, String key, Integer version) {}
 
   record SaveDraft(@NotNull String sourceYaml, @NotNull Long revision) {}
 
@@ -74,8 +84,14 @@ class WorkflowDefinitionController {
 
   /** Valida un YAML sin guardarlo. */
   @PostMapping("/api/workflows/validate")
-  ValidationView validate(@Valid @RequestBody Source request) {
-    return definitions.validate(request.sourceYaml());
+  ValidationView validate(@Valid @RequestBody ValidateRequest request) {
+    return definitions.validate(request.sourceYaml(), request.key(), request.version());
+  }
+
+  /** JSON Schema del YAML, para el autocompletado del editor de la web. */
+  @GetMapping(value = "/api/workflows/schema", produces = MediaType.APPLICATION_JSON_VALUE)
+  String schema() {
+    return SCHEMA;
   }
 
   @GetMapping("/api/workflow-versions/{id}")
@@ -98,6 +114,19 @@ class WorkflowDefinitionController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   void discard(@PathVariable UUID id) {
     definitions.discard(id);
+  }
+
+  private static String loadSchema() {
+    try (InputStream in =
+        WorkflowDefinitionController.class.getResourceAsStream(
+            "/dev/skynet/protocol/workflow-definition.schema.json")) {
+      if (in == null) {
+        throw new IllegalStateException("Falta workflow-definition.schema.json en protocol");
+      }
+      return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
   }
 
   @ExceptionHandler(DefinitionRejectedException.class)

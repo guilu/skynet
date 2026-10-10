@@ -141,6 +141,17 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
     case 'stage.status.changed':
     case 'workflow.status.changed':
       return `${statusLabel(p('previousStatus'))} → ${statusLabel(p('status'))}`
+    case 'workflow.definition.created':
+      return `Borrador de ${p('key')} v${p('version')} creado`
+    case 'workflow.definition.published':
+      return `${p('key')} v${p('version')} publicado`
+    case 'workflow.definition.discarded':
+      return `Borrador de ${p('key')} v${p('version')} descartado`
+    // El mismo tipo vale para un workflow (con `key`) y para una ejecución.
+    case 'workflow.archived':
+      return payload.key ? `Workflow ${p('key')} archivado` : 'Ejecución archivada'
+    case 'workflow.restored':
+      return payload.key ? `Workflow ${p('key')} restaurado` : 'Ejecución restaurada'
     default:
       return type
   }

@@ -11,6 +11,8 @@ import { ProjectsPage } from './pages/ProjectsPage'
 import { RunnersPage } from './pages/RunnersPage'
 import { RunsPage } from './pages/RunsPage'
 import { WorkflowsPage } from './pages/WorkflowsPage'
+import { NewWorkflowPage } from './pages/NewWorkflowPage'
+import { WorkflowPage } from './pages/WorkflowPage'
 import { WorkItemPage } from './pages/WorkItemPage'
 import { RunSkeleton } from './components/ui/Skeleton'
 import { NotFound } from './pages/NotFound'
@@ -31,6 +33,8 @@ export default function App() {
             <Route path="/projects/:projectId" element={<ProjectPage />} />
             <Route path="/work-items/:workItemId" element={<WorkItemPage />} />
             <Route path="/workflows" element={<WorkflowsPage />} />
+            <Route path="/workflows/new" element={<NewWorkflowPage />} />
+            <Route path="/workflows/:key" element={<WorkflowPage />} />
             <Route path="/runs" element={<RunsPage />} />
             <Route
               path="/runs/:runId"

@@ -4,6 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.skynet.controlplane.artifact.ArtifactSummary;
 import dev.skynet.controlplane.dashboard.DashboardSummary;
+import dev.skynet.controlplane.definition.DefinitionDetail;
+import dev.skynet.controlplane.definition.DefinitionParser;
+import dev.skynet.controlplane.definition.DefinitionStatus;
+import dev.skynet.controlplane.definition.VersionView;
+import dev.skynet.controlplane.definition.WorkflowSummary;
+import dev.skynet.controlplane.definition.WorkflowView;
 import dev.skynet.controlplane.event.StoredEvent;
 import dev.skynet.controlplane.runner.RunnerView;
 import dev.skynet.controlplane.support.IntegrationTest;
@@ -67,6 +73,12 @@ class ContractIT extends IntegrationTest {
         Arguments.of("dashboard-metrics", Samples.metrics()),
         Arguments.of("stored-event", Samples.toolStartedEvent()),
         Arguments.of("workflow-definitions", List.of(Samples.adhocDefinition())),
+        Arguments.of("workflows", List.of(Samples.reviewWorkflow())),
+        Arguments.of(
+            "workflow",
+            new WorkflowView(
+                Samples.reviewWorkflow(), List.of(Samples.reviewDraft(), Samples.reviewV1()))),
+        Arguments.of("workflow-version", Samples.reviewDraftDetail()),
         Arguments.of("conversation", Samples.conversation()),
         Arguments.of("artifacts", Samples.artifacts()),
         Arguments.of("verifications", Samples.verifications()));
@@ -391,6 +403,90 @@ class ContractIT extends IntegrationTest {
               + "    required: true\nstages:\n  - id: agent\n    type: agent\n"
               + "    prompt: \"{{inputs.prompt}}\"\n",
           T0);
+    }
+
+    static final UUID REVIEW_WORKFLOW = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a12");
+    static final UUID REVIEW_V1 = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a13");
+    static final UUID REVIEW_V2 = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a14");
+
+    /** Borrador de la v2 de un workflow: con todos los campos y una fase que aún no se ejecuta. */
+    static final String REVIEW_YAML =
+        """
+        id: revisar-y-corregir
+        version: 2
+        name: Revisar y corregir
+        description: Un agente revisa el cambio y otro corrige lo que encuentre.
+
+        inputs:
+          foco:
+            type: string
+            required: false
+            default: seguridad
+            description: En qué fijarse.
+
+        agents:
+          reviewer:
+            description: Revisor exigente.
+            prompt: |
+              Revisa {{workItem.key}} ({{workItem.title}}) poniendo el foco en {{inputs.foco}}.
+            tools: [Read, Grep, Glob]
+            permissionMode: dontAsk
+            limits:
+              maxTurns: 30
+              maxBudgetUsd: 1.5
+              timeoutMinutes: 20
+
+        stages:
+          - id: review
+            type: agent
+            agent: reviewer
+          - id: fix
+            type: agent
+            prompt: Corrige lo que encontró la revisión.
+            dependsOn: [review]
+          - id: verify
+            type: verification
+            dependsOn: ["fix?"]
+        """;
+
+    static VersionView reviewV1() {
+      return new VersionView(REVIEW_V1, 1, DefinitionStatus.PUBLISHED, T0, at(60), at(60));
+    }
+
+    static VersionView reviewDraft() {
+      return new VersionView(REVIEW_V2, 2, DefinitionStatus.VALIDATED, at(120), at(180), null);
+    }
+
+    static WorkflowSummary reviewWorkflow() {
+      return new WorkflowSummary(
+          REVIEW_WORKFLOW,
+          "revisar-y-corregir",
+          "Revisar y corregir",
+          "Un agente revisa el cambio y otro corrige lo que encuentre.",
+          reviewV1(),
+          reviewDraft(),
+          T0,
+          null);
+    }
+
+    static DefinitionDetail reviewDraftDetail() {
+      DefinitionParser.Parsed parsed =
+          DefinitionParser.parse(
+              REVIEW_YAML, new DefinitionParser.Expectations("revisar-y-corregir", 2));
+      return new DefinitionDetail(
+          REVIEW_V2,
+          REVIEW_WORKFLOW,
+          "revisar-y-corregir",
+          2,
+          DefinitionStatus.VALIDATED,
+          REVIEW_YAML,
+          3,
+          at(120),
+          at(180),
+          null,
+          null,
+          parsed.validation(),
+          parsed.definition());
     }
 
     static final UUID VERIFICATION = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0f");
