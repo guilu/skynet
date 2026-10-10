@@ -7,6 +7,7 @@ import artifacts from '../../fixtures/contracts/artifacts.json'
 import conversation from '../../fixtures/contracts/conversation.json'
 import dashboardMetrics from '../../fixtures/contracts/dashboard-metrics.json'
 import dashboardSummary from '../../fixtures/contracts/dashboard-summary.json'
+import effectivePolicy from '../../fixtures/contracts/effective-policy.json'
 import runPage from '../../fixtures/contracts/run-page.json'
 import runView from '../../fixtures/contracts/run-view.json'
 import runners from '../../fixtures/contracts/runners.json'
@@ -36,6 +37,7 @@ import type {
   RunTotals,
   Runner,
   StageDefinition,
+  StagePolicy,
   StageRun,
   StoredEvent,
   TestTotals,
@@ -45,6 +47,7 @@ import type {
   VersionView,
   WorkflowDefinition,
   WorkflowModel,
+  WorkflowRef,
   WorkflowSummary,
   WorkflowView,
   Workspace,
@@ -108,6 +111,9 @@ const CONVERSATION_MESSAGE: Keys<ConversationMessage> = {
 const STAGE_RUN: Keys<StageRun> = {
   id: true,
   stageKey: true,
+  name: true,
+  agent: true,
+  dependsOn: true,
   status: true,
   attempt: true,
   startedAt: true,
@@ -135,7 +141,20 @@ const RUN: Keys<Run> = {
   currentStageRunId: true,
   currentAgentRunId: true,
   totals: true,
+  workflow: true,
   stages: true,
+}
+const WORKFLOW_REF: Keys<WorkflowRef> = { key: true, version: true, name: true }
+const STAGE_POLICY: Keys<StagePolicy> = {
+  stage: true,
+  name: true,
+  agent: true,
+  allowedTools: true,
+  permissionMode: true,
+  environment: true,
+  maxTurns: true,
+  maxBudgetUsd: true,
+  timeoutMinutes: true,
 }
 const RUN_PAGE: Keys<RunPage> = { items: true, page: true, size: true, total: true }
 const PROMPT: Keys<Prompt> = { id: true, role: true, content: true, sha256: true, createdAt: true }
@@ -333,6 +352,7 @@ function expectAgent(agent: AgentRun) {
 function expectRun(run: Run) {
   expectShape(run, RUN)
   expectShape(run.totals, RUN_TOTALS)
+  if (run.workflow) expectShape(run.workflow, WORKFLOW_REF)
   for (const stage of run.stages) {
     expectShape(stage, STAGE_RUN)
     stage.agents.forEach(expectAgent)
@@ -343,6 +363,11 @@ describe('contratos con el backend', () => {
   it('ejecución', () => {
     expectRun(runView as Run)
     expect(runView.stages[0].agents).toHaveLength(1)
+  })
+
+  it('política efectiva por fase', () => {
+    ;(effectivePolicy as StagePolicy[]).forEach((p) => expectShape(p, STAGE_POLICY))
+    expect(effectivePolicy.map((p) => p.agent)).toEqual(['reviewer', null])
   })
 
   it('página de ejecuciones', () => {

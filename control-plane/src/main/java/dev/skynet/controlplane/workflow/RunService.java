@@ -27,6 +27,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -181,6 +182,36 @@ public class RunService {
     }
     publisher.publishEvent(new WorkflowRunChanged(run.getId()));
     return run;
+  }
+
+  /**
+   * Lo que se le permitirá a cada fase de la versión publicada {@code definitionId} si se lanza en
+   * {@code repositoryId}, con la política actual del repositorio. Los límites son los que fija cada
+   * agente; los que no fija salen del lanzamiento.
+   */
+  @Transactional(readOnly = true)
+  public List<StagePolicy> effectivePolicies(UUID definitionId, UUID repositoryId) {
+    WorkflowDefinition definition = definitions.launchable(definitionId).definition();
+    AgentPolicy policy = projects.agentPolicy(projects.getRepository(repositoryId));
+    return definition.stages().stream()
+        .map(
+            stage -> {
+              AgentDefinition agent =
+                  stage.agent() == null ? null : definition.agent(stage.agent()).orElse(null);
+              EffectivePolicy effective = EffectivePolicy.of(policy, agent, AgentLimits.none());
+              AgentLimits limits = effective.limits();
+              return new StagePolicy(
+                  stage.id(),
+                  stage.name(),
+                  stage.agent(),
+                  effective.allowedTools(),
+                  effective.permissionMode(),
+                  effective.environment(),
+                  limits.maxTurns(),
+                  limits.maxBudgetUsd(),
+                  limits.timeout() == null ? null : Math.toIntExact(limits.timeout().toMinutes()));
+            })
+        .toList();
   }
 
   /**
@@ -980,27 +1011,67 @@ public class RunService {
     workItems
         .getAll(runs.stream().map(WorkflowRun::getWorkItemId).distinct().toList())
         .forEach(w -> items.put(w.getId(), w));
+    Map<UUID, PublishedDefinition> published = new HashMap<>();
+    runs.stream()
+        .map(WorkflowRun::getDefinitionId)
+        .distinct()
+        .forEach(id -> published.put(id, publishedOrNull(id)));
     return runs.stream()
         .map(
-            run ->
-                RunView.of(
-                    run,
-                    items.get(run.getWorkItemId()),
-                    stages.stream()
-                        .filter(s -> s.getWorkflowRunId().equals(run.getId()))
-                        .map(
-                            s ->
-                                StageRunView.of(
-                                    s,
-                                    agents.stream()
-                                        .filter(a -> a.getStageRunId().equals(s.getId()))
-                                        .map(
-                                            a ->
-                                                AgentRunView.of(
-                                                    a, worktrees.get(a.getWorkspaceId())))
-                                        .toList()))
-                        .toList()))
+            run -> {
+              PublishedDefinition definition = published.get(run.getDefinitionId());
+              return RunView.of(
+                  run,
+                  items.get(run.getWorkItemId()),
+                  definition == null
+                      ? null
+                      : new RunView.WorkflowRef(
+                          definition.key(), definition.version(), definition.definition().name()),
+                  stages.stream()
+                      .filter(s -> s.getWorkflowRunId().equals(run.getId()))
+                      .sorted(Comparator.comparingInt(s -> yamlOrder(definition, s)))
+                      .map(
+                          s ->
+                              StageRunView.of(
+                                  s,
+                                  definition == null
+                                      ? null
+                                      : definition.definition().stage(s.getStageKey()).orElse(null),
+                                  agents.stream()
+                                      .filter(a -> a.getStageRunId().equals(s.getId()))
+                                      .map(
+                                          a ->
+                                              AgentRunView.of(a, worktrees.get(a.getWorkspaceId())))
+                                      .toList()))
+                      .toList());
+            })
         .toList();
+  }
+
+  /**
+   * Posición de la fase en el YAML; las fases se crean a la vez, así que su fecha no las ordena.
+   * Sin definición, todas empatan y queda el orden de creación.
+   */
+  private static int yamlOrder(PublishedDefinition definition, StageRun stage) {
+    if (definition == null) {
+      return 0;
+    }
+    List<StageDefinition> all = definition.definition().stages();
+    for (int i = 0; i < all.size(); i++) {
+      if (all.get(i).id().equals(stage.getStageKey())) {
+        return i;
+      }
+    }
+    return all.size();
+  }
+
+  /** La versión publicada {@code id}, o {@code null} si ya no se puede leer: la vista no falla. */
+  private PublishedDefinition publishedOrNull(UUID id) {
+    try {
+      return definitions.published(id);
+    } catch (RuntimeException e) {
+      return null;
+    }
   }
 
   /**

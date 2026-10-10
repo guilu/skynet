@@ -80,6 +80,16 @@ class RunController {
             .getId());
   }
 
+  /**
+   * Lo que se le permitirá al agente de cada fase de una versión publicada si se lanza en {@code
+   * repositoryId}.
+   */
+  @GetMapping("/api/workflow-versions/{definitionId}/effective-policy")
+  List<StagePolicy> effectivePolicy(
+      @PathVariable UUID definitionId, @RequestParam UUID repositoryId) {
+    return service.effectivePolicies(definitionId, repositoryId);
+  }
+
   @GetMapping("/api/work-items/{workItemId}/runs")
   List<RunView> runsOf(
       @PathVariable UUID workItemId, @RequestParam(defaultValue = "false") String archived) {

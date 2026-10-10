@@ -170,9 +170,21 @@ export interface ConversationMessage {
   text: string
 }
 
+/** Dependencia de una fase; una opcional también se cumple si esa fase se omite. */
+export interface StageDependency {
+  stage: string
+  optional: boolean
+}
+
 export interface StageRun {
   id: string
   stageKey: string
+  /** Nombre de la fase en el YAML. */
+  name: string | null
+  /** Agente con nombre del YAML; null si usa la política del repositorio. */
+  agent: string | null
+  /** Fases que tienen que terminar antes, en el orden del YAML. */
+  dependsOn: StageDependency[]
   status: StageStatus
   attempt: number
   startedAt: string | null
@@ -204,7 +216,30 @@ export interface Run {
   currentStageRunId: string | null
   currentAgentRunId: string | null
   totals: RunTotals
+  /** Workflow y versión que sigue; null si la versión ya no se puede leer. */
+  workflow: WorkflowRef | null
   stages: StageRun[]
+}
+
+export interface WorkflowRef {
+  key: string
+  version: number
+  name: string | null
+}
+
+/** Lo que se le permitirá al agente de una fase si se lanza el workflow en un repositorio. */
+export interface StagePolicy {
+  stage: string
+  name: string | null
+  agent: string | null
+  allowedTools: string[]
+  permissionMode: PermissionMode | null
+  /** null: todas las que permite el runner. */
+  environment: string[] | null
+  /** Límites que fija el agente; null: los del lanzamiento. */
+  maxTurns: number | null
+  maxBudgetUsd: number | null
+  timeoutMinutes: number | null
 }
 
 export interface RunPage {
@@ -475,7 +510,12 @@ export interface VerificationResult {
 /** Lanzamiento de un agente; los límites que falten usan los valores por defecto del servidor. */
 export interface LaunchRequest {
   repositoryId: string
-  prompt: string
+  /** Versión publicada que se lanza; sin ella, la última de `adhoc`. */
+  definitionId?: string
+  /** Datos de entrada del workflow, por nombre. */
+  inputs?: Record<string, string | number | boolean>
+  /** Atajo para el dato `prompt` de los workflows que lo piden. */
+  prompt?: string
   maxTurns?: number
   maxBudgetUsd?: number
   timeoutMinutes?: number
@@ -710,7 +750,14 @@ export const api = {
   },
   launchRun: (workItemId: string, body: LaunchRequest) =>
     request<Run>('POST', `/api/work-items/${workItemId}/runs`, body),
+  effectivePolicy: (definitionId: string, repositoryId: string) =>
+    request<StagePolicy[]>(
+      'GET',
+      `/api/workflow-versions/${definitionId}/effective-policy?repositoryId=${repositoryId}`,
+    ),
   agent: (id: string) => request<AgentRunDetail>('GET', `/api/agent-runs/${id}`),
+  /** Cancela la ejecución: sus fases sin empezar y sus agentes en marcha. */
+  cancelRun: (id: string) => request<Run>('POST', `/api/workflow-runs/${id}/cancel`),
   cancelAgent: (id: string) => request<AgentRunDetail>('POST', `/api/agent-runs/${id}/cancel`),
   cleanupWorkspace: (id: string) =>
     request<AgentRunDetail>('POST', `/api/agent-runs/${id}/workspace/cleanup`),

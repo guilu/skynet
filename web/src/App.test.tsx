@@ -57,6 +57,74 @@ const workItem = {
   createdAt: '',
 }
 
+/** Un workflow publicado con su versión leída, como los devuelve la API. */
+function publishedWorkflow(
+  key: string,
+  versionId: string,
+  definition: {
+    name: string | null
+    inputs: unknown[]
+    agents?: unknown[]
+    stages: unknown[]
+  },
+) {
+  const version = {
+    id: versionId,
+    version: 1,
+    status: 'PUBLISHED',
+    createdAt: '',
+    updatedAt: '',
+    publishedAt: '',
+  }
+  return {
+    summary: {
+      id: `wf-${key}`,
+      key,
+      name: definition.name,
+      description: null,
+      published: version,
+      draft: null,
+      createdAt: '',
+      archivedAt: null,
+    },
+    detail: {
+      ...version,
+      workflowId: `wf-${key}`,
+      key,
+      sourceYaml: '',
+      revision: 1,
+      archivedAt: null,
+      validation: { valid: true, publishable: true, problems: [] },
+      definition: { key, description: null, agents: [], ...definition },
+    },
+  }
+}
+
+const stage = (id: string, agent: string | null, dependsOn: string[] = []) => ({
+  id,
+  name: null,
+  type: 'agent',
+  agent,
+  prompt: null,
+  dependsOn: dependsOn.map((d) => ({ stage: d, optional: false })),
+  workspace: 'INHERIT',
+  workspaceFrom: null,
+})
+
+const adhoc = publishedWorkflow('adhoc', 'v-adhoc', {
+  name: 'Agente suelto',
+  inputs: [
+    {
+      name: 'prompt',
+      type: 'text',
+      required: true,
+      defaultValue: null,
+      description: 'Qué tiene que hacer el agente.',
+    },
+  ],
+  stages: [stage('agent', null)],
+})
+
 describe('App', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -402,9 +470,11 @@ describe('App', () => {
       'GET /api/work-items/w1/runs': [],
       'POST /api/work-items/w1/runs': runningRun,
       [`/api/workflow-runs/${runningRun.id}`]: runningRun,
+      '/api/workflows': [adhoc.summary],
+      '/api/workflow-versions/v-adhoc': adhoc.detail,
     })
     renderAt('/work-items/w1', <App />)
-    const open = await screen.findByRole('button', { name: 'Lanzar agente' })
+    const open = await screen.findByRole('button', { name: 'Lanzar workflow' })
     await waitFor(() => expect(open).toBeEnabled())
     fireEvent.click(open)
     fireEvent.change(await screen.findByLabelText('Prompt'), { target: { value: 'Haz X' } })
@@ -431,13 +501,169 @@ describe('App', () => {
     const call = fetch.mock.calls.find(([, init]) => init?.method === 'POST')!
     expect(JSON.parse(call[1]!.body as string)).toEqual({
       repositoryId: 'repo1',
-      prompt: 'Haz X',
+      definitionId: 'v-adhoc',
+      inputs: { prompt: 'Haz X' },
       maxTurns: 7,
     })
     // Termina en la página de la ejecución lanzada.
     expect(
       await screen.findByRole('heading', { level: 1, name: /Add model pricing importer/ }),
     ).toBeInTheDocument()
+  })
+
+  it('lanzar otro workflow pide sus datos y enseña la política de cada fase', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const review = publishedWorkflow('review', 'v-review', {
+      name: 'Revisión',
+      inputs: [
+        { name: 'issue', type: 'string', required: true, defaultValue: null, description: null },
+        { name: 'rondas', type: 'number', required: false, defaultValue: 2, description: null },
+        {
+          name: 'borrador',
+          type: 'boolean',
+          required: false,
+          defaultValue: false,
+          description: null,
+        },
+      ],
+      stages: [stage('plan', null), stage('fix', 'fixer', ['plan'])],
+    })
+    const fetch = stubApi({
+      '/api/work-items/w1': workItem,
+      '/api/projects/p1/repositories': [
+        {
+          id: 'repo1',
+          projectId: 'p1',
+          name: 'demo',
+          localPath: '/r',
+          remoteUrl: null,
+          defaultBranch: 'main',
+          validationCommand: null,
+          testReportPaths: [],
+          agentPolicy: {
+            allowedTools: ['Read', 'Edit'],
+            permissionMode: 'acceptEdits',
+            environment: [],
+            maxTurns: null,
+            maxBudgetUsd: null,
+            timeoutMinutes: null,
+          },
+          agentPolicyCustom: false,
+          createdAt: '',
+        },
+      ],
+      'GET /api/work-items/w1/runs': [],
+      'POST /api/work-items/w1/runs': runningRun,
+      [`/api/workflow-runs/${runningRun.id}`]: runningRun,
+      '/api/workflows': [review.summary, adhoc.summary],
+      '/api/workflow-versions/v-adhoc': adhoc.detail,
+      '/api/workflow-versions/v-review': review.detail,
+      '/api/workflow-versions/v-review/effective-policy?repositoryId=repo1': [
+        {
+          stage: 'plan',
+          name: null,
+          agent: null,
+          allowedTools: ['Read', 'Edit'],
+          permissionMode: 'acceptEdits',
+          environment: [],
+          maxTurns: null,
+          maxBudgetUsd: null,
+          timeoutMinutes: null,
+        },
+        {
+          stage: 'fix',
+          name: null,
+          agent: 'fixer',
+          allowedTools: ['Read'],
+          permissionMode: 'plan',
+          environment: [],
+          maxTurns: 10,
+          maxBudgetUsd: null,
+          timeoutMinutes: null,
+        },
+      ],
+    })
+    renderAt('/work-items/w1', <App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Lanzar workflow' }))
+    // adhoc sale el primero y es el que se elige por defecto.
+    const select = await screen.findByLabelText('Workflow')
+    await waitFor(() => expect(select).toHaveValue('adhoc'))
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Agente suelto · v1', 'Revisión · v1'])
+    fireEvent.change(select, { target: { value: 'review' } })
+
+    fireEvent.change(await screen.findByLabelText('Issue'), { target: { value: '#42' } })
+    expect(screen.getByLabelText('Rondas')).toHaveValue(2)
+    fireEvent.click(screen.getByLabelText('Borrador'))
+    const policies = await screen.findByRole('region', { name: 'Política de cada fase' })
+    expect(
+      await within(policies).findByText(
+        (_, el) => el?.tagName === 'LI' && /^fix/.test(el.textContent ?? ''),
+      ),
+    ).toHaveTextContent('fix · agente fixer: herramientas Read; modo plan; 10 turnos')
+    expect(
+      within(policies).getByText(
+        (_, el) => el?.tagName === 'LI' && /^plan/.test(el.textContent ?? ''),
+      ),
+    ).toHaveTextContent('plan: herramientas Read, Edit; modo acceptEdits; límites del lanzamiento')
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Lanzar' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Lanzar' }))
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/work-items/w1/runs',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    )
+    const call = fetch.mock.calls.find(([, init]) => init?.method === 'POST')!
+    expect(JSON.parse(call[1]!.body as string)).toEqual({
+      repositoryId: 'repo1',
+      definitionId: 'v-review',
+      inputs: { issue: '#42', rondas: 2, borrador: true },
+    })
+  })
+
+  it('la vista de la ejecución enseña las fases que esperan y las omitidas', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const base = runningRun.stages[0]
+    const pendingStage = (id: string, stageKey: string, status: string, dependsOn: string[]) => ({
+      ...base,
+      id,
+      stageKey,
+      status,
+      startedAt: null,
+      finishedAt: null,
+      agent: null,
+      dependsOn: dependsOn.map((d) => ({ stage: d, optional: false })),
+      agents: [],
+    })
+    const run = {
+      ...runningRun,
+      workflow: { key: 'dag', version: 3, name: 'Tres fases' },
+      stages: [
+        { ...base, stageKey: 'plan' },
+        pendingStage('s-fix', 'fix', 'PENDING', ['plan']),
+        pendingStage('s-gate', 'gate', 'SKIPPED', []),
+        pendingStage('s-ship', 'ship', 'SKIPPED', ['gate']),
+      ],
+    }
+    stubApi({
+      [`/api/workflow-runs/${run.id}`]: run,
+      [`/api/agent-runs/${agentId}`]: agentRunDetail,
+      [`/api/events?workflowRunId=${run.id}&limit=500`]: [],
+    })
+    renderAt(`/runs/${run.id}`, <App />)
+    const tree = await screen.findByRole('navigation', { name: 'Fases y agentes' })
+    expect(within(tree).getByText('Espera a plan')).toBeInTheDocument()
+    expect(within(tree).getByText('Omitida porque se omitió gate')).toBeInTheDocument()
+    expect(within(tree).getByText('Pendiente')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Tres fases' })).toHaveAttribute(
+      'href',
+      '/workflows/dag',
+    )
   })
 
   it('el menú de tema fija data-theme en el documento', async () => {

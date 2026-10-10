@@ -114,9 +114,35 @@ class WorkflowEngineIT extends IntegrationTest {
     String definitionId = publish(DAG);
     Runner runner = register("laptop");
 
+    // Antes de lanzar, la web enseña lo que tendrá cada fase en este repositorio.
+    JsonNode policies =
+        get(
+            "/api/workflow-versions/"
+                + definitionId
+                + "/effective-policy?repositoryId="
+                + repositoryId);
+    assertThat(policies).hasSize(3);
+    assertThat(policies.get(0).path("agent").isNull()).isTrue();
+    assertThat(policies.get(0).path("permissionMode").asString()).isEqualTo("acceptEdits");
+    assertThat(policies.get(0).path("maxTurns").isNull()).isTrue();
+    JsonNode fixPolicy = policies.get(2);
+    assertThat(fixPolicy.path("agent").asString()).isEqualTo("fixer");
+    assertThat(fixPolicy.path("allowedTools"))
+        .extracting(JsonNode::asString)
+        .containsExactly("Read", "Edit");
+    assertThat(fixPolicy.path("permissionMode").asString()).isEqualTo("plan");
+    assertThat(fixPolicy.path("maxTurns").asInt()).isEqualTo(40);
+
     JsonNode run = launch(definitionId, Map.of("issue", "#42"));
     String runId = run.path("id").asString();
     assertThat(run.path("status").asString()).isEqualTo("RUNNING");
+    assertThat(run.path("workflow").path("key").asString()).isEqualTo("dag");
+    JsonNode fixStage = run.path("stages").get(2);
+    assertThat(fixStage.path("stageKey").asString()).isEqualTo("fix");
+    assertThat(fixStage.path("agent").asString()).isEqualTo("fixer");
+    assertThat(fixStage.path("dependsOn").get(0).path("stage").asString()).isEqualTo("plan");
+    assertThat(fixStage.path("dependsOn").get(0).path("optional").asBoolean()).isTrue();
+    assertThat(fixStage.path("dependsOn").get(1).path("optional").asBoolean()).isFalse();
     assertThat(stageStatuses(runId))
         .containsEntry("plan", "READY")
         .containsEntry("tests", "READY")

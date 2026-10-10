@@ -6,6 +6,7 @@ import { formatDuration, statusLabel } from '../../format'
 import { cn } from '../../lib/cn'
 import { StatusBadge } from '../StatusBadge'
 import { spanDuration, toolStatusText, type Span } from './runSpans'
+import { stageNote } from './stageNotes'
 
 const ORIGIN: Record<Exclude<AgentRun['kind'], 'START'>, string> = {
   RESUME: 'reanudación del',
@@ -54,6 +55,7 @@ export function RunTree({
       return next
     })
   const agents = new Map(run.stages.flatMap((s) => s.agents).map((a) => [a.id, a]))
+  const stages = new Map(run.stages.map((s) => [s.id, s]))
 
   function tools(children: Span[], agentId: string, depth: number) {
     return (
@@ -85,64 +87,72 @@ export function RunTree({
   return (
     <nav className="run-tree" aria-label="Fases y agentes" onKeyDown={moveFocus}>
       <ol className="tree-stages">
-        {spans.map((stage, i) => (
-          <li key={stage.id} className={stage.id === run.currentStageRunId ? 'current' : undefined}>
-            <p className="tree-stage">
-              <span className="stepper-index" aria-hidden="true">
-                {i + 1}
-              </span>
-              <strong>{stage.label}</strong> <StatusBadge status={stage.status} />
-              {stage.detail && <span className="muted small"> {stage.detail}</span>}
-            </p>
-            <ul className="tree-list">
-              {stage.children.map((span) => {
-                const agent = agents.get(span.id)!
-                const open = !collapsed.has(span.id)
-                const count = countTools(span.children)
-                return (
-                  <li key={span.id}>
-                    <div className="tree-agent">
-                      <button
-                        type="button"
-                        className="tree-row"
-                        aria-label={`${span.label} ${span.detail}, ${statusLabel(span.status)}, ${formatDuration(spanDuration(span, now))}`}
-                        aria-current={span.id === selectedAgentId ? 'true' : undefined}
-                        onClick={() => onSelectAgent(span.id)}
-                      >
-                        <span className="tree-label">
-                          {span.label} <span className="muted small">{span.detail}</span>
-                        </span>
-                        <StatusBadge status={span.status} />
-                        <span className="tree-time">{formatDuration(spanDuration(span, now))}</span>
-                      </button>
-                      {count > 0 && (
+        {spans.map((stage, i) => {
+          const stageRun = stages.get(stage.id)
+          const note = stageRun ? stageNote(stageRun, run) : ''
+          return (
+            <li key={stage.id} className={stageClass(stage.status)}>
+              <p className="tree-stage">
+                <span className="stepper-index" aria-hidden="true">
+                  {i + 1}
+                </span>
+                <strong>{stage.label}</strong> <StatusBadge status={stage.status} />
+                {stage.detail && <span className="muted small"> {stage.detail}</span>}
+                {stageRun?.agent && <span className="muted small"> · agente {stageRun.agent}</span>}
+              </p>
+              {note && <p className="tree-stage-note muted small">{note}</p>}
+              <ul className="tree-list">
+                {stage.children.map((span) => {
+                  const agent = agents.get(span.id)!
+                  const open = !collapsed.has(span.id)
+                  const count = countTools(span.children)
+                  return (
+                    <li key={span.id}>
+                      <div className="tree-agent">
                         <button
                           type="button"
-                          className="tree-toggle"
-                          aria-expanded={open}
-                          aria-label={`${open ? 'Ocultar' : 'Mostrar'} las ${count} herramientas`}
-                          onClick={() => toggle(span.id)}
+                          className="tree-row"
+                          aria-label={`${span.label} ${span.detail}, ${statusLabel(span.status)}, ${formatDuration(spanDuration(span, now))}`}
+                          aria-current={span.id === selectedAgentId ? 'true' : undefined}
+                          onClick={() => onSelectAgent(span.id)}
                         >
-                          <ChevronRight size={16} aria-hidden="true" />
-                          <span aria-hidden="true">{count}</span>
+                          <span className="tree-label">
+                            {span.label} <span className="muted small">{span.detail}</span>
+                          </span>
+                          <StatusBadge status={span.status} />
+                          <span className="tree-time">
+                            {formatDuration(spanDuration(span, now))}
+                          </span>
                         </button>
+                        {count > 0 && (
+                          <button
+                            type="button"
+                            className="tree-toggle"
+                            aria-expanded={open}
+                            aria-label={`${open ? 'Ocultar' : 'Mostrar'} las ${count} herramientas`}
+                            onClick={() => toggle(span.id)}
+                          >
+                            <ChevronRight size={16} aria-hidden="true" />
+                            <span aria-hidden="true">{count}</span>
+                          </button>
+                        )}
+                      </div>
+                      {agent.kind !== 'START' && agent.parentAgentRunId && (
+                        <p className="muted small agent-origin">
+                          {ORIGIN[agent.kind]}{' '}
+                          <Link to={`/agent-runs/${agent.parentAgentRunId}`}>
+                            agente {agent.parentAgentRunId.slice(0, 8)}
+                          </Link>
+                        </p>
                       )}
-                    </div>
-                    {agent.kind !== 'START' && agent.parentAgentRunId && (
-                      <p className="muted small agent-origin">
-                        {ORIGIN[agent.kind]}{' '}
-                        <Link to={`/agent-runs/${agent.parentAgentRunId}`}>
-                          agente {agent.parentAgentRunId.slice(0, 8)}
-                        </Link>
-                      </p>
-                    )}
-                    {open && span.children.length > 0 && tools(span.children, span.id, 1)}
-                  </li>
-                )
-              })}
-            </ul>
-          </li>
-        ))}
+                      {open && span.children.length > 0 && tools(span.children, span.id, 1)}
+                    </li>
+                  )
+                })}
+              </ul>
+            </li>
+          )
+        })}
       </ol>
       {spans.every((s) => s.children.length === 0) && (
         <p className="muted small">Esta ejecución aún no tiene agentes.</p>
@@ -150,6 +160,15 @@ export function RunTree({
     </nav>
   )
 }
+
+/** Las fases en marcha (puede haber varias en paralelo) se resaltan; las que esperan, no. */
+function stageClass(status: string): string | undefined {
+  if (status === 'PENDING') return 'waiting'
+  if (status === 'SKIPPED') return 'skipped'
+  return ACTIVE.includes(status) ? 'current' : undefined
+}
+
+const ACTIVE = ['READY', 'STARTING', 'RUNNING', 'WAITING_FOR_INPUT', 'WAITING_FOR_APPROVAL']
 
 function countTools(spans: Span[]): number {
   return spans.reduce((n, s) => n + 1 + countTools(s.children), 0)
