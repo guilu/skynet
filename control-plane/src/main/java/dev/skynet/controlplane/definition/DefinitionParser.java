@@ -88,9 +88,9 @@ public final class DefinitionParser {
 
   static final Pattern KEY = Pattern.compile("[a-z][a-z0-9-]{1,48}");
   static final Pattern NAME = Pattern.compile("[a-z][a-z0-9-]{0,63}");
-  static final Pattern INPUT_NAME = Pattern.compile("[A-Za-z][A-Za-z0-9_]{0,63}");
-  static final Pattern TOOL = Pattern.compile("[A-Za-z][A-Za-z0-9_]*(\\(.+\\))?");
-  private static final Pattern VARIABLE = Pattern.compile("\\{\\{\\s*(.*?)\\s*}}");
+  static final Pattern INPUT_NAME = Pattern.compile("[A-Za-z]\\w{0,63}");
+  static final Pattern TOOL = Pattern.compile("[A-Za-z]\\w*(\\(.+\\))?");
+  private static final Pattern VARIABLE = Pattern.compile("\\{\\{([^{}]*)}}");
 
   private DefinitionParser() {}
 
@@ -123,6 +123,9 @@ public final class DefinitionParser {
 
   /** Copia el YAML cambiando el valor de {@code version}, si lo tiene. */
   public static String withVersion(String source, int version) {
+    if (source == null) {
+      return null;
+    }
     Parsed parsed = parse(source, Expectations.NONE);
     Span span = parsed.versionSpan();
     if (span == null) {
@@ -325,13 +328,13 @@ public final class DefinitionParser {
                 type = value;
               }
             }
-            Boolean required = bool(fields.get("required"), path + ".required");
+            boolean required = bool(fields.get("required"), path + ".required") == Boolean.TRUE;
             Object defaultValue = defaultValue(fields.get("default"), path + ".default", type);
             inputs.add(
                 new InputDefinition(
                     name,
                     type,
-                    required != null && required,
+                    required,
                     defaultValue,
                     text(fields.get("description"), path + ".description")));
           });
@@ -833,7 +836,7 @@ public final class DefinitionParser {
       String value = scalar.getValue();
       Matcher matcher = VARIABLE.matcher(value);
       while (matcher.find()) {
-        String variable = matcher.group(1);
+        String variable = matcher.group(1).strip();
         int[] position = position(scalar, matcher.start());
         if (variable.startsWith("inputs.")) {
           String name = variable.substring("inputs.".length());
@@ -1076,7 +1079,8 @@ public final class DefinitionParser {
       }
     }
 
-    private Boolean bool(Entry entry, String path) {
+    /** {@link Boolean#TRUE}, {@link Boolean#FALSE} o {@code null} si falta o no es booleano. */
+    private Object bool(Entry entry, String path) {
       if (entry == null) {
         return null;
       }

@@ -28,7 +28,8 @@ ALTER TABLE workflow_definition
     ADD COLUMN revision     bigint NOT NULL DEFAULT 0,
     ADD CONSTRAINT workflow_definition_workflow_fk FOREIGN KEY (key) REFERENCES workflow (key);
 
-UPDATE workflow_definition SET updated_at = created_at, published_at = created_at;
+UPDATE workflow_definition SET updated_at = created_at, published_at = created_at
+WHERE updated_at IS NULL;
 UPDATE workflow_definition SET name = 'Agente suelto',
     description = 'Una fase con un agente y el prompt que escribes al lanzar.'
 WHERE id = '00000000-0000-0000-0000-000000000001';
