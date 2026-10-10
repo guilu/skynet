@@ -813,12 +813,15 @@ public class RunService {
         buckets);
   }
 
-  /** Definiciones de workflow, de la más reciente a la más antigua (en la Fase 1, solo adhoc). */
+  /**
+   * Versiones publicadas de los workflows, por clave y de la más reciente a la más antigua. Los
+   * borradores y su gestión están en el módulo {@code definition}.
+   */
   @Transactional(readOnly = true)
   public List<WorkflowDefinitionView> definitions() {
     return jdbc.sql(
             "SELECT id, key, version, source_yaml, created_at FROM workflow_definition"
-                + " ORDER BY key, version DESC")
+                + " WHERE status = 'PUBLISHED' ORDER BY key, version DESC")
         .query(
             (rs, row) ->
                 new WorkflowDefinitionView(

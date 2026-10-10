@@ -14,6 +14,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.springframework.modulith:spring-modulith-starter-core")
+    // YAML de los workflows (W1), con las posiciones de cada nodo para los errores.
+    implementation("org.yaml:snakeyaml")
     runtimeOnly("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql")
 

@@ -387,7 +387,9 @@ class ContractIT extends IntegrationTest {
           ADHOC,
           "adhoc",
           1,
-          "id: adhoc\nversion: 1\nstages:\n  - id: agent\n    type: agent\n",
+          "id: adhoc\nversion: 1\nname: Agente suelto\ninputs:\n  prompt:\n    type: text\n"
+              + "    required: true\nstages:\n  - id: agent\n    type: agent\n"
+              + "    prompt: \"{{inputs.prompt}}\"\n",
           T0);
     }
 
