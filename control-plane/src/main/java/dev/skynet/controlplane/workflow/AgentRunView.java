@@ -4,6 +4,8 @@ import dev.skynet.protocol.AgentObservableStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Proyección de una invocación de agente: estado, actividad actual, sesión, tokens, coste y
@@ -15,6 +17,8 @@ import java.util.UUID;
  * @param kind cómo se originó: lanzamiento, reanudación, reintento o fork de {@code
  *     parentAgentRunId}
  * @param childKey hijo de una fase {@code parallel} que ejecuta, o {@code null} en las demás
+ * @param structuredOutput salida estructurada que devolvió (la que pide el {@code output} de su
+ *     agente), o {@code null}
  */
 public record AgentRunView(
     UUID id,
@@ -45,7 +49,8 @@ public record AgentRunView(
     String lastEventType,
     String currentTool,
     WorkspaceView workspace,
-    String childKey) {
+    String childKey,
+    JsonNode structuredOutput) {
 
   static AgentRunView of(AgentRun a, WorkspaceView workspace) {
     return new AgentRunView(
@@ -77,6 +82,9 @@ public record AgentRunView(
         a.getLastEventType(),
         a.getCurrentTool(),
         workspace,
-        a.getChildKey());
+        a.getChildKey(),
+        a.getStructuredOutput() == null
+            ? null
+            : JsonMapper.shared().readTree(a.getStructuredOutput()));
   }
 }

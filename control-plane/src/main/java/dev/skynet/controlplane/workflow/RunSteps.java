@@ -1,6 +1,7 @@
 package dev.skynet.controlplane.workflow;
 
 import dev.skynet.controlplane.definition.AgentDefinition;
+import dev.skynet.controlplane.definition.Condition;
 import dev.skynet.controlplane.definition.PublishedDefinition;
 import dev.skynet.controlplane.definition.StageDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.ChildDefinition;
@@ -66,7 +67,11 @@ public class RunSteps {
     /** El worktree que continúa está ocupado (una verificación): se intenta más tarde. */
     DEFERRED,
     /** No se ha podido arrancar y la fase ha fallado. */
-    FAILED
+    FAILED,
+    /** Su condición es falsa y se ha omitido. */
+    SKIPPED,
+    /** Es una {@code conditional} y su condición es verdadera: ha terminado bien. */
+    SUCCEEDED
   }
 
   private final RunService runs;
@@ -205,6 +210,18 @@ public class RunSteps {
         throw new ConflictException(
             "Las fases de tipo `" + stageDefinition.type().yaml() + "` todavía no se ejecutan");
       }
+      if (stageDefinition.condition() != null) {
+        boolean holds = condition(run, stage, stageDefinition, definition, now);
+        if (!holds) {
+          return StartOutcome.SKIPPED;
+        }
+        if (stageDefinition.type() == StageType.CONDITIONAL) {
+          StageRun started =
+              transitions.advanceStage(stage, StageStatus.STARTING, "condition-true", now);
+          transitions.advanceStage(started, StageStatus.SUCCEEDED, "condition-true", now);
+          return StartOutcome.SUCCEEDED;
+        }
+      }
       WorkItem workItem = workItems.get(run.getWorkItemId());
       CodeRepository repository = projects.getRepository(repositoryOf(run));
       workItems.requireActive(workItem);
@@ -271,6 +288,114 @@ public class RunSteps {
     } catch (ConflictException e) {
       fail(stage, e.getMessage(), now);
       return StartOutcome.FAILED;
+    }
+  }
+
+  /**
+   * Evalúa la condición de la fase con los datos de la ejecución y lo deja en {@code
+   * stage.condition.evaluated} con cada valor leído. Si es falsa, omite la fase ({@code
+   * condition-false}). Si no se puede evaluar, lanza {@link ConflictException} y la fase falla.
+   */
+  private boolean condition(
+      WorkflowRun run,
+      StageRun stage,
+      StageDefinition stageDefinition,
+      WorkflowDefinition definition,
+      Instant now) {
+    Map<String, Object> values = new LinkedHashMap<>();
+    boolean holds;
+    try {
+      Condition.Expr expr = Condition.parse(stageDefinition.condition());
+      ConditionData data = new ConditionData(run, definition);
+      for (Condition.Path path : Condition.paths(expr)) {
+        values.put(path.text(), data.value(path.parts()));
+      }
+      holds = Condition.test(expr, values::get);
+    } catch (Condition.SyntaxError | Condition.EvaluationError e) {
+      throw new ConflictException(
+          "No se pudo evaluar la condición `"
+              + stageDefinition.condition()
+              + "`: "
+              + e.getMessage());
+    }
+    Map<String, Object> details = new LinkedHashMap<>();
+    details.put("condition", stageDefinition.condition());
+    details.put("values", values);
+    Map<String, Object> evaluated = new LinkedHashMap<>(details);
+    evaluated.put("stageKey", stage.getStageKey());
+    evaluated.put("result", holds);
+    transitions.append(
+        "stage_run", stage.getId(), "stage.condition.evaluated", run.getId(), evaluated, now);
+    if (!holds) {
+      transitions.skipStage(stage, "condition-false", details, now);
+    }
+    return holds;
+  }
+
+  /**
+   * Los datos que lee una condición: {@code status} de cada fase, {@code exitCode} de un comando,
+   * los campos de la salida estructurada de un agente o de los hijos de una {@code parallel} y los
+   * datos de entrada. Lo que falta vale {@code null}.
+   */
+  private final class ConditionData {
+    private final WorkflowRun run;
+    private final WorkflowDefinition definition;
+    private final Map<String, StageRun> stages;
+
+    ConditionData(WorkflowRun run, WorkflowDefinition definition) {
+      this.run = run;
+      this.definition = definition;
+      this.stages = latestStages(run.getId());
+    }
+
+    Object value(List<String> parts) {
+      if (parts.getFirst().equals("inputs")) {
+        return inputsOf(run).get(parts.get(1));
+      }
+      StageRun stage = stages.get(parts.getFirst());
+      StageDefinition stageDefinition = definition.stage(parts.getFirst()).orElse(null);
+      if (stage == null || stageDefinition == null || parts.size() < 2) {
+        return null;
+      }
+      String field = parts.get(1);
+      if (parts.size() == 2 && field.equals("status")) {
+        return stage.getStatus().name();
+      }
+      List<AgentRun> agents =
+          agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
+      if (parts.size() == 2 && field.equals("exitCode")) {
+        return agents.isEmpty() ? null : agents.getLast().getExitCode();
+      }
+      if (stageDefinition.type() == StageType.PARALLEL) {
+        if (parts.size() == 3) {
+          return agents.stream()
+              .filter(a -> field.equals(a.getChildKey()))
+              .reduce((first, second) -> second)
+              .map(a -> output(a, parts.get(2)))
+              .orElse(null);
+        }
+        // Un booleano de los hijos: verdadero si alguno lo devuelve verdadero.
+        Object any = null;
+        for (AgentRun agent : agents) {
+          Object value = output(agent, field);
+          if (Boolean.TRUE.equals(value)) {
+            return true;
+          }
+          if (value != null) {
+            any = value;
+          }
+        }
+        return any;
+      }
+      return agents.isEmpty() ? null : output(agents.getLast(), field);
+    }
+
+    private Object output(AgentRun agent, String field) {
+      if (agent.getStructuredOutput() == null) {
+        return null;
+      }
+      JsonNode value = json.readTree(agent.getStructuredOutput()).get(field);
+      return value == null || value.isNull() ? null : json.treeToValue(value, Object.class);
     }
   }
 

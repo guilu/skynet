@@ -58,6 +58,12 @@ public class AgentRun {
   /** Hijo de una fase {@code parallel} que ejecuta, o {@code null} en las demás fases. */
   private String childKey;
 
+  /** JSON Schema de la salida estructurada que tiene que devolver, o {@code null}. */
+  private String outputSchema;
+
+  /** La salida estructurada que devolvió (JSON), o {@code null}. */
+  private String structuredOutput;
+
   @Version private Long version;
 
   @PersistenceCreator
@@ -367,6 +373,10 @@ public class AgentRun {
       return AgentObservableStatus.FAILED;
     }
     if (Boolean.FALSE.equals(resultIsError) && Integer.valueOf(0).equals(exitCode)) {
+      if (outputSchema != null && structuredOutput == null) {
+        error = "El agente no devolvió la salida estructurada que pide su `output`";
+        return AgentObservableStatus.FAILED;
+      }
       return AgentObservableStatus.COMPLETED;
     }
     if (error == null) {
@@ -407,6 +417,24 @@ public class AgentRun {
 
   public String getChildKey() {
     return childKey;
+  }
+
+  public String getOutputSchema() {
+    return outputSchema;
+  }
+
+  public String getStructuredOutput() {
+    return structuredOutput;
+  }
+
+  /** Tiene que devolver una salida estructurada que cumpla {@code schema} (JSON). */
+  void expectOutput(String schema) {
+    this.outputSchema = schema;
+  }
+
+  /** La salida estructurada del resultado, en JSON. */
+  void recordStructuredOutput(String json) {
+    this.structuredOutput = json;
   }
 
   /** La invocación es el hijo {@code childKey} de una fase {@code parallel}. */

@@ -69,6 +69,7 @@ export function kindOf(type: string): EventKind {
     case 'stage.pending':
     case 'stage.ready':
     case 'stage.skipped':
+    case 'stage.condition.evaluated':
     case 'stage.start.failed':
     case 'agent.spawned':
       return 'status'

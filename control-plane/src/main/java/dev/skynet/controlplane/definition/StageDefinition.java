@@ -16,6 +16,8 @@ import java.util.Optional;
  * @param command comando de shell de una fase {@code command}; {@code null} en las demás
  * @param children agentes de una fase {@code parallel}, que se ejecutan a la vez; vacío en las
  *     demás
+ * @param condition condición que se evalúa cuando la fase está lista: si es falsa, la fase se
+ *     omite; {@code null} si no tiene
  */
 public record StageDefinition(
     String id,
@@ -27,7 +29,8 @@ public record StageDefinition(
     WorkspaceMode workspace,
     String workspaceFrom,
     String command,
-    List<ChildDefinition> children) {
+    List<ChildDefinition> children,
+    String condition) {
 
   public StageDefinition {
     dependsOn = List.copyOf(dependsOn);
@@ -45,7 +48,18 @@ public record StageDefinition(
       WorkspaceMode workspace,
       String workspaceFrom,
       String command) {
-    this(id, name, type, agent, prompt, dependsOn, workspace, workspaceFrom, command, List.of());
+    this(
+        id,
+        name,
+        type,
+        agent,
+        prompt,
+        dependsOn,
+        workspace,
+        workspaceFrom,
+        command,
+        List.of(),
+        null);
   }
 
   /** El hijo {@code id}, si la fase lo tiene. */

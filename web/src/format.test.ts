@@ -14,6 +14,19 @@ describe('describeEvent', () => {
     )
   })
 
+  it('explica las condiciones', () => {
+    const condition = { stageKey: 'fix', condition: 'review.hasBlockingFindings' }
+    expect(describeEvent('stage.condition.evaluated', { ...condition, result: false })).toBe(
+      'Condición de fix: review.hasBlockingFindings es falsa',
+    )
+    expect(describeEvent('stage.skipped', { ...condition, reason: 'condition-false' })).toBe(
+      'Fase fix omitida: su condición review.hasBlockingFindings es falsa',
+    )
+    expect(describeEvent('stage.skipped', { stageKey: 'fix', reason: 'upstream' })).toBe(
+      'Fase fix omitida: no se ejecutó una fase de la que depende',
+    )
+  })
+
   it('resume los cambios de estado', () => {
     expect(
       describeEvent('agent.status.changed', { previousStatus: 'QUEUED', status: 'CANCELLED' }),

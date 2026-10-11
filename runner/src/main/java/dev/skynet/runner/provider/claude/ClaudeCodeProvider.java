@@ -102,6 +102,10 @@ public class ClaudeCodeProvider {
     if (start.model() != null) {
       command.addAll(List.of("--model", start.model()));
     }
+    if (start.outputSchema() != null) {
+      // Claude Code valida la salida contra el schema y la devuelve en structured_output.
+      command.addAll(List.of("--json-schema", start.outputSchema()));
+    }
     AgentLimits limits = start.limits();
     if (limits.maxTurns() != null) {
       command.addAll(List.of("--max-turns", limits.maxTurns().toString()));

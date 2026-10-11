@@ -40,6 +40,12 @@ export function DefinitionSummary({ definition }: { definition: WorkflowModel })
                   ` · A la vez: ${s.children
                     .map((c) => (c.id === c.agent ? c.id : `${c.id} (${c.agent})`))
                     .join(', ')}`}
+                {s.condition && (
+                  <>
+                    {s.type === 'conditional' ? ' · Evalúa ' : ' · Solo si '}
+                    <code>{s.condition}</code>
+                  </>
+                )}
                 {s.dependsOn.length > 0 &&
                   ` · Depende de ${s.dependsOn
                     .map((d) => (d.optional ? `${d.stage} (opcional)` : d.stage))

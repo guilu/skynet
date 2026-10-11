@@ -52,6 +52,12 @@ describe('stageNote', () => {
     expect(stageNote(ship, run(build, ship))).toBe('Omitida porque se omitió build')
   })
 
+  it('una fase omitida sin cascada la omitió su condición', () => {
+    const review = stage('review', 'SUCCEEDED', [], 1)
+    const fix = stage('fix', 'SKIPPED', ['review'])
+    expect(stageNote(fix, run(review, fix))).toBe('Omitida porque su condición es falsa')
+  })
+
   it('una fase cancelada sin arrancar dice qué fase falló', () => {
     const a = stage('a', 'FAILED', [], 1)
     const b = stage('b', 'CANCELLED', [], 1)

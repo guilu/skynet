@@ -50,7 +50,15 @@ public final class DefinitionParser {
       Set.of("id", "version", "name", "description", "inputs", "agents", "stages");
   static final Set<String> INPUT_KEYS = Set.of("type", "required", "default", "description");
   static final Set<String> AGENT_KEYS =
-      Set.of("description", "prompt", "tools", "permissionMode", "limits", "model", "provider");
+      Set.of(
+          "description",
+          "prompt",
+          "tools",
+          "permissionMode",
+          "limits",
+          "model",
+          "provider",
+          "output");
   static final Set<String> LIMIT_KEYS = Set.of("maxTurns", "maxBudgetUsd", "timeoutMinutes");
   static final Set<String> STAGE_KEYS =
       Set.of(
@@ -64,7 +72,8 @@ public final class DefinitionParser {
           "workspace",
           "workspaceFrom",
           "command",
-          "children");
+          "children",
+          "condition");
   static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt");
 
   /** Claves de §11 que llegan con hitos posteriores, con el hito que las ejecuta. */
@@ -74,8 +83,7 @@ public final class DefinitionParser {
           "outputSchema", "W4",
           "artifacts", "W4",
           "retry", "W6",
-          "timeout", "W6",
-          "condition", "W3");
+          "timeout", "W6");
 
   /** Variables que puede usar un prompt, además de {@code inputs.<nombre>}. */
   static final List<String> CONTEXT_VARIABLES =
@@ -96,6 +104,12 @@ public final class DefinitionParser {
   static final Pattern INPUT_NAME = Pattern.compile("[A-Za-z]\\w{0,63}");
   static final Pattern TOOL = Pattern.compile("[A-Za-z]\\w*(\\(.+\\))?");
   static final Pattern MODEL = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:/\\[\\]-]{0,99}");
+
+  /** Campos de la salida estructurada: los leen las condiciones como {@code fase.campo}. */
+  static final Pattern OUTPUT_FIELD = Pattern.compile("[A-Za-z]\\w{0,63}");
+
+  static final List<String> OUTPUT_TYPES =
+      List.of("boolean", "string", "number", "integer", "array", "object");
 
   /** Proveedores que llegan con el hito de proveedores, después de W3. */
   static final Set<String> FUTURE_PROVIDERS = Set.of("codex", "gemini", "opencode");
@@ -399,6 +413,7 @@ public final class DefinitionParser {
             String permissionMode = permissionMode(fields.get("permissionMode"), path);
             String model = model(fields.get("model"), path + ".model");
             String provider = provider(fields.get("provider"), path + ".provider");
+            Map<String, Object> output = output(fields.get("output"), path + ".output");
             Integer maxTurns = null;
             BigDecimal maxBudgetUsd = null;
             Integer timeoutMinutes = null;
@@ -429,9 +444,117 @@ public final class DefinitionParser {
                     maxBudgetUsd,
                     timeoutMinutes,
                     model,
-                    provider));
+                    provider,
+                    output));
           });
       return agents;
+    }
+
+    /**
+     * El JSON Schema de la salida estructurada de un agente: un objeto con sus campos en {@code
+     * properties}, cada uno con su {@code type}. Lo demás (descripciones, {@code required}...) pasa
+     * tal cual a Claude Code, que valida la salida contra él.
+     */
+    private Map<String, Object> output(Entry entry, String path) {
+      if (entry == null || isNull(entry.value())) {
+        return null;
+      }
+      String example =
+          ", p. ej. `output: {type: object, properties: {hasBlockingFindings: {type: boolean}}}`";
+      if (!(entry.value() instanceof MappingNode mapping)) {
+        error(entry.value(), path, "`output` debe ser un JSON Schema de un objeto" + example);
+        return null;
+      }
+      Map<String, Node> schema = new LinkedHashMap<>();
+      for (NodeTuple tuple : mapping.getValue()) {
+        if (tuple.getKeyNode() instanceof ScalarNode key) {
+          schema.put(key.getValue(), tuple.getValueNode());
+        }
+      }
+      Node type = schema.get("type");
+      if (!(type instanceof ScalarNode kind) || !kind.getValue().equals("object")) {
+        error(
+            type == null ? entry.key() : type,
+            path + ".type",
+            "La salida estructurada tiene que ser un objeto: pon `type: object` y sus campos en"
+                + " `properties`");
+        return null;
+      }
+      Node properties = schema.get("properties");
+      if (!(properties instanceof MappingNode fields) || fields.getValue().isEmpty()) {
+        error(
+            properties == null ? entry.key() : properties,
+            path + ".properties",
+            "A `output` le faltan sus campos en `properties`" + example);
+        return null;
+      }
+      boolean valid = true;
+      for (NodeTuple field : fields.getValue()) {
+        String name = field.getKeyNode() instanceof ScalarNode k ? k.getValue() : "";
+        String fieldPath = path + ".properties." + name;
+        if (!OUTPUT_FIELD.matcher(name).matches()) {
+          error(
+              field.getKeyNode(),
+              fieldPath,
+              "`"
+                  + name
+                  + "` no vale como campo de `output`: usa letras, números y `_`, empezando por"
+                  + " una letra");
+          valid = false;
+          continue;
+        }
+        Node fieldType =
+            field.getValueNode() instanceof MappingNode m
+                ? m.getValue().stream()
+                    .filter(
+                        t -> t.getKeyNode() instanceof ScalarNode k && k.getValue().equals("type"))
+                    .map(NodeTuple::getValueNode)
+                    .findFirst()
+                    .orElse(null)
+                : null;
+        if (!(fieldType instanceof ScalarNode ft) || !OUTPUT_TYPES.contains(ft.getValue())) {
+          error(
+              fieldType == null ? field.getKeyNode() : fieldType,
+              fieldPath + ".type",
+              "El campo `"
+                  + name
+                  + "` de `output` necesita `type`: "
+                  + String.join(", ", OUTPUT_TYPES));
+          valid = false;
+        }
+      }
+      if (!valid) {
+        return null;
+      }
+      @SuppressWarnings("unchecked")
+      Map<String, Object> plain = (Map<String, Object>) plain(entry.value());
+      return plain;
+    }
+
+    /** Un nodo del YAML como mapas, listas, textos, números, booleanos y {@code null}. */
+    private static Object plain(Node node) {
+      return switch (node) {
+        case MappingNode mapping -> {
+          Map<String, Object> map = new LinkedHashMap<>();
+          for (NodeTuple tuple : mapping.getValue()) {
+            if (tuple.getKeyNode() instanceof ScalarNode key) {
+              map.put(key.getValue(), plain(tuple.getValueNode()));
+            }
+          }
+          yield map;
+        }
+        case SequenceNode sequence ->
+            sequence.getValue().stream().map(DefinitionParser.Reader::plain).toList();
+        case ScalarNode scalar when Tag.NULL.equals(scalar.getTag()) -> null;
+        case ScalarNode scalar when Tag.BOOL.equals(scalar.getTag()) ->
+            Boolean.parseBoolean(scalar.getValue());
+        case ScalarNode scalar when Tag.INT.equals(scalar.getTag()) ->
+            new java.math.BigInteger(scalar.getValue().replace("_", ""));
+        case ScalarNode scalar when Tag.FLOAT.equals(scalar.getTag()) ->
+            new BigDecimal(scalar.getValue().replace("_", ""));
+        case ScalarNode scalar -> scalar.getValue();
+        default -> null;
+      };
     }
 
     private String model(Entry entry, String path) {
@@ -693,6 +816,7 @@ public final class DefinitionParser {
 
       String command = command(fields, type, node, path);
       List<ChildAt> children = children(fields, type, node, path);
+      String condition = condition(fields, type, node, path);
       StageDefinition stage =
           new StageDefinition(
               id,
@@ -704,8 +828,39 @@ public final class DefinitionParser {
               workspace,
               text(fields.get("workspaceFrom"), path + ".workspaceFrom"),
               command,
-              children.stream().map(ChildAt::child).toList());
+              children.stream().map(ChildAt::child).toList(),
+              condition);
       return new StageAt(stage, path, node, fields, dependencyNodes, children);
+    }
+
+    /**
+     * El texto de {@code condition}, que se comprueba con las demás fases ({@link
+     * #checkCondition}). Una fase {@code conditional} no hace otra cosa: necesita su condición y no
+     * lleva agente ni prompt.
+     */
+    private String condition(Map<String, Entry> fields, StageType type, Node node, String path) {
+      String condition = text(fields.get("condition"), path + ".condition");
+      if (type != StageType.CONDITIONAL) {
+        return condition;
+      }
+      for (String key : List.of("agent", "prompt")) {
+        Entry used = fields.get(key);
+        if (used != null) {
+          error(
+              used.key(),
+              path + "." + key,
+              "Una fase `conditional` no hace trabajo, solo evalúa su condición: quita `"
+                  + key
+                  + "`");
+        }
+      }
+      if (fields.get("condition") == null) {
+        error(
+            node,
+            path + ".condition",
+            "A esta fase le falta `condition`, p. ej. `condition: review.hasBlockingFindings`");
+      }
+      return condition;
     }
 
     /**
@@ -988,6 +1143,220 @@ public final class DefinitionParser {
         }
       }
       checkCycles(stages, byId);
+      for (StageAt at : stages) {
+        if (at.stage().condition() != null && at.stage().type().executable()) {
+          checkCondition(at, byId, agentsByName, inputs);
+        }
+      }
+    }
+
+    /**
+     * Comprueba la condición de una fase: que se entienda, que solo lea datos de las fases de las
+     * que depende (directa o indirectamente) y de {@code inputs}, y que sus tipos casen. El error
+     * va en la línea y la columna del trozo que falla.
+     */
+    private void checkCondition(
+        StageAt at,
+        Map<String, StageAt> byId,
+        Map<String, AgentDefinition> agents,
+        List<InputDefinition> inputs) {
+      Node node = at.fields().get("condition").value();
+      String path = at.path() + ".condition";
+      if (!(node instanceof ScalarNode scalar)) {
+        return;
+      }
+      Set<String> ancestors = ancestors(at.stage().id(), byId);
+      try {
+        Condition.Expr expr = Condition.parse(scalar.getValue());
+        Condition.check(
+            expr, p -> conditionType(p, at.stage().id(), ancestors, byId, agents, inputs));
+      } catch (Condition.SyntaxError e) {
+        int[] position = position(scalar, Math.min(e.position(), scalar.getValue().length()));
+        add(Severity.ERROR, path, position[0], position[1], e.getMessage());
+      }
+    }
+
+    /** Fases de las que {@code stage} depende, directa o indirectamente. */
+    private static Set<String> ancestors(String stage, Map<String, StageAt> byId) {
+      Set<String> seen = new LinkedHashSet<>();
+      List<String> pending = new ArrayList<>(List.of(stage));
+      while (!pending.isEmpty()) {
+        StageAt at = byId.get(pending.removeLast());
+        if (at == null) {
+          continue;
+        }
+        for (Dependency dep : at.stage().dependsOn()) {
+          if (seen.add(dep.stage())) {
+            pending.add(dep.stage());
+          }
+        }
+      }
+      seen.remove(stage);
+      return seen;
+    }
+
+    /** El tipo del dato al que lleva una ruta de una condición, o un error si no vale. */
+    private static Condition.Type conditionType(
+        Condition.Path path,
+        String stageId,
+        Set<String> ancestors,
+        Map<String, StageAt> byId,
+        Map<String, AgentDefinition> agents,
+        List<InputDefinition> inputs) {
+      List<String> parts = path.parts();
+      String first = parts.getFirst();
+      String usage =
+          "`"
+              + path.text()
+              + "` no es un dato que pueda leer una condición: usa `<fase>.status`,"
+              + " `<fase>.exitCode`, `<fase>.<campo>` o `inputs.<nombre>`";
+      if (first.equals("inputs")) {
+        if (parts.size() != 2) {
+          throw new Condition.SyntaxError(usage, path.position());
+        }
+        InputDefinition input =
+            inputs.stream().filter(i -> i.name().equals(parts.get(1))).findFirst().orElse(null);
+        if (input == null) {
+          throw new Condition.SyntaxError(
+              "`"
+                  + path.text()
+                  + "` usa un dato que no está en `inputs`"
+                  + suggestion(parts.get(1), inputs.stream().map(InputDefinition::name).toList()),
+              path.position());
+        }
+        return switch (input.type()) {
+          case "number" -> Condition.Type.NUMBER;
+          case "boolean" -> Condition.Type.BOOLEAN;
+          default -> Condition.Type.STRING;
+        };
+      }
+      StageAt source = byId.get(first);
+      if (source == null) {
+        throw new Condition.SyntaxError(
+            "`" + first + "` no es ninguna fase ni `inputs`" + suggestion(first, byId.keySet()),
+            path.position());
+      }
+      if (!ancestors.contains(first)) {
+        throw new Condition.SyntaxError(
+            "`"
+                + first
+                + "` no es una dependencia de `"
+                + stageId
+                + "`: una condición solo lee fases que han terminado antes (ponla en `dependsOn`)",
+            path.position());
+      }
+      if (parts.size() < 2) {
+        throw new Condition.SyntaxError(usage, path.position());
+      }
+      String field = parts.get(1);
+      StageDefinition stage = source.stage();
+      if (parts.size() == 2 && field.equals("status")) {
+        return Condition.Type.STRING;
+      }
+      if (parts.size() == 2 && field.equals("exitCode")) {
+        if (stage.type() != StageType.COMMAND) {
+          throw new Condition.SyntaxError(
+              "Solo las fases `command` tienen `exitCode`; `"
+                  + first
+                  + "` es `"
+                  + stage.type().yaml()
+                  + "`",
+              path.position());
+        }
+        return Condition.Type.NUMBER;
+      }
+      if (stage.type() == StageType.PARALLEL) {
+        if (parts.size() == 3) {
+          ChildDefinition child = stage.child(field).orElse(null);
+          if (child == null) {
+            throw new Condition.SyntaxError(
+                "La fase `"
+                    + first
+                    + "` no tiene ningún hijo `"
+                    + field
+                    + "`"
+                    + suggestion(
+                        field, stage.children().stream().map(ChildDefinition::id).toList()),
+                path.position());
+          }
+          return outputType(path, agents.get(child.agent()), parts.get(2), first + "." + field);
+        }
+        if (parts.size() == 2) {
+          boolean declared = false;
+          for (ChildDefinition child : stage.children()) {
+            AgentDefinition agent = agents.get(child.agent());
+            String type = agent == null ? null : agent.outputFields().get(field);
+            if (type != null && !type.equals("boolean")) {
+              throw new Condition.SyntaxError(
+                  "`"
+                      + path.text()
+                      + "` junta los hijos y solo vale para campos booleanos (es verdadero si"
+                      + " algún hijo devuelve true); `"
+                      + field
+                      + "` es "
+                      + type
+                      + " en `"
+                      + child.id()
+                      + "`: usa `"
+                      + first
+                      + "."
+                      + child.id()
+                      + "."
+                      + field
+                      + "`",
+                  path.position());
+            }
+            declared |= type != null;
+          }
+          if (!declared) {
+            throw new Condition.SyntaxError(
+                "Ningún hijo de `"
+                    + first
+                    + "` devuelve `"
+                    + field
+                    + "`: declara el campo en el `output` de su agente",
+                path.position());
+          }
+          return Condition.Type.BOOLEAN;
+        }
+        throw new Condition.SyntaxError(usage, path.position());
+      }
+      if (stage.type() == StageType.AGENT && parts.size() == 2) {
+        AgentDefinition agent = stage.agent() == null ? null : agents.get(stage.agent());
+        return outputType(path, agent, field, first);
+      }
+      throw new Condition.SyntaxError(usage, path.position());
+    }
+
+    /** El tipo del campo {@code field} del {@code output} de {@code agent}. */
+    private static Condition.Type outputType(
+        Condition.Path path, AgentDefinition agent, String field, String who) {
+      if (agent == null || agent.output() == null) {
+        throw new Condition.SyntaxError(
+            "`"
+                + who
+                + "` no devuelve salida estructurada: declara `output` en su agente para leer `"
+                + field
+                + "`",
+            path.position());
+      }
+      String type = agent.outputFields().get(field);
+      if (type == null) {
+        throw new Condition.SyntaxError(
+            "El `output` del agente `"
+                + agent.name()
+                + "` no tiene el campo `"
+                + field
+                + "`"
+                + suggestion(field, agent.outputFields().keySet()),
+            path.position());
+      }
+      return switch (type) {
+        case "boolean" -> Condition.Type.BOOLEAN;
+        case "number", "integer" -> Condition.Type.NUMBER;
+        case "string" -> Condition.Type.STRING;
+        default -> Condition.Type.ANY;
+      };
     }
 
     private void checkWorkspace(StageAt at, Map<String, StageAt> byId) {

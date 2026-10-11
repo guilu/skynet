@@ -138,6 +138,8 @@ export interface AgentRun {
   workspace: Workspace | null
   /** Hijo de una fase `parallel` que ejecuta, o null en las demás fases. */
   childKey: string | null
+  /** Salida estructurada que devolvió el agente según su `output`, o null. */
+  structuredOutput: unknown
 }
 
 export interface Workspace {
@@ -393,6 +395,8 @@ export interface AgentDefinition {
   model: string | null
   /** Por ahora solo `claude-code`. */
   provider: string | null
+  /** JSON Schema de la salida estructurada, o null si no devuelve ninguna. */
+  output: { type: 'object'; properties: Record<string, { type: string }> } | null
 }
 
 export interface StageDefinition {
@@ -408,6 +412,8 @@ export interface StageDefinition {
   command: string | null
   /** Agentes de una fase `parallel`, que se ejecutan a la vez. */
   children: { id: string; agent: string; prompt: string | null }[]
+  /** Condición que decide si la fase se ejecuta; null: siempre. */
+  condition: string | null
 }
 
 /** El workflow leído del YAML. */

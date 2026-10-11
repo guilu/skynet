@@ -25,6 +25,8 @@ import java.util.UUID;
  *     uno; no se combina con {@code resume}
  * @param command comando de shell de una fase {@code command}: el runner lo ejecuta con {@code sh
  *     -c} en el worktree en lugar de lanzar el agente; {@code null} para un agente
+ * @param outputSchema JSON Schema de la salida estructurada que debe devolver el agente ({@code
+ *     --json-schema}), o {@code null} si no tiene que devolver ninguna
  */
 public record StartAgent(
     UUID workflowRunId,
@@ -40,7 +42,8 @@ public record StartAgent(
     ResumeFrom resume,
     List<String> environment,
     WorkspaceRef workspace,
-    String command) {
+    String command,
+    String outputSchema) {
 
   public StartAgent {
     Objects.requireNonNull(workflowRunId, "workflowRunId");
@@ -56,6 +59,43 @@ public record StartAgent(
     if (command != null && resume != null) {
       throw new IllegalArgumentException("Un comando no se reanuda");
     }
+    if (command != null && outputSchema != null) {
+      throw new IllegalArgumentException("Un comando no devuelve salida estructurada");
+    }
+  }
+
+  /** Invocación sin salida estructurada. */
+  public StartAgent(
+      UUID workflowRunId,
+      String workItemKey,
+      String repositoryPath,
+      String baseBranch,
+      UUID sessionId,
+      String prompt,
+      List<String> allowedTools,
+      String permissionMode,
+      String model,
+      AgentLimits limits,
+      ResumeFrom resume,
+      List<String> environment,
+      WorkspaceRef workspace,
+      String command) {
+    this(
+        workflowRunId,
+        workItemKey,
+        repositoryPath,
+        baseBranch,
+        sessionId,
+        prompt,
+        allowedTools,
+        permissionMode,
+        model,
+        limits,
+        resume,
+        environment,
+        workspace,
+        command,
+        null);
   }
 
   /** Invocación de un agente (no un comando). */
