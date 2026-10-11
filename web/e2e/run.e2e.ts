@@ -142,7 +142,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     await expect(verified.getByText('Pasa')).toBeVisible({ timeout: 60_000 })
     await expect(verified.getByText('1 tests · 0 fallidos · 0 omitidos')).toBeVisible()
     await expect(verified.getByText('sh check.sh')).toBeVisible()
-    await expect(header.getByText('1/1 tests')).toBeVisible()
+    await expect(header.locator('.run-kpis').getByText('1/1', { exact: true })).toBeVisible()
 
     await panel.getByRole('button', { name: 'Reejecutar verificación' }).click()
     await expect(panel.getByRole('heading', { name: 'Anteriores' })).toBeVisible({

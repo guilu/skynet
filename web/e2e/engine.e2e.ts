@@ -78,7 +78,9 @@ test('un workflow de tres fases termina igual aunque se reinicie el control plan
   await test.step('todas las fases desde el principio; la unión espera', async () => {
     await expect(page.getByRole('link', { name: 'Tres fases E2E' })).toBeVisible()
     await expect(tree.locator('.path > li')).toHaveCount(3)
-    await expect(tree.getByText('Espera a izquierda y derecha')).toBeVisible()
+    await expect(
+      tree.locator('.step-note', { hasText: 'Espera a izquierda y derecha' }),
+    ).toBeVisible()
     // Las fases en paralelo ya trabajan: se ven sus herramientas en la cascada.
     await page.getByRole('tab', { name: 'Cascada' }).click()
     const waterfall = page.getByRole('tabpanel', { name: 'Cascada' })
@@ -104,7 +106,9 @@ test('un workflow de tres fases termina igual aunque se reinicie el control plan
       timeout: 120_000,
     })
     await expect(tree.locator('.step.done')).toHaveCount(3)
-    await expect(tree.getByText('Después de izquierda y derecha')).toBeVisible()
+    await expect(
+      tree.locator('.step-note', { hasText: 'Después de izquierda y derecha' }),
+    ).toBeVisible()
     const run = await (await page.request.get(`/api/workflow-runs/${runId}`)).json()
     expect(
       run.stages.map((s: { stageKey: string; agents: unknown[] }) => [s.stageKey, s.agents.length]),
