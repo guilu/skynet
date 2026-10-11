@@ -132,6 +132,33 @@ class FakeClaudeTest {
   }
 
   @Test
+  void withASchemaReturnsTheConfiguredStructuredOutput() throws Exception {
+    String[] args = {"-p", "x", "--output-format", "stream-json", "--json-schema", "{}"};
+    Result configured =
+        run(
+            Map.of(
+                "FAKE_CLAUDE_FIXTURE",
+                "01-simple-text",
+                "FAKE_CLAUDE_DELAY_MS",
+                "0",
+                "FAKE_CLAUDE_STRUCTURED_OUTPUT",
+                "{\"hasBlockingFindings\":true}"),
+            CWD,
+            args);
+    assertThat(
+            configured
+                .lines
+                .getLast()
+                .path("structured_output")
+                .path("hasBlockingFindings")
+                .asBoolean())
+        .isTrue();
+
+    Result none = run("01-simple-text", args);
+    assertThat(none.lines.getLast().has("structured_output")).isFalse();
+  }
+
+  @Test
   void rejectsNonStreamJsonOutput() throws Exception {
     assertThat(run("01-simple-text", "-p", "x").exitCode).isEqualTo(2);
   }

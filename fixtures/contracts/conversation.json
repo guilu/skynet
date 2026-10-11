@@ -39,7 +39,8 @@
         "cleanupError" : null,
         "removedAt" : null
       },
-      "childKey" : null
+      "childKey" : null,
+      "structuredOutput" : null
     },
     "prompt" : "Implementa el importador de precios de modelos",
     "messages" : [ {
@@ -87,7 +88,8 @@
         "cleanupError" : null,
         "removedAt" : null
       },
-      "childKey" : null
+      "childKey" : null,
+      "structuredOutput" : null
     },
     "prompt" : "Añade también los precios de caché",
     "messages" : [ {

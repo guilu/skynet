@@ -54,6 +54,31 @@ class ClaudeCodeProviderTest {
   }
 
   @Test
+  void asksForTheStructuredOutputOfItsSchema() {
+    String schema = "{\"type\":\"object\",\"properties\":{\"ok\":{\"type\":\"boolean\"}}}";
+    StartAgent start =
+        new StartAgent(
+            UUID.randomUUID(),
+            "TKM-1",
+            "/r",
+            "main",
+            UUID.randomUUID(),
+            "Revisa",
+            List.of(),
+            null,
+            null,
+            AgentLimits.none(),
+            null,
+            null,
+            null,
+            null,
+            schema);
+
+    assertThat(new ClaudeCodeProvider("claude", List.of()).command(start))
+        .containsSubsequence("--json-schema", schema);
+  }
+
+  @Test
   void resumesTheSessionAndForksWithANewId() {
     UUID parent = UUID.randomUUID();
     UUID forked = UUID.randomUUID();

@@ -90,7 +90,13 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
     case 'stage.ready':
       return `Fase ${p('stageKey')} preparada (intento ${p('attempt')})`
     case 'stage.skipped':
-      return `Fase ${p('stageKey')} omitida: no se ejecutó una fase de la que depende`
+      return payload.reason === 'condition-false'
+        ? `Fase ${p('stageKey')} omitida: su condición ${p('condition')} es falsa`
+        : `Fase ${p('stageKey')} omitida: no se ejecutó una fase de la que depende`
+    case 'stage.condition.evaluated':
+      return `Condición de ${p('stageKey')}: ${p('condition')} es ${
+        payload.result ? 'verdadera' : 'falsa'
+      }`
     case 'stage.start.failed':
       return `La fase ${p('stageKey')} no pudo arrancar: ${p('error')}`
     case 'agent.spawned':

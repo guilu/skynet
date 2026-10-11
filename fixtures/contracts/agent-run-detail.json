@@ -37,7 +37,8 @@
       "cleanupError" : null,
       "removedAt" : null
     },
-    "childKey" : null
+    "childKey" : null,
+    "structuredOutput" : null
   },
   "workflowRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04",
   "prompts" : [ {
