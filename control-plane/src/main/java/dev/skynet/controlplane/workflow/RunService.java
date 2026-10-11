@@ -203,13 +203,16 @@ public class RunService {
               return new StagePolicy(
                   stage.id(),
                   stage.name(),
+                  stage.type(),
                   stage.agent(),
                   effective.allowedTools(),
                   effective.permissionMode(),
                   effective.environment(),
                   limits.maxTurns(),
                   limits.maxBudgetUsd(),
-                  limits.timeout() == null ? null : Math.toIntExact(limits.timeout().toMinutes()));
+                  limits.timeout() == null ? null : Math.toIntExact(limits.timeout().toMinutes()),
+                  effective.model(),
+                  stage.command());
             })
         .toList();
   }
@@ -231,9 +234,7 @@ public class RunService {
             .map(StageDefinition::agent)
             .flatMap(definition::agent)
             .orElse(null);
-    EffectivePolicy effective = EffectivePolicy.of(policy, agent, limits);
-    return new EffectivePolicy(
-        effective.allowedTools(), effective.permissionMode(), effective.environment(), limits);
+    return EffectivePolicy.of(policy, agent, limits).withLimits(limits);
   }
 
   /** Límites como se guardan en {@code launch_limits}. */
@@ -272,6 +273,7 @@ public class RunService {
   public WorkflowRun retry(UUID agentRunId) {
     AgentRun parent = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
     requireFinished(parent);
+    requireAgent(parent);
     if (parent.getKind() != AgentRunKind.START && parent.getKind() != AgentRunKind.RETRY) {
       throw new ConflictException(
           "Solo se puede reintentar un lanzamiento; para repetir un mensaje, envíalo de nuevo");
@@ -293,6 +295,7 @@ public class RunService {
 
   private WorkflowRun continueSession(UUID agentRunId, String text, boolean fork) {
     AgentRun requested = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
+    requireAgent(requested);
     WorkspaceView workspace =
         workspaces
             .find(requested.getWorkspaceId())
@@ -333,6 +336,15 @@ public class RunService {
                 parent.getProviderSessionId(), fork, workspace.path(), workspace.branch()),
             null,
             parent.getRunnerId()));
+  }
+
+  /** Un comando no tiene sesión que continuar, y reintentar una fase llega con W6. */
+  private static void requireAgent(AgentRun agent) {
+    if (agent.isCommand()) {
+      throw new ConflictException(
+          "Es un comando, no un agente: no tiene conversación que continuar ni se reintenta"
+              + " por separado");
+    }
   }
 
   /**
@@ -956,13 +968,17 @@ public class RunService {
         .list();
   }
 
-  /** Agentes activos sin actividad desde {@code before}, candidatos a {@code UNRESPONSIVE}. */
+  /**
+   * Agentes activos sin actividad desde {@code before}, candidatos a {@code UNRESPONSIVE}. Un
+   * comando no cuenta: no emite nada mientras corre, lo acota su tiempo máximo y los latidos del
+   * runner detectan si su proceso desaparece.
+   */
   @Transactional(readOnly = true)
   List<UUID> silentAgents(Instant before) {
     return jdbc.sql(
             "SELECT id FROM agent_run WHERE status IN ('THINKING', 'EXECUTING')"
-                + " AND last_activity_at < ? ORDER BY last_activity_at")
-        .param(Timestamp.from(before))
+                + " AND provider <> ? AND last_activity_at < ? ORDER BY last_activity_at")
+        .params(AgentRun.PROVIDER_COMMAND, Timestamp.from(before))
         .query(UUID.class)
         .list();
   }

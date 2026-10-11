@@ -50,16 +50,35 @@ stages:
 - `prompt`: plantilla con variables.
 - `tools`: herramientas de Claude Code, como `Edit` o `Bash(git:*)`. Por defecto, las del repositorio.
 - `permissionMode`: `dontAsk`, `acceptEdits`, `default` o `plan`. Por defecto, el del repositorio.
+- `model`: el modelo del agente, por su nombre (`claude-haiku-4-5`) o su alias (`opus`). Por defecto, el global (`SKYNET_AGENT_MODEL`).
+- `provider`: quién ejecuta el agente. Por ahora solo `claude-code`, que es el valor por defecto; `codex`, `gemini` y `opencode` salen como `UNSUPPORTED` hasta el hito de proveedores.
 - `limits`: `maxTurns` (1-1000), `maxBudgetUsd` (0,01-1000) y `timeoutMinutes` (1-1440).
 - Al lanzar, lo que pide un agente se recorta a la política del repositorio: solo las herramientas que el repositorio permite (`Bash(git:*)` cabe en `Bash`, al revés no), su modo de permisos solo si no es más permisivo (`plan` < `default`/`dontAsk` < `acceptEdits`) y sus límites rebajados a los del repositorio. Lo que el agente no fija sale de la política y, los límites, de los del lanzamiento.
 
 **`stages[]`:**
-- `id` (obligatorio, único) y `type` (obligatorio).
+- `id` (obligatorio, único) y `type` (obligatorio): `agent` o `command` (los demás tipos aún no se ejecutan, ver abajo).
 - `agent`: un agente de `agents`. Sin él, la fase usa la política del repositorio.
 - `prompt`: el de la fase; si falta, el del agente. Uno de los dos tiene que existir.
 - `dependsOn`: fases que tienen que terminar antes. Con `?` al final (`plan?`) es opcional: también vale si esa fase se omite. Entre corchetes va entre comillas (`dependsOn: ["plan?"]`), porque YAML lee `?` como otra cosa.
-- `workspace`: `inherit` (por defecto) continúa el worktree de la fase con agente de la que depende, sesión nueva pero mismos ficheros; sin ninguna, empieza uno nuevo. `isolated-worktree` empieza siempre uno nuevo desde la rama por defecto.
-- `workspaceFrom`: obligatorio si la fase depende de varias fases con agente y no es `isolated-worktree`; dice cuál continúa.
+- `workspace`: `inherit` (por defecto) continúa el worktree de la fase con agente o comando de la que depende, sesión nueva pero mismos ficheros; sin ninguna, empieza uno nuevo. `isolated-worktree` empieza siempre uno nuevo desde la rama por defecto.
+- `workspaceFrom`: obligatorio si la fase depende de varias fases con worktree (agente o comando) y no es `isolated-worktree`; dice cuál continúa.
+- `command`: solo en las fases `type: command`, y obligatorio en ellas. Ver abajo.
+
+**Fases `command`:** ejecutan un comando de shell en lugar de un agente, p. ej. los tests después de implementar:
+
+```yaml
+  - id: tests
+    type: command
+    command: ./gradlew test
+    dependsOn: [implement]   # en el worktree de implement
+```
+
+- El runner lo ejecuta con `sh -c` en el worktree de la fase, con las mismas reglas que una fase `agent` (`workspace`, `workspaceFrom`), y la fase siguiente puede continuar ese worktree.
+- Termina bien solo con código 0; cualquier otro código, el tiempo agotado o una cancelación la hacen fallar, y entonces se aplica el fail-fast.
+- Lleva el entorno que el repositorio permite a sus agentes y el tiempo máximo de las verificaciones (`SKYNET_VERIFICATION_TIMEOUT`, 30 min). El `timeout` por fase llega en W6.
+- No admite `agent`, `prompt` ni variables `{{...}}`: un dato de entrada dentro de un comando de shell podría colar otro comando.
+- El comando lo escribe quien publica el workflow, igual que el comando de verificación del repositorio.
+- En la ejecución es una invocación más de su fase (con proveedor `command`): una herramienta `Bash` con su salida, y como artefactos el comando, la salida completa (`command.log`) y los cambios del worktree. No se verifica después (ya es un comando) y no se puede continuar ni reintentar por separado.
 
 **Variables de los prompts:** `{{workItem.key}}`, `{{workItem.title}}`, `{{workItem.description}}`, `{{workItem.type}}`, `{{workItem.externalRef}}`, `{{project.key}}`, `{{project.name}}` e `{{inputs.<nombre>}}`.
 
@@ -69,12 +88,13 @@ El YAML admite ya todo §11 para poder escribir los workflows de la especificaci
 
 | Qué | Hito |
 |---|---|
-| Fases `command`, `parallel` y `conditional`; `condition`, `children` y `command` | W3 |
+| Fases `parallel` y `conditional`; `condition` y `children` | W3 |
 | Fase `verification`; `outputSchema` y `artifacts`; `{{stages.<id>...}}` en los prompts | W4 |
 | Fase `human-approval` | W5 |
 | `retry` y `timeout` | W6 |
 | Fases `github-pr`, `github-check`, `github-merge` y `merge` | S2 |
 | `promptTemplate` | S3 |
+| `provider` distinto de `claude-code` | Hito de proveedores, tras W3 |
 | Fase `deploy` | sin fecha |
 
 ## Cómo se ejecuta

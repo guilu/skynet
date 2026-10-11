@@ -3,7 +3,7 @@ import type { WorkflowModel } from '../../api'
 const WORKSPACE = { INHERIT: 'Continúa el de su dependencia', ISOLATED: 'Uno nuevo' } as const
 
 function workspaceLabel(stage: WorkflowModel['stages'][number]): string {
-  if (stage.type !== 'agent') return '—'
+  if (stage.type !== 'agent' && stage.type !== 'command') return '—'
   if (stage.workspaceFrom) return `Continúa el de ${stage.workspaceFrom}`
   if (stage.workspace === 'INHERIT' && stage.dependsOn.length === 0) return 'Uno nuevo'
   return WORKSPACE[stage.workspace]
@@ -25,11 +25,18 @@ export function DefinitionSummary({ definition }: { definition: WorkflowModel })
               {s.name && <span> {s.name}</span>} <span className="tag">{s.type}</span>
               <span className="muted small">
                 {s.type === 'agent' && ` · Agente: ${s.agent ?? 'el del repositorio'}`}
+                {s.type === 'command' && (
+                  <>
+                    {' · Ejecuta '}
+                    <code>{s.command}</code>
+                  </>
+                )}
                 {s.dependsOn.length > 0 &&
                   ` · Depende de ${s.dependsOn
                     .map((d) => (d.optional ? `${d.stage} (opcional)` : d.stage))
                     .join(', ')}`}
-                {s.type === 'agent' && ` · Worktree: ${workspaceLabel(s).toLowerCase()}`}
+                {(s.type === 'agent' || s.type === 'command') &&
+                  ` · Worktree: ${workspaceLabel(s).toLowerCase()}`}
               </span>
             </li>
           ))}
@@ -61,6 +68,7 @@ export function DefinitionSummary({ definition }: { definition: WorkflowModel })
                   {' '}
                   · Herramientas:{' '}
                   {agent.tools ? agent.tools.join(', ') || 'ninguna' : 'las del repositorio'}
+                  {agent.model && ` · Modelo ${agent.model}`}
                   {agent.permissionMode && ` · ${agent.permissionMode}`}
                   {agent.maxTurns != null && ` · ${agent.maxTurns} turnos`}
                   {agent.maxBudgetUsd != null && ` · ${agent.maxBudgetUsd} US$`}

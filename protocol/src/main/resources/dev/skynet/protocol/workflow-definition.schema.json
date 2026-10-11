@@ -71,6 +71,15 @@
           "description": "Modo de permisos de Claude Code. Por defecto, el del repositorio.",
           "enum": ["dontAsk", "acceptEdits", "default", "plan"]
         },
+        "model": {
+          "description": "Modelo del agente, p. ej. claude-sonnet-4-5 u opus. Por defecto, el global de Skynet.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/\\[\\]-]{0,99}$"
+        },
+        "provider": {
+          "description": "Quién ejecuta el agente. Por ahora solo claude-code; codex, gemini y opencode llegan con el hito de proveedores.",
+          "enum": ["claude-code", "codex", "gemini", "opencode"]
+        },
         "limits": {
           "description": "Límites de cada invocación, nunca por encima de los del repositorio.",
           "type": "object",
@@ -96,7 +105,7 @@
         "name": { "description": "Nombre para mostrar.", "type": "string", "minLength": 1 },
         "description": { "description": "Qué hace la fase.", "type": "string", "minLength": 1 },
         "type": {
-          "description": "Tipo de fase. Por ahora el motor solo ejecuta agent.",
+          "description": "Tipo de fase. Por ahora el motor ejecuta agent y command.",
           "enum": [
             "agent",
             "command",
@@ -127,8 +136,13 @@
           "enum": ["inherit", "isolated-worktree"]
         },
         "workspaceFrom": {
-          "description": "Con varias dependencias con agente, cuál de ellas continúa su worktree.",
+          "description": "Con varias dependencias con agente o comando, cuál de ellas continúa su worktree.",
           "type": "string"
+        },
+        "command": {
+          "description": "Solo en fases command: comando de shell (sh -c) que se ejecuta en el worktree. Termina bien con código 0. Sin variables.",
+          "type": "string",
+          "minLength": 1
         },
         "promptTemplate": { "description": "Llega en S3.", "type": "string" },
         "outputSchema": { "description": "Llega en W4.", "type": "string" },
@@ -136,8 +150,7 @@
         "retry": { "description": "Llega en W6.", "type": "object" },
         "timeout": { "description": "Llega en W6." },
         "condition": { "description": "Llega en W3.", "type": "string" },
-        "children": { "description": "Llega en W3.", "type": "array" },
-        "command": { "description": "Llega en W3.", "type": "string" }
+        "children": { "description": "Llega en W3.", "type": "array" }
       }
     }
   }

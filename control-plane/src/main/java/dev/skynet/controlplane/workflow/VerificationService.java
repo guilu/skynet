@@ -75,6 +75,9 @@ public class VerificationService {
   @Transactional
   public VerificationResult request(UUID agentRunId) {
     AgentRun agent = agent(agentRunId);
+    if (agent.isCommand()) {
+      throw new ConflictException("Es un comando: su resultado ya es su código de salida");
+    }
     if (!agent.getStatus().isTerminal()) {
       throw new ConflictException(
           "El agente " + agentRunId + " sigue en curso (" + agent.getStatus() + ")");
@@ -104,11 +107,11 @@ public class VerificationService {
   }
 
   /**
-   * Una invocación acaba de completarse: si el repositorio tiene comando, verifica su worktree.
-   * Corre en la transacción de la ingestión.
+   * Una invocación acaba de completarse: si el repositorio tiene comando, verifica su worktree. Una
+   * fase {@code command} no se verifica: ya es un comando. Corre en la transacción de la ingestión.
    */
   void afterCompletion(AgentRun agent, Instant now) {
-    String command = commandOf(agent);
+    String command = agent.isCommand() ? null : commandOf(agent);
     if (command == null) {
       return;
     }

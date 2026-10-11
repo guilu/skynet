@@ -102,6 +102,40 @@ public final class TestAgents {
         null);
   }
 
+  /**
+   * Orden START de una fase {@code command}: ejecuta {@code command} en un worktree nuevo o, con
+   * {@code workspace}, en uno existente.
+   */
+  public static RunnerCommand command(
+      UUID agentRunId,
+      String repository,
+      String command,
+      Duration timeout,
+      WorkspaceRef workspace) {
+    return new RunnerCommand(
+        UUID.randomUUID(),
+        RunnerCommandType.START,
+        agentRunId,
+        Instant.now(),
+        new StartAgent(
+            UUID.randomUUID(),
+            "TKM-1",
+            repository,
+            "main",
+            UUID.randomUUID(),
+            command,
+            List.of(),
+            null,
+            null,
+            new AgentLimits(null, null, timeout),
+            null,
+            null,
+            workspace,
+            command),
+        null,
+        null);
+  }
+
   private static StartAgent invocation(
       String repository, UUID sessionId, String prompt, AgentLimits limits, ResumeFrom resume) {
     return new StartAgent(

@@ -6,6 +6,8 @@ import { DefinitionSummary } from './DefinitionSummary'
 import { ProblemList } from './ProblemList'
 import { problemSummary } from './problems'
 import { useDebounced } from './useDebounced'
+import { useTouchOnly } from '../../useTouchOnly'
+import PlainYamlEditor from './PlainYamlEditor'
 import type { YamlEditorHandle } from './YamlEditor'
 
 const YamlEditor = lazy(() => import('./YamlEditor'))
@@ -39,6 +41,8 @@ export function DefinitionEditor({
   actions,
 }: Props) {
   const editor = useRef<YamlEditorHandle>(null)
+  // En un móvil, Monaco no deja seleccionar, copiar ni pegar: se usa un campo de texto normal.
+  const touchOnly = useTouchOnly()
   const schema = useQuery({
     queryKey: ['workflow-schema'],
     queryFn: api.workflowSchema,
@@ -61,18 +65,29 @@ export function DefinitionEditor({
       {actions && <div className="definition-actions">{actions}</div>}
       <div className="definition-editor">
         <section className="definition-source" aria-label="YAML">
-          <Suspense fallback={<LinesSkeleton label="el editor" lines={12} />}>
-            <YamlEditor
+          {touchOnly ? (
+            <PlainYamlEditor
               ref={editor}
               value={text}
               onChange={onChange}
               readOnly={readOnly}
-              problems={problems}
-              schema={schema.data}
               label={label}
               onSave={onSave}
             />
-          </Suspense>
+          ) : (
+            <Suspense fallback={<LinesSkeleton label="el editor" lines={12} />}>
+              <YamlEditor
+                ref={editor}
+                value={text}
+                onChange={onChange}
+                readOnly={readOnly}
+                problems={problems}
+                schema={schema.data}
+                label={label}
+                onSave={onSave}
+              />
+            </Suspense>
+          )}
         </section>
         <aside className="definition-aside">
           <section className="card" aria-labelledby="problems-title">

@@ -1916,6 +1916,27 @@
     overflow: auto;
   }
 
+  .plain-yaml-editor {
+    display: block;
+    width: 100%;
+    font-family: var(--font-mono);
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1.5;
+    tab-size: 2;
+    white-space: pre;
+    overflow: auto;
+    resize: vertical;
+    border-radius: var(--r-md);
+  }
+
+  /* Safari de iOS amplía la página al enfocar un campo con letra de menos de 16 px. */
+  @media (pointer: coarse) {
+    .plain-yaml-editor {
+      font-size: 16px;
+    }
+  }
+
   .side-by-side {
     display: grid;
     grid-template-columns: 1fr 1fr;

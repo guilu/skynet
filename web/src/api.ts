@@ -231,6 +231,8 @@ export interface WorkflowRef {
 export interface StagePolicy {
   stage: string
   name: string | null
+  /** En una fase `command` solo cuentan el entorno y el comando. */
+  type: string
   agent: string | null
   allowedTools: string[]
   permissionMode: PermissionMode | null
@@ -240,6 +242,10 @@ export interface StagePolicy {
   maxTurns: number | null
   maxBudgetUsd: number | null
   timeoutMinutes: number | null
+  /** Modelo que pide el agente; null: el global. */
+  model: string | null
+  /** Comando de una fase `command`. */
+  command: string | null
 }
 
 export interface RunPage {
@@ -381,6 +387,10 @@ export interface AgentDefinition {
   maxTurns: number | null
   maxBudgetUsd: number | null
   timeoutMinutes: number | null
+  /** null: el modelo global de Skynet. */
+  model: string | null
+  /** Por ahora solo `claude-code`. */
+  provider: string | null
 }
 
 export interface StageDefinition {
@@ -392,6 +402,8 @@ export interface StageDefinition {
   dependsOn: { stage: string; optional: boolean }[]
   workspace: 'INHERIT' | 'ISOLATED'
   workspaceFrom: string | null
+  /** Comando de shell de una fase `command`. */
+  command: string | null
 }
 
 /** El workflow leído del YAML. */

@@ -13,6 +13,7 @@ import java.util.UUID;
  * @param workspace worktree existente en el que arranca una sesión nueva (una fase que continúa el
  *     de la fase de la que depende)
  * @param runnerId runner que debe ejecutarla, o {@code null} si vale cualquiera
+ * @param command comando de shell de una fase {@code command}, o {@code null} para un agente
  */
 record Invocation(
     AgentRunKind kind,
@@ -23,7 +24,21 @@ record Invocation(
     UUID workspaceId,
     ResumeFrom resume,
     WorkspaceRef workspace,
-    UUID runnerId) {
+    UUID runnerId,
+    String command) {
+
+  Invocation(
+      AgentRunKind kind,
+      AgentRun parent,
+      UUID sessionId,
+      String prompt,
+      EffectivePolicy policy,
+      UUID workspaceId,
+      ResumeFrom resume,
+      WorkspaceRef workspace,
+      UUID runnerId) {
+    this(kind, parent, sessionId, prompt, policy, workspaceId, resume, workspace, runnerId, null);
+  }
 
   /** Invocación con sesión y worktree nuevos, en cualquier runner. */
   static Invocation fresh(
@@ -43,5 +58,20 @@ record Invocation(
         null,
         new WorkspaceRef(workspace.path(), workspace.branch()),
         workspace.runnerId());
+  }
+
+  /** La misma invocación como fase {@code command}: el runner ejecuta {@code command}. */
+  Invocation asCommand(String command) {
+    return new Invocation(
+        kind,
+        parent,
+        sessionId,
+        command,
+        policy,
+        workspaceId,
+        resume,
+        workspace,
+        runnerId,
+        command);
   }
 }

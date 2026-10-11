@@ -7,6 +7,7 @@ import dev.skynet.controlplane.dashboard.DashboardSummary;
 import dev.skynet.controlplane.definition.DefinitionDetail;
 import dev.skynet.controlplane.definition.DefinitionParser;
 import dev.skynet.controlplane.definition.DefinitionStatus;
+import dev.skynet.controlplane.definition.StageType;
 import dev.skynet.controlplane.definition.VersionView;
 import dev.skynet.controlplane.definition.WorkflowSummary;
 import dev.skynet.controlplane.definition.WorkflowView;
@@ -332,23 +333,42 @@ class ContractIT extends IntegrationTest {
           new StagePolicy(
               "review",
               "Revisión",
+              StageType.AGENT,
               "reviewer",
               List.of("Read", "Grep"),
               "plan",
               null,
               10,
               new BigDecimal("2.50"),
+              null,
+              "claude-haiku-4-5",
               null),
           new StagePolicy(
               "fix",
               null,
+              StageType.AGENT,
               null,
               List.of("Read", "Edit", "Bash"),
               "dontAsk",
               List.of(),
               null,
               null,
-              null));
+              null,
+              null,
+              null),
+          new StagePolicy(
+              "tests",
+              "Tests",
+              StageType.COMMAND,
+              null,
+              List.of("Read", "Edit", "Bash"),
+              "dontAsk",
+              List.of(),
+              null,
+              null,
+              null,
+              null,
+              "./gradlew test"));
     }
 
     static AgentRunDetail agentDetail() {
@@ -478,6 +498,7 @@ class ContractIT extends IntegrationTest {
               Revisa {{workItem.key}} ({{workItem.title}}) poniendo el foco en {{inputs.foco}}.
             tools: [Read, Grep, Glob]
             permissionMode: dontAsk
+            model: claude-haiku-4-5
             limits:
               maxTurns: 30
               maxBudgetUsd: 1.5
