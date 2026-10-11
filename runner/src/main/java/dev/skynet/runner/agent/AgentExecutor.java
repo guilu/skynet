@@ -59,6 +59,9 @@ public final class AgentExecutor implements AutoCloseable {
   private static final String JSON_TYPE = "application/json";
   private static final String EXIT_CODE = "exitCode";
 
+  /** Salida de un comando que va en su evento; la completa se sube como artefacto. */
+  private static final int MAX_OUTPUT = 16 * 1024;
+
   private final Journal journal;
   private final ProcessSupervisor supervisor;
   private final WorkspaceManager workspaces;
@@ -286,6 +289,10 @@ public final class AgentExecutor implements AutoCloseable {
     ready.put("branch", workspace.branch());
     ready.put("baseCommit", workspace.baseCommit());
     emit(id, AgentEventType.WORKSPACE_READY, ready);
+    if (start.command() != null) {
+      runCommand(id, start, execution, workspace);
+      return;
+    }
 
     List<String> refused = provider.refusedEnvironment(start);
     if (!refused.isEmpty()) {
@@ -412,6 +419,11 @@ public final class AgentExecutor implements AutoCloseable {
             }
           });
     }
+    collectChanges(id, workspace);
+  }
+
+  /** Rama, commits y diff del worktree respecto a su commit de partida. */
+  private void collectChanges(UUID id, Workspace workspace) throws InterruptedException {
     Path diff = logs.resolve(id + ".diff");
     try {
       GitIndexer.Changes changes = GitIndexer.index(workspace.path(), workspace.baseCommit(), diff);
@@ -447,6 +459,138 @@ public final class AgentExecutor implements AutoCloseable {
           () -> "No se pudo indexar el worktree " + workspace.path() + ": " + e.getMessage());
     } finally {
       deleteQuietly(diff);
+    }
+  }
+
+  /**
+   * Fase {@code command}: ejecuta el comando con {@code sh -c} en el worktree, con el entorno de un
+   * agente. Se cuenta como una sola herramienta {@code Bash} (empieza y termina con su salida), y
+   * termina bien solo con código 0. Sube la salida completa y los cambios del worktree.
+   */
+  private void runCommand(UUID id, StartAgent start, Execution execution, Workspace workspace)
+      throws InterruptedException {
+    String toolUseId = "command-" + id;
+    Map<String, Object> started = new LinkedHashMap<>();
+    started.put("toolUseId", toolUseId);
+    started.put("name", "Bash");
+    started.put("input", Map.of("command", start.command()));
+    emit(id, AgentEventType.TOOL_STARTED, started);
+
+    Path log = logs.resolve(id + ".log");
+    SupervisedProcess process;
+    try {
+      // stderr al mismo sitio que stdout: la salida se guarda entera, en orden.
+      process =
+          execution.launch(
+              () ->
+                  supervisor.start(
+                      List.of("sh", "-c", "exec 2>&1\n" + start.command()),
+                      workspace.path(),
+                      provider.environment(runnerEnv, start.environment()),
+                      log,
+                      line -> {}));
+    } catch (IOException e) {
+      finish(id, failure("No se pudo ejecutar el comando: " + e.getMessage()));
+      return;
+    }
+    if (process == null) {
+      finish(id, failure("Cancelado antes de arrancar"));
+      return;
+    }
+    journal.processStarted(id, process.pid(), process.startedAt());
+
+    Duration timeout = start.limits().timeout();
+    ScheduledFuture<?> deadline =
+        timeout == null
+            ? null
+            : timer.schedule(
+                () -> {
+                  execution.timedOut = true;
+                  process.terminate(cancelGrace);
+                },
+                timeout.toMillis(),
+                TimeUnit.MILLISECONDS);
+    ProcessExit exit = process.awaitExit(cancelGrace);
+    if (deadline != null) {
+      deadline.cancel(false);
+    }
+
+    String output = tail(log);
+    Map<String, Object> completed = new LinkedHashMap<>();
+    completed.put("toolUseId", toolUseId);
+    completed.put("name", "Bash");
+    completed.put("isError", exit.exitCode() != 0);
+    completed.put("output", output);
+    if (output.length() < sizeOf(log)) {
+      completed.put("outputTruncated", true);
+    }
+    emit(id, AgentEventType.TOOL_COMPLETED, completed);
+
+    artifact(
+        id,
+        "PROMPT",
+        () ->
+            spool.add(
+                id,
+                null,
+                ArtifactType.PROMPT,
+                "command.txt",
+                TEXT,
+                start.command().getBytes(StandardCharsets.UTF_8),
+                Map.of()));
+    if (Files.exists(log)) {
+      artifact(
+          id,
+          "LOG",
+          () ->
+              spool.addFile(
+                  id,
+                  null,
+                  ArtifactType.LOG,
+                  "command.log",
+                  TEXT,
+                  log,
+                  Map.of(EXIT_CODE, exit.exitCode(), "bytes", Files.size(log))));
+    }
+    collectChanges(id, workspace);
+
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put(EXIT_CODE, exit.exitCode());
+    if (exit.signal() != null) {
+      payload.put("signal", exit.signal());
+    }
+    if (execution.stopping) {
+      payload.put(ERROR, "El runner se detuvo durante la ejecución");
+    } else if (execution.timedOut && !execution.cancelled()) {
+      payload.put(ERROR, "Se agotó el tiempo máximo (" + timeout + ")");
+    }
+    finish(id, payload);
+  }
+
+  /** Los últimos {@link #MAX_OUTPUT} bytes de la salida de un comando, como texto. */
+  private static String tail(Path log) {
+    try {
+      long size = sizeOf(log);
+      if (size == 0) {
+        return "";
+      }
+      try (var channel = java.nio.channels.FileChannel.open(log)) {
+        long from = Math.max(0, size - MAX_OUTPUT);
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocate((int) (size - from));
+        channel.read(buffer, from);
+        return new String(buffer.array(), 0, buffer.position(), StandardCharsets.UTF_8);
+      }
+    } catch (IOException e) {
+      LOG.log(Level.WARNING, e, () -> "No se pudo leer la salida " + log);
+      return "";
+    }
+  }
+
+  private static long sizeOf(Path file) {
+    try {
+      return Files.exists(file) ? Files.size(file) : 0;
+    } catch (IOException e) {
+      return 0;
     }
   }
 

@@ -71,6 +71,7 @@ public class RunSteps {
   private final ProjectService projects;
   private final JdbcClient jdbc;
   private final ObjectMapper json;
+  private final VerificationProperties verification;
   private final TimeSource time;
 
   RunSteps(
@@ -85,6 +86,7 @@ public class RunSteps {
       ProjectService projects,
       JdbcClient jdbc,
       ObjectMapper json,
+      VerificationProperties verification,
       TimeSource time) {
     this.runs = runs;
     this.workflowRuns = workflowRuns;
@@ -97,6 +99,7 @@ public class RunSteps {
     this.projects = projects;
     this.jdbc = jdbc;
     this.json = json;
+    this.verification = verification;
     this.time = time;
   }
 
@@ -162,7 +165,9 @@ public class RunSteps {
 
   /**
    * Arranca una fase lista: renderiza su prompt, calcula lo que se le permite a su agente y lo pone
-   * en cola, en el worktree de la fase de la que depende si lo continúa. Si no se puede (el
+   * en cola, en el worktree de la fase de la que depende si lo continúa. Una fase {@code command}
+   * se pone en cola igual, como una invocación que el runner ejecuta con {@code sh -c}, con el
+   * entorno del repositorio y el tiempo máximo de las verificaciones. Si no se puede (el
    * repositorio o el trabajo se archivaron, el worktree se eliminó, no hay prompt), la fase falla
    * con el motivo.
    */
@@ -176,7 +181,7 @@ public class RunSteps {
             .stage(stageKey)
             .orElseThrow(() -> new IllegalStateException("La fase " + stageKey + " no existe"));
     try {
-      if (stageDefinition.type() != StageType.AGENT) {
+      if (!stageDefinition.type().executable()) {
         throw new ConflictException(
             "Las fases de tipo `" + stageDefinition.type().yaml() + "` todavía no se ejecutan");
       }
@@ -184,25 +189,10 @@ public class RunSteps {
       CodeRepository repository = projects.getRepository(repositoryOf(run));
       workItems.requireActive(workItem);
       projects.requireActive(repository);
-      AgentDefinition agent =
-          stageDefinition.agent() == null
-              ? null
-              : definition.agent(stageDefinition.agent()).orElseThrow();
-      String template =
-          stageDefinition.prompt() != null
-              ? stageDefinition.prompt()
-              : agent == null ? null : agent.prompt();
-      String prompt =
-          template == null
-              ? ""
-              : new PromptRenderer(workItem, projects.get(workItem.getProjectId()), inputsOf(run))
-                  .render(template);
-      if (prompt.isBlank()) {
-        throw new ConflictException("La fase " + stageKey + " se queda sin prompt");
-      }
-      EffectivePolicy policy =
-          EffectivePolicy.of(projects.agentPolicy(repository), agent, launchLimitsOf(run));
-      Invocation invocation = Invocation.fresh(AgentRunKind.START, null, prompt, policy);
+      Invocation invocation =
+          stageDefinition.type() == StageType.COMMAND
+              ? commandInvocation(stageDefinition, repository)
+              : agentInvocation(run, stageDefinition, definition, workItem, repository);
       String source = worktreeSource(stageDefinition, definition, latestStages(runId));
       if (source != null) {
         WorkspaceView workspace = worktreeOf(runId, source);
@@ -212,7 +202,12 @@ public class RunSteps {
         if (workspaces.hasLiveInvocation(workspace.id())) {
           return StartOutcome.DEFERRED;
         }
-        invocation = Invocation.inWorkspace(prompt, policy, workspace);
+        Invocation inWorkspace =
+            Invocation.inWorkspace(invocation.prompt(), invocation.policy(), workspace);
+        invocation =
+            invocation.command() == null
+                ? inWorkspace
+                : inWorkspace.asCommand(invocation.command());
       }
       agentQueue.queue(run, stage, workItem, repository, invocation, now);
       return StartOutcome.STARTED;
@@ -220,6 +215,47 @@ public class RunSteps {
       fail(stage, e.getMessage(), now);
       return StartOutcome.FAILED;
     }
+  }
+
+  /** El agente de una fase {@code agent}, con su prompt y lo que se le permite. */
+  private Invocation agentInvocation(
+      WorkflowRun run,
+      StageDefinition stageDefinition,
+      WorkflowDefinition definition,
+      WorkItem workItem,
+      CodeRepository repository) {
+    String stageKey = stageDefinition.id();
+    AgentDefinition agent =
+        stageDefinition.agent() == null
+            ? null
+            : definition.agent(stageDefinition.agent()).orElseThrow();
+    String template =
+        stageDefinition.prompt() != null
+            ? stageDefinition.prompt()
+            : agent == null ? null : agent.prompt();
+    String prompt =
+        template == null
+            ? ""
+            : new PromptRenderer(workItem, projects.get(workItem.getProjectId()), inputsOf(run))
+                .render(template);
+    if (prompt.isBlank()) {
+      throw new ConflictException("La fase " + stageKey + " se queda sin prompt");
+    }
+    EffectivePolicy policy =
+        EffectivePolicy.of(projects.agentPolicy(repository), agent, launchLimitsOf(run));
+    return Invocation.fresh(AgentRunKind.START, null, prompt, policy);
+  }
+
+  /**
+   * El comando de una fase {@code command}: el entorno que el repositorio permite a sus agentes y,
+   * como tiempo máximo, el de las verificaciones.
+   */
+  private Invocation commandInvocation(StageDefinition stage, CodeRepository repository) {
+    EffectivePolicy policy =
+        EffectivePolicy.of(
+            projects.agentPolicy(repository), new AgentLimits(null, null, verification.timeout()));
+    return Invocation.fresh(AgentRunKind.START, null, stage.command(), policy)
+        .asCommand(stage.command());
   }
 
   /** La fase falla sin llegar a tener agente: queda el motivo en su evento. */
@@ -237,8 +273,8 @@ public class RunSteps {
 
   /**
    * Fase cuyo worktree continúa {@code stage}, o {@code null} para uno nuevo: la de {@code
-   * workspaceFrom} o, si no, su única dependencia con agente. Una dependencia opcional que se
-   * omitió no deja worktree.
+   * workspaceFrom} o, si no, su única dependencia con worktree (agente o comando). Una dependencia
+   * opcional que se omitió no deja worktree.
    */
   static String worktreeSource(
       StageDefinition stage, WorkflowDefinition definition, Map<String, StageRun> stages) {
@@ -250,7 +286,7 @@ public class RunSteps {
       List<String> agentDependencies =
           stage.dependsOn().stream()
               .map(Dependency::stage)
-              .filter(d -> definition.stage(d).map(s -> s.type() == StageType.AGENT).orElse(false))
+              .filter(d -> definition.stage(d).map(s -> s.type().hasWorkspace()).orElse(false))
               .toList();
       source = agentDependencies.size() == 1 ? agentDependencies.getFirst() : null;
     }

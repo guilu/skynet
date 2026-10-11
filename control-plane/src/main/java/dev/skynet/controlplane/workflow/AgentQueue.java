@@ -53,7 +53,9 @@ class AgentQueue {
                 ? AgentRun.queued(
                     stage.getId(),
                     repository.getId(),
-                    AgentRun.PROVIDER_CLAUDE_CODE,
+                    invocation.command() == null
+                        ? AgentRun.PROVIDER_CLAUDE_CODE
+                        : AgentRun.PROVIDER_COMMAND,
                     invocation.sessionId(),
                     invocation.workspaceId(),
                     limits,
@@ -78,6 +80,13 @@ class AgentQueue {
     spawned.put("promptSha256", prompt.getSha256());
     spawned.put("allowedTools", policy.allowedTools());
     spawned.put("permissionMode", policy.permissionMode());
+    String model = model(invocation);
+    if (model != null) {
+      spawned.put("model", model);
+    }
+    if (invocation.command() != null) {
+      spawned.put("command", invocation.command());
+    }
     Map<String, Object> limitsPayload = new LinkedHashMap<>();
     limitsPayload.put("maxTurns", limits.maxTurns());
     limitsPayload.put("maxBudgetUsd", limits.maxBudgetUsd());
@@ -103,12 +112,25 @@ class AgentQueue {
                 invocation.prompt(),
                 policy.allowedTools(),
                 policy.permissionMode(),
-                defaults.model(),
+                model,
                 limits,
                 invocation.resume(),
                 policy.environment(),
-                invocation.workspace()),
+                invocation.workspace(),
+                invocation.command()),
             invocation.runnerId()));
     return agent;
+  }
+
+  /**
+   * Modelo de la invocación: el de su agente del YAML o, si no fija ninguno, el global. Un comando
+   * no tiene modelo.
+   */
+  private String model(Invocation invocation) {
+    if (invocation.command() != null) {
+      return null;
+    }
+    String model = invocation.policy().model();
+    return model != null ? model : defaults.model();
   }
 }

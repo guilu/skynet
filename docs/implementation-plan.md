@@ -522,6 +522,8 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Estimación: 8–10 semanas, sin contar W8.**
 
+**Proveedores (decidido el 2026-10-10):** después de W3 va un hito propio, adelantado de la Fase 4: la interfaz `AgentProvider` (§4.1) en el runner, adaptadores headless de Codex (`codex exec --json`) y Gemini (`gemini -p --output-format stream-json`) y runners que declaran qué CLIs tienen. W3-A ya deja `model` por agente y la clave `provider` reservada en el YAML.
+
 **Implementado (W1-A), definiciones en el backend:**
 
 - Módulo `definition`: `DefinitionParser` lee el YAML con SnakeYAML (posición de cada nodo) y lo valida: claves desconocidas con sugerencia, ids, tipos, dependencias inexistentes, a sí misma y ciclos (con la cadena), agentes, herramientas, modo de permisos, límites, variables de los prompts (línea y columna exactas dentro de un bloque `|`) y el worktree de las fases con varias dependencias (`workspaceFrom`). Lo que el motor aún no ejecuta es `UNSUPPORTED`: válido, pero no publicable. El formato está en [`workflows.md`](workflows.md).
@@ -551,6 +553,13 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 - Vista de ejecución: `RunView` lleva `workflow` (clave, versión y nombre) y cada fase su `name`, su `agent` y su `dependsOn`, en el orden del YAML. El árbol enseña todas las fases desde el principio con «Pendiente», «Lista» y «Omitida», a qué fase espera cada una, la cascada (omitida o cancelada por otra fase) y resalta todas las fases en marcha. Con varias fases, la cabecera cancela la ejecución entera.
 - E2E `engine.e2e.ts`: un workflow de tres fases (dos en paralelo y una que las une) lanzado desde la web termina «Completada» con un agente por fase aunque se reinicie el control plane a mitad. Es el criterio de aceptación de W2.
 - Contrato nuevo `effective-policy`; `run-view` con `workflow`, `name`, `agent` y `dependsOn`.
+
+**Implementado (W3-A), fases `command` y modelo por agente:**
+
+- Fase `command` (`command: ./gradlew test`): el runner ejecuta el comando con `sh -c` en el worktree de la fase, con las reglas de worktree de una fase `agent` (la siguiente puede continuarlo), el entorno que el repositorio permite a sus agentes y el tiempo máximo de las verificaciones. Termina bien solo con código 0. Sin `agent`, `prompt` ni variables. El formato está en [`workflows.md`](workflows.md).
+- Un comando es una invocación de su fase con proveedor `command` (`agent_run.provider`), sin tabla nueva: reutiliza la cola de órdenes (`StartAgent.command`), el worktree, la cancelación, el tiempo máximo, el journal, los latidos y la reconciliación de M6-C. El runner lo cuenta como una herramienta `Bash` (`agent.tool.started` y `agent.tool.completed` con los últimos 16 KB de la salida) y sube el comando, `command.log` y los cambios del worktree. No se verifica después y no se continúa, bifurca ni reintenta por separado (409).
+- `model` en los agentes del YAML (si falta, `skynet.agent.model`) llega al runner en `StartAgent.model`; `provider` queda reservado: `claude-code` por defecto, `codex`, `gemini` y `opencode` salen como `UNSUPPORTED` hasta el hito de proveedores, que va después de W3.
+- `effective-policy` lleva `type`, `model` y `command`; la web los enseña al lanzar y en el resumen del workflow.
 
 ---
 

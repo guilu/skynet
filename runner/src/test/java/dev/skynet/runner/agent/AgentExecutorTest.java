@@ -453,6 +453,92 @@ class AgentExecutorTest {
   }
 
   @Test
+  void aCommandRunsInANewWorktreeAndEndsWithItsExitCode() throws Exception {
+    UUID id = UUID.randomUUID();
+    executor("02-tools")
+        .start(
+            TestAgents.command(
+                id,
+                repo.toString(),
+                "echo compilando; echo hecho > salida.txt; echo fallo >&2; exit 3",
+                null,
+                null));
+
+    NormalizedEvent exit = awaitExit(id);
+    List<NormalizedEvent> events = eventsOf(id);
+    assertThat(events)
+        .extracting(NormalizedEvent::type)
+        .containsExactly(
+            AgentEventType.WORKSPACE_READY,
+            AgentEventType.TOOL_STARTED,
+            AgentEventType.TOOL_COMPLETED,
+            AgentEventType.PROCESS_EXITED);
+    assertThat(events.get(1).payload())
+        .containsEntry("name", "Bash")
+        .containsEntry(
+            "input",
+            Map.of("command", "echo compilando; echo hecho > salida.txt; echo fallo >&2; exit 3"));
+    assertThat(events.get(2).payload())
+        .containsEntry("isError", true)
+        .containsEntry("output", "compilando\nfallo\n");
+    assertThat(exit.payload()).containsEntry("exitCode", 3).doesNotContainKey("error");
+
+    Map<ArtifactType, Journal.PendingArtifact> artifacts = artifactsOf(id);
+    assertThat(artifacts)
+        .containsOnlyKeys(
+            ArtifactType.PROMPT, ArtifactType.LOG, ArtifactType.GIT_CHANGES, ArtifactType.DIFF);
+    assertThat(Files.readString(artifacts.get(ArtifactType.LOG).file()))
+        .isEqualTo("compilando\nfallo\n");
+    assertThat(artifacts.get(ArtifactType.LOG).upload().metadata()).containsEntry("exitCode", 3);
+    assertThat(Files.readString(artifacts.get(ArtifactType.DIFF).file())).contains("+hecho");
+  }
+
+  @Test
+  void aCommandContinuesTheWorktreeOfAPreviousStage() throws Exception {
+    UUID first = UUID.randomUUID();
+    executor("02-tools", Map.of("FAKE_CLAUDE_APPLY", "1"))
+        .start(TestAgents.start(first, repo.toString(), null));
+    awaitExit(first);
+    String path = eventsOf(first).getFirst().payload().get("path").toString();
+    String branch = eventsOf(first).getFirst().payload().get("branch").toString();
+
+    UUID id = UUID.randomUUID();
+    executor.start(
+        TestAgents.command(
+            id, repo.toString(), "grep -c 'a + b' calc.py", null, new WorkspaceRef(path, branch)));
+
+    NormalizedEvent exit = awaitExit(id);
+    assertThat(eventsOf(id).getFirst().payload()).containsEntry("path", path);
+    assertThat(eventsOf(id).get(2).payload())
+        .containsEntry("isError", false)
+        .containsEntry("output", "1\n");
+    assertThat(exit.payload()).containsEntry("exitCode", 0);
+  }
+
+  @Test
+  void aCommandThatRunsTooLongIsTerminated() throws Exception {
+    UUID id = UUID.randomUUID();
+    executor("02-tools")
+        .start(TestAgents.command(id, repo.toString(), "sleep 30", Duration.ofMillis(300), null));
+
+    NormalizedEvent exit = awaitExit(id);
+    assertThat(exit.payload().get("error").toString()).startsWith("Se agotó el tiempo máximo");
+  }
+
+  @Test
+  void cancelTerminatesARunningCommand() throws Exception {
+    UUID id = UUID.randomUUID();
+    executor("02-tools").start(TestAgents.command(id, repo.toString(), "sleep 30", null, null));
+    awaitRunning(id);
+
+    executor.cancel(id);
+
+    NormalizedEvent exit = awaitExit(id);
+    assertThat(exit.payload()).doesNotContainKey("error");
+    assertThat(exit.payload().get("signal")).isIn("SIGTERM", "SIGKILL");
+  }
+
+  @Test
   void verifyRunsTheCommandInTheWorktreeAndReadsItsTestReports() throws Exception {
     Path worktree = finishedWorktree();
     UUID agent = UUID.randomUUID();

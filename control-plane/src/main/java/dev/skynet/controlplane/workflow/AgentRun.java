@@ -18,6 +18,9 @@ public class AgentRun {
 
   public static final String PROVIDER_CLAUDE_CODE = "claude-code";
 
+  /** Una fase {@code command}: el runner ejecuta un comando de shell en lugar de un agente. */
+  public static final String PROVIDER_COMMAND = "command";
+
   @Id private final UUID id;
   private final UUID stageRunId;
   private final UUID parentAgentRunId;
@@ -349,6 +352,16 @@ public class AgentRun {
       error = runnerError;
       return AgentObservableStatus.FAILED;
     }
+    if (isCommand()) {
+      if (Integer.valueOf(0).equals(exitCode)) {
+        return AgentObservableStatus.COMPLETED;
+      }
+      error =
+          "El comando terminó con código "
+              + exitCode
+              + (signal != null ? " (señal " + signal + ")" : "");
+      return AgentObservableStatus.FAILED;
+    }
     if (Boolean.FALSE.equals(resultIsError) && Integer.valueOf(0).equals(exitCode)) {
       return AgentObservableStatus.COMPLETED;
     }
@@ -410,6 +423,11 @@ public class AgentRun {
 
   public String getProvider() {
     return provider;
+  }
+
+  /** Si es una fase {@code command}: sin sesión que reanudar ni verificación. */
+  public boolean isCommand() {
+    return PROVIDER_COMMAND.equals(provider);
   }
 
   public String getProviderSessionId() {

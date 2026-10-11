@@ -24,7 +24,10 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
 
-/** El motor de W2: fases en paralelo, dependencias, worktrees heredados, fail-fast y reinicios. */
+/**
+ * El motor: fases en paralelo, dependencias, worktrees heredados, fail-fast, reinicios (W2) y fases
+ * {@code command} (W3).
+ */
 class WorkflowEngineIT extends IntegrationTest {
 
   /**
@@ -73,6 +76,29 @@ class WorkflowEngineIT extends IntegrationTest {
           prompt: publica
           dependsOn: [build]
           workspace: isolated-worktree
+      """;
+
+  /** Implementar con un modelo propio, pasar los tests con un comando y revisar. */
+  static final String BUILD =
+      """
+      id: build
+      version: 1
+      agents:
+        dev:
+          prompt: Implementa {{workItem.key}}
+          model: claude-haiku-4-5
+      stages:
+        - id: implement
+          type: agent
+          agent: dev
+        - id: tests
+          type: command
+          command: ./gradlew test
+          dependsOn: [implement]
+        - id: review
+          type: agent
+          prompt: Revisa
+          dependsOn: [tests]
       """;
 
   private String projectId;
@@ -257,6 +283,113 @@ class WorkflowEngineIT extends IntegrationTest {
   }
 
   @Test
+  void aCommandStageRunsInTheWorktreeItContinuesAndGatesTheNextStage() {
+    put(
+        "/api/projects/" + projectId + "/repositories/" + repositoryId + "/verification",
+        Map.of("validationCommand", "npm test"));
+    String definitionId = publish(BUILD);
+    Runner runner = register("laptop");
+
+    JsonNode policies =
+        get(
+            "/api/workflow-versions/"
+                + definitionId
+                + "/effective-policy?repositoryId="
+                + repositoryId);
+    assertThat(policies.get(0).path("model").asString()).isEqualTo("claude-haiku-4-5");
+    assertThat(policies.get(1).path("type").asString()).isEqualTo("command");
+    assertThat(policies.get(1).path("command").asString()).isEqualTo("./gradlew test");
+    assertThat(policies.get(2).path("model").isNull()).isTrue();
+
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    JsonNode implement = runner.claim().getFirst();
+    assertThat(implement.path("start").path("model").asString()).isEqualTo("claude-haiku-4-5");
+    assertThat(implement.path("start").path("command").isNull()).isTrue();
+    complete(runner, implement, "/w/eng/implement");
+
+    // La verificación automática del agente va primero; el comando espera a que termine.
+    JsonNode verification = runner.claim().getFirst();
+    assertThat(verification.path("type").asString()).isEqualTo("VERIFY");
+    assertThat(stageStatuses(runId)).containsEntry("tests", "READY");
+    Events verified = new Events(UUID.fromString(verification.path("agentRunId").asString()));
+    String verificationId = verification.path("verify").path("verificationRunId").asString();
+    verified.add(
+        AgentEventType.VERIFICATION_COMPLETED,
+        Map.of("verificationRunId", verificationId, "exitCode", 0));
+    runner.send(verified);
+
+    // El comando va al runner como una invocación más, en el worktree de implement.
+    JsonNode tests = runner.claim().getFirst();
+    JsonNode start = tests.path("start");
+    assertThat(start.path("command").asString()).isEqualTo("./gradlew test");
+    assertThat(start.path("prompt").asString()).isEqualTo("./gradlew test");
+    assertThat(start.path("model").isNull()).isTrue();
+    assertThat(start.path("workspace").path("path").asString()).isEqualTo("/w/eng/implement");
+    assertThat(start.path("limits").path("timeout").isNull()).isFalse();
+    String testsAgent = tests.path("agentRunId").asString();
+    assertThat(provider(testsAgent)).isEqualTo("command");
+
+    Events events = new Events(UUID.fromString(testsAgent));
+    events.add(
+        AgentEventType.WORKSPACE_READY,
+        Map.of("path", "/w/eng/implement", "branch", "skynet/implement", "baseCommit", "abc"));
+    events.add(
+        AgentEventType.TOOL_STARTED,
+        Map.of("toolUseId", "c", "name", "Bash", "input", Map.of("command", "./gradlew test")));
+    runner.send(events);
+    assertThat(stageStatuses(runId)).containsEntry("tests", "RUNNING");
+    events = new Events(UUID.fromString(testsAgent), 2);
+    events.add(
+        AgentEventType.TOOL_COMPLETED,
+        Map.of("toolUseId", "c", "name", "Bash", "isError", false, "output", "BUILD SUCCESSFUL"));
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 0));
+    runner.send(events);
+
+    // Sin verificación del comando: lo siguiente es review, en el mismo worktree.
+    List<JsonNode> next = runner.claim();
+    assertThat(next).hasSize(1);
+    assertThat(next.getFirst().path("type").asString()).isEqualTo("START");
+    assertThat(next.getFirst().path("start").path("prompt").asString()).isEqualTo("Revisa");
+    assertThat(next.getFirst().path("start").path("workspace").path("path").asString())
+        .isEqualTo("/w/eng/implement");
+    assertThat(stageStatuses(runId)).containsEntry("tests", "SUCCEEDED");
+
+    // Un comando no tiene conversación que continuar ni se reintenta por separado.
+    assertConflict(() -> post("/api/agent-runs/" + testsAgent + "/retry", Map.of()));
+    assertConflict(
+        () -> post("/api/agent-runs/" + testsAgent + "/messages", Map.of("text", "otra vez")));
+    assertConflict(() -> post("/api/agent-runs/" + testsAgent + "/verifications", Map.of()));
+  }
+
+  @Test
+  void aFailingCommandFailsItsStageAndTheRun() {
+    String definitionId = publish(BUILD);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    JsonNode tests = runner.claim().getFirst();
+
+    Events events = new Events(UUID.fromString(tests.path("agentRunId").asString()));
+    events.add(
+        AgentEventType.TOOL_STARTED,
+        Map.of("toolUseId", "c", "name", "Bash", "input", Map.of("command", "./gradlew test")));
+    events.add(
+        AgentEventType.TOOL_COMPLETED,
+        Map.of("toolUseId", "c", "name", "Bash", "isError", true, "output", "2 tests failed"));
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 2));
+    runner.send(events);
+
+    assertThat(stageStatuses(runId))
+        .containsEntry("tests", "FAILED")
+        .containsEntry("review", "CANCELLED");
+    JsonNode run = get("/api/workflow-runs/" + runId);
+    assertThat(run.path("status").asString()).isEqualTo("FAILED");
+    JsonNode agent = run.path("stages").get(1).path("agents").get(0);
+    assertThat(agent.path("status").asString()).isEqualTo("FAILED");
+    assertThat(agent.path("error").asString()).isEqualTo("El comando terminó con código 2");
+  }
+
+  @Test
   void aChangeTheControlPlaneDidNotEvaluateIsPickedUpOnceByAWorker() {
     String definitionId = publish(CHAIN);
     String runId = launch(definitionId, Map.of()).path("id").asString();
@@ -396,6 +529,20 @@ class WorkflowEngineIT extends IntegrationTest {
         .single();
   }
 
+  private String provider(String agentRunId) {
+    return jdbc.sql("SELECT provider FROM agent_run WHERE id = ?::uuid")
+        .param(agentRunId)
+        .query(String.class)
+        .single();
+  }
+
+  private static void assertConflict(Runnable call) {
+    assertThatThrownBy(call::run)
+        .isInstanceOfSatisfying(
+            HttpClientErrorException.class,
+            e -> assertThat(e.getStatusCode().value()).isEqualTo(409));
+  }
+
   private int jobs() {
     return jdbc.sql("SELECT count(*) FROM workflow_job").query(Integer.class).single();
   }
@@ -489,8 +636,16 @@ class WorkflowEngineIT extends IntegrationTest {
     private final UUID agentRunId;
     private final List<NormalizedEvent> all = new ArrayList<>();
 
+    private final int sent;
+
     Events(UUID agentRunId) {
+      this(agentRunId, 0);
+    }
+
+    /** Eventos que siguen a los {@code sent} ya enviados. */
+    Events(UUID agentRunId, int sent) {
       this.agentRunId = agentRunId;
+      this.sent = sent;
     }
 
     void add(AgentEventType type, Map<String, ?> payload) {
@@ -498,7 +653,7 @@ class WorkflowEngineIT extends IntegrationTest {
           new NormalizedEvent(
               UUID.randomUUID(),
               agentRunId,
-              all.size() + 1,
+              sent + all.size() + 1,
               Instant.now(),
               type,
               new LinkedHashMap<>(payload)));

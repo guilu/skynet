@@ -54,10 +54,12 @@ export function LaunchForm({
   const repository = repositories.find((r) => r.id === repositoryId) ?? repositories[0]
   const policy = repository?.agentPolicy
   const namedAgents = model?.stages.some((s) => s.agent != null) ?? false
+  // Fases con su propia política o que no son un agente: se enseña qué hará cada una.
+  const perStage = namedAgents || (model?.stages.some((s) => s.type !== 'agent') ?? false)
   const stagePolicies = useQuery({
     queryKey: ['effective-policy', versionId, repository?.id],
     queryFn: () => api.effectivePolicy(versionId!, repository!.id),
-    enabled: !!versionId && !!repository && namedAgents,
+    enabled: !!versionId && !!repository && perStage,
   })
 
   const valueOf = (input: InputDefinition): Value =>
@@ -132,7 +134,7 @@ export function LaunchForm({
           .
         </p>
       )}
-      {namedAgents && (
+      {perStage && (
         <section aria-label="Política de cada fase" className="stage-policies small">
           <p className="muted">Los agentes del workflow solo pueden recortarla:</p>
           <ErrorMessage error={stagePolicies.error} />
@@ -314,8 +316,11 @@ function environmentText(environment: string[] | null): string {
   return environment.length > 0 ? environment.join(', ') : 'sin variables extra'
 }
 
-/** «herramientas Read, Edit; modo plan; 40 turnos, 2 US$, 30 min». */
+/** «herramientas Read, Edit; modo plan; 40 turnos, 2 US$, 30 min», o el comando que ejecuta. */
 function policyText(p: StagePolicy): string {
+  if (p.type === 'command') {
+    return `ejecuta \`${p.command}\` en el worktree, entorno ${environmentText(p.environment)}`
+  }
   const parts = [
     `herramientas ${p.allowedTools.length > 0 ? p.allowedTools.join(', ') : 'ninguna'}`,
     `modo ${p.permissionMode ?? 'el del runner'}`,
@@ -326,6 +331,7 @@ function policyText(p: StagePolicy): string {
     p.timeoutMinutes != null && `${p.timeoutMinutes} min`,
   ].filter(Boolean)
   parts.push(limits.length > 0 ? limits.join(', ') : 'límites del lanzamiento')
+  if (p.model) parts.push(`modelo ${p.model}`)
   return parts.join('; ')
 }
 
