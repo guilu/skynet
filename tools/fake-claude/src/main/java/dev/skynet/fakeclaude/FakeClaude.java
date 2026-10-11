@@ -36,8 +36,9 @@ import tools.jackson.databind.node.ObjectNode;
  *       se traducen desde su {@code cwd}). Así una ejecución de prueba cambia archivos y hace
  *       commits.
  *   <li>{@code FAKE_CLAUDE_STRUCTURED_OUTPUT}: con {@code --json-schema}, el JSON que la línea
- *       {@code result} devuelve en {@code structured_output}. Sin ella no devuelve ninguno, como un
- *       agente que no consigue cumplir el schema.
+ *       {@code result} devuelve en {@code structured_output}, o {@code @ruta} para leerlo de ese
+ *       fichero del directorio de trabajo (así cada ejecución decide el suyo). Sin ella, o sin el
+ *       fichero, no devuelve ninguno, como un agente que no consigue cumplir el schema.
  *   <li>{@code CLAUDE_CONFIG_DIR}: si está definida, guarda cada sesión en {@code
  *       <dir>/projects/<cwd>/<sesión>.jsonl}, como el CLI real, y {@code --resume} falla si no
  *       encuentra la sesión en el directorio de trabajo actual. Sin ella no comprueba nada.
@@ -104,7 +105,7 @@ public final class FakeClaude {
       if ("result".equals(type)) {
         sawResult = true;
         isError = node.path("is_error").asBoolean(false);
-        String structured = env.get("FAKE_CLAUDE_STRUCTURED_OUTPUT");
+        String structured = structuredOutput(env, cwd);
         if (inv.jsonSchema() != null && structured != null && !isError) {
           node.set("structured_output", JSON.readTree(structured));
         }
@@ -160,6 +161,19 @@ public final class FakeClaude {
         .resolve("projects")
         .resolve(cwd.toString().replaceAll("[^A-Za-z0-9]", "-"))
         .resolve(sessionId + ".jsonl");
+  }
+
+  /**
+   * El JSON de {@code FAKE_CLAUDE_STRUCTURED_OUTPUT}: el valor tal cual o, con {@code @ruta}, lo
+   * que haya en ese fichero del directorio de trabajo; {@code null} si no hay variable o fichero.
+   */
+  static String structuredOutput(Map<String, String> env, Path cwd) throws IOException {
+    String value = env.get("FAKE_CLAUDE_STRUCTURED_OUTPUT");
+    if (value == null || !value.startsWith("@")) {
+      return value;
+    }
+    Path file = cwd.resolve(value.substring(1));
+    return Files.isRegularFile(file) ? Files.readString(file, StandardCharsets.UTF_8) : null;
   }
 
   private static boolean hang(Map<String, String> env) {

@@ -7,6 +7,7 @@ function stage(
   status: StageStatus,
   dependsOn: string[] = [],
   agents = 0,
+  condition: string | null = null,
 ): StageRun {
   return {
     id: stageKey,
@@ -14,6 +15,9 @@ function stage(
     name: null,
     agent: null,
     dependsOn: dependsOn.map((d) => ({ stage: d.replace('?', ''), optional: d.endsWith('?') })),
+    type: 'agent',
+    command: null,
+    condition,
     status,
     attempt: 1,
     startedAt: null,
@@ -56,6 +60,20 @@ describe('stageNote', () => {
     const review = stage('review', 'SUCCEEDED', [], 1)
     const fix = stage('fix', 'SKIPPED', ['review'])
     expect(stageNote(fix, run(review, fix))).toBe('Omitida porque su condición es falsa')
+    const conditional = stage('fix', 'SKIPPED', ['review'], 0, 'review.hasBlockingFindings')
+    expect(stageNote(conditional, run(review, conditional))).toBe(
+      'Omitida: review.hasBlockingFindings es falsa',
+    )
+  })
+
+  it('una fase con condición que arrancó dice que se cumplió', () => {
+    const review = stage('review', 'SUCCEEDED', [], 1)
+    const fix = stage('fix', 'RUNNING', ['review'], 1, 'review.hasBlockingFindings')
+    expect(stageNote(fix, run(review, fix))).toBe(
+      'Después de review · review.hasBlockingFindings se cumplió',
+    )
+    const waiting = stage('fix', 'PENDING', ['review'], 0, 'review.hasBlockingFindings')
+    expect(stageNote(waiting, run(review, waiting))).toBe('')
   })
 
   it('una fase cancelada sin arrancar dice qué fase falló', () => {

@@ -27,9 +27,11 @@ export function stageNote(stage: StageRun, run: Run): string {
     }
     case 'SKIPPED': {
       const cause = deps.filter((d) => !d.optional && status.get(d.stage) === 'SKIPPED')
+      if (cause.length > 0)
+        return `Omitida porque se omitió ${joinNames(cause.map((d) => d.stage))}`
       // Sin una dependencia omitida que la arrastre, la omitió su `condition`.
-      return cause.length > 0
-        ? `Omitida porque se omitió ${joinNames(cause.map((d) => d.stage))}`
+      return stage.condition
+        ? `Omitida: ${stage.condition} es falsa`
         : 'Omitida porque su condición es falsa'
     }
     case 'CANCELLED': {
@@ -40,5 +42,9 @@ export function stageNote(stage: StageRun, run: Run): string {
       return 'No arrancó: se canceló la ejecución'
     }
   }
-  return deps.length > 0 ? `Después de ${joinNames(deps.map(named))}` : ''
+  const after = deps.length > 0 ? `Después de ${joinNames(deps.map(named))}` : ''
+  // Si ha llegado a arrancar, su condición se cumplió.
+  if (stage.condition && stage.status !== 'READY')
+    return [after, `${stage.condition} se cumplió`].filter(Boolean).join(' · ')
+  return after
 }

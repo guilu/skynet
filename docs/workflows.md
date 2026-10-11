@@ -4,6 +4,8 @@ Un workflow describe las fases de un trabajo y qué agente hace cada una (§11 d
 
 En la web se escriben en **Workflows**: el editor autocompleta con el JSON Schema de [`protocol/.../workflow-definition.schema.json`](../protocol/src/main/resources/dev/skynet/protocol/workflow-definition.schema.json) y, mientras se escribe, el control plane valida el texto con los mismos mensajes que al guardar (también lo que un schema no expresa) y los marca en su línea.
 
+**Nuevo workflow** empieza desde una plantilla: «Dos fases» (una revisión y una corrección que continúa su worktree) o «Revisión en paralelo» (implementar, tests con una fase `command`, revisión de calidad y de seguridad a la vez con salida estructurada, corregir solo si `review.hasBlockingFindings` y tests finales con `dependsOn: [review, "fix?"]`). Antes de usar esta última, cambia `./gradlew test` por el comando de tests de tu repositorio. Al publicar, el aviso lista los comandos de shell que ejecuta el workflow.
+
 ## Ejemplo
 
 ```yaml
@@ -191,6 +193,8 @@ La ejecución nace `RUNNING` con todas sus fases en `PENDING` (`stage.pending`, 
 | `SKYNET_ENGINE_RETRY_DELAY` | `5s` | Espera antes de reintentar (crece con los intentos, hasta 12 veces) |
 
 **En la web.** En un trabajo, **Lanzar workflow** pide el workflow (por defecto `adhoc`), el repositorio y los datos de entrada según su tipo (texto, número o casilla), y enseña la política del repositorio y, si el workflow tiene agentes con nombre, lo que se le permitirá a cada fase. La ejecución lista todas sus fases desde el principio, en el orden del YAML: las que esperan dicen a qué fases («Espera a izquierda y derecha»), las omitidas por qué («Omitida porque se omitió build»), las canceladas sin arrancar qué fase falló, y las demás detrás de cuáles van. La cabecera enlaza con el workflow y su versión; con varias fases, **Cancelar ejecución** cancela la ejecución entera.
+
+Al abrir una fase en el progreso se ve, según su tipo, el comando que ejecuta y su código de salida, los hijos de una fase `parallel` (cada uno con su agente, su worktree y su salida estructurada, p. ej. «Salida: hasBlockingFindings: sí») o su condición con el resultado: «Omitida: review.hasBlockingFindings es falsa» o «review.hasBlockingFindings se cumplió». El timeline guarda cada evaluación con los valores que leyó.
 
 ## Estados y versiones
 

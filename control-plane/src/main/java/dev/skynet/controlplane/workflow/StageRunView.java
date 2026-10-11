@@ -13,6 +13,9 @@ import java.util.UUID;
  * @param name nombre de la fase en el YAML, o {@code null}
  * @param agent agente con nombre que la ejecuta, o {@code null} si usa la política del repositorio
  * @param dependsOn fases que tienen que terminar antes, en el orden del YAML
+ * @param type tipo de la fase en el YAML ({@code agent}, {@code command}…), o {@code null}
+ * @param command comando de shell de una fase {@code command}, o {@code null}
+ * @param condition condición que decide si se ejecuta, o {@code null} si se ejecuta siempre
  */
 public record StageRunView(
     UUID id,
@@ -20,6 +23,9 @@ public record StageRunView(
     String name,
     String agent,
     List<Dependency> dependsOn,
+    String type,
+    String command,
+    String condition,
     StageStatus status,
     int attempt,
     Instant startedAt,
@@ -36,6 +42,9 @@ public record StageRunView(
         definition == null ? null : definition.name(),
         definition == null ? null : definition.agent(),
         definition == null ? List.of() : definition.dependsOn(),
+        definition == null ? null : definition.type().yaml(),
+        definition == null ? null : definition.command(),
+        definition == null ? null : definition.condition(),
         s.getStatus(),
         s.getAttempt(),
         s.getStartedAt(),

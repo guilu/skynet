@@ -8,39 +8,23 @@ import { Button } from '../components/ui/Button'
 import { DefinitionEditor } from '../components/workflow/DefinitionEditor'
 import { ImportButton } from '../components/workflow/ImportButton'
 import { ProblemList } from '../components/workflow/ProblemList'
-
-/** Punto de partida de un workflow nuevo: dos fases, la segunda continúa el worktree de la primera. */
-export const TEMPLATE = `id: mi-workflow
-name: Mi workflow
-description: Qué hace este workflow.
-
-inputs:
-  foco:
-    type: string
-    required: false
-    description: En qué fijarse.
-
-agents:
-  reviewer:
-    prompt: |
-      Revisa {{workItem.key}} ({{workItem.title}}) poniendo el foco en {{inputs.foco}}.
-    tools: [Read, Grep, Glob]
-
-stages:
-  - id: review
-    type: agent
-    agent: reviewer
-  - id: fix
-    type: agent
-    prompt: Corrige lo que encontró la revisión.
-    dependsOn: [review]
-`
+import { TEMPLATES } from '../components/workflow/templates'
 
 /** Alta de un workflow: se escribe (o se importa) el YAML y se guarda como borrador de la v1. */
 export function NewWorkflowPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [text, setText] = useState(TEMPLATE)
+  const [template, setTemplate] = useState(TEMPLATES[0])
+  const [text, setText] = useState(template.yaml)
+  const chooseTemplate = (id: string) => {
+    const next = TEMPLATES.find((t) => t.id === id)
+    if (!next) return
+    // Lo escrito encima de la plantilla se perdería: solo con permiso.
+    if (text !== template.yaml && !window.confirm('Se sustituye el YAML que has escrito. ¿Seguir?'))
+      return
+    setTemplate(next)
+    setText(next.yaml)
+  }
   const create = useMutation({
     mutationFn: () => api.createWorkflow(text),
     onSuccess: (detail) => {
@@ -60,6 +44,19 @@ export function NewWorkflowPage() {
             formato está en <code>docs/workflows.md</code>.
           </p>
         </div>
+      </div>
+      <div className="form template-picker">
+        <label>
+          Plantilla
+          <select value={template.id} onChange={(e) => chooseTemplate(e.target.value)}>
+            {TEMPLATES.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="hint">{template.description}</p>
       </div>
       <DefinitionEditor
         text={text}
