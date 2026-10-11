@@ -399,7 +399,7 @@ describe('App', () => {
     expect(await header.findByText('runner-01')).toBeInTheDocument()
     expect(header.getByText('4 entrada · 32 salida', { exact: false })).toBeInTheDocument()
     expect(header.getByText('caché: 28.437 leídos · 4256 escritos')).toBeInTheDocument()
-    expect(header.getByText('(llega al terminar)')).toBeInTheDocument()
+    expect(header.getByText('Llega al terminar')).toBeInTheDocument()
     expect(header.getByText('Conectando…')).toBeInTheDocument()
 
     // Interrumpir pide una confirmación sencilla.
@@ -937,7 +937,8 @@ describe('App', () => {
         'true',
       )
       expect(screen.getByRole('tab', { name: 'Resumen' })).toHaveAttribute('aria-selected', 'true')
-      expect(screen.getByText('claude-opus-5-5')).toBeInTheDocument()
+      const inspector = within(screen.getByRole('region', { name: 'Inspector del agente' }))
+      expect(inspector.getByText('claude-opus-5-5')).toBeInTheDocument()
     })
 
     it('abre la pestaña de la URL y empareja cada herramienta con su resultado', async () => {
@@ -966,24 +967,16 @@ describe('App', () => {
       expect(await screen.findByText('“agent.tool.completed”')).toBeInTheDocument()
     })
 
-    it('el árbol lista las herramientas del agente y abre la elegida en el inspector', async () => {
+    it('el progreso abre los agentes de la fase y elige uno', async () => {
       openRun()
-      const tree = await screen.findByRole('navigation', { name: 'Fases y agentes' })
-      FakeEventSource.last!.emit(toolStarted, toolCompleted)
-      const row = await within(tree).findByRole('button', { name: /Read\s+\/w\/README\.md/ })
-      expect(row).toHaveTextContent('0 s')
-      fireEvent.click(row)
-      expect(row).toHaveAttribute('aria-current', 'true')
-      expect(screen.getByRole('tab', { name: 'Herramientas' })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      )
-      const inspector = screen.getByRole('region', { name: 'Inspector del agente' })
-      expect(inspector.querySelector('.tool-calls > li.selected > details')).toHaveAttribute('open')
-
-      // Las herramientas de un agente se pueden plegar.
-      fireEvent.click(within(tree).getByRole('button', { name: 'Ocultar las 1 herramientas' }))
-      expect(within(tree).queryByRole('button', { name: /Read\s+\/w\/README\.md/ })).toBeNull()
+      const progress = await screen.findByRole('navigation', { name: 'Fases y agentes' })
+      const step = within(progress).getByRole('button', { name: /^1\. / })
+      expect(step).toHaveAttribute('aria-pressed', 'true')
+      fireEvent.click(step)
+      const agentButton = within(progress).getByRole('button', { name: /claude-code START/ })
+      fireEvent.click(agentButton)
+      expect(agentButton).toHaveAttribute('aria-current', 'true')
+      expect(screen.getByRole('tab', { name: 'Resumen' })).toHaveAttribute('aria-selected', 'true')
     })
 
     it('la cascada pone agentes y herramientas en el mismo eje y abre la barra elegida', async () => {
@@ -1125,7 +1118,7 @@ describe('App', () => {
       '/api/runners?archived=all': runners,
     })
     renderAt(`/runs/${runningRun.id}`, <App />)
-    const title = await screen.findByRole('heading', { level: 1, name: /Add model pricing/ })
+    await screen.findByRole('heading', { level: 1, name: /Add model pricing/ })
     FakeEventSource.last!.emit({
       ...(storedEvent as StoredEvent),
       workflowRunId: runningRun.id,
@@ -1133,7 +1126,9 @@ describe('App', () => {
       sequence: 2000,
       payload: { toolUseId: 'g', name: 'Grep', input: { pattern: 'price' } },
     })
-    expect(await within(title.closest('header')!).findByText(/Grep/)).toBeInTheDocument()
+    // La herramienta en curso sale bajo su fase, en el progreso.
+    const progress = screen.getByRole('navigation', { name: 'Fases y agentes' })
+    expect(await within(progress).findByText('Grep')).toBeInTheDocument()
     const runFetches = fetch.mock.calls.filter(
       ([url]) => url === `/api/workflow-runs/${runningRun.id}`,
     )

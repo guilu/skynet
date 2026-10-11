@@ -13,7 +13,6 @@ import {
 import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
 import { Pill } from '../ui/Pill'
-import { AgentActions } from './AgentActions'
 import { ArtifactsTab } from './ArtifactsTab'
 import { agentOutcome, toolCallsOf, type ToolCall } from './agentEvents'
 import { JsonView } from './JsonView'
@@ -44,7 +43,6 @@ interface Props {
 export function Inspector({ agent, events, tab, sequence, toolUseId, onTab, onShowEvent }: Props) {
   return (
     <section className="run-inspector" aria-label="Inspector del agente">
-      <AgentActions agent={agent} />
       <TabList
         label="Detalle del agente"
         tabs={INSPECTOR_TABS}

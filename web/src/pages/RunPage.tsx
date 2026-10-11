@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChartGantt, List, ListTree, MessagesSquare, PanelRight } from 'lucide-react'
+import { ChartGantt, List, MessagesSquare, PanelRight } from 'lucide-react'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import { useEffect, useMemo, useRef } from 'react'
 import { useParams } from 'react-router'
@@ -7,7 +7,7 @@ import { api, type Run } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { eventsOfAgent, toolCallsOf, type ToolCall } from '../components/run/agentEvents'
 import { Conversation } from '../components/run/Conversation'
-import { RunTree } from '../components/run/RunTree'
+import { RunProgress } from '../components/run/RunProgress'
 import { runSpans } from '../components/run/runSpans'
 import { Waterfall } from '../components/run/Waterfall'
 import { applyEvent } from '../components/run/applyEvent'
@@ -25,9 +25,9 @@ import { useNow } from '../useNow'
 import { RunSkeleton } from '../components/ui/Skeleton'
 
 /**
- * Ejecución en tres paneles redimensionables (ADR-0001 §3.4): el árbol de fases, agentes y
- * herramientas; la actividad (conversación, cascada y eventos), y el inspector del agente elegido.
- * En el móvil, los paneles pasan a pestañas. La selección vive en la URL.
+ * Ejecución (ADR-0001 §3.4): cabecera con cifras, el progreso de sus fases y, debajo, dos paneles
+ * redimensionables: la actividad (conversación, cascada y eventos) y el inspector del agente
+ * elegido. En el móvil, los paneles pasan a pestañas. La selección vive en la URL.
  */
 export function RunPage() {
   const { runId = '' } = useParams()
@@ -94,7 +94,7 @@ export function RunPage() {
   }, [run.data, events])
   const now = useNow(run.data?.finishedAt == null)
   const narrow = useMediaQuery('(max-width: 900px)')
-  const panels = useDefaultLayout({ id: 'skynet.run-panels', storage: safeStorage })
+  const panels = useDefaultLayout({ id: 'skynet.run-panels-2', storage: safeStorage })
   const visible = timeline.filter((e) => matchesFilters(e, selection.filters))
   const hiddenSelection =
     selection.sequence != null &&
@@ -108,20 +108,6 @@ export function RunPage() {
     select({ agentId, toolUseId: null, sequence: null, ...(narrow && { pane: 'inspector' }) })
   const selectTool = (agentId: string, toolUseId: string) =>
     select({ agentId, toolUseId, tab: 'tools', ...(narrow && { pane: 'inspector' }) })
-
-  const tree = run.data && (
-    <section className="run-pane" aria-label="Pasos de la ejecución">
-      <RunTree
-        run={run.data}
-        spans={spans}
-        now={now}
-        selectedAgentId={agent?.id}
-        selectedToolUseId={selection.toolUseId}
-        onSelectAgent={selectAgent}
-        onSelectTool={selectTool}
-      />
-    </section>
-  )
 
   const activity = (
     <section className="run-pane run-activity" aria-label="Actividad">
@@ -214,7 +200,14 @@ export function RunPage() {
       {run.isPending && <RunSkeleton />}
       {run.data && (
         <>
-          <RunHeader run={run.data} stream={state} />
+          <RunHeader run={run.data} stream={state} agent={agent} />
+          <RunProgress
+            run={run.data}
+            spans={spans}
+            now={now}
+            selectedAgentId={agent?.id}
+            onSelectAgent={selectAgent}
+          />
           {narrow ? (
             <div className="run-mobile">
               <TabList
@@ -226,7 +219,6 @@ export function RunPage() {
                 panelId="pane-panel"
               />
               <TabPanel id="pane-panel" labelledBy={`pane-${selection.pane}`} className="card">
-                {selection.pane === 'tree' && tree}
                 {selection.pane === 'activity' && activity}
                 {selection.pane === 'inspector' && inspector}
               </TabPanel>
@@ -238,15 +230,11 @@ export function RunPage() {
               defaultLayout={panels.defaultLayout}
               onLayoutChanged={panels.onLayoutChanged}
             >
-              <Panel id="tree" defaultSize="26" minSize="220px" className="run-panel">
-                {tree}
-              </Panel>
-              <Separator className="run-separator" aria-label="Ancho del árbol" />
-              <Panel id="activity" defaultSize="40" minSize="320px" className="run-panel">
+              <Panel id="activity" defaultSize="58" minSize="320px" className="run-panel">
                 {activity}
               </Panel>
               <Separator className="run-separator" aria-label="Ancho del inspector" />
-              <Panel id="inspector" defaultSize="34" minSize="300px" className="run-panel">
+              <Panel id="inspector" defaultSize="42" minSize="300px" className="run-panel">
                 {inspector}
               </Panel>
             </Group>
@@ -260,7 +248,6 @@ export function RunPage() {
 const VIEW_ICONS = { conversation: MessagesSquare, waterfall: ChartGantt, events: List }
 
 const PANES: TabItem<RunPane>[] = [
-  { id: 'tree', label: 'Pasos', icon: ListTree },
   { id: 'activity', label: 'Actividad', icon: MessagesSquare },
   { id: 'inspector', label: 'Detalle', icon: PanelRight },
 ]

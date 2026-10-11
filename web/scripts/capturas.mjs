@@ -14,7 +14,8 @@ const base = process.argv[2] ?? 'http://localhost:4174'
 const fixture = (name) =>
   JSON.parse(fs.readFileSync(path.join(root, 'fixtures/contracts', `${name}.json`), 'utf8'))
 
-const runView = fixture('run-view')
+// La ejecución de ejemplo, con las fases de un workflow de revisión: una se omite por su condición.
+const runView = withStages(fixture('run-view'))
 const agent = fixture('agent-run-detail')
 const stored = fixture('stored-event')
 const event = (sequence, type, payload, at) => ({
@@ -213,6 +214,76 @@ const ROUTES = [
   [/\/api\/work-items\/w1$/, workItem],
 ]
 
+/** Cuatro fases: review (el agente del fixture), fix (omitida), limpio y final. */
+function withStages(view) {
+  const [stage] = view.stages
+  const agent = stage.agents[0]
+  const later = (id, key, dependsOn, startedAt, finishedAt) => ({
+    ...stage,
+    id,
+    stageKey: key,
+    dependsOn,
+    startedAt,
+    finishedAt,
+    agents: [
+      {
+        ...agent,
+        id: `${id}-a`,
+        stageRunId: id,
+        provider: 'command',
+        model: null,
+        providerSessionId: null,
+        createdAt: startedAt,
+        startedAt,
+        lastActivityAt: finishedAt,
+        finishedAt,
+        inputTokens: null,
+        outputTokens: null,
+        cacheReadTokens: null,
+        cacheCreationTokens: null,
+        costUsd: null,
+        costUsdCumulative: null,
+        workspace: null,
+      },
+    ],
+  })
+  return {
+    ...view,
+    workflow: { key: 'revisar-y-arreglar', version: 1, name: 'Revisar y arreglar' },
+    finishedAt: '2026-10-05T09:00:48Z',
+    stages: [
+      { ...stage, stageKey: 'review', agent: 'revisor' },
+      {
+        ...stage,
+        id: 's-fix',
+        stageKey: 'fix',
+        dependsOn: [{ stage: 'review', optional: false }],
+        status: 'SKIPPED',
+        startedAt: null,
+        finishedAt: null,
+        agents: [],
+      },
+      later(
+        's-limpio',
+        'limpio',
+        [{ stage: 'review', optional: false }],
+        '2026-10-05T09:00:43Z',
+        '2026-10-05T09:00:45Z',
+      ),
+      later(
+        's-final',
+        'final',
+        [
+          { stage: 'review', optional: false },
+          { stage: 'fix', optional: true },
+        ],
+        '2026-10-05T09:00:46Z',
+        '2026-10-05T09:00:48Z',
+      ),
+    ],
+  }
+}
+
 /** EventSource falso que entrega los eventos y se queda abierto, como el de verdad. */
 const fakeEventSource = `(${(events) => {
   window.EventSource = class {
@@ -234,7 +305,7 @@ const SHOTS = [
   ['ejecucion', run],
   ['ejecucion-cascada', `${run}&view=waterfall&tab=artifacts`],
   ['proyecto', '/projects/p1?tab=repos'],
-  ['trabajo-lanzar', '/work-items/w1', 'Lanzar agente'],
+  ['trabajo-lanzar', '/work-items/w1', 'Lanzar workflow'],
   ['workflows', '/workflows'],
   ['workflow', '/workflows/revisar-y-corregir'],
   // Ajustes con la paleta Frambuesa elegida (sin guardar), para que se vea la vista previa.

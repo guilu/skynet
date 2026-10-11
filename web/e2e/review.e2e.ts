@@ -25,7 +25,7 @@ async function completedRun(page: Page): Promise<string> {
   })
   await page.goto(`/runs/${runId}`)
   const header = page.locator('header.run-header')
-  await expect(header.getByRole('heading', { level: 1 }).getByText('Completada')).toBeVisible({
+  await expect(header.locator('.hero-top').getByText('Completada')).toBeVisible({
     timeout: 90_000,
   })
   await page.getByRole('tab', { name: 'Verificación' }).click()

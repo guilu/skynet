@@ -24,7 +24,7 @@ test('archivar, limpiar el worktree y eliminar una ejecución; archivar y restau
 
   await test.step('archivar la ejecución terminada', async () => {
     await page.goto(`/runs/${runId}`)
-    await expect(header.getByRole('heading', { level: 1 }).getByText('Completada')).toBeVisible({
+    await expect(header.locator('.hero-top').getByText('Completada')).toBeVisible({
       timeout: 90_000,
     })
     await header.getByRole('button', { name: /^Más acciones: / }).click()

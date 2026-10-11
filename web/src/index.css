@@ -1487,58 +1487,6 @@
   }
 
   /* ---------- Ejecución ---------- */
-  .run-header-title {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    flex-wrap: wrap;
-  }
-
-  .run-header h1 {
-    margin: var(--space-4) 0 var(--space-3);
-  }
-
-  .metrics {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: var(--space-3);
-    margin: 0 0 var(--space-4);
-  }
-
-  .metrics > div {
-    background: var(--surface-2);
-    border-radius: var(--r-md);
-    padding: 10px 14px;
-  }
-
-  .metrics dt {
-    font-size: 0.75rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--muted);
-  }
-
-  .metrics dd {
-    margin: 2px 0 0;
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* En el móvil, dos cifras por fila: una por fila llenaba la pantalla antes de los paneles. */
-  @media (max-width: 520px) {
-    .metrics {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: var(--space-2);
-    }
-
-    .metrics > div {
-      padding: 8px 10px;
-      min-width: 0;
-      overflow-wrap: anywhere;
-    }
-  }
-
   .agent-facts {
     display: grid;
     grid-template-columns: max-content 1fr;
@@ -1558,19 +1506,6 @@
 
   .agent-facts .fact {
     display: contents;
-  }
-
-  .stepper-index {
-    display: inline-grid;
-    place-items: center;
-    width: 1.6rem;
-    height: 1.6rem;
-    margin-right: var(--space-2);
-    border-radius: 50%;
-    background: var(--surface-2);
-    border: 2px solid var(--border);
-    font-size: 0.75rem;
-    font-weight: 800;
   }
 
   .run-inspector h3 {
@@ -2647,165 +2582,517 @@
     font-size: 0.75rem;
   }
 
-  /* Árbol: fases, agentes y herramientas. */
-  .tree-stages {
+  /* Cabecera de la ejecución: insignia de estado, título, chips y acciones. */
+  .run-hero {
     display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-4) 20px;
+    align-items: center;
+    padding: 20px;
+  }
+
+  .hero-badge {
+    display: grid;
+    place-items: center;
+    width: 76px;
+    height: 76px;
+    border-radius: 24px;
+    background: var(--idle);
+    color: #fff;
+    box-shadow: 0 5px 0 var(--idle-shade);
+  }
+
+  .hero-ok {
+    background: var(--ok);
+    box-shadow: 0 5px 0 var(--ok-shade);
+  }
+
+  .hero-active {
+    background: var(--live);
+    box-shadow: 0 5px 0 var(--live-shade);
+  }
+
+  .hero-bad {
+    background: var(--bad);
+    box-shadow: 0 5px 0 var(--bad-shade);
+  }
+
+  .hero-warn {
+    background: var(--warn);
+    box-shadow: 0 5px 0 var(--warn-shade);
+  }
+
+  .hero-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) 10px;
+  }
+
+  .hero-menu {
+    margin-left: auto;
+  }
+
+  .run-key {
+    padding: 2px 8px;
+    border-radius: 8px;
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .run-key:hover {
+    text-decoration: underline;
+  }
+
+  .run-hero h1 {
+    margin: var(--space-2) 0 0;
+    overflow-wrap: anywhere;
+  }
+
+  .hero-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+    padding: 4px 10px;
+    border: 2px solid var(--border);
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  .chip svg {
+    flex: none;
+  }
+
+  .chip a {
+    color: inherit;
+  }
+
+  .chip .mono {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+  }
+
+  .hero-actions {
+    grid-column: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: var(--space-3);
   }
 
-  .tree-stages > li {
-    border-left: 4px solid var(--border);
-    border-radius: 2px;
-    padding-left: var(--space-3);
+  .hero-actions:empty {
+    display: none;
   }
 
-  .tree-stages > li.current {
-    border-left-color: var(--primary);
+  .hero-actions .agent-actions {
+    display: contents;
   }
 
-  /* Sin arrancar todavía, u omitida: borde discontinuo. */
-  .tree-stages > li.waiting,
-  .tree-stages > li.skipped {
-    border-left-style: dashed;
+  .hero-actions .agent-actions > p {
+    flex-basis: 100%;
+    order: 1;
+    margin: 0;
   }
 
-  .tree-stage {
+  /* Cifras de la ejecución: cuatro tarjetas; sin tests, la cuarta se queda en hueco. */
+  .run-kpis {
+    margin: 20px 0 0;
+  }
+
+  .run-kpis .kpi {
+    grid-template-areas:
+      'icon label'
+      'icon value'
+      'sub sub';
+    box-shadow: 0 var(--lift-card) 0 var(--border);
+    border-color: var(--border);
+    border-radius: var(--r-lg);
+  }
+
+  .kpi-line {
+    display: block;
+  }
+
+  .kpi-warn {
+    --kc: var(--warn);
+    --ks: var(--warn-soft);
+    --ki: var(--warn-ink);
+  }
+
+  .run-kpis .kpi-sub {
+    grid-area: sub;
+    margin-top: var(--space-2);
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  @media (max-width: 900px) {
+    .run-kpis {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .run-kpis .kpi-main dd:not(.kpi-sub) {
+      font-size: 1.4rem;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .run-hero {
+      padding: 16px;
+    }
+
+    .hero-badge {
+      width: 52px;
+      height: 52px;
+      border-radius: 17px;
+    }
+
+    .run-hero {
+      align-items: start;
+      gap: var(--space-3) 14px;
+    }
+
+    .hero-actions {
+      grid-column: 1 / -1;
+    }
+
+    .hero-badge svg {
+      width: 30px;
+      height: 30px;
+    }
+
+    .run-hero h1 {
+      font-size: 1.4rem;
+    }
+
+    .run-kpis .kpi {
+      grid-template-areas:
+        'icon'
+        'label'
+        'value'
+        'sub';
+    }
+
+    .run-kpis .kpi-main dd:not(.kpi-sub) {
+      font-size: 1.25rem;
+    }
+
+    .kpi-empty {
+      display: none;
+    }
+  }
+
+  /* Progreso: las fases como un camino horizontal. */
+  .run-progress {
+    padding: 14px 20px 20px;
+  }
+
+  .run-progress .card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .run-progress h2 {
+    margin: 0 0 var(--space-3);
+    font-size: 1.15rem;
+  }
+
+  .path {
+    display: grid;
+    grid-template-columns: repeat(var(--steps), minmax(96px, 1fr));
+    margin: 0;
+    padding: 4px 0 6px;
+    list-style: none;
+    overflow-x: auto;
+  }
+
+  .step {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    align-content: start;
+    gap: 4px;
+    min-width: 0;
+    padding: 0 4px;
+    text-align: center;
+  }
+
+  /* El tramo que une cada paso con el anterior: verde si el paso ya ha empezado. */
+  .step::before {
+    content: '';
+    position: absolute;
+    top: 30px;
+    left: calc(-50% + 34px);
+    right: calc(50% + 34px);
+    height: 6px;
+    border-radius: 6px;
+    background: var(--border);
+  }
+
+  .step:first-child::before {
+    display: none;
+  }
+
+  .step.done::before,
+  .step.now::before,
+  .step.hold::before,
+  .step.fail::before {
+    background: var(--ok);
+  }
+
+  .step.skip::before {
+    background: repeating-linear-gradient(90deg, var(--border) 0 10px, transparent 10px 16px);
+  }
+
+  .step-button {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    padding: 4px 4px 6px;
+    border: 2px solid transparent;
+    border-radius: var(--r-md);
+    background: none;
+    color: var(--fg);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .step-button:hover .step-dot {
+    transform: translateY(-2px);
+  }
+
+  .step-button[aria-pressed='true'] strong {
+    color: var(--primary-ink);
+    text-decoration: underline;
+    text-decoration-thickness: 3px;
+    text-underline-offset: 4px;
+  }
+
+  /* La fase abierta: un anillo del acento alrededor del punto. */
+  .step-button[aria-pressed='true'] .step-dot {
+    outline: 4px solid var(--primary);
+    outline-offset: 3px;
+  }
+
+  .step-button strong {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.875rem;
+  }
+
+  .step-button small,
+  .step-note {
+    max-width: 100%;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  .step-note {
+    font-weight: 600;
+  }
+
+  .step-dot {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    border: 3px solid var(--border);
+    border-radius: 50%;
+    background: var(--surface-2);
+    color: var(--idle-ink);
+    box-shadow: 0 4px 0 var(--border);
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 800;
+    transition: transform 120ms;
+  }
+
+  .step.done .step-dot {
+    border-color: var(--ok-shade);
+    background: var(--ok);
+    color: #fff;
+    box-shadow: 0 4px 0 var(--ok-shade);
+  }
+
+  .step.now .step-dot {
+    border-color: var(--live-shade);
+    background: var(--live);
+    color: #fff;
+    box-shadow: 0 4px 0 var(--live-shade);
+  }
+
+  .step.now .step-dot::after {
+    content: '';
+    position: absolute;
+    inset: -9px;
+    border: 3px solid var(--live);
+    border-radius: 50%;
+    opacity: 0.5;
+    animation: step-ring 1.6s ease-out infinite;
+  }
+
+  @keyframes step-ring {
+    from {
+      transform: scale(0.85);
+      opacity: 0.7;
+    }
+
+    to {
+      transform: scale(1.15);
+      opacity: 0;
+    }
+  }
+
+  .step.hold .step-dot {
+    border-color: var(--warn-shade);
+    background: var(--warn);
+    color: #fff;
+    box-shadow: 0 4px 0 var(--warn-shade);
+  }
+
+  .step.fail .step-dot {
+    border-color: var(--bad-shade);
+    background: var(--bad);
+    color: #fff;
+    box-shadow: 0 4px 0 var(--bad-shade);
+  }
+
+  .step.skip .step-dot {
+    border-style: dashed;
+    background: var(--idle-soft);
+    box-shadow: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .step.now .step-dot::after {
+      animation: none;
+    }
+  }
+
+  /* Agentes de la fase abierta. */
+  .step-detail {
+    margin-top: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: 2px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--surface-2);
+  }
+
+  .step-detail-head {
     margin: 0 0 var(--space-2);
   }
 
-  .tree-stage-note {
+  .step-detail-note {
     margin: calc(-1 * var(--space-1)) 0 var(--space-2);
   }
 
-  .tree-list {
-    display: grid;
-    gap: 2px;
+  .step-agents {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
 
-  /* Elementos de rejilla: sin esto, el texto sin cortar de una fila ensancharía el panel. */
-  .tree-stages > li,
-  .tree-list > li {
+  .step-agents > li {
     min-width: 0;
   }
 
-  .tree-agent {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .tree-row {
+  .step-agent {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 4px 8px;
-    width: 100%;
     min-width: 0;
-    padding: 6px 10px;
-    border: 2px solid transparent;
-    border-radius: var(--r-sm);
-    background: none;
+    padding: 6px 12px;
+    border: 2px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--surface);
     color: var(--fg);
     font: inherit;
     text-align: left;
     cursor: pointer;
   }
 
-  .tree-row:hover {
-    background: var(--surface-2);
+  .step-agent:hover {
+    border-color: var(--border-strong);
   }
 
-  .tree-row[aria-current='true'] {
+  .step-agent[aria-current='true'] {
     border-color: var(--primary);
     background: var(--primary-soft);
   }
 
-  .tree-tool {
-    flex-wrap: nowrap;
-    font-size: 0.85rem;
-  }
-
-  .tree-label {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .tree-tool .tree-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .tree-detail {
-    color: var(--muted);
-    font-family: var(--font-mono);
-    font-size: 0.78rem;
-  }
-
-  .tree-time {
+  .step-time {
     color: var(--muted);
     font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 
-  .tree-dot {
-    flex: none;
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--idle);
-  }
+  @media (max-width: 520px) {
+    .run-progress {
+      padding: 12px 14px 16px;
+    }
 
-  .tree-dot.tone-active {
-    background: var(--live);
-  }
+    .path {
+      grid-template-columns: repeat(var(--steps), minmax(68px, 1fr));
+    }
 
-  .tree-dot.tone-ok {
-    background: var(--ok);
-  }
+    /* La relación con las demás fases se lee abajo, al abrir la fase. */
+    .step-note {
+      display: none;
+    }
 
-  .tree-dot.tone-bad {
-    background: var(--bad);
-  }
+    .step-dot {
+      width: 44px;
+      height: 44px;
+      font-size: 1rem;
+    }
 
-  .tree-dot.tone-warn {
-    background: var(--warn);
-  }
+    .step-dot svg {
+      width: 20px;
+      height: 20px;
+    }
 
-  .tree-agent > .tree-row {
-    flex: 1;
-    width: auto;
-  }
-
-  /* El agente en una línea y, debajo, su estado y su duración. */
-  .tree-agent .tree-label {
-    flex-basis: 100%;
-    overflow-wrap: anywhere;
-  }
-
-  .tree-toggle {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    gap: 2px;
-    padding: 4px 6px;
-    border: 2px solid var(--border);
-    border-radius: var(--r-sm);
-    background: var(--surface);
-    color: var(--muted);
-    font: inherit;
-    font-size: 0.75rem;
-    font-weight: 800;
-    cursor: pointer;
-  }
-
-  .tree-toggle svg {
-    transition: transform 150ms;
-  }
-
-  .tree-toggle[aria-expanded='true'] svg {
-    transform: rotate(90deg);
+    .step::before {
+      top: 24px;
+      left: calc(-50% + 28px);
+      right: calc(50% + 28px);
+    }
   }
 
   /* Cascada (Gantt). */
