@@ -189,6 +189,12 @@ export interface StageRun {
   agent: string | null
   /** Fases que tienen que terminar antes, en el orden del YAML. */
   dependsOn: StageDependency[]
+  /** Tipo de la fase en el YAML (`agent`, `command`, `parallel`, `conditional`…). */
+  type: string | null
+  /** Comando de shell de una fase `command`. */
+  command: string | null
+  /** Condición que decide si se ejecuta; null: siempre. */
+  condition: string | null
   status: StageStatus
   attempt: number
   startedAt: string | null

@@ -151,4 +151,29 @@ describe('Workflows', () => {
     await waitFor(() => expect(bodies(fetch, 'POST', '/api/workflows')).toHaveLength(1))
     expect(await screen.findByRole('navigation', { name: 'Versiones' })).toBeInTheDocument()
   })
+
+  it('cambiar de plantilla sustituye el YAML y pregunta antes de perder lo escrito', async () => {
+    stubApi({
+      'POST /api/workflows/validate': {
+        key: 'mi-workflow',
+        validation: draft.validation,
+        definition: draft.definition,
+      },
+    })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderAt('/workflows/new', <App />)
+
+    const editor = (await screen.findByLabelText('YAML del workflow nuevo')) as HTMLTextAreaElement
+    const plantilla = screen.getByLabelText('Plantilla')
+    fireEvent.change(plantilla, { target: { value: 'revision-en-paralelo' } })
+    expect(editor.value).toMatch(/^id: revision-en-paralelo/)
+    expect(editor.value).toContain('condition: review.hasBlockingFindings')
+    expect(confirm).not.toHaveBeenCalled()
+
+    fireEvent.change(editor, { target: { value: 'id: mio\n' } })
+    fireEvent.change(plantilla, { target: { value: 'basico' } })
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(editor.value).toBe('id: mio\n')
+    confirm.mockRestore()
+  })
 })

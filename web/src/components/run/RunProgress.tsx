@@ -5,6 +5,7 @@ import type { AgentRun, Run, StageRun } from '../../api'
 import { formatDuration, statusLabel } from '../../format'
 import { cn } from '../../lib/cn'
 import { StatusBadge } from '../StatusBadge'
+import { outputSummary } from './agentOutput'
 import { spanDuration, type Span } from './runSpans'
 import { stageNote } from './stageNotes'
 
@@ -106,12 +107,25 @@ export function RunProgress({
               <strong>{open.name ?? open.stageKey}</strong> <StatusBadge status={open.status} />
               {openSpan?.detail && <span className="muted small"> {openSpan.detail}</span>}
               {open.agent && <span className="muted small"> · agente {open.agent}</span>}
+              {open.type === 'parallel' && (
+                <span className="muted small"> · {open.agents.length} agentes a la vez</span>
+              )}
+              {open.command && (
+                <span className="muted small">
+                  {' · ejecuta '}
+                  <code>{open.command}</code>
+                </span>
+              )}
             </p>
             {stageNote(open, run) && (
               <p className="step-detail-note muted small">{stageNote(open, run)}</p>
             )}
             {open.agents.length === 0 ? (
-              <p className="muted small">Esta fase no tiene agentes.</p>
+              <p className="muted small">
+                {open.type === 'conditional'
+                  ? 'Esta fase solo evalúa su condición.'
+                  : 'Esta fase no tiene agentes.'}
+              </p>
             ) : (
               <ul className="step-agents">
                 {openSpan?.children.map((span) => {
@@ -131,6 +145,16 @@ export function RunProgress({
                         <StatusBadge status={span.status} />
                         <span className="step-time">{formatDuration(spanDuration(span, now))}</span>
                       </button>
+                      {agent.provider === 'command' && agent.exitCode != null && (
+                        <p className="muted small agent-origin">
+                          Código de salida {agent.exitCode}
+                        </p>
+                      )}
+                      {outputSummary(agent.structuredOutput) && (
+                        <p className="muted small agent-origin">
+                          Salida: {outputSummary(agent.structuredOutput)}
+                        </p>
+                      )}
                       {agent.kind !== 'START' && agent.parentAgentRunId && (
                         <p className="muted small agent-origin">
                           {ORIGIN[agent.kind]}{' '}

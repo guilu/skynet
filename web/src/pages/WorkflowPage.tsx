@@ -197,6 +197,7 @@ function VersionPanel({
   const dirty = text !== saved.sourceYaml
   const isDraft = saved.status !== 'PUBLISHED'
   const canPublish = editable && !dirty && saved.validation.publishable
+  const commands = (saved.definition?.stages ?? []).filter((s) => s.type === 'command')
   const publishHint = !isDraft
     ? null
     : dirty
@@ -262,6 +263,21 @@ function VersionPanel({
             A partir de ahora, las ejecuciones nuevas de <code>{saved.key}</code> usarán la versión{' '}
             {saved.version}. Las que ya corrieron siguen con la suya.
           </p>
+          {commands.length > 0 && (
+            <section aria-labelledby="publish-commands">
+              <p id="publish-commands">
+                Ejecuta {commands.length === 1 ? 'este comando' : 'estos comandos'} de shell en el
+                worktree, con el entorno que el repositorio permite a sus agentes:
+              </p>
+              <ul className="definition-list">
+                {commands.map((s) => (
+                  <li key={s.id}>
+                    <code>{s.id}</code> <code>{s.command}</code>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {saved.validation.problems.length > 0 && (
             <>
               <p className="muted small">Tiene avisos, que no impiden publicarla:</p>

@@ -29,8 +29,9 @@ start() {
       SKYNET_RUNNER_HOME=$OUT/runner-home \
       SKYNET_RUNNER_NAME=${E2E_RUNNER_NAME:-e2e} \
       SKYNET_CLAUDE_BIN=$ROOT/tools/fake-claude/build/install/fake-claude/bin/fake-claude \
-      SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE,FAKE_CLAUDE_DELAY_MS,FAKE_CLAUDE_APPLY \
+      SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE,FAKE_CLAUDE_DELAY_MS,FAKE_CLAUDE_APPLY,FAKE_CLAUDE_STRUCTURED_OUTPUT \
       FAKE_CLAUDE_FIXTURE=02-tools FAKE_CLAUDE_DELAY_MS=${FAKE_CLAUDE_DELAY_MS:-500} FAKE_CLAUDE_APPLY=1 \
+      FAKE_CLAUDE_STRUCTURED_OUTPUT=@.revision.json \
       CLAUDE_CONFIG_DIR=$OUT/claude \
         "$ROOT/runner/build/install/skynet-runner/bin/skynet-runner" >> "$OUT/runner.log" 2>&1 &
       echo $! > "$pidfile"

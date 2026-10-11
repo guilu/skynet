@@ -575,6 +575,14 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 - `condition` en cualquier fase: el motor la evalúa al arrancar la fase (`stage.condition.evaluated` con los valores leídos) y, si es falsa, la omite (`stage.skipped` con motivo `condition-false`). `type: conditional` es una fase sin trabajo que termina bien si su condición es verdadera.
 - La web enseña la condición en el resumen del workflow y explica en el timeline cada evaluación y cada omisión por condición.
 
+**Implementado (W3-D), nodos en la web y E2E:**
+
+- Nuevo workflow empieza desde una plantilla: «Dos fases» o «Revisión en paralelo» (implementar → tests `command` → revisión de calidad y de seguridad en una fase `parallel` con `output: hasBlockingFindings` → `fix` con `condition: review.hasBlockingFindings` → tests finales con `dependsOn: [review, "fix?"]`). El autocompletado del editor ya cubre `command`, `children`, `condition` y `output` porque sale del JSON Schema.
+- El aviso de publicar lista los comandos de shell del workflow.
+- La vista de ejecución (`RunView` lleva ahora el `type`, el `command` y la `condition` de cada fase) enseña en el progreso el comando y su código de salida, los hijos de una fase `parallel` con su salida estructurada y la condición con su resultado («Omitida: review.hasBlockingFindings es falsa», «review.hasBlockingFindings se cumplió»).
+- fake-claude acepta `FAKE_CLAUDE_STRUCTURED_OUTPUT=@fichero` para leer la salida del directorio de trabajo.
+- E2E `nodes.e2e.ts`, criterio de aceptación de W3: la plantilla, publicada y lanzada desde la web, termina «Completada» con hallazgos (corrige) y sin ellos (omite la corrección), con axe en la plantilla, el aviso de publicar y la ejecución.
+
 ---
 
 ## 8. Fase 3 — SDD completo

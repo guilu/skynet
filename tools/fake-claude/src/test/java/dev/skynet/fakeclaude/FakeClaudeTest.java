@@ -159,6 +159,26 @@ class FakeClaudeTest {
   }
 
   @Test
+  void withAnAtPathReadsTheStructuredOutputFromTheWorkingDirectory(@TempDir Path cwd)
+      throws Exception {
+    String[] args = {"-p", "x", "--output-format", "stream-json", "--json-schema", "{}"};
+    Map<String, String> env =
+        Map.of(
+            "FAKE_CLAUDE_FIXTURE",
+            "01-simple-text",
+            "FAKE_CLAUDE_DELAY_MS",
+            "0",
+            "FAKE_CLAUDE_STRUCTURED_OUTPUT",
+            "@salida.json");
+    assertThat(run(env, cwd, args).lines.getLast().has("structured_output")).isFalse();
+
+    Files.writeString(cwd.resolve("salida.json"), "{\"hasBlockingFindings\":false}");
+    JsonNode output = run(env, cwd, args).lines.getLast().path("structured_output");
+    assertThat(output.path("hasBlockingFindings").isBoolean()).isTrue();
+    assertThat(output.path("hasBlockingFindings").asBoolean()).isFalse();
+  }
+
+  @Test
   void rejectsNonStreamJsonOutput() throws Exception {
     assertThat(run("01-simple-text", "-p", "x").exitCode).isEqualTo(2);
   }
