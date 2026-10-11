@@ -1,6 +1,7 @@
 package dev.skynet.controlplane.definition;
 
 import dev.skynet.controlplane.definition.Problem.Severity;
+import dev.skynet.controlplane.definition.StageDefinition.ChildDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.Dependency;
 import dev.skynet.controlplane.definition.StageDefinition.WorkspaceMode;
 import dev.skynet.controlplane.project.AgentPolicy;
@@ -62,7 +63,9 @@ public final class DefinitionParser {
           "dependsOn",
           "workspace",
           "workspaceFrom",
-          "command");
+          "command",
+          "children");
+  static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt");
 
   /** Claves de §11 que llegan con hitos posteriores, con el hito que las ejecuta. */
   static final Map<String, String> FUTURE_STAGE_KEYS =
@@ -72,8 +75,7 @@ public final class DefinitionParser {
           "artifacts", "W4",
           "retry", "W6",
           "timeout", "W6",
-          "condition", "W3",
-          "children", "W3");
+          "condition", "W3");
 
   /** Variables que puede usar un prompt, además de {@code inputs.<nombre>}. */
   static final List<String> CONTEXT_VARIABLES =
@@ -537,7 +539,11 @@ public final class DefinitionParser {
         String path,
         Node node,
         Map<String, Entry> fields,
-        List<Node> dependencyNodes) {}
+        List<Node> dependencyNodes,
+        List<ChildAt> children) {}
+
+    /** Un hijo leído de una fase {@code parallel}, con sus nodos. */
+    private record ChildAt(ChildDefinition child, String path, Map<String, Entry> fields) {}
 
     private List<StageAt> stages(Entry entry) {
       if (!(entry.value() instanceof SequenceNode sequence)) {
@@ -686,6 +692,7 @@ public final class DefinitionParser {
       }
 
       String command = command(fields, type, node, path);
+      List<ChildAt> children = children(fields, type, node, path);
       StageDefinition stage =
           new StageDefinition(
               id,
@@ -696,8 +703,110 @@ public final class DefinitionParser {
               dependsOn,
               workspace,
               text(fields.get("workspaceFrom"), path + ".workspaceFrom"),
-              command);
-      return new StageAt(stage, path, node, fields, dependencyNodes);
+              command,
+              children.stream().map(ChildAt::child).toList());
+      return new StageAt(stage, path, node, fields, dependencyNodes, children);
+    }
+
+    /**
+     * Los hijos de una fase {@code parallel}: obligatorios, cada uno con su agente, y sin agente,
+     * prompt ni comando propios en la fase. En las demás fases, {@code children} no vale.
+     */
+    private List<ChildAt> children(
+        Map<String, Entry> fields, StageType type, Node node, String path) {
+      Entry entry = fields.get("children");
+      if (type != StageType.PARALLEL) {
+        if (entry != null && type.executable()) {
+          error(
+              entry.key(),
+              path + ".children",
+              "`children` solo vale en fases `type: parallel`; esta es `" + type.yaml() + "`");
+        }
+        return List.of();
+      }
+      for (String key : List.of("agent", "prompt")) {
+        Entry used = fields.get(key);
+        if (used != null) {
+          error(
+              used.key(),
+              path + "." + key,
+              "Una fase `parallel` no tiene agente propio: pon `"
+                  + key
+                  + "` en cada hijo de `children`");
+        }
+      }
+      if (entry == null || isNull(entry.value())) {
+        error(
+            node,
+            path + ".children",
+            "A esta fase le falta `children`, los agentes que se ejecutan a la vez, p. ej."
+                + " `children: [{agent: calidad}, {agent: seguridad}]`");
+        return List.of();
+      }
+      if (!(entry.value() instanceof SequenceNode sequence) || sequence.getValue().isEmpty()) {
+        error(
+            entry.value(),
+            path + ".children",
+            "`children` debe ser una lista de hijos, cada uno empezando por `- agent: ...`");
+        return List.of();
+      }
+      List<ChildAt> children = new ArrayList<>();
+      Map<String, ChildAt> byId = new HashMap<>();
+      for (int i = 0; i < sequence.getValue().size(); i++) {
+        Node childNode = sequence.getValue().get(i);
+        String childPath = path + ".children[" + i + "]";
+        Map<String, Entry> childFields = mapping(childNode, childPath, CHILD_KEYS, Map.of());
+        if (childFields == null) {
+          continue;
+        }
+        Entry agentEntry = childFields.get("agent");
+        if (agentEntry == null) {
+          error(
+              childNode,
+              childPath + ".agent",
+              "A este hijo le falta `agent`, el agente de `agents` que lo ejecuta");
+          continue;
+        }
+        String agent = text(agentEntry, childPath + ".agent");
+        if (agent == null) {
+          continue;
+        }
+        Entry idEntry = childFields.get("id");
+        String id = idEntry == null ? agent : text(idEntry, childPath + ".id");
+        if (id == null) {
+          continue;
+        }
+        if (!NAME.matcher(id).matches()) {
+          error(
+              idEntry == null ? agentEntry.value() : idEntry.value(),
+              childPath + ".id",
+              "`"
+                  + id
+                  + "` no vale como id de hijo: usa minúsculas, números y guiones, empezando por"
+                  + " una letra");
+          continue;
+        }
+        ChildAt child =
+            new ChildAt(
+                new ChildDefinition(
+                    id, agent, text(childFields.get("prompt"), childPath + ".prompt")),
+                childPath,
+                childFields);
+        ChildAt previous = byId.putIfAbsent(id, child);
+        if (previous != null) {
+          error(
+              idEntry == null ? childNode : idEntry.value(),
+              childPath + ".id",
+              "Ya hay otro hijo `"
+                  + id
+                  + "` en esta fase: ponle a uno un `id` distinto, p. ej. `id: "
+                  + id
+                  + "-2`");
+          continue;
+        }
+        children.add(child);
+      }
+      return children;
     }
 
     /**
@@ -796,6 +905,37 @@ public final class DefinitionParser {
           checkWorkspace(at, byId);
           continue;
         }
+        if (stage.type() == StageType.PARALLEL) {
+          for (ChildAt child : at.children()) {
+            String name = child.child().agent();
+            usedAgents.add(name);
+            AgentDefinition agent = agentsByName.get(name);
+            if (agent == null) {
+              error(
+                  child.fields().get("agent").value(),
+                  child.path() + ".agent",
+                  "No hay ningún agente `"
+                      + name
+                      + "` en `agents`"
+                      + suggestion(name, agentsByName.keySet()));
+            } else if (child.child().prompt() == null && agent.prompt() == null) {
+              error(
+                  child.fields().get("agent").value(),
+                  child.path() + ".prompt",
+                  "El hijo `"
+                      + child.child().id()
+                      + "` no tiene prompt: escríbelo en el hijo o en el agente `"
+                      + name
+                      + "`");
+            }
+            if (child.child().prompt() != null) {
+              checkVariables(
+                  child.fields().get("prompt").value(), child.path() + ".prompt", inputNames);
+            }
+          }
+          checkWorkspace(at, byId);
+          continue;
+        }
         if (stage.type() != StageType.AGENT) {
           continue;
         }
@@ -860,11 +1000,13 @@ public final class DefinitionParser {
       if (stage.workspaceFrom() != null) {
         Node node = at.fields().get("workspaceFrom").value();
         String path = at.path() + ".workspaceFrom";
+        int dot = stage.workspaceFrom().indexOf('.');
+        String from = dot < 0 ? stage.workspaceFrom() : stage.workspaceFrom().substring(0, dot);
+        String child = dot < 0 ? null : stage.workspaceFrom().substring(dot + 1);
         Dependency dep =
-            stage.dependsOn().stream()
-                .filter(d -> d.stage().equals(stage.workspaceFrom()))
-                .findFirst()
-                .orElse(null);
+            stage.dependsOn().stream().filter(d -> d.stage().equals(from)).findFirst().orElse(null);
+        StageDefinition source =
+            dep == null || !byId.containsKey(from) ? null : byId.get(from).stage();
         if (stage.workspace() == WorkspaceMode.ISOLATED) {
           error(
               node,
@@ -878,10 +1020,26 @@ public final class DefinitionParser {
               "`workspaceFrom` tiene que ser una de las fases de `dependsOn`"
                   + (agentDeps.isEmpty() ? "" : ": " + String.join(", ", agentDeps)));
         } else if (!agentDeps.contains(dep.stage())) {
+          error(node, path, "`" + dep.stage() + "` no es una fase con worktree");
+        } else if (child != null && source.type() != StageType.PARALLEL) {
           error(
               node,
               path,
-              "`" + dep.stage() + "` no es una fase con agente ni comando: no tiene worktree");
+              "`"
+                  + from
+                  + "` no es una fase `parallel`: `<fase>.<hijo>` solo vale para continuar el"
+                  + " worktree de un hijo");
+        } else if (child != null && source.child(child).isEmpty()) {
+          error(
+              node,
+              path,
+              "La fase `"
+                  + from
+                  + "` no tiene ningún hijo `"
+                  + child
+                  + "`"
+                  + suggestion(
+                      child, source.children().stream().map(ChildDefinition::id).toList()));
         } else if (dep.optional()) {
           error(
               node,

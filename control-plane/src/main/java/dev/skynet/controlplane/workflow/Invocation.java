@@ -11,7 +11,8 @@ import java.util.UUID;
  * @param workspaceId worktree que reutiliza (al reanudar o al continuar el de otra fase)
  * @param resume sesión y worktree de partida (reanudar y bifurcar)
  * @param workspace worktree existente en el que arranca una sesión nueva (una fase que continúa el
- *     de la fase de la que depende)
+ *     de la fase de la que depende) o del que se copia el suyo (un hijo de una fase {@code
+ *     parallel})
  * @param runnerId runner que debe ejecutarla, o {@code null} si vale cualquiera
  * @param command comando de shell de una fase {@code command}, o {@code null} para un agente
  */
@@ -57,6 +58,23 @@ record Invocation(
         workspace.id(),
         null,
         new WorkspaceRef(workspace.path(), workspace.branch()),
+        workspace.runnerId());
+  }
+
+  /**
+   * Sesión nueva en un worktree nuevo creado, en su runner, desde una instantánea de {@code
+   * workspace} (con sus cambios sin confirmar): un hijo de una fase {@code parallel}.
+   */
+  static Invocation inCopyOf(String prompt, EffectivePolicy policy, WorkspaceView workspace) {
+    return new Invocation(
+        AgentRunKind.START,
+        null,
+        UUID.randomUUID(),
+        prompt,
+        policy,
+        null,
+        null,
+        new WorkspaceRef(workspace.path(), workspace.branch(), true),
         workspace.runnerId());
   }
 

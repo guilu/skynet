@@ -56,13 +56,14 @@ stages:
 - Al lanzar, lo que pide un agente se recorta a la política del repositorio: solo las herramientas que el repositorio permite (`Bash(git:*)` cabe en `Bash`, al revés no), su modo de permisos solo si no es más permisivo (`plan` < `default`/`dontAsk` < `acceptEdits`) y sus límites rebajados a los del repositorio. Lo que el agente no fija sale de la política y, los límites, de los del lanzamiento.
 
 **`stages[]`:**
-- `id` (obligatorio, único) y `type` (obligatorio): `agent` o `command` (los demás tipos aún no se ejecutan, ver abajo).
+- `id` (obligatorio, único) y `type` (obligatorio): `agent`, `command` o `parallel` (los demás tipos aún no se ejecutan, ver abajo).
 - `agent`: un agente de `agents`. Sin él, la fase usa la política del repositorio.
 - `prompt`: el de la fase; si falta, el del agente. Uno de los dos tiene que existir.
 - `dependsOn`: fases que tienen que terminar antes. Con `?` al final (`plan?`) es opcional: también vale si esa fase se omite. Entre corchetes va entre comillas (`dependsOn: ["plan?"]`), porque YAML lee `?` como otra cosa.
-- `workspace`: `inherit` (por defecto) continúa el worktree de la fase con agente o comando de la que depende, sesión nueva pero mismos ficheros; sin ninguna, empieza uno nuevo. `isolated-worktree` empieza siempre uno nuevo desde la rama por defecto.
-- `workspaceFrom`: obligatorio si la fase depende de varias fases con worktree (agente o comando) y no es `isolated-worktree`; dice cuál continúa.
+- `workspace`: `inherit` (por defecto) continúa el worktree de la fase con worktree (agente, comando o `parallel`) de la que depende, sesión nueva pero mismos ficheros; sin ninguna, empieza uno nuevo. `isolated-worktree` empieza siempre uno nuevo desde la rama por defecto.
+- `workspaceFrom`: obligatorio si la fase depende de varias fases con worktree y no es `isolated-worktree`; dice cuál continúa. Para continuar el worktree de un hijo de una fase `parallel`, `<fase>.<hijo>` (p. ej. `review.seguridad`).
 - `command`: solo en las fases `type: command`, y obligatorio en ellas. Ver abajo.
+- `children`: solo en las fases `type: parallel`, y obligatorio en ellas. Ver abajo.
 
 **Fases `command`:** ejecutan un comando de shell en lugar de un agente, p. ej. los tests después de implementar:
 
@@ -80,6 +81,27 @@ stages:
 - El comando lo escribe quien publica el workflow, igual que el comando de verificación del repositorio.
 - En la ejecución es una invocación más de su fase (con proveedor `command`): una herramienta `Bash` con su salida, y como artefactos el comando, la salida completa (`command.log`) y los cambios del worktree. No se verifica después (ya es un comando) y no se puede continuar ni reintentar por separado.
 
+**Fases `parallel`:** ejecutan varios agentes a la vez, p. ej. dos revisores después de implementar:
+
+```yaml
+  - id: review
+    type: parallel
+    dependsOn: [implement]
+    children:
+      - agent: calidad
+      - agent: seguridad
+      - id: seguridad-estricta      # el mismo agente dos veces necesita otro id
+        agent: seguridad
+        prompt: Revisa la seguridad con lupa
+```
+
+- Cada hijo lleva `agent` (obligatorio, un agente de `agents`) y opcionalmente `id` (por defecto, el nombre del agente; único en la fase) y `prompt` (si falta, el del agente). La fase no tiene `agent`, `prompt` ni `command` propios.
+- Arranca todos los hijos a la vez: un agente por hijo en la misma fase, cada uno con lo que se le permite a su agente.
+- **Worktree:** cada hijo trabaja en un worktree nuevo, creado desde una instantánea del worktree que la fase hereda (con las mismas reglas que una fase `agent`), con sus cambios sin confirmar y sus ficheros nuevos, sin tocar el original. Todos van al runner del worktree heredado. Si la fase no hereda ninguno (sin dependencias o `isolated-worktree`), cada hijo empieza uno nuevo.
+- La fase siguiente continúa el worktree **original**, no el de un hijo: lo que cambien los revisores se queda en sus worktrees, con su diff a la vista. Para continuar el de un hijo, `workspaceFrom: review.seguridad`.
+- Termina bien cuando terminan bien todos sus hijos. Si uno falla o se cancela, a sus hermanos se les ordena terminar, las demás fases se cancelan (fail-fast) y la fase falla cuando acaban todos.
+- En la ejecución, cada hijo es un agente de la fase con su `childKey`. Cada uno se verifica, se continúa o se reintenta como cualquier agente, y lo que se le permitirá sale en «Política de cada fase» como `review.calidad`.
+
 **Variables de los prompts:** `{{workItem.key}}`, `{{workItem.title}}`, `{{workItem.description}}`, `{{workItem.type}}`, `{{workItem.externalRef}}`, `{{project.key}}`, `{{project.name}}` e `{{inputs.<nombre>}}`.
 
 ## Lo que aún no se ejecuta
@@ -88,7 +110,7 @@ El YAML admite ya todo §11 para poder escribir los workflows de la especificaci
 
 | Qué | Hito |
 |---|---|
-| Fases `parallel` y `conditional`; `condition` y `children` | W3 |
+| Fase `conditional`; `condition` | W3 |
 | Fase `verification`; `outputSchema` y `artifacts`; `{{stages.<id>...}}` en los prompts | W4 |
 | Fase `human-approval` | W5 |
 | `retry` y `timeout` | W6 |
@@ -114,9 +136,9 @@ La ejecución nace `RUNNING` con todas sus fases en `PENDING` (`stage.pending`, 
 
 - Una fase pasa a `READY` (`stage.ready`) cuando todas sus dependencias han terminado bien; una opcional (`plan?`) también vale si se omitió. Si se omitió una que no es opcional, la fase también se omite (`stage.skipped`).
 - Una fase lista se arranca: se renderiza su prompt, se calcula lo que se le permite a su agente y se pone en cola. Varias fases listas a la vez se ejecutan en paralelo.
-- Con `workspace: inherit`, la fase continúa el worktree de `workspaceFrom` o, si no, el de su única dependencia con agente, siempre que haya terminado bien: sesión nueva, mismos ficheros, mismo runner. Si en ese worktree hay algo en curso (la verificación automática del agente anterior), la fase espera en `READY` y arranca cuando termina.
+- Con `workspace: inherit`, la fase continúa el worktree de `workspaceFrom` o, si no, el de su única dependencia con worktree, siempre que haya terminado bien: sesión nueva, mismos ficheros, mismo runner. Si en ese worktree hay algo en curso (la verificación automática del agente anterior), la fase espera en `READY` y arranca cuando termina.
 - Si una fase no puede arrancar (el repositorio o el trabajo se archivaron, el worktree se eliminó, el prompt queda vacío) falla con `stage.start.failed` y el motivo.
-- **Fail-fast:** si una fase falla o se cancela, las que no han empezado se cancelan y a los agentes en marcha se les ordena terminar; la ejecución termina `FAILED` (o `CANCELLED`) cuando todas han acabado. Si todas terminan bien u omitidas, `SUCCEEDED`.
+- **Fail-fast:** si una fase (o un hijo de una fase `parallel`) falla o se cancela, las que no han empezado se cancelan y a los agentes en marcha se les ordena terminar; la ejecución termina `FAILED` (o `CANCELLED`) cuando todas han acabado. Si todas terminan bien u omitidas, `SUCCEEDED`.
 - `POST /api/workflow-runs/{id}/cancel` cancela la ejecución entera del mismo modo; 409 si ya ha terminado.
 
 **Reinicios.** Cada cambio en una ejecución (lanzarla, que termine un agente o una verificación, cancelar) deja un trabajo en la tabla `workflow_job` en la misma transacción y se evalúa allí mismo, así que el siguiente agente queda en cola al instante. Si esa evaluación falla o tiene que esperar, el trabajo queda para los workers del motor, que lo reclaman con `FOR UPDATE SKIP LOCKED` y un alquiler (`skynet.engine.lease`). Al arrancar, el control plane encola todas las ejecuciones sin terminar. Evaluar una ejecución bloquea su fila y solo mira el estado guardado, así que repetirla tras una caída no duplica agentes.

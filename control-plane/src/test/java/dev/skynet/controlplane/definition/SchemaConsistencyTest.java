@@ -38,6 +38,8 @@ class SchemaConsistencyTest {
     Set<String> expected = new HashSet<>(DefinitionParser.STAGE_KEYS);
     expected.addAll(DefinitionParser.FUTURE_STAGE_KEYS.keySet());
     assertThat(names(stage)).isEqualTo(expected);
+    assertThat(names(schema.path("$defs").path("child").path("properties")))
+        .isEqualTo(DefinitionParser.CHILD_KEYS);
     Set<String> types = new HashSet<>();
     stage.path("type").path("enum").forEach(t -> types.add(t.asString()));
     assertThat(types)

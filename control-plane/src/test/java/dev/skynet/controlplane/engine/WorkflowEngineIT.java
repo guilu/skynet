@@ -26,7 +26,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * El motor: fases en paralelo, dependencias, worktrees heredados, fail-fast, reinicios (W2) y fases
- * {@code command} (W3).
+ * {@code command} y {@code parallel} (W3).
  */
 class WorkflowEngineIT extends IntegrationTest {
 
@@ -99,6 +99,41 @@ class WorkflowEngineIT extends IntegrationTest {
           type: agent
           prompt: Revisa
           dependsOn: [tests]
+      """;
+
+  /**
+   * Implementar, revisar con dos hijos a la vez, corregir en el worktree original y endurecer en el
+   * del revisor de seguridad.
+   */
+  static final String REVIEW =
+      """
+      id: review
+      version: 1
+      agents:
+        calidad:
+          prompt: Revisa la calidad de {{workItem.key}}
+          model: claude-haiku-4-5
+        seguridad:
+          prompt: Revisa la seguridad
+      stages:
+        - id: implement
+          type: agent
+          prompt: Implementa
+        - id: review
+          type: parallel
+          dependsOn: [implement]
+          children:
+            - agent: calidad
+            - agent: seguridad
+        - id: fix
+          type: agent
+          prompt: Corrige
+          dependsOn: [review]
+        - id: harden
+          type: command
+          command: make harden
+          dependsOn: [review, fix]
+          workspaceFrom: review.seguridad
       """;
 
   private String projectId;
@@ -387,6 +422,111 @@ class WorkflowEngineIT extends IntegrationTest {
     JsonNode agent = run.path("stages").get(1).path("agents").get(0);
     assertThat(agent.path("status").asString()).isEqualTo("FAILED");
     assertThat(agent.path("error").asString()).isEqualTo("El comando terminó con código 2");
+  }
+
+  @Test
+  void aParallelStageRunsItsChildrenInCopiesAndTheNextStageContinuesTheOriginal() {
+    String definitionId = publish(REVIEW);
+    Runner runner = register("laptop");
+
+    // Lo que se permite a cada hijo sale como una fase más, <fase>.<hijo>.
+    JsonNode policies =
+        get(
+            "/api/workflow-versions/"
+                + definitionId
+                + "/effective-policy?repositoryId="
+                + repositoryId);
+    assertThat(policies)
+        .extracting(p -> p.path("stage").asString())
+        .containsExactly("implement", "review.calidad", "review.seguridad", "fix", "harden");
+    assertThat(policies.get(1).path("type").asString()).isEqualTo("parallel");
+    assertThat(policies.get(1).path("agent").asString()).isEqualTo("calidad");
+    assertThat(policies.get(1).path("model").asString()).isEqualTo("claude-haiku-4-5");
+
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+
+    // Los dos hijos arrancan a la vez, cada uno en una copia del worktree de implement.
+    List<JsonNode> children = runner.claim();
+    assertThat(children).hasSize(2);
+    Map<String, JsonNode> byPrompt = new HashMap<>();
+    children.forEach(c -> byPrompt.put(c.path("start").path("prompt").asString(), c));
+    assertThat(byPrompt).containsOnlyKeys("Revisa la calidad de ENG-1", "Revisa la seguridad");
+    for (JsonNode child : children) {
+      JsonNode workspace = child.path("start").path("workspace");
+      assertThat(workspace.path("path").asString()).isEqualTo("/w/eng/implement");
+      assertThat(workspace.path("copy").asBoolean()).isTrue();
+    }
+    JsonNode quality = byPrompt.get("Revisa la calidad de ENG-1");
+    assertThat(quality.path("start").path("model").asString()).isEqualTo("claude-haiku-4-5");
+    JsonNode review = get("/api/workflow-runs/" + runId).path("stages").get(1);
+    assertThat(review.path("agents"))
+        .extracting(a -> a.path("childKey").asString())
+        .containsExactlyInAnyOrder("calidad", "seguridad");
+
+    // La fase termina cuando terminan los dos.
+    complete(runner, quality, "/w/eng/calidad");
+    assertThat(stageStatuses(runId))
+        .containsEntry("review", "RUNNING")
+        .containsEntry("fix", "PENDING");
+    complete(runner, byPrompt.get("Revisa la seguridad"), "/w/eng/seguridad");
+    assertThat(stageStatuses(runId)).containsEntry("review", "SUCCEEDED");
+
+    // fix continúa el worktree original, sin los cambios de los revisores.
+    JsonNode fix = runner.claim().getFirst();
+    assertThat(fix.path("start").path("workspace").path("path").asString())
+        .isEqualTo("/w/eng/implement");
+    assertThat(fix.path("start").path("workspace").path("copy").asBoolean()).isFalse();
+    complete(runner, fix, "/w/eng/implement");
+
+    // harden continúa el del revisor de seguridad.
+    JsonNode harden = runner.claim().getFirst();
+    assertThat(harden.path("start").path("command").asString()).isEqualTo("make harden");
+    assertThat(harden.path("start").path("workspace").path("path").asString())
+        .isEqualTo("/w/eng/seguridad");
+    complete(runner, harden, "/w/eng/seguridad");
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("SUCCEEDED");
+
+    // Reintentar un hijo mantiene lo que su agente del YAML tiene permitido.
+    post("/api/agent-runs/" + quality.path("agentRunId").asString() + "/retry", Map.of());
+    assertThat(runner.claim().getFirst().path("start").path("model").asString())
+        .isEqualTo("claude-haiku-4-5");
+  }
+
+  @Test
+  void aFailingChildCancelsItsSiblingAndFailsTheRun() {
+    String definitionId = publish(REVIEW);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    Map<String, JsonNode> byPrompt = new HashMap<>();
+    runner.claim().forEach(c -> byPrompt.put(c.path("start").path("prompt").asString(), c));
+    Events security =
+        new Events(
+            UUID.fromString(byPrompt.get("Revisa la seguridad").path("agentRunId").asString()));
+    security.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", "s"));
+    runner.send(security);
+
+    Events quality =
+        new Events(
+            UUID.fromString(
+                byPrompt.get("Revisa la calidad de ENG-1").path("agentRunId").asString()));
+    quality.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", "q"));
+    quality.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 1));
+    runner.send(quality);
+
+    // El hermano recibe la orden de terminar; la fase sigue en curso hasta que acabe.
+    assertThat(stageStatuses(runId))
+        .containsEntry("review", "RUNNING")
+        .containsEntry("fix", "CANCELLED")
+        .containsEntry("harden", "CANCELLED");
+    assertThat(runner.claim()).extracting(c -> c.path("type").asString()).containsExactly("CANCEL");
+
+    security = new Events(security.agentRunId, 1);
+    security.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 143, "signal", "SIGTERM"));
+    runner.send(security);
+    assertThat(stageStatuses(runId)).containsEntry("review", "FAILED");
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("FAILED");
   }
 
   @Test

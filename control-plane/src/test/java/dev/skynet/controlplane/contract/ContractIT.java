@@ -157,7 +157,8 @@ class ContractIT extends IntegrationTest {
           null,
           "agent.process.exited",
           null,
-          worktree());
+          worktree(),
+          null);
     }
 
     static AgentRunView workingAgent() {
@@ -189,7 +190,8 @@ class ContractIT extends IntegrationTest {
           null,
           "agent.tool.started",
           "Read",
-          worktree());
+          worktree(),
+          null);
     }
 
     static WorkspaceView worktree() {
@@ -234,7 +236,8 @@ class ContractIT extends IntegrationTest {
           null,
           "agent.process.exited",
           null,
-          worktree());
+          worktree(),
+          null);
     }
 
     static ConversationView conversation() {

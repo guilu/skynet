@@ -54,6 +54,10 @@ public class AgentRun {
   private final Integer maxTurns;
   private final BigDecimal maxBudgetUsd;
   private final Long timeoutSeconds;
+
+  /** Hijo de una fase {@code parallel} que ejecuta, o {@code null} en las demás fases. */
+  private String childKey;
+
   @Version private Long version;
 
   @PersistenceCreator
@@ -399,6 +403,15 @@ public class AgentRun {
 
   public UUID getId() {
     return id;
+  }
+
+  public String getChildKey() {
+    return childKey;
+  }
+
+  /** La invocación es el hijo {@code childKey} de una fase {@code parallel}. */
+  void forChild(String childKey) {
+    this.childKey = childKey;
   }
 
   public UUID getStageRunId() {

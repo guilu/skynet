@@ -64,6 +64,28 @@ class RunnerMessagesJsonTest {
   }
 
   @Test
+  void startInACopyOfAWorktreeRoundTrip() {
+    StartAgent start =
+        new StartAgent(
+            UUID.randomUUID(),
+            "TKM-1",
+            "/home/dev/demo",
+            "main",
+            UUID.randomUUID(),
+            "Revisa la seguridad",
+            List.of("Read"),
+            "dontAsk",
+            null,
+            AgentLimits.none(),
+            null,
+            null,
+            new WorkspaceRef("/w/run/implement", "skynet/tkm-1/abcd1234", true));
+    RunnerCommand command = RunnerCommand.start(UUID.randomUUID(), UUID.randomUUID(), NOW, start);
+
+    assertThat(roundTrip(command, RunnerCommand.class)).isEqualTo(command);
+  }
+
+  @Test
   void aStartCannotBothResumeAndUseAWorktree() {
     assertThatThrownBy(
             () ->

@@ -105,7 +105,7 @@
         "name": { "description": "Nombre para mostrar.", "type": "string", "minLength": 1 },
         "description": { "description": "Qué hace la fase.", "type": "string", "minLength": 1 },
         "type": {
-          "description": "Tipo de fase. Por ahora el motor ejecuta agent y command.",
+          "description": "Tipo de fase. Por ahora el motor ejecuta agent, command y parallel.",
           "enum": [
             "agent",
             "command",
@@ -132,12 +132,13 @@
           "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}\\??$" }
         },
         "workspace": {
-          "description": "inherit (por defecto) continúa el worktree de la fase de la que depende; isolated-worktree empieza uno nuevo.",
+          "description": "inherit (por defecto) continúa el worktree de la fase de la que depende; isolated-worktree empieza uno nuevo. En una fase parallel, cada hijo trabaja en una copia del worktree heredado.",
           "enum": ["inherit", "isolated-worktree"]
         },
         "workspaceFrom": {
-          "description": "Con varias dependencias con agente o comando, cuál de ellas continúa su worktree.",
-          "type": "string"
+          "description": "Con varias dependencias con worktree, cuál de ellas continúa. Para continuar el de un hijo de una fase parallel, <fase>.<hijo>, p. ej. review.security.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}(\\.[a-z][a-z0-9-]{0,63})?$"
         },
         "command": {
           "description": "Solo en fases command: comando de shell (sh -c) que se ejecuta en el worktree. Termina bien con código 0. Sin variables.",
@@ -150,7 +151,30 @@
         "retry": { "description": "Llega en W6.", "type": "object" },
         "timeout": { "description": "Llega en W6." },
         "condition": { "description": "Llega en W3.", "type": "string" },
-        "children": { "description": "Llega en W3.", "type": "array" }
+        "children": {
+          "description": "Solo en fases parallel: los agentes que se ejecutan a la vez. La fase termina bien cuando terminan bien todos; si uno falla, se cancelan los demás.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/child" }
+        }
+      }
+    },
+    "child": {
+      "type": "object",
+      "required": ["agent"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Id del hijo, único en la fase. Por defecto, el nombre de su agente.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "agent": { "description": "Agente de `agents` que lo ejecuta.", "type": "string" },
+        "prompt": {
+          "description": "Prompt del hijo. Si falta, se usa el del agente.",
+          "type": "string",
+          "minLength": 1
+        }
       }
     }
   }

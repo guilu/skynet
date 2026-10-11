@@ -103,6 +103,19 @@ class PlannerTest {
   }
 
   @Test
+  void aFailedChildCancelsItsSiblingsAndTheOtherStages() {
+    Map<String, StageState> stages = states("SUCCEEDED", "RUNNING", "RUNNING", "PENDING");
+    // Un hijo de fix ha fallado y el otro sigue: fix sigue en curso, pero ya va a fallar.
+    stages.put("fix", new StageState("fix", StageStatus.RUNNING, true, StageStatus.FAILED));
+
+    assertThat(Planner.plan(DAG, stages))
+        .containsExactly(
+            new Cancel("tests", "stage-failed"),
+            new Cancel("fix", "stage-failed"),
+            new Cancel("review", "stage-failed"));
+  }
+
+  @Test
   void aCancelledStageCancelsTheRun() {
     assertThat(Planner.plan(DAG, states("CANCELLED", "SUCCEEDED", "CANCELLED", "CANCELLED")))
         .containsExactly(new Finish(WorkflowRunStatus.CANCELLED, "stage-cancelled"));

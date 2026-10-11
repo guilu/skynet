@@ -14,6 +14,7 @@ import java.util.UUID;
  * @param workspace worktree de la invocación, cuando el runner lo ha preparado
  * @param kind cómo se originó: lanzamiento, reanudación, reintento o fork de {@code
  *     parentAgentRunId}
+ * @param childKey hijo de una fase {@code parallel} que ejecuta, o {@code null} en las demás
  */
 public record AgentRunView(
     UUID id,
@@ -43,7 +44,8 @@ public record AgentRunView(
     String error,
     String lastEventType,
     String currentTool,
-    WorkspaceView workspace) {
+    WorkspaceView workspace,
+    String childKey) {
 
   static AgentRunView of(AgentRun a, WorkspaceView workspace) {
     return new AgentRunView(
@@ -74,6 +76,7 @@ public record AgentRunView(
         a.getError(),
         a.getLastEventType(),
         a.getCurrentTool(),
-        workspace);
+        workspace,
+        a.getChildKey());
   }
 }

@@ -53,7 +53,8 @@
       "dependsOn" : [ ],
       "workspace" : "INHERIT",
       "workspaceFrom" : null,
-      "command" : null
+      "command" : null,
+      "children" : [ ]
     }, {
       "id" : "fix",
       "name" : null,
@@ -66,7 +67,8 @@
       } ],
       "workspace" : "INHERIT",
       "workspaceFrom" : null,
-      "command" : null
+      "command" : null,
+      "children" : [ ]
     }, {
       "id" : "verify",
       "name" : null,
@@ -79,7 +81,8 @@
       } ],
       "workspace" : "INHERIT",
       "workspaceFrom" : null,
-      "command" : null
+      "command" : null,
+      "children" : [ ]
     } ]
   }
 }

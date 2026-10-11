@@ -44,34 +44,50 @@ class AgentQueue {
       CodeRepository repository,
       Invocation invocation,
       Instant now) {
+    return queue(run, stage, workItem, repository, invocation, null, now);
+  }
+
+  /** Con {@code childKey}, la invocación es ese hijo de una fase {@code parallel}. */
+  AgentRun queue(
+      WorkflowRun run,
+      StageRun stage,
+      WorkItem workItem,
+      CodeRepository repository,
+      Invocation invocation,
+      String childKey,
+      Instant now) {
     AgentRun parent = invocation.parent();
     EffectivePolicy policy = invocation.policy();
     AgentLimits limits = policy.limits();
-    AgentRun agent =
-        agentRuns.save(
-            parent == null
-                ? AgentRun.queued(
-                    stage.getId(),
-                    repository.getId(),
-                    invocation.command() == null
-                        ? AgentRun.PROVIDER_CLAUDE_CODE
-                        : AgentRun.PROVIDER_COMMAND,
-                    invocation.sessionId(),
-                    invocation.workspaceId(),
-                    limits,
-                    now)
-                : AgentRun.queued(
-                    stage.getId(),
-                    parent,
-                    invocation.kind(),
-                    invocation.sessionId(),
-                    invocation.workspaceId(),
-                    limits,
-                    now));
+    AgentRun queued =
+        parent == null
+            ? AgentRun.queued(
+                stage.getId(),
+                repository.getId(),
+                invocation.command() == null
+                    ? AgentRun.PROVIDER_CLAUDE_CODE
+                    : AgentRun.PROVIDER_COMMAND,
+                invocation.sessionId(),
+                invocation.workspaceId(),
+                limits,
+                now)
+            : AgentRun.queued(
+                stage.getId(),
+                parent,
+                invocation.kind(),
+                invocation.sessionId(),
+                invocation.workspaceId(),
+                limits,
+                now);
+    queued.forChild(childKey);
+    AgentRun agent = agentRuns.save(queued);
     Prompt prompt =
         prompts.save(Prompt.of(agent.getId(), Prompt.ROLE_USER, invocation.prompt(), now));
     Map<String, Object> spawned = new LinkedHashMap<>();
     spawned.put("stageRunId", stage.getId());
+    if (childKey != null) {
+      spawned.put("childKey", childKey);
+    }
     spawned.put("repositoryId", repository.getId());
     spawned.put("provider", agent.getProvider());
     spawned.put("kind", agent.getKind());
@@ -96,7 +112,9 @@ class AgentQueue {
     if (parent != null) {
       spawned.put("parentAgentRunId", parent.getId());
     }
-    if (invocation.workspace() != null) {
+    if (invocation.workspace() != null && invocation.workspace().copy()) {
+      spawned.put("copyOfWorkspace", invocation.workspace().path());
+    } else if (invocation.workspace() != null) {
       spawned.put("workspaceId", invocation.workspaceId());
     }
     transitions.append("agent_run", agent.getId(), "agent.spawned", run.getId(), spawned, now);

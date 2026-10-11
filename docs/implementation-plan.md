@@ -561,6 +561,13 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 - `model` en los agentes del YAML (si falta, `skynet.agent.model`) llega al runner en `StartAgent.model`; `provider` queda reservado: `claude-code` por defecto, `codex`, `gemini` y `opencode` salen como `UNSUPPORTED` hasta el hito de proveedores, que va después de W3.
 - `effective-policy` lleva `type`, `model` y `command`; la web los enseña al lanzar y en el resumen del workflow.
 
+**Implementado (W3-B), fases `parallel`:**
+
+- Fase `parallel` con `children` (cada hijo con `agent` y, opcionalmente, `id` y `prompt`): una `stage_run` con un `agent_run` por hijo, arrancados a la vez. `agent_run.child_key` (V14) dice qué hijo ejecuta cada uno; la API lo da como `childKey` y `agent.spawned` lo lleva.
+- Cada hijo trabaja en un worktree nuevo creado desde una instantánea del worktree heredado (`WorkspaceRef.copy`): el runner reutiliza la copia del fork (`HEAD` más los cambios sin confirmar y los ficheros nuevos) sin tocar el original, y todos van al runner de ese worktree. La fase siguiente continúa el original; `workspaceFrom: <fase>.<hijo>` continúa el de un hijo.
+- La fase se cierra con el resultado conjunto de sus agentes cuando han terminado todos (`RunTransitions.finishStage`). Un hijo que falla o se cancela deja la fase «fallando» (`StageState.failing`) y el `Planner` aplica el fail-fast: cancela a sus hermanos y las demás fases.
+- `effective-policy` da una entrada por hijo (`review.calidad`); reintentar un hijo usa la política de su agente.
+
 ---
 
 ## 8. Fase 3 — SDD completo

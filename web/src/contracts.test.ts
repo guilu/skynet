@@ -85,6 +85,7 @@ const AGENT_RUN: Keys<AgentRun> = {
   lastEventType: true,
   currentTool: true,
   workspace: true,
+  childKey: true,
 }
 const WORKSPACE: Keys<Workspace> = {
   id: true,
@@ -339,6 +340,7 @@ const STAGE_DEFINITION: Keys<StageDefinition> = {
   workspace: true,
   workspaceFrom: true,
   command: true,
+  children: true,
 }
 
 function expectSummary(summary: WorkflowSummary) {
