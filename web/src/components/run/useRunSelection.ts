@@ -23,13 +23,12 @@ export const ACTIVITY_VIEWS = [
 
 export type ActivityView = (typeof ACTIVITY_VIEWS)[number]['id']
 
-/** En el móvil, los tres paneles pasan a ser pestañas. */
-export type RunPane = 'tree' | 'activity' | 'inspector'
+/** En el móvil, los dos paneles pasan a ser pestañas. */
+export type RunPane = 'activity' | 'inspector'
 
 const isTab = (v: string | null): v is InspectorTab => INSPECTOR_TABS.some((t) => t.id === v)
 const isView = (v: string | null): v is ActivityView => ACTIVITY_VIEWS.some((t) => t.id === v)
-const isPane = (v: string | null): v is RunPane =>
-  v === 'tree' || v === 'activity' || v === 'inspector'
+const isPane = (v: string | null): v is RunPane => v === 'activity' || v === 'inspector'
 
 export interface RunSelection {
   /** Agente elegido en la URL; null si no hay ninguno (la página elige uno por defecto). */

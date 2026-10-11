@@ -106,9 +106,10 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     await expect(inspector.locator('.tool-calls > li')).toHaveCount(3)
     await expect(inspector.getByText('Hecha')).toHaveCount(3)
 
-    // Elegir una herramienta en el árbol la abre en el inspector.
-    const tree = page.getByRole('navigation', { name: 'Fases y agentes' })
-    await tree.getByRole('button', { name: /^Edit / }).click()
+    // Elegir una herramienta en la cascada la abre en el inspector.
+    await page.getByRole('tab', { name: 'Cascada' }).click()
+    const waterfall = page.getByRole('tabpanel', { name: 'Cascada' })
+    await waterfall.getByRole('button', { name: /^Edit / }).click()
     await expect(inspector.locator('.tool-calls > li.selected > details')).toHaveAttribute(
       'open',
       '',
@@ -188,7 +189,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     ).toBeVisible({
       timeout: 90_000,
     })
-    await expect(header.getByRole('heading', { level: 1 }).getByText('Completada')).toBeVisible({
+    await expect(header.locator('.hero-top').getByText('Completada')).toBeVisible({
       timeout: 30_000,
     })
     await expect(header.getByText(/US\$/)).toBeVisible()
@@ -214,7 +215,7 @@ test('cancelar a mitad deja el agente cancelado y ningún proceso vivo', async (
   await header.getByRole('button', { name: 'Cancelar agente' }).click()
   await header.getByRole('button', { name: 'Sí, cancelar' }).click()
 
-  await expect(header.getByRole('heading', { level: 1 }).getByText('Cancelada')).toBeVisible({
+  await expect(header.locator('.hero-top').getByText('Cancelada')).toBeVisible({
     timeout: 30_000,
   })
   await expect.poll(fakeClaudeProcesses, { timeout: 10_000 }).toHaveLength(0)
@@ -249,7 +250,7 @@ test('reiniciar el control plane a mitad no interrumpe la ejecución', async ({ 
   await page.goto(`/runs/${runId}`)
   await login(page)
   const header = page.locator('header.run-header')
-  await expect(header.getByRole('heading', { level: 1 }).getByText('Completada')).toBeVisible({
+  await expect(header.locator('.hero-top').getByText('Completada')).toBeVisible({
     timeout: 90_000,
   })
   // El runner siguió declarando la invocación en sus latidos: no se dio por perdida.
@@ -275,7 +276,7 @@ test('reiniciar el runner a mitad deja el agente fallido y ningún proceso vivo'
   }
 
   const header = page.locator('header.run-header')
-  await expect(header.getByRole('heading', { level: 1 }).getByText('Fallida')).toBeVisible({
+  await expect(header.locator('.hero-top').getByText('Fallida')).toBeVisible({
     timeout: 60_000,
   })
   await expect(page.getByText('El runner se reinició durante la ejecución').first()).toBeVisible()

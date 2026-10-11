@@ -77,10 +77,12 @@ test('un workflow de tres fases termina igual aunque se reinicie el control plan
 
   await test.step('todas las fases desde el principio; la unión espera', async () => {
     await expect(page.getByRole('link', { name: 'Tres fases E2E' })).toBeVisible()
-    await expect(tree.locator('.tree-stages > li')).toHaveCount(3)
+    await expect(tree.locator('.path > li')).toHaveCount(3)
     await expect(tree.getByText('Espera a izquierda y derecha')).toBeVisible()
-    // Las fases en paralelo ya trabajan: se ven sus herramientas.
-    await expect(tree.getByRole('button', { name: /^Read / }).first()).toBeVisible({
+    // Las fases en paralelo ya trabajan: se ven sus herramientas en la cascada.
+    await page.getByRole('tab', { name: 'Cascada' }).click()
+    const waterfall = page.getByRole('tabpanel', { name: 'Cascada' })
+    await expect(waterfall.getByRole('button', { name: /^Read / }).first()).toBeVisible({
       timeout: 45_000,
     })
   })
@@ -98,10 +100,10 @@ test('un workflow de tres fases termina igual aunque se reinicie el control plan
 
   await test.step('la ejecución termina «Completada», con un agente por fase', async () => {
     const header = page.locator('header.run-header')
-    await expect(header.getByRole('heading', { level: 1 }).getByText('Completada')).toBeVisible({
+    await expect(header.locator('.hero-top').getByText('Completada')).toBeVisible({
       timeout: 120_000,
     })
-    await expect(tree.locator('.tree-stage').filter({ hasText: 'Completada' })).toHaveCount(3)
+    await expect(tree.locator('.step.done')).toHaveCount(3)
     await expect(tree.getByText('Después de izquierda y derecha')).toBeVisible()
     const run = await (await page.request.get(`/api/workflow-runs/${runId}`)).json()
     expect(
