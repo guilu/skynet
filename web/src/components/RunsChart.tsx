@@ -3,10 +3,40 @@ import type { MetricsBucket, RunMetrics } from '../api'
 import { formatCost } from '../format'
 import { bucketLabel, bucketTitle } from './metricsFormat'
 
+const SERIES = ['succeeded', 'failed', 'cancelled', 'other'] as const
+const SERIES_TONE = { succeeded: 'ok', failed: 'bad', cancelled: 'idle', other: 'live' } as const
+
 interface Row extends MetricsBucket {
   label: string
   title: string
   other: number
+}
+
+/** Hueco entre los segmentos de una misma barra. */
+const GAP = 4
+
+/**
+ * Cada segmento de la barra es una pastilla con las esquinas redondeadas; se recorta por arriba
+ * para dejar un hueco con el segmento siguiente, salvo si es tan bajo que desaparecería.
+ */
+function Segment({
+  x = 0,
+  y = 0,
+  width = 0,
+  height = 0,
+  className,
+}: {
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  className?: string
+}) {
+  if (height <= 0 || width <= 0) return null
+  const h = Math.max(height - GAP, Math.min(height, 6))
+  const top = y + (height - h)
+  const r = Math.min(width / 2.6, 12, h / 2)
+  return <rect x={x} y={top} width={width} height={h} rx={r} ry={r} className={className} />
 }
 
 /**
@@ -21,7 +51,7 @@ export default function RunsChart({ data }: { data: RunMetrics }) {
     other: Math.max(0, b.total - b.succeeded - b.failed - b.cancelled),
   }))
   return (
-    <ResponsiveContainer width="100%" height={200}>
+    <ResponsiveContainer width="100%" height={240}>
       <BarChart
         data={rows}
         margin={{ top: 8, right: 8, bottom: 0, left: -16 }}
@@ -56,16 +86,17 @@ export default function RunsChart({ data }: { data: RunMetrics }) {
             )
           }}
         />
-        <Bar dataKey="succeeded" stackId="runs" className="bar-ok" maxBarSize={28} />
-        <Bar dataKey="failed" stackId="runs" className="bar-bad" maxBarSize={28} />
-        <Bar dataKey="cancelled" stackId="runs" className="bar-idle" maxBarSize={28} />
-        <Bar
-          dataKey="other"
-          stackId="runs"
-          className="bar-live"
-          maxBarSize={28}
-          radius={[6, 6, 0, 0]}
-        />
+        {SERIES.map((key) => (
+          <Bar
+            key={key}
+            dataKey={key}
+            stackId="runs"
+            className={`bar-${SERIES_TONE[key]}`}
+            maxBarSize={44}
+            shape={<Segment />}
+            isAnimationActive={false}
+          />
+        ))}
       </BarChart>
     </ResponsiveContainer>
   )

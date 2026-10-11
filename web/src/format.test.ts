@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeEvent, formatDuration, statusTone } from './format'
+import { describeEvent, formatCompact, formatDuration, statusTone } from './format'
 
 describe('describeEvent', () => {
   it('describe las fases que mueve el motor', () => {
@@ -76,5 +76,14 @@ describe('formatDuration', () => {
     expect(formatDuration(45_000)).toBe('45 s')
     expect(formatDuration(185_000)).toBe('3 min 05 s')
     expect(formatDuration(3_720_000)).toBe('1 h 02 min')
+  })
+})
+
+describe('formatCompact', () => {
+  it('acorta las cifras grandes de las tarjetas', () => {
+    expect(formatCompact(null)).toBe('—')
+    expect(formatCompact(1200)).toBe('1200')
+    expect(formatCompact(14_845)).toBe('14,8 k')
+    expect(formatCompact(2_300_000)).toBe('2,3 M')
   })
 })
