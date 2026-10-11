@@ -42,7 +42,8 @@
       "maxBudgetUsd" : 1.5,
       "timeoutMinutes" : 20,
       "model" : "claude-haiku-4-5",
-      "provider" : "claude-code"
+      "provider" : "claude-code",
+      "output" : null
     } ],
     "stages" : [ {
       "id" : "review",
@@ -54,7 +55,8 @@
       "workspace" : "INHERIT",
       "workspaceFrom" : null,
       "command" : null,
-      "children" : [ ]
+      "children" : [ ],
+      "condition" : null
     }, {
       "id" : "fix",
       "name" : null,
@@ -68,7 +70,8 @@
       "workspace" : "INHERIT",
       "workspaceFrom" : null,
       "command" : null,
-      "children" : [ ]
+      "children" : [ ],
+      "condition" : null
     }, {
       "id" : "verify",
       "name" : null,
@@ -82,7 +85,8 @@
       "workspace" : "INHERIT",
       "workspaceFrom" : null,
       "command" : null,
-      "children" : [ ]
+      "children" : [ ],
+      "condition" : null
     } ]
   }
 }

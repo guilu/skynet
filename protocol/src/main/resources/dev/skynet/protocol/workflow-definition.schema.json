@@ -80,6 +80,26 @@
           "description": "Quién ejecuta el agente. Por ahora solo claude-code; codex, gemini y opencode llegan con el hito de proveedores.",
           "enum": ["claude-code", "codex", "gemini", "opencode"]
         },
+        "output": {
+          "description": "Salida estructurada que devuelve el agente: un JSON Schema de objeto con sus campos en properties. Las condiciones los leen como <fase>.<campo>.",
+          "type": "object",
+          "required": ["type", "properties"],
+          "properties": {
+            "type": { "const": "object" },
+            "properties": {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$" },
+              "additionalProperties": {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "enum": ["boolean", "string", "number", "integer", "array", "object"] }
+                }
+              }
+            }
+          }
+        },
         "limits": {
           "description": "Límites de cada invocación, nunca por encima de los del repositorio.",
           "type": "object",
@@ -105,7 +125,7 @@
         "name": { "description": "Nombre para mostrar.", "type": "string", "minLength": 1 },
         "description": { "description": "Qué hace la fase.", "type": "string", "minLength": 1 },
         "type": {
-          "description": "Tipo de fase. Por ahora el motor ejecuta agent, command y parallel.",
+          "description": "Tipo de fase. Por ahora el motor ejecuta agent, command, parallel y conditional.",
           "enum": [
             "agent",
             "command",
@@ -150,7 +170,11 @@
         "artifacts": { "description": "Llega en W4.", "type": "array", "items": { "type": "string" } },
         "retry": { "description": "Llega en W6.", "type": "object" },
         "timeout": { "description": "Llega en W6." },
-        "condition": { "description": "Llega en W3.", "type": "string" },
+        "condition": {
+          "description": "Se evalúa cuando la fase está lista; si es falsa, la fase se omite. Lee <fase>.status, <fase>.exitCode, <fase>.<campo> del output de su agente e inputs.<nombre>, con == != < <= > >= && || ! in. En una fase conditional es lo único que hace.",
+          "type": "string",
+          "minLength": 1
+        },
         "children": {
           "description": "Solo en fases parallel: los agentes que se ejecutan a la vez. La fase termina bien cuando terminan bien todos; si uno falla, se cancelan los demás.",
           "type": "array",

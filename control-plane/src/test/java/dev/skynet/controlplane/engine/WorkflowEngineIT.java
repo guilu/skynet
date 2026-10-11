@@ -23,10 +23,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * El motor: fases en paralelo, dependencias, worktrees heredados, fail-fast, reinicios (W2) y fases
- * {@code command} y {@code parallel} (W3).
+ * {@code command}, {@code parallel}, condiciones y {@code conditional} (W3).
  */
 class WorkflowEngineIT extends IntegrationTest {
 
@@ -134,6 +135,39 @@ class WorkflowEngineIT extends IntegrationTest {
           command: make harden
           dependsOn: [review, fix]
           workspaceFrom: review.seguridad
+      """;
+
+  /** Revisar con salida estructurada y corregir solo si hay hallazgos que bloquean. */
+  static final String FIX =
+      """
+      id: fix
+      version: 1
+      agents:
+        revisor:
+          prompt: Revisa
+          output:
+            type: object
+            properties:
+              hasBlockingFindings:
+                type: boolean
+      stages:
+        - id: review
+          type: agent
+          agent: revisor
+        - id: fix
+          type: agent
+          prompt: Corrige
+          dependsOn: [review]
+          condition: review.hasBlockingFindings
+        - id: limpio
+          type: conditional
+          dependsOn: [review]
+          condition: "!review.hasBlockingFindings"
+        - id: final
+          type: command
+          command: make test
+          dependsOn: [review, "fix?"]
+          workspaceFrom: review
       """;
 
   private String projectId;
@@ -530,6 +564,70 @@ class WorkflowEngineIT extends IntegrationTest {
   }
 
   @Test
+  void aFalseConditionSkipsItsStageAndTheOptionalDependentRuns() {
+    String definitionId = publish(FIX);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    JsonNode review = runner.claim().getFirst();
+    assertThat(review.path("start").path("outputSchema").asString())
+        .contains("\"hasBlockingFindings\"");
+
+    complete(runner, review, "/w/eng/review", Map.of("hasBlockingFindings", false));
+
+    assertThat(stageStatuses(runId))
+        .containsEntry("fix", "SKIPPED")
+        .containsEntry("limpio", "SUCCEEDED");
+    JsonNode skipped =
+        jdbc.sql(
+                "SELECT CAST(payload AS text) FROM event WHERE workflow_run_id = ?::uuid"
+                    + " AND event_type = 'stage.skipped'")
+            .param(runId)
+            .query((rs, i) -> JsonMapper.shared().readTree(rs.getString(1)))
+            .single();
+    assertThat(skipped.path("reason").asString()).isEqualTo("condition-false");
+    assertThat(skipped.path("condition").asString()).isEqualTo("review.hasBlockingFindings");
+    assertThat(skipped.path("values").path("review.hasBlockingFindings").asBoolean(true)).isFalse();
+    JsonNode agent = get("/api/workflow-runs/" + runId).path("stages").get(0).path("agents").get(0);
+    assertThat(agent.path("structuredOutput").path("hasBlockingFindings").isBoolean()).isTrue();
+
+    // final depende de fix?: arranca aunque fix se haya omitido.
+    JsonNode last = runner.claim().getFirst();
+    assertThat(last.path("start").path("command").asString()).isEqualTo("make test");
+    complete(runner, last, "/w/eng/review");
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("SUCCEEDED");
+  }
+
+  @Test
+  void aTrueConditionRunsItsStage() {
+    String definitionId = publish(FIX);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(
+        runner, runner.claim().getFirst(), "/w/eng/review", Map.of("hasBlockingFindings", true));
+
+    assertThat(stageStatuses(runId))
+        .containsEntry("limpio", "SKIPPED")
+        .containsEntry("final", "PENDING");
+    JsonNode fix = runner.claim().getFirst();
+    assertThat(fix.path("start").path("prompt").asString()).isEqualTo("Corrige");
+    assertThat(fix.path("start").path("outputSchema").isNull()).isTrue();
+    assertThat(eventTypes(runId)).contains("stage.condition.evaluated");
+  }
+
+  @Test
+  void anAgentThatDoesNotReturnItsOutputFails() {
+    String definitionId = publish(FIX);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/review");
+
+    JsonNode run = get("/api/workflow-runs/" + runId);
+    assertThat(run.path("status").asString()).isEqualTo("FAILED");
+    assertThat(run.path("stages").get(0).path("agents").get(0).path("error").asString())
+        .isEqualTo("El agente no devolvió la salida estructurada que pide su `output`");
+  }
+
+  @Test
   void aChangeTheControlPlaneDidNotEvaluateIsPickedUpOnceByAWorker() {
     String definitionId = publish(CHAIN);
     String runId = launch(definitionId, Map.of()).path("id").asString();
@@ -636,6 +734,12 @@ class WorkflowEngineIT extends IntegrationTest {
 
   /** El agente prepara su worktree y termina bien. */
   private void complete(Runner runner, JsonNode command, String worktree) {
+    complete(runner, command, worktree, null);
+  }
+
+  /** Igual, devolviendo {@code output} como salida estructurada. */
+  private void complete(
+      Runner runner, JsonNode command, String worktree, Map<String, Object> output) {
     Events events = new Events(UUID.fromString(command.path("agentRunId").asString()));
     events.add(
         AgentEventType.WORKSPACE_READY,
@@ -647,7 +751,12 @@ class WorkflowEngineIT extends IntegrationTest {
             "baseCommit",
             "abc"));
     events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", UUID.randomUUID().toString()));
-    events.add(AgentEventType.RESULT, Map.of("subtype", "success", "isError", false));
+    Map<String, Object> result =
+        new LinkedHashMap<>(Map.of("subtype", "success", "isError", false));
+    if (output != null) {
+      result.put("structuredOutput", output);
+    }
+    events.add(AgentEventType.RESULT, result);
     events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 0));
     runner.send(events);
   }

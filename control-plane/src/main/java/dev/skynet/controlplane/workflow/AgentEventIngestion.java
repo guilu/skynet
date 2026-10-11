@@ -17,6 +17,7 @@ import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Registra los eventos que envía un runner y aplica sus efectos sobre el agente, su fase y la
@@ -167,15 +168,20 @@ public class AgentEventIngestion {
         agent.addUsage(TokenUsage.of(p.get("usage")));
         agent = active(agent, stage, AgentObservableStatus.EXECUTING, "tool-started", now);
       }
-      case RESULT ->
-          agent.recordResult(
-              string(p, "subtype"),
-              Boolean.TRUE.equals(p.get("isError")),
-              integer(p.get("numTurns")),
-              TokenUsage.of(p.get("usage")),
-              decimal(p.get("costUsdCumulative")),
-              previousCumulativeCost(agent),
-              errors(p));
+      case RESULT -> {
+        if (p.get("structuredOutput") != null) {
+          agent.recordStructuredOutput(
+              JsonMapper.shared().writeValueAsString(p.get("structuredOutput")));
+        }
+        agent.recordResult(
+            string(p, "subtype"),
+            Boolean.TRUE.equals(p.get("isError")),
+            integer(p.get("numTurns")),
+            TokenUsage.of(p.get("usage")),
+            decimal(p.get("costUsdCumulative")),
+            previousCumulativeCost(agent),
+            errors(p));
+      }
       case PROCESS_EXITED -> {
         AgentObservableStatus outcome =
             agent.exited(integer(p.get("exitCode")), string(p, "signal"), string(p, "error"));

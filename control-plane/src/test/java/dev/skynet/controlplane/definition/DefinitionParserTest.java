@@ -52,8 +52,18 @@ class DefinitionParserTest {
             maxBudgetUsd: 3
         quality-reviewer:
           prompt: Revisa la calidad de {{workItem.key}}
+          output:
+            type: object
+            properties:
+              hasBlockingFindings:
+                type: boolean
         security-reviewer:
           prompt: Revisa la seguridad de {{workItem.key}}
+          output:
+            type: object
+            properties:
+              hasBlockingFindings:
+                type: boolean
 
       stages:
         - id: specification
@@ -135,8 +145,7 @@ class DefinitionParserTest {
             "El tipo `human-approval` todavía no se ejecuta: llega en W5",
             "El tipo `github-pr` todavía no se ejecuta: llega en S2",
             "`promptTemplate` todavía no se usa: llega en S3",
-            "`retry` todavía no se usa: llega en W6",
-            "`condition` todavía no se usa: llega en W3");
+            "`retry` todavía no se usa: llega en W6");
 
     WorkflowDefinition definition = parsed.definition();
     assertThat(definition.stage("pull-request").orElseThrow().dependsOn())
@@ -290,6 +299,216 @@ class DefinitionParserTest {
             "La fase `hijos-mal` no tiene ningún hijo `seguridad`",
             "`agente` no es una fase `parallel`: `<fase>.<hijo>` solo vale para continuar el"
                 + " worktree de un hijo");
+  }
+
+  /** Revisores con salida estructurada, un comando y una corrección que depende de ellos. */
+  static final String REVIEW =
+      """
+      id: revision
+      inputs:
+        foco:
+          type: string
+        estricto:
+          type: boolean
+      agents:
+        calidad:
+          prompt: Revisa
+          output:
+            type: object
+            properties:
+              hasBlockingFindings:
+                type: boolean
+              score:
+                type: number
+        seguridad:
+          prompt: Revisa
+          output:
+            type: object
+            properties:
+              hasBlockingFindings:
+                type: boolean
+              summary:
+                type: string
+        plano:
+          prompt: Implementa
+      stages:
+        - id: implement
+          type: agent
+          agent: plano
+        - id: tests
+          type: command
+          command: make test
+          dependsOn: [implement]
+        - id: review
+          type: parallel
+          dependsOn: [tests]
+          children:
+            - agent: calidad
+            - agent: seguridad
+        - id: fix
+          type: agent
+          prompt: Corrige
+          dependsOn: [review]
+          condition: %s
+      """;
+
+  @Test
+  void conditionsReadStatusesExitCodesOutputsAndInputs() {
+    for (String condition :
+        List.of(
+            "review.hasBlockingFindings",
+            "review.calidad.score >= 7 && !review.seguridad.hasBlockingFindings",
+            "tests.exitCode == 0 || implement.status == 'SUCCEEDED'",
+            "inputs.estricto && inputs.foco in ['seguridad', 'calidad']",
+            "review.seguridad.summary != null")) {
+      Parsed parsed = parse(REVIEW.formatted("\"" + condition + "\""));
+      assertThat(parsed.validation().problems()).as(condition).isEmpty();
+      assertThat(parsed.validation().publishable()).isTrue();
+      assertThat(parsed.definition().stage("fix").orElseThrow().condition()).isEqualTo(condition);
+    }
+    AgentDefinition calidad =
+        parse(REVIEW.formatted("review.hasBlockingFindings"))
+            .definition()
+            .agent("calidad")
+            .orElseThrow();
+    assertThat(calidad.outputFields())
+        .containsExactly(
+            java.util.Map.entry("hasBlockingFindings", "boolean"),
+            java.util.Map.entry("score", "number"));
+  }
+
+  @Test
+  void eachWrongConditionSaysWhatAndWhere() {
+    assertCondition("review.hasBlockingFindings &&", "La condición termina antes de tiempo", 29);
+    assertCondition("nadie.status == 'X'", "`nadie` no es ninguna fase ni `inputs`", 0);
+    assertCondition(
+        "fix.status == 'X'",
+        "`fix` no es una dependencia de `fix`: una condición solo lee fases que han terminado"
+            + " antes (ponla en `dependsOn`)",
+        0);
+    assertCondition(
+        "implement.exitCode == 0",
+        "Solo las fases `command` tienen `exitCode`; `implement` es `agent`",
+        0);
+    assertCondition(
+        "implement.done",
+        "`implement` no devuelve salida estructurada: declara `output` en su agente para leer"
+            + " `done`",
+        0);
+    assertCondition(
+        "review.calidad.nada", "El `output` del agente `calidad` no tiene el campo `nada`", 0);
+    assertCondition("review.otro.score > 1", "La fase `review` no tiene ningún hijo `otro`", 0);
+    assertCondition(
+        "review.score > 1",
+        "`review.score` junta los hijos y solo vale para campos booleanos (es verdadero si algún"
+            + " hijo devuelve true); `score` es number en `calidad`: usa `review.calidad.score`",
+        0);
+    assertCondition(
+        "review.nada",
+        "Ningún hijo de `review` devuelve `nada`: declara el campo en el `output` de su agente",
+        0);
+    assertCondition(
+        "inputs.rama == 'main'", "`inputs.rama` usa un dato que no está en `inputs`", 0);
+    assertCondition(
+        "tests.exitCode", "La condición tiene que ser verdadera o falsa, y esto es un número", 0);
+    assertCondition("tests.exitCode == 'cero'", "No se puede comparar un número con un texto", 15);
+    assertCondition(
+        "tests",
+        "`tests` no es un dato que pueda leer una condición: usa `<fase>.status`,"
+            + " `<fase>.exitCode`, `<fase>.<campo>` o `inputs.<nombre>`",
+        0);
+  }
+
+  /** {@code index}: carácter de la condición donde está el error. */
+  private static void assertCondition(String condition, String message, int index) {
+    Parsed parsed = parse(REVIEW.formatted("\"" + condition + "\""));
+    assertThat(errors(parsed))
+        .as(condition)
+        .singleElement()
+        .satisfies(
+            p -> {
+              assertThat(p.message()).isEqualTo(message);
+              assertThat(p.path()).isEqualTo("stages.fix.condition");
+              assertThat(p.column()).isEqualTo(index + 17);
+            });
+  }
+
+  @Test
+  void conditionalStagesOnlyEvaluateTheirCondition() {
+    Parsed parsed =
+        parse(
+            """
+            id: ramas
+            stages:
+              - id: tests
+                type: command
+                command: make test
+              - id: si-falla
+                type: conditional
+                dependsOn: [tests]
+                condition: tests.exitCode != 0
+              - id: mal
+                type: conditional
+                prompt: hola
+              - id: avisar
+                type: agent
+                prompt: Avisa
+                dependsOn: [si-falla]
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .containsExactly(
+            "A esta fase le falta `condition`, p. ej. `condition: review.hasBlockingFindings`",
+            "Una fase `conditional` no hace trabajo, solo evalúa su condición: quita `prompt`");
+    assertThat(parsed.definition().stage("si-falla").orElseThrow().type())
+        .isEqualTo(StageType.CONDITIONAL);
+  }
+
+  @Test
+  void anOutputIsAnObjectSchemaWithTypedFields() {
+    Parsed parsed =
+        parse(
+            """
+            id: salidas
+            agents:
+              lista:
+                prompt: a
+                output: [ok]
+              sin-tipo:
+                prompt: a
+                output:
+                  properties:
+                    ok:
+                      type: boolean
+              sin-campos:
+                prompt: a
+                output:
+                  type: object
+              campos-mal:
+                prompt: a
+                output:
+                  type: object
+                  properties:
+                    1mal:
+                      type: boolean
+                    raro:
+                      type: fecha
+            stages:
+              - id: a
+                type: agent
+                agent: lista
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .containsExactly(
+            "`output` debe ser un JSON Schema de un objeto, p. ej. `output: {type: object,"
+                + " properties: {hasBlockingFindings: {type: boolean}}}`",
+            "La salida estructurada tiene que ser un objeto: pon `type: object` y sus campos en"
+                + " `properties`",
+            "A `output` le faltan sus campos en `properties`, p. ej. `output: {type: object,"
+                + " properties: {hasBlockingFindings: {type: boolean}}}`",
+            "`1mal` no vale como campo de `output`: usa letras, números y `_`, empezando por una"
+                + " letra",
+            "El campo `raro` de `output` necesita `type`: boolean, string, number, integer, array,"
+                + " object");
   }
 
   @Test

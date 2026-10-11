@@ -12,7 +12,7 @@ public enum StageType {
   AGENT("agent", null),
   COMMAND("command", null),
   PARALLEL("parallel", null),
-  CONDITIONAL("conditional", "W3"),
+  CONDITIONAL("conditional", null),
   VERIFICATION("verification", "W4"),
   HUMAN_APPROVAL("human-approval", "W5"),
   GITHUB_PR("github-pr", "S2"),
@@ -37,7 +37,7 @@ public enum StageType {
 
   /** Si el motor ya ejecuta fases de este tipo. */
   public boolean executable() {
-    return this == AGENT || this == COMMAND || this == PARALLEL;
+    return this == AGENT || this == COMMAND || this == PARALLEL || this == CONDITIONAL;
   }
 
   /**

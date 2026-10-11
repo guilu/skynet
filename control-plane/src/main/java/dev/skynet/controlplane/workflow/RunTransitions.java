@@ -107,15 +107,18 @@ class RunTransitions {
 
   /** La fase no se ejecutará: una dependencia que necesitaba se ha omitido. */
   StageRun skipStage(StageRun stage, String reason, Instant now) {
+    return skipStage(stage, reason, Map.of(), now);
+  }
+
+  /** La fase no se ejecutará, con más datos en el evento (la condición y lo que leyó). */
+  StageRun skipStage(StageRun stage, String reason, Map<String, ?> details, Instant now) {
     stage.transitionTo(StageStatus.SKIPPED, now);
     StageRun saved = stageRuns.save(stage);
-    append(
-        "stage_run",
-        stage.getId(),
-        "stage.skipped",
-        stage.getWorkflowRunId(),
-        Map.of("stageKey", stage.getStageKey(), "reason", reason),
-        now);
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("stageKey", stage.getStageKey());
+    payload.put("reason", reason);
+    payload.putAll(details);
+    append("stage_run", stage.getId(), "stage.skipped", stage.getWorkflowRunId(), payload, now);
     return saved;
   }
 

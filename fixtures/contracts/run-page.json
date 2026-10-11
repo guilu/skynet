@@ -72,7 +72,8 @@
           "cleanupError" : null,
           "removedAt" : null
         },
-        "childKey" : null
+        "childKey" : null,
+        "structuredOutput" : null
       } ]
     } ]
   } ],

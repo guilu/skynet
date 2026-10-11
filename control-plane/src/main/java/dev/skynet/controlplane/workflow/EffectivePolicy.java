@@ -6,6 +6,7 @@ import dev.skynet.protocol.runner.AgentLimits;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Lo que se le permite a una invocación: lo que pide su agente del YAML, recortado a la política
@@ -14,13 +15,25 @@ import java.util.Map;
  *
  * @param model modelo que pide el agente, o {@code null} para el global ({@code
  *     skynet.agent.model})
+ * @param outputSchema JSON Schema de la salida estructurada que pide el agente ({@code output}), o
+ *     {@code null}
  */
 record EffectivePolicy(
     List<String> allowedTools,
     String permissionMode,
     List<String> environment,
     AgentLimits limits,
-    String model) {
+    String model,
+    String outputSchema) {
+
+  EffectivePolicy(
+      List<String> allowedTools,
+      String permissionMode,
+      List<String> environment,
+      AgentLimits limits,
+      String model) {
+    this(allowedTools, permissionMode, environment, limits, model, null);
+  }
 
   /** Del menos al más permisivo; {@code default} y {@code dontAsk} solo usan lo permitido. */
   private static final Map<String, Integer> PERMISSIVENESS =
@@ -60,12 +73,19 @@ record EffectivePolicy(
                 ? launch.maxBudgetUsd()
                 : min(agent.maxBudgetUsd(), policy.maxBudgetUsd()),
             agentTimeout == null ? launch.timeout() : min(agentTimeout, policy.timeout()));
-    return new EffectivePolicy(tools, mode, policy.environment(), limits, agent.model());
+    return new EffectivePolicy(
+        tools,
+        mode,
+        policy.environment(),
+        limits,
+        agent.model(),
+        agent.output() == null ? null : JsonMapper.shared().writeValueAsString(agent.output()));
   }
 
   /** La misma política con otros límites. */
   EffectivePolicy withLimits(AgentLimits other) {
-    return new EffectivePolicy(allowedTools, permissionMode, environment, other, model);
+    return new EffectivePolicy(
+        allowedTools, permissionMode, environment, other, model, outputSchema);
   }
 
   /** {@code Bash(git:*)} cabe en {@code Bash}; {@code Bash} no cabe en {@code Bash(git:*)}. */

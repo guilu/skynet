@@ -27,9 +27,10 @@ export function stageNote(stage: StageRun, run: Run): string {
     }
     case 'SKIPPED': {
       const cause = deps.filter((d) => !d.optional && status.get(d.stage) === 'SKIPPED')
+      // Sin una dependencia omitida que la arrastre, la omitió su `condition`.
       return cause.length > 0
         ? `Omitida porque se omitió ${joinNames(cause.map((d) => d.stage))}`
-        : ''
+        : 'Omitida porque su condición es falsa'
     }
     case 'CANCELLED': {
       // Sin agentes, la canceló la ejecución: por el fallo de otra fase o a mano.

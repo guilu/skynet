@@ -52,11 +52,12 @@ stages:
 - `permissionMode`: `dontAsk`, `acceptEdits`, `default` o `plan`. Por defecto, el del repositorio.
 - `model`: el modelo del agente, por su nombre (`claude-haiku-4-5`) o su alias (`opus`). Por defecto, el global (`SKYNET_AGENT_MODEL`).
 - `provider`: quién ejecuta el agente. Por ahora solo `claude-code`, que es el valor por defecto; `codex`, `gemini` y `opencode` salen como `UNSUPPORTED` hasta el hito de proveedores.
+- `output`: JSON Schema de un objeto con la salida estructurada que el agente devuelve al terminar, p. ej. `{type: object, properties: {hasBlockingFindings: {type: boolean}}}`. Cada campo lleva `type` (`boolean`, `string`, `number`, `integer`, `array` u `object`). Ver «Condiciones».
 - `limits`: `maxTurns` (1-1000), `maxBudgetUsd` (0,01-1000) y `timeoutMinutes` (1-1440).
 - Al lanzar, lo que pide un agente se recorta a la política del repositorio: solo las herramientas que el repositorio permite (`Bash(git:*)` cabe en `Bash`, al revés no), su modo de permisos solo si no es más permisivo (`plan` < `default`/`dontAsk` < `acceptEdits`) y sus límites rebajados a los del repositorio. Lo que el agente no fija sale de la política y, los límites, de los del lanzamiento.
 
 **`stages[]`:**
-- `id` (obligatorio, único) y `type` (obligatorio): `agent`, `command` o `parallel` (los demás tipos aún no se ejecutan, ver abajo).
+- `id` (obligatorio, único) y `type` (obligatorio): `agent`, `command`, `parallel` o `conditional` (los demás tipos aún no se ejecutan, ver abajo).
 - `agent`: un agente de `agents`. Sin él, la fase usa la política del repositorio.
 - `prompt`: el de la fase; si falta, el del agente. Uno de los dos tiene que existir.
 - `dependsOn`: fases que tienen que terminar antes. Con `?` al final (`plan?`) es opcional: también vale si esa fase se omite. Entre corchetes va entre comillas (`dependsOn: ["plan?"]`), porque YAML lee `?` como otra cosa.
@@ -64,6 +65,7 @@ stages:
 - `workspaceFrom`: obligatorio si la fase depende de varias fases con worktree y no es `isolated-worktree`; dice cuál continúa. Para continuar el worktree de un hijo de una fase `parallel`, `<fase>.<hijo>` (p. ej. `review.seguridad`).
 - `command`: solo en las fases `type: command`, y obligatorio en ellas. Ver abajo.
 - `children`: solo en las fases `type: parallel`, y obligatorio en ellas. Ver abajo.
+- `condition`: la fase solo se ejecuta si es verdadera; si es falsa, se omite. Ver «Condiciones».
 
 **Fases `command`:** ejecutan un comando de shell en lugar de un agente, p. ej. los tests después de implementar:
 
@@ -102,6 +104,45 @@ stages:
 - Termina bien cuando terminan bien todos sus hijos. Si uno falla o se cancela, a sus hermanos se les ordena terminar, las demás fases se cancelan (fail-fast) y la fase falla cuando acaban todos.
 - En la ejecución, cada hijo es un agente de la fase con su `childKey`. Cada uno se verifica, se continúa o se reintenta como cualquier agente, y lo que se le permitirá sale en «Política de cada fase» como `review.calidad`.
 
+**Condiciones.** Una fase con `condition` la evalúa al estar lista; si es falsa, se omite (`stage.skipped` con motivo `condition-false`) y las que dependen de ella solo siguen si la tienen como opcional (`fix?`). Una fase `type: conditional` no hace trabajo: solo evalúa su `condition` (obligatoria) y termina bien si es verdadera o se omite si es falsa; sirve para colgar de ella las fases de una rama.
+
+```yaml
+agents:
+  revisor:
+    prompt: Revisa el cambio y di si hay algo que bloquee
+    output:
+      type: object
+      properties:
+        hasBlockingFindings: {type: boolean}
+
+stages:
+  - id: review
+    type: agent
+    agent: revisor
+    dependsOn: [implement]
+  - id: fix
+    type: agent
+    dependsOn: [review]
+    condition: review.hasBlockingFindings
+  - id: tests
+    type: command
+    command: ./gradlew test
+    dependsOn: [review, "fix?"]
+    workspaceFrom: review
+```
+
+- **Salida estructurada:** un agente con `output` se lanza con `--json-schema` y lo que devuelve se guarda en la invocación (`structuredOutput`). Si termina bien pero no la devuelve, la invocación falla.
+- **Qué se puede leer** (solo de fases de las que depende, directa o indirectamente):
+  - `<fase>.status`: el estado de la fase, p. ej. `review.status == 'SUCCEEDED'`.
+  - `<fase>.exitCode`: el código de salida de una fase `command`.
+  - `<fase>.<campo>`: un campo del `output` del agente de la fase.
+  - `<fase>.<hijo>.<campo>`: el de un hijo de una fase `parallel`.
+  - `<fase>.<campo>` en una fase `parallel`: solo para campos booleanos; es verdadero si algún hijo devuelve `true`.
+  - `inputs.<nombre>`: un dato de entrada.
+- **El lenguaje** es un subconjunto de [CEL](https://cel.dev): `&&`, `||`, `!`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in` con una lista (`review.score in [4, 5]`), paréntesis, números, textos entre comillas, `true`, `false` y `null`. Un dato que no existe (un hijo omitido, un campo que el agente no devolvió) vale `null`, y `null` cuenta como falso.
+- Al publicar se comprueba cada condición: la sintaxis, que cada dato exista y sea de una fase de la que depende, y los tipos (no se compara un número con un texto). Un error dice qué falla y en qué línea y columna.
+- Cada evaluación deja `stage.condition.evaluated` con la condición, los valores leídos y el resultado.
+
 **Variables de los prompts:** `{{workItem.key}}`, `{{workItem.title}}`, `{{workItem.description}}`, `{{workItem.type}}`, `{{workItem.externalRef}}`, `{{project.key}}`, `{{project.name}}` e `{{inputs.<nombre>}}`.
 
 ## Lo que aún no se ejecuta
@@ -110,8 +151,7 @@ El YAML admite ya todo §11 para poder escribir los workflows de la especificaci
 
 | Qué | Hito |
 |---|---|
-| Fase `conditional`; `condition` | W3 |
-| Fase `verification`; `outputSchema` y `artifacts`; `{{stages.<id>...}}` en los prompts | W4 |
+| Fase `verification`; `outputSchema` de fase y `artifacts`; `{{stages.<id>...}}` en los prompts | W4 |
 | Fase `human-approval` | W5 |
 | `retry` y `timeout` | W6 |
 | Fases `github-pr`, `github-check`, `github-merge` y `merge` | S2 |

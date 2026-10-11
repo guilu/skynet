@@ -35,6 +35,9 @@ import tools.jackson.databind.node.ObjectNode;
  *       {@code Write} y {@code Bash} del fixture en el directorio de trabajo (las rutas del fixture
  *       se traducen desde su {@code cwd}). Así una ejecución de prueba cambia archivos y hace
  *       commits.
+ *   <li>{@code FAKE_CLAUDE_STRUCTURED_OUTPUT}: con {@code --json-schema}, el JSON que la línea
+ *       {@code result} devuelve en {@code structured_output}. Sin ella no devuelve ninguno, como un
+ *       agente que no consigue cumplir el schema.
  *   <li>{@code CLAUDE_CONFIG_DIR}: si está definida, guarda cada sesión en {@code
  *       <dir>/projects/<cwd>/<sesión>.jsonl}, como el CLI real, y {@code --resume} falla si no
  *       encuentra la sesión en el directorio de trabajo actual. Sin ella no comprueba nada.
@@ -101,6 +104,10 @@ public final class FakeClaude {
       if ("result".equals(type)) {
         sawResult = true;
         isError = node.path("is_error").asBoolean(false);
+        String structured = env.get("FAKE_CLAUDE_STRUCTURED_OUTPUT");
+        if (inv.jsonSchema() != null && structured != null && !isError) {
+          node.set("structured_output", JSON.readTree(structured));
+        }
       }
       String json = JSON.writeValueAsString(node);
       out.println(json);
@@ -165,6 +172,7 @@ public final class FakeClaude {
       String sessionId,
       String resume,
       boolean forkSession,
+      String jsonSchema,
       List<String> rest) {
 
     static Invocation parse(String[] args) {
@@ -172,6 +180,7 @@ public final class FakeClaude {
       String sessionId = null;
       String resume = null;
       boolean fork = false;
+      String jsonSchema = null;
       List<String> rest = new ArrayList<>();
       for (int i = 0; i < args.length; i++) {
         switch (args[i]) {
@@ -179,10 +188,11 @@ public final class FakeClaude {
           case "--session-id" -> sessionId = args[++i];
           case "--resume", "-r" -> resume = args[++i];
           case "--fork-session" -> fork = true;
+          case "--json-schema" -> jsonSchema = args[++i];
           default -> rest.add(args[i]);
         }
       }
-      return new Invocation(outputFormat, sessionId, resume, fork, List.copyOf(rest));
+      return new Invocation(outputFormat, sessionId, resume, fork, jsonSchema, List.copyOf(rest));
     }
 
     String fixture(Map<String, String> env) {

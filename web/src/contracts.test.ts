@@ -86,6 +86,7 @@ const AGENT_RUN: Keys<AgentRun> = {
   currentTool: true,
   workspace: true,
   childKey: true,
+  structuredOutput: true,
 }
 const WORKSPACE: Keys<Workspace> = {
   id: true,
@@ -329,6 +330,7 @@ const AGENT_DEFINITION: Keys<AgentDefinition> = {
   timeoutMinutes: true,
   model: true,
   provider: true,
+  output: true,
 }
 const STAGE_DEFINITION: Keys<StageDefinition> = {
   id: true,
@@ -341,6 +343,7 @@ const STAGE_DEFINITION: Keys<StageDefinition> = {
   workspaceFrom: true,
   command: true,
   children: true,
+  condition: true,
 }
 
 function expectSummary(summary: WorkflowSummary) {

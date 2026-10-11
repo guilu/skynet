@@ -158,6 +158,7 @@ class ContractIT extends IntegrationTest {
           "agent.process.exited",
           null,
           worktree(),
+          null,
           null);
     }
 
@@ -191,6 +192,7 @@ class ContractIT extends IntegrationTest {
           "agent.tool.started",
           "Read",
           worktree(),
+          null,
           null);
     }
 
@@ -237,6 +239,7 @@ class ContractIT extends IntegrationTest {
           "agent.process.exited",
           null,
           worktree(),
+          null,
           null);
     }
 

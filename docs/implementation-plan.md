@@ -568,6 +568,13 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 - La fase se cierra con el resultado conjunto de sus agentes cuando han terminado todos (`RunTransitions.finishStage`). Un hijo que falla o se cancela deja la fase «fallando» (`StageState.failing`) y el `Planner` aplica el fail-fast: cancela a sus hermanos y las demás fases.
 - `effective-policy` da una entrada por hijo (`review.calidad`); reintentar un hijo usa la política de su agente.
 
+**Implementado (W3-C), condiciones:**
+
+- Salida estructurada mínima, adelantada de W4: `output` (JSON Schema de un objeto en línea) en los agentes del YAML. Llega al runner en `StartAgent.outputSchema`, que lanza `claude` con `--json-schema`; el `structured_output` del resultado se guarda en `agent_run.structured_output` (V15, junto a `output_schema`) y la API lo da como `structuredOutput`. Un agente con `output` que termina sin devolverla falla.
+- Lenguaje de condiciones propio (`Condition`), subconjunto de CEL: `&&`, `||`, `!`, comparaciones, `in` con listas, números, textos, `true`, `false` y `null` (que cuenta como falso). Lee `<fase>.status`, `<fase>.exitCode`, `<fase>.<campo>`, `<fase>.<hijo>.<campo>`, `<parallel>.<campo>` (booleano: algún hijo) e `inputs.<nombre>`. Se valida al publicar (sintaxis, que el dato exista en una fase de la que depende y los tipos) con línea y columna.
+- `condition` en cualquier fase: el motor la evalúa al arrancar la fase (`stage.condition.evaluated` con los valores leídos) y, si es falsa, la omite (`stage.skipped` con motivo `condition-false`). `type: conditional` es una fase sin trabajo que termina bien si su condición es verdadera.
+- La web enseña la condición en el resumen del workflow y explica en el timeline cada evaluación y cada omisión por condición.
+
 ---
 
 ## 8. Fase 3 — SDD completo

@@ -80,6 +80,8 @@ class AgentQueue {
                 limits,
                 now);
     queued.forChild(childKey);
+    String outputSchema = invocation.command() == null ? policy.outputSchema() : null;
+    queued.expectOutput(outputSchema);
     AgentRun agent = agentRuns.save(queued);
     Prompt prompt =
         prompts.save(Prompt.of(agent.getId(), Prompt.ROLE_USER, invocation.prompt(), now));
@@ -102,6 +104,9 @@ class AgentQueue {
     }
     if (invocation.command() != null) {
       spawned.put("command", invocation.command());
+    }
+    if (outputSchema != null) {
+      spawned.put("outputSchema", outputSchema);
     }
     Map<String, Object> limitsPayload = new LinkedHashMap<>();
     limitsPayload.put("maxTurns", limits.maxTurns());
@@ -135,7 +140,8 @@ class AgentQueue {
                 invocation.resume(),
                 policy.environment(),
                 invocation.workspace(),
-                invocation.command()),
+                invocation.command(),
+                outputSchema),
             invocation.runnerId()));
     return agent;
   }
