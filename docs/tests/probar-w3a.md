@@ -96,7 +96,16 @@ Edita el workflow (versión 2) cambiando el comando por `echo "2 tests fallan" &
 
 Cambia el comando por `sleep 120` (versión 3), lanza y, con `check` en marcha, **Cancelar ejecución**. El comando termina enseguida (la fase sale **Cancelada**) y no queda ningún `sleep` vivo (`pgrep -f "sleep 120"` no devuelve nada). Aunque pasen más de 5 minutos, un comando largo no se marca «Sin respuesta».
 
-## 6. Comprobaciones automáticas
+## 6. El editor en el móvil
+
+Abre **Workflows** en el iPhone (Safari) y entra en un borrador:
+
+- El YAML sale en un campo de texto normal (sin números de línea ni colores): se puede mantener pulsado para seleccionar, copiar, cortar y pegar, y el teclado no pone mayúsculas ni corrige palabras.
+- Escribir valida igual que en el ordenador, y tocar un problema de la lista lleva el cursor a su línea.
+- En los artefactos de un agente (diff, log, resultado), el texto también se puede seleccionar y copiar.
+- En el ordenador (o en un iPad con trackpad) sigue el editor completo, con colores y autocompletado.
+
+## 7. Comprobaciones automáticas
 
 - `./gradlew build` (con `SKYNET_TEST_DB_URL`): `DefinitionParserTest` (fases `command`, modelo y proveedor), `WorkflowEngineIT` (comando en el worktree de la fase anterior, espera a la verificación, no se verifica ni se continúa; un comando que falla hace fallar la ejecución) y `AgentExecutorTest` (salida, código, artefactos, worktree heredado, tiempo máximo y cancelación).
-- `cd web && npm test` (contratos `effective-policy` y `workflow-version`).
+- `cd web && npm test` (contratos `effective-policy` y `workflow-version`, y `PlainYamlEditor.test.tsx` para el editor del móvil).
