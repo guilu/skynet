@@ -341,6 +341,36 @@ class AgentExecutorTest {
   }
 
   @Test
+  void childrenOfAParallelStageWorkInCopiesOfTheInheritedWorktree() throws Exception {
+    UUID first = UUID.randomUUID();
+    executor("02-tools").start(TestAgents.start(first, repo.toString(), null));
+    awaitExit(first);
+    Map<String, Object> ready = eventsOf(first).getFirst().payload();
+    Path original = Path.of((String) ready.get("path"));
+    Files.writeString(original.resolve("notas.txt"), "sin confirmar\n");
+    WorkspaceRef copy = new WorkspaceRef(original.toString(), (String) ready.get("branch"), true);
+
+    UUID quality = UUID.randomUUID();
+    UUID security = UUID.randomUUID();
+    executor.start(
+        TestAgents.command(quality, repo.toString(), "echo calidad >> notas.txt", null, copy));
+    executor.start(
+        TestAgents.command(security, repo.toString(), "echo seguridad >> notas.txt", null, copy));
+    assertThat(awaitExit(quality).payload()).containsEntry("exitCode", 0);
+    assertThat(awaitExit(security).payload()).containsEntry("exitCode", 0);
+
+    Path qualityPath = Path.of((String) eventsOf(quality).getFirst().payload().get("path"));
+    Path securityPath = Path.of((String) eventsOf(security).getFirst().payload().get("path"));
+    assertThat(qualityPath).isNotEqualTo(original).isNotEqualTo(securityPath);
+    // Cada hijo parte de los cambios sin confirmar del original y no ve los del otro.
+    assertThat(qualityPath.resolve("notas.txt")).hasContent("sin confirmar\ncalidad");
+    assertThat(securityPath.resolve("notas.txt")).hasContent("sin confirmar\nseguridad");
+    assertThat(original.resolve("notas.txt")).hasContent("sin confirmar");
+    assertThat(eventsOf(quality).getFirst().payload().get("branch"))
+        .isNotEqualTo(ready.get("branch"));
+  }
+
+  @Test
   void forkContinuesACopyOfTheSessionInANewWorktree() throws Exception {
     UUID first = UUID.randomUUID();
     RunnerCommand start = TestAgents.start(first, repo.toString(), null);

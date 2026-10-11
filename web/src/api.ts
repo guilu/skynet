@@ -136,6 +136,8 @@ export interface AgentRun {
   currentTool: string | null
   /** Worktree de la invocación, cuando el runner lo ha preparado. */
   workspace: Workspace | null
+  /** Hijo de una fase `parallel` que ejecuta, o null en las demás fases. */
+  childKey: string | null
 }
 
 export interface Workspace {
@@ -404,6 +406,8 @@ export interface StageDefinition {
   workspaceFrom: string | null
   /** Comando de shell de una fase `command`. */
   command: string | null
+  /** Agentes de una fase `parallel`, que se ejecutan a la vez. */
+  children: { id: string; agent: string; prompt: string | null }[]
 }
 
 /** El workflow leído del YAML. */

@@ -21,7 +21,8 @@ import java.util.Map;
  *       opcional, la fase también se omite.
  *   <li>Una fase lista sin agente se arranca.
  *   <li>Si una fase falla o se cancela, se cancelan las demás (fail-fast) y la ejecución termina
- *       fallida o cancelada cuando todas han terminado.
+ *       fallida o cancelada cuando todas han terminado. Un hijo de una fase {@code parallel} que
+ *       falla o se cancela cuenta igual: se cancelan sus hermanos y las demás fases.
  *   <li>Si todas terminan bien (u omitidas), la ejecución termina bien.
  * </ul>
  */
@@ -112,7 +113,8 @@ final class Planner {
     return ready ? Readiness.READY : Readiness.WAIT;
   }
 
+  /** Si alguna fase ha acabado así, o va a acabar así (un hijo de una {@code parallel}). */
   private static boolean has(Map<String, StageState> stages, StageStatus status) {
-    return stages.values().stream().anyMatch(s -> s.status() == status);
+    return stages.values().stream().anyMatch(s -> s.status() == status || s.ending() == status);
   }
 }

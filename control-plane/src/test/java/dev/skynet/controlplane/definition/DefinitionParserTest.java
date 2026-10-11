@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.skynet.controlplane.definition.DefinitionParser.Expectations;
 import dev.skynet.controlplane.definition.DefinitionParser.Parsed;
 import dev.skynet.controlplane.definition.Problem.Severity;
+import dev.skynet.controlplane.definition.StageDefinition.ChildDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.Dependency;
 import java.math.BigDecimal;
 import java.util.List;
@@ -49,6 +50,10 @@ class DefinitionParserTest {
           tools: [Read, Edit, Write, "Bash(git:*)"]
           limits:
             maxBudgetUsd: 3
+        quality-reviewer:
+          prompt: Revisa la calidad de {{workItem.key}}
+        security-reviewer:
+          prompt: Revisa la seguridad de {{workItem.key}}
 
       stages:
         - id: specification
@@ -128,7 +133,6 @@ class DefinitionParserTest {
     assertThat(messages(parsed, Severity.UNSUPPORTED))
         .contains(
             "El tipo `human-approval` todavía no se ejecuta: llega en W5",
-            "El tipo `parallel` todavía no se ejecuta: llega en W3",
             "El tipo `github-pr` todavía no se ejecuta: llega en S2",
             "`promptTemplate` todavía no se usa: llega en S3",
             "`retry` todavía no se usa: llega en W6",
@@ -171,6 +175,121 @@ class DefinitionParserTest {
     assertThat(tests.type()).isEqualTo(StageType.COMMAND);
     assertThat(tests.command()).isEqualTo("./gradlew test");
     assertThat(tests.agent()).isNull();
+  }
+
+  @Test
+  void parallelStagesRunTheirChildrenAtOnce() {
+    Parsed parsed =
+        parse(
+            """
+            id: revision
+            agents:
+              calidad:
+                prompt: Revisa la calidad
+              seguridad:
+                prompt: Revisa la seguridad
+            stages:
+              - id: implement
+                type: agent
+                prompt: Implementa
+              - id: review
+                type: parallel
+                dependsOn: [implement]
+                children:
+                  - agent: calidad
+                  - agent: seguridad
+                  - id: seguridad-estricta
+                    agent: seguridad
+                    prompt: Revisa la seguridad con lupa
+              - id: fix
+                type: agent
+                prompt: Corrige
+                dependsOn: [review]
+              - id: harden
+                type: command
+                command: make harden
+                dependsOn: [review, fix]
+                workspaceFrom: review.seguridad
+            """);
+    assertThat(parsed.validation().problems()).isEmpty();
+    assertThat(parsed.validation().publishable()).isTrue();
+    StageDefinition review = parsed.definition().stage("review").orElseThrow();
+    assertThat(review.type()).isEqualTo(StageType.PARALLEL);
+    assertThat(review.children())
+        .containsExactly(
+            new ChildDefinition("calidad", "calidad", null),
+            new ChildDefinition("seguridad", "seguridad", null),
+            new ChildDefinition("seguridad-estricta", "seguridad", "Revisa la seguridad con lupa"));
+  }
+
+  @Test
+  void aParallelStageHasChildrenWithAgentsAndNothingElse() {
+    Parsed parsed =
+        parse(
+            """
+            id: revision
+            inputs:
+              rama:
+                type: string
+            agents:
+              calidad:
+                prompt: Revisa
+              mudo:
+                description: sin prompt
+            stages:
+              - id: sin-hijos
+                type: parallel
+              - id: con-agente
+                type: parallel
+                agent: calidad
+                children:
+                  - agent: calidad
+              - id: hijos-mal
+                type: parallel
+                children:
+                  - prompt: hola
+                  - agent: calidad
+                  - agent: calidad
+                  - agent: nadie
+                  - agent: mudo
+                  - id: Mal
+                    agent: calidad
+                  - id: otro
+                    agent: calidad
+                    prompt: "{{inputs.nada}}"
+              - id: agente
+                type: agent
+                prompt: hola
+                children:
+                  - agent: calidad
+              - id: sigue
+                type: agent
+                prompt: hola
+                dependsOn: [hijos-mal, agente]
+                workspaceFrom: hijos-mal.seguridad
+              - id: sigue-agente
+                type: agent
+                prompt: hola
+                dependsOn: [agente]
+                workspaceFrom: agente.calidad
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .containsExactly(
+            "A esta fase le falta `children`, los agentes que se ejecutan a la vez, p. ej."
+                + " `children: [{agent: calidad}, {agent: seguridad}]`",
+            "Una fase `parallel` no tiene agente propio: pon `agent` en cada hijo de `children`",
+            "A este hijo le falta `agent`, el agente de `agents` que lo ejecuta",
+            "Ya hay otro hijo `calidad` en esta fase: ponle a uno un `id` distinto, p. ej."
+                + " `id: calidad-2`",
+            "No hay ningún agente `nadie` en `agents`",
+            "El hijo `mudo` no tiene prompt: escríbelo en el hijo o en el agente `mudo`",
+            "`Mal` no vale como id de hijo: usa minúsculas, números y guiones, empezando por una"
+                + " letra",
+            "`{{inputs.nada}}` usa un dato que no está en `inputs`",
+            "`children` solo vale en fases `type: parallel`; esta es `agent`",
+            "La fase `hijos-mal` no tiene ningún hijo `seguridad`",
+            "`agente` no es una fase `parallel`: `<fase>.<hijo>` solo vale para continuar el"
+                + " worktree de un hijo");
   }
 
   @Test

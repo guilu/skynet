@@ -3,6 +3,8 @@ package dev.skynet.controlplane.workflow;
 import dev.skynet.controlplane.definition.AgentDefinition;
 import dev.skynet.controlplane.definition.PublishedDefinition;
 import dev.skynet.controlplane.definition.StageDefinition;
+import dev.skynet.controlplane.definition.StageDefinition.ChildDefinition;
+import dev.skynet.controlplane.definition.StageType;
 import dev.skynet.controlplane.definition.WorkflowDefinition;
 import dev.skynet.controlplane.definition.WorkflowDefinitions;
 import dev.skynet.controlplane.project.AgentPolicy;
@@ -27,6 +29,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -193,28 +196,46 @@ public class RunService {
   public List<StagePolicy> effectivePolicies(UUID definitionId, UUID repositoryId) {
     WorkflowDefinition definition = definitions.launchable(definitionId).definition();
     AgentPolicy policy = projects.agentPolicy(projects.getRepository(repositoryId));
-    return definition.stages().stream()
-        .map(
-            stage -> {
-              AgentDefinition agent =
-                  stage.agent() == null ? null : definition.agent(stage.agent()).orElse(null);
-              EffectivePolicy effective = EffectivePolicy.of(policy, agent, AgentLimits.none());
-              AgentLimits limits = effective.limits();
-              return new StagePolicy(
-                  stage.id(),
-                  stage.name(),
-                  stage.type(),
-                  stage.agent(),
-                  effective.allowedTools(),
-                  effective.permissionMode(),
-                  effective.environment(),
-                  limits.maxTurns(),
-                  limits.maxBudgetUsd(),
-                  limits.timeout() == null ? null : Math.toIntExact(limits.timeout().toMinutes()),
-                  effective.model(),
-                  stage.command());
-            })
-        .toList();
+    List<StagePolicy> policies = new ArrayList<>();
+    for (StageDefinition stage : definition.stages()) {
+      if (stage.type() == StageType.PARALLEL) {
+        for (ChildDefinition child : stage.children()) {
+          policies.add(
+              stagePolicy(
+                  policy, definition, stage, stage.id() + "." + child.id(), child.agent(), null));
+        }
+      } else {
+        policies.add(
+            stagePolicy(policy, definition, stage, stage.id(), stage.agent(), stage.command()));
+      }
+    }
+    return policies;
+  }
+
+  /** Lo que se permite a una fase o, con {@code id} {@code <fase>.<hijo>}, a un hijo. */
+  private static StagePolicy stagePolicy(
+      AgentPolicy policy,
+      WorkflowDefinition definition,
+      StageDefinition stage,
+      String id,
+      String agentName,
+      String command) {
+    AgentDefinition agent = agentName == null ? null : definition.agent(agentName).orElse(null);
+    EffectivePolicy effective = EffectivePolicy.of(policy, agent, AgentLimits.none());
+    AgentLimits limits = effective.limits();
+    return new StagePolicy(
+        id,
+        stage.name(),
+        stage.type(),
+        agentName,
+        effective.allowedTools(),
+        effective.permissionMode(),
+        effective.environment(),
+        limits.maxTurns(),
+        limits.maxBudgetUsd(),
+        limits.timeout() == null ? null : Math.toIntExact(limits.timeout().toMinutes()),
+        effective.model(),
+        command);
   }
 
   /**
@@ -231,7 +252,11 @@ public class RunService {
     AgentDefinition agent =
         definition
             .stage(stage.getStageKey())
-            .map(StageDefinition::agent)
+            .map(
+                s ->
+                    parent.getChildKey() == null
+                        ? s.agent()
+                        : s.child(parent.getChildKey()).map(ChildDefinition::agent).orElse(null))
             .flatMap(definition::agent)
             .orElse(null);
     return EffectivePolicy.of(policy, agent, limits).withLimits(limits);
@@ -476,7 +501,7 @@ public class RunService {
       agent =
           transitions.agent(
               agent, AgentObservableStatus.CANCELLED, run.getId(), "cancelled-by-user", now);
-      transitions.finishStage(stage, AgentObservableStatus.CANCELLED, now);
+      transitions.finishStage(stage, now);
       publisher.publishEvent(new AgentRunWithdrawn(agent.getId()));
       publisher.publishEvent(new WorkflowRunChanged(run.getId()));
       return agent;
@@ -523,8 +548,8 @@ public class RunService {
 
   /**
    * Cancela una fase que no ha terminado. Sin agente, o con él aún en cola, queda cancelada en el
-   * acto; con el agente en un runner, se le ordena terminar y la fase se cierra cuando acabe.
-   * Devuelve si la fase ha cambiado de estado.
+   * acto; con el agente en un runner, se le ordena terminar y la fase se cierra cuando acabe. En
+   * una fase {@code parallel} vale para todos sus hijos. Devuelve si la fase ha cambiado de estado.
    */
   boolean cancelStage(StageRun stage, String reason, Instant now) {
     if (stage.getStatus().isTerminal()) {
@@ -554,7 +579,13 @@ public class RunService {
     if (running) {
       return false;
     }
-    transitions.advanceStage(stage, StageStatus.CANCELLED, reason, now);
+    // Si un hijo de una fase parallel ya había fallado, la fase falla; si no, se cancela.
+    List<AgentRun> agents = agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
+    if (!agents.isEmpty() && RunTransitions.outcome(agents) == AgentObservableStatus.FAILED) {
+      transitions.finishStage(stage, now);
+    } else {
+      transitions.advanceStage(stage, StageStatus.CANCELLED, reason, now);
+    }
     return true;
   }
 
@@ -603,7 +634,7 @@ public class RunService {
     AgentObservableStatus outcome =
         agent.exited(null, null, "El proceso ya no existe en el runner");
     agent = transitions.advanceAgent(agent, outcome, run.getId(), "process-lost", now);
-    transitions.finishStage(stage, outcome, now);
+    transitions.finishStage(stage, now);
     agentRuns.save(agent);
     publisher.publishEvent(new WorkflowRunChanged(run.getId()));
     return true;

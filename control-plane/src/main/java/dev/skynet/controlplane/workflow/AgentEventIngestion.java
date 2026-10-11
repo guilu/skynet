@@ -180,7 +180,7 @@ public class AgentEventIngestion {
         AgentObservableStatus outcome =
             agent.exited(integer(p.get("exitCode")), string(p, "signal"), string(p, "error"));
         agent = transitions.advanceAgent(agent, outcome, runId, "process-exited", now);
-        transitions.finishStage(stage, outcome, now);
+        transitions.finishStage(stage, now);
         if (agent.getStatus() == AgentObservableStatus.COMPLETED) {
           verifications.afterCompletion(agent, now);
         }

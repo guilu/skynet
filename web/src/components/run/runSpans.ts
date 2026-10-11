@@ -69,7 +69,7 @@ export function runSpans(run: Run, toolsOf: (agentId: string) => ToolCall[]): Sp
       return {
         id: agent.id,
         kind: 'agent',
-        label: agent.provider,
+        label: agent.childKey ?? agent.provider,
         detail: agent.kind,
         status: agent.status,
         tone: statusTone(agent.status),

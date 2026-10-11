@@ -3,6 +3,7 @@ package dev.skynet.controlplane.workflow;
 import dev.skynet.controlplane.definition.AgentDefinition;
 import dev.skynet.controlplane.definition.PublishedDefinition;
 import dev.skynet.controlplane.definition.StageDefinition;
+import dev.skynet.controlplane.definition.StageDefinition.ChildDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.Dependency;
 import dev.skynet.controlplane.definition.StageDefinition.WorkspaceMode;
 import dev.skynet.controlplane.definition.StageType;
@@ -47,8 +48,16 @@ public class RunSteps {
    * Una fase de la ejecución: su último intento y si ya tiene agente.
    *
    * @param hasAgent ya se le ha puesto en cola un agente (no hay que arrancarla otra vez)
+   * @param ending {@code FAILED} o {@code CANCELLED} si la fase sigue en curso pero uno de sus
+   *     agentes (un hijo de una fase {@code parallel}) ya ha fallado o se ha cancelado: así acabará
+   *     la fase en cuanto terminen los demás; {@code null} si no
    */
-  public record StageState(String key, StageStatus status, boolean hasAgent) {}
+  public record StageState(String key, StageStatus status, boolean hasAgent, StageStatus ending) {
+
+    public StageState(String key, StageStatus status, boolean hasAgent) {
+      this(key, status, hasAgent, null);
+    }
+  }
 
   /** Cómo ha ido arrancar una fase. */
   public enum StartOutcome {
@@ -123,10 +132,20 @@ public class RunSteps {
     WorkflowRun run = workflowRuns.findById(runId).orElseThrow();
     Map<String, StageState> stages = new LinkedHashMap<>();
     for (StageRun stage : latestStages(runId).values()) {
-      boolean hasAgent =
-          !agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId())).isEmpty();
+      List<AgentRun> agents =
+          agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
+      List<AgentRun> finished = agents.stream().filter(a -> a.getStatus().isTerminal()).toList();
+      StageStatus ending =
+          stage.getStatus().isTerminal()
+              ? null
+              : switch (RunTransitions.outcome(finished)) {
+                case COMPLETED -> null;
+                case CANCELLED -> StageStatus.CANCELLED;
+                default -> StageStatus.FAILED;
+              };
       stages.put(
-          stage.getStageKey(), new StageState(stage.getStageKey(), stage.getStatus(), hasAgent));
+          stage.getStageKey(),
+          new StageState(stage.getStageKey(), stage.getStatus(), !agents.isEmpty(), ending));
     }
     return Optional.of(new RunState(runId, run.getDefinitionId(), run.getStatus(), stages));
   }
@@ -167,9 +186,10 @@ public class RunSteps {
    * Arranca una fase lista: renderiza su prompt, calcula lo que se le permite a su agente y lo pone
    * en cola, en el worktree de la fase de la que depende si lo continúa. Una fase {@code command}
    * se pone en cola igual, como una invocación que el runner ejecuta con {@code sh -c}, con el
-   * entorno del repositorio y el tiempo máximo de las verificaciones. Si no se puede (el
-   * repositorio o el trabajo se archivaron, el worktree se eliminó, no hay prompt), la fase falla
-   * con el motivo.
+   * entorno del repositorio y el tiempo máximo de las verificaciones. Una fase {@code parallel}
+   * pone en cola un agente por hijo, cada uno en un worktree nuevo: una copia del heredado si lo
+   * hay. Si no se puede (el repositorio o el trabajo se archivaron, el worktree se eliminó, no hay
+   * prompt), la fase falla con el motivo.
    */
   public StartOutcome start(UUID runId, String stageKey, PublishedDefinition published) {
     Instant now = time.now();
@@ -189,27 +209,64 @@ public class RunSteps {
       CodeRepository repository = projects.getRepository(repositoryOf(run));
       workItems.requireActive(workItem);
       projects.requireActive(repository);
-      Invocation invocation =
-          stageDefinition.type() == StageType.COMMAND
-              ? commandInvocation(stageDefinition, repository)
-              : agentInvocation(run, stageDefinition, definition, workItem, repository);
-      String source = worktreeSource(stageDefinition, definition, latestStages(runId));
+      WorkspaceView source = sourceWorkspace(runId, stageDefinition, definition);
       if (source != null) {
-        WorkspaceView workspace = worktreeOf(runId, source);
-        workspaces.lock(workspace.id());
-        workspace = workspaces.find(workspace.id()).orElseThrow();
-        RunService.requireUsable(workspace);
-        if (workspaces.hasLiveInvocation(workspace.id())) {
+        workspaces.lock(source.id());
+        source = workspaces.find(source.id()).orElseThrow();
+        RunService.requireUsable(source);
+        if (workspaces.hasLiveInvocation(source.id())) {
           return StartOutcome.DEFERRED;
         }
-        Invocation inWorkspace =
-            Invocation.inWorkspace(invocation.prompt(), invocation.policy(), workspace);
-        invocation =
-            invocation.command() == null
-                ? inWorkspace
-                : inWorkspace.asCommand(invocation.command());
       }
-      agentQueue.queue(run, stage, workItem, repository, invocation, now);
+      Map<String, Invocation> invocations = new LinkedHashMap<>();
+      switch (stageDefinition.type()) {
+        case COMMAND -> {
+          Invocation command = commandInvocation(stageDefinition, repository);
+          invocations.put(
+              null,
+              source == null
+                  ? command
+                  : Invocation.inWorkspace(command.prompt(), command.policy(), source)
+                      .asCommand(command.command()));
+        }
+        case PARALLEL -> {
+          for (ChildDefinition child : stageDefinition.children()) {
+            Invocation invocation =
+                agentInvocation(
+                    run,
+                    "El hijo " + child.id() + " de la fase " + stageKey,
+                    child.agent(),
+                    child.prompt(),
+                    definition,
+                    workItem,
+                    repository);
+            invocations.put(
+                child.id(),
+                source == null
+                    ? invocation
+                    : Invocation.inCopyOf(invocation.prompt(), invocation.policy(), source));
+          }
+        }
+        default -> {
+          Invocation invocation =
+              agentInvocation(
+                  run,
+                  "La fase " + stageKey,
+                  stageDefinition.agent(),
+                  stageDefinition.prompt(),
+                  definition,
+                  workItem,
+                  repository);
+          invocations.put(
+              null,
+              source == null
+                  ? invocation
+                  : Invocation.inWorkspace(invocation.prompt(), invocation.policy(), source));
+        }
+      }
+      invocations.forEach(
+          (child, invocation) ->
+              agentQueue.queue(run, stage, workItem, repository, invocation, child, now));
       return StartOutcome.STARTED;
     } catch (ConflictException e) {
       fail(stage, e.getMessage(), now);
@@ -217,29 +274,28 @@ public class RunSteps {
     }
   }
 
-  /** El agente de una fase {@code agent}, con su prompt y lo que se le permite. */
+  /**
+   * Un agente con su prompt (el propio o, si no tiene, el de {@code agentName}) y lo que se le
+   * permite; {@code who} lo nombra en el error si se queda sin prompt.
+   */
   private Invocation agentInvocation(
       WorkflowRun run,
-      StageDefinition stageDefinition,
+      String who,
+      String agentName,
+      String promptTemplate,
       WorkflowDefinition definition,
       WorkItem workItem,
       CodeRepository repository) {
-    String stageKey = stageDefinition.id();
-    AgentDefinition agent =
-        stageDefinition.agent() == null
-            ? null
-            : definition.agent(stageDefinition.agent()).orElseThrow();
+    AgentDefinition agent = agentName == null ? null : definition.agent(agentName).orElseThrow();
     String template =
-        stageDefinition.prompt() != null
-            ? stageDefinition.prompt()
-            : agent == null ? null : agent.prompt();
+        promptTemplate != null ? promptTemplate : agent == null ? null : agent.prompt();
     String prompt =
         template == null
             ? ""
             : new PromptRenderer(workItem, projects.get(workItem.getProjectId()), inputsOf(run))
                 .render(template);
     if (prompt.isBlank()) {
-      throw new ConflictException("La fase " + stageKey + " se queda sin prompt");
+      throw new ConflictException(who + " se queda sin prompt");
     }
     EffectivePolicy policy =
         EffectivePolicy.of(projects.agentPolicy(repository), agent, launchLimitsOf(run));
@@ -272,9 +328,19 @@ public class RunSteps {
   }
 
   /**
+   * De dónde sale el worktree de la fase {@code stage}, o {@code null} para uno nuevo: de la fase
+   * (o de {@code <fase>.<hijo>}) que devuelve {@link #worktreeSource}.
+   */
+  private WorkspaceView sourceWorkspace(
+      UUID runId, StageDefinition stage, WorkflowDefinition definition) {
+    String source = worktreeSource(stage, definition, latestStages(runId));
+    return source == null ? null : worktreeOf(runId, source, definition);
+  }
+
+  /**
    * Fase cuyo worktree continúa {@code stage}, o {@code null} para uno nuevo: la de {@code
-   * workspaceFrom} o, si no, su única dependencia con worktree (agente o comando). Una dependencia
-   * opcional que se omitió no deja worktree.
+   * workspaceFrom} (que puede ser un hijo, {@code <fase>.<hijo>}) o, si no, su única dependencia
+   * con worktree. Una dependencia opcional que se omitió no deja worktree.
    */
   static String worktreeSource(
       StageDefinition stage, WorkflowDefinition definition, Map<String, StageRun> stages) {
@@ -290,22 +356,39 @@ public class RunSteps {
               .toList();
       source = agentDependencies.size() == 1 ? agentDependencies.getFirst() : null;
     }
-    StageRun run = source == null ? null : stages.get(source);
+    StageRun run = source == null ? null : stages.get(stageOf(source));
     return run != null && run.getStatus() == StageStatus.SUCCEEDED ? source : null;
   }
 
-  /** Worktree del último agente de la fase {@code stageKey}. */
-  private WorkspaceView worktreeOf(UUID runId, String stageKey) {
-    StageRun source = stage(runId, stageKey);
-    return agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(source.getId())).stream()
+  /** La fase de {@code source}: {@code review} en {@code review.security}. */
+  private static String stageOf(String source) {
+    int dot = source.indexOf('.');
+    return dot < 0 ? source : source.substring(0, dot);
+  }
+
+  /**
+   * Worktree que deja {@code source}: el del último agente de una fase, el de un hijo ({@code
+   * <fase>.<hijo>}) o, en una fase {@code parallel}, el que heredó (sus hijos trabajan en copias);
+   * {@code null} si la {@code parallel} no heredó ninguno.
+   */
+  private WorkspaceView worktreeOf(UUID runId, String source, WorkflowDefinition definition) {
+    String stageKey = stageOf(source);
+    String child = stageKey.equals(source) ? null : source.substring(stageKey.length() + 1);
+    StageDefinition stageDefinition = definition.stage(stageKey).orElseThrow();
+    if (child == null && stageDefinition.type() == StageType.PARALLEL) {
+      String inherited = worktreeSource(stageDefinition, definition, latestStages(runId));
+      return inherited == null ? null : worktreeOf(runId, inherited, definition);
+    }
+    StageRun stage = stage(runId, stageKey);
+    return agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId())).stream()
+        .filter(a -> child == null || child.equals(a.getChildKey()))
         .map(AgentRun::getWorkspaceId)
         .filter(java.util.Objects::nonNull)
         .reduce((first, second) -> second)
         .flatMap(workspaces::find)
         .orElseThrow(
             () ->
-                new ConflictException(
-                    "La fase " + stageKey + " no dejó un worktree que continuar"));
+                new ConflictException("La fase " + source + " no dejó un worktree que continuar"));
   }
 
   /** Último intento de cada fase, en el orden en que se crearon. */

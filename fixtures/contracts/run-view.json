@@ -70,7 +70,8 @@
         "cleanupRequestedAt" : null,
         "cleanupError" : null,
         "removedAt" : null
-      }
+      },
+      "childKey" : null
     } ]
   } ]
 }

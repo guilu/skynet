@@ -7,6 +7,7 @@ import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -135,16 +136,39 @@ class RunTransitions {
   }
 
   /**
-   * Cierra la fase con el resultado de su agente. La ejecución la cierra el motor, que decide qué
-   * viene después: quien llama publica {@link WorkflowRunChanged}.
+   * Cierra la fase con el resultado de sus agentes, cuando todos han terminado: bien si todos
+   * terminan bien; si no, fallida si alguno falla y cancelada si alguno se cancela. Con algún
+   * agente aún en curso (un hijo de una fase {@code parallel}) la deja como está. La ejecución la
+   * cierra el motor, que decide qué viene después: quien llama publica {@link WorkflowRunChanged}.
    */
-  StageRun finishStage(StageRun stage, AgentObservableStatus outcome, Instant now) {
+  StageRun finishStage(StageRun stage, Instant now) {
+    List<AgentRun> agents = agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
+    if (agents.isEmpty() || agents.stream().anyMatch(a -> !a.getStatus().isTerminal())) {
+      return stage;
+    }
+    AgentObservableStatus outcome = outcome(agents);
     String reason = "agent-" + outcome.name().toLowerCase(java.util.Locale.ROOT);
     return switch (outcome) {
       case COMPLETED -> advanceStage(stage, StageStatus.SUCCEEDED, reason, now);
       case CANCELLED -> advanceStage(stage, StageStatus.CANCELLED, reason, now);
       default -> advanceStage(stage, StageStatus.FAILED, reason, now);
     };
+  }
+
+  /** Resultado conjunto de unos agentes terminados: el peor de ellos. */
+  static AgentObservableStatus outcome(List<AgentRun> agents) {
+    AgentObservableStatus outcome = AgentObservableStatus.COMPLETED;
+    for (AgentRun agent : agents) {
+      AgentObservableStatus status = agent.getStatus();
+      if (status == AgentObservableStatus.CANCELLED) {
+        if (outcome == AgentObservableStatus.COMPLETED) {
+          outcome = status;
+        }
+      } else if (status != AgentObservableStatus.COMPLETED) {
+        return status;
+      }
+    }
+    return outcome;
   }
 
   void append(

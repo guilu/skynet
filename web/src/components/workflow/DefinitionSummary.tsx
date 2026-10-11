@@ -1,9 +1,14 @@
 import type { WorkflowModel } from '../../api'
 
 const WORKSPACE = { INHERIT: 'Continúa el de su dependencia', ISOLATED: 'Uno nuevo' } as const
+const WITH_WORKSPACE = ['agent', 'command', 'parallel']
 
 function workspaceLabel(stage: WorkflowModel['stages'][number]): string {
-  if (stage.type !== 'agent' && stage.type !== 'command') return '—'
+  if (!WITH_WORKSPACE.includes(stage.type)) return '—'
+  if (stage.type === 'parallel') {
+    if (stage.workspace === 'ISOLATED' || stage.dependsOn.length === 0) return 'Uno nuevo por hijo'
+    return `Una copia por hijo del de ${stage.workspaceFrom ?? 'su dependencia'}`
+  }
   if (stage.workspaceFrom) return `Continúa el de ${stage.workspaceFrom}`
   if (stage.workspace === 'INHERIT' && stage.dependsOn.length === 0) return 'Uno nuevo'
   return WORKSPACE[stage.workspace]
@@ -31,11 +36,15 @@ export function DefinitionSummary({ definition }: { definition: WorkflowModel })
                     <code>{s.command}</code>
                   </>
                 )}
+                {s.type === 'parallel' &&
+                  ` · A la vez: ${s.children
+                    .map((c) => (c.id === c.agent ? c.id : `${c.id} (${c.agent})`))
+                    .join(', ')}`}
                 {s.dependsOn.length > 0 &&
                   ` · Depende de ${s.dependsOn
                     .map((d) => (d.optional ? `${d.stage} (opcional)` : d.stage))
                     .join(', ')}`}
-                {(s.type === 'agent' || s.type === 'command') &&
+                {WITH_WORKSPACE.includes(s.type) &&
                   ` · Worktree: ${workspaceLabel(s).toLowerCase()}`}
               </span>
             </li>
