@@ -1,20 +1,26 @@
 package dev.skynet.runner.provider.gemini;
 
+import static dev.skynet.runner.provider.EventJson.event;
+import static dev.skynet.runner.provider.EventJson.invalid;
+import static dev.skynet.runner.provider.EventJson.object;
+import static dev.skynet.runner.provider.EventJson.payload;
+import static dev.skynet.runner.provider.EventJson.raw;
+import static dev.skynet.runner.provider.EventJson.text;
+import static dev.skynet.runner.provider.EventJson.truncate;
+import static dev.skynet.runner.provider.EventJson.value;
+
 import dev.skynet.protocol.AgentEventType;
+import dev.skynet.runner.provider.EventJson.Payload;
 import dev.skynet.runner.provider.EventParser;
 import dev.skynet.runner.provider.ModelPrices;
 import dev.skynet.runner.provider.ParsedEvent;
 import dev.skynet.runner.provider.StructuredOutput;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Traduce el JSONL de {@code gemini --output-format stream-json} a eventos normalizados (ver {@code
@@ -30,8 +36,6 @@ public final class GeminiEventParser implements EventParser {
 
   /** Herramientas que escriben un fichero ({@code file_path} en sus parámetros). */
   static final Set<String> FILE_TOOLS = Set.of("write_file", "replace");
-
-  private static final ObjectMapper JSON = JsonMapper.builder().build();
 
   private final String model;
   private final StructuredOutput structured;
@@ -63,14 +67,9 @@ public final class GeminiEventParser implements EventParser {
     if (line == null || line.isBlank()) {
       return List.of();
     }
-    JsonNode node;
-    try {
-      node = JSON.readTree(line);
-    } catch (JacksonException e) {
-      return List.of(raw(Map.of("line", line, "error", "invalid_json")));
-    }
-    if (!node.isObject()) {
-      return List.of(raw(Map.of("line", line, "error", "not_an_object")));
+    JsonNode node = object(line);
+    if (node == null) {
+      return List.of(invalid(line));
     }
     String type = text(node, "type");
     if ("message".equals(type)) {
@@ -146,7 +145,7 @@ public final class GeminiEventParser implements EventParser {
             .put("toolUseId", id)
             .put("name", toolName(rawName))
             .put("isError", error)
-            .put("output", truncate(output));
+            .put("output", truncate(output, MAX_TOOL_OUTPUT));
     if (output != null && output.length() > MAX_TOOL_OUTPUT) {
       completed.put("outputTruncated", true);
     }
@@ -213,50 +212,5 @@ public final class GeminiEventParser implements EventParser {
       payload.put("structuredOutput", read.value());
     }
     return event(AgentEventType.RESULT, payload);
-  }
-
-  private static String truncate(String s) {
-    return s == null || s.length() <= MAX_TOOL_OUTPUT ? s : s.substring(0, MAX_TOOL_OUTPUT);
-  }
-
-  private static ParsedEvent raw(JsonNode node) {
-    return raw(Map.of("line", value(node)));
-  }
-
-  private static ParsedEvent raw(Map<String, Object> payload) {
-    return new ParsedEvent(AgentEventType.RAW, payload);
-  }
-
-  private static ParsedEvent event(AgentEventType type, Payload payload) {
-    return new ParsedEvent(type, payload.map());
-  }
-
-  private static String text(JsonNode node, String field) {
-    JsonNode value = node == null ? null : node.get(field);
-    return value == null || value.isNull() ? null : value.asString();
-  }
-
-  private static Object value(JsonNode node) {
-    return node == null || node.isNull() ? null : JSON.treeToValue(node, Object.class);
-  }
-
-  private static Payload payload() {
-    return new Payload();
-  }
-
-  /** Mapa ordenado que ignora los valores {@code null}. */
-  private static final class Payload {
-    private final Map<String, Object> map = new LinkedHashMap<>();
-
-    Payload put(String key, Object value) {
-      if (value != null) {
-        map.put(key, value);
-      }
-      return this;
-    }
-
-    Map<String, Object> map() {
-      return map;
-    }
   }
 }

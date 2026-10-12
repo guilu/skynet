@@ -1,12 +1,9 @@
 package dev.skynet.fakeclaude;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -55,11 +52,7 @@ public final class FakeGemini {
 
   public static void main(String[] args) throws Exception {
     int code = run(args, System.getenv(), Path.of("").toAbsolutePath(), System.out, System.err);
-    if (code == FakeClaude.EXIT_KILLED
-        && !"false".equalsIgnoreCase(System.getenv().getOrDefault("FAKE_GEMINI_HANG", "true"))) {
-      Thread.currentThread().join(); // Simula una ejecución larga hasta recibir SIGTERM.
-    }
-    System.exit(code);
+    FakeCli.exit(code, "FAKE_GEMINI_HANG");
   }
 
   static int run(String[] args, Map<String, String> env, Path cwd, PrintStream out, PrintStream err)
@@ -100,9 +93,12 @@ public final class FakeGemini {
             ? env.getOrDefault("FAKE_GEMINI_FIXTURE", DEFAULT_FIXTURE)
             : env.getOrDefault("FAKE_GEMINI_RESUME_FIXTURE", RESUME_FIXTURE);
     long delayMs = Long.parseLong(env.getOrDefault("FAKE_GEMINI_DELAY_MS", "10"));
-    String structured = inv.prompt().contains("```json") ? structuredOutput(env, cwd) : null;
+    String structured =
+        inv.prompt().contains("```json")
+            ? FakeCli.structuredOutput(env, "FAKE_GEMINI_STRUCTURED_OUTPUT", cwd)
+            : null;
     int code = FakeClaude.EXIT_KILLED;
-    for (String line : loadFixture(fixture)) {
+    for (String line : FakeCli.loadFixture("gemini", fixture)) {
       if (line.isBlank()) {
         continue;
       }
@@ -120,7 +116,8 @@ public final class FakeGemini {
         }
         case "result" -> {
           if (structured != null && "success".equals(node.path("status").asString(""))) {
-            emit(out, sessionFile, assistant(node, "\n```json\n" + structured + "\n```"), delayMs);
+            FakeCli.emit(
+                out, sessionFile, assistant(node, "\n```json\n" + structured + "\n```"), delayMs);
           }
           if (inv.model() != null) {
             renameModels(node, inv.model());
@@ -129,40 +126,9 @@ public final class FakeGemini {
         }
         default -> {}
       }
-      emit(out, sessionFile, JSON.writeValueAsString(node), delayMs);
+      FakeCli.emit(out, sessionFile, JSON.writeValueAsString(node), delayMs);
     }
     return code;
-  }
-
-  static List<String> loadFixture(String fixture) throws IOException {
-    Path path = Path.of(fixture);
-    if (Files.isRegularFile(path)) {
-      return Files.readAllLines(path, StandardCharsets.UTF_8);
-    }
-    try (InputStream in = FakeGemini.class.getResourceAsStream("/gemini/" + fixture + ".jsonl")) {
-      if (in == null) {
-        throw new IllegalArgumentException("Fixture no encontrado: " + fixture);
-      }
-      return new String(in.readAllBytes(), StandardCharsets.UTF_8).lines().toList();
-    }
-  }
-
-  private static void emit(PrintStream out, Path sessionFile, String json, long delayMs)
-      throws IOException, InterruptedException {
-    out.println(json);
-    out.flush();
-    if (sessionFile != null) {
-      Files.createDirectories(sessionFile.getParent());
-      Files.writeString(
-          sessionFile,
-          json + "\n",
-          StandardCharsets.UTF_8,
-          StandardOpenOption.CREATE,
-          StandardOpenOption.APPEND);
-    }
-    if (delayMs > 0) {
-      Thread.sleep(delayMs);
-    }
   }
 
   private static String assistant(JsonNode like, String content) {
@@ -207,17 +173,6 @@ public final class FakeGemini {
         .resolve(folder)
         .resolve("chats")
         .resolve(session + ".jsonl");
-  }
-
-  static String structuredOutput(Map<String, String> env, Path cwd) throws IOException {
-    String value = env.get("FAKE_GEMINI_STRUCTURED_OUTPUT");
-    if (value == null || !value.startsWith("@")) {
-      return value;
-    }
-    Path file = cwd.resolve(value.substring(1));
-    return Files.isRegularFile(file)
-        ? Files.readString(file, StandardCharsets.UTF_8).strip()
-        : null;
   }
 
   /** Lo que importa de {@code gemini [opciones]}. */
