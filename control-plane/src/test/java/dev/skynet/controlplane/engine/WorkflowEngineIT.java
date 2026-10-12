@@ -7,6 +7,7 @@ import dev.skynet.controlplane.support.IntegrationTest;
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.runner.EventBatch;
+import dev.skynet.protocol.runner.ProviderInfo;
 import dev.skynet.protocol.runner.RunnerRegistration;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -168,6 +169,28 @@ class WorkflowEngineIT extends IntegrationTest {
           command: make test
           dependsOn: [review, "fix?"]
           workspaceFrom: review
+      """;
+
+  /** Un agente de Codex con modelo, modo de permisos y salida estructurada propios. */
+  static final String CODEX =
+      """
+      id: codex
+      version: 1
+      agents:
+        worker:
+          provider: codex
+          model: gpt-5.5
+          permissionMode: plan
+          prompt: Arregla add()
+          output:
+            type: object
+            properties:
+              fixed:
+                type: boolean
+      stages:
+        - id: fix
+          type: agent
+          agent: worker
       """;
 
   private String projectId;
@@ -564,6 +587,58 @@ class WorkflowEngineIT extends IntegrationTest {
   }
 
   @Test
+  void messagesAndForksKeepTheAgentOfTheWorkflowAlongTheWholeSession() {
+    String definitionId = publish(CODEX);
+    Runner runner = register("servidor", List.of(new ProviderInfo("codex", "0.160.0")));
+    launch(definitionId, Map.of());
+    JsonNode start = runner.claim().getFirst();
+    assertKeepsTheAgent(start);
+    String agentId = start.path("agentRunId").asString();
+    String session = UUID.randomUUID().toString();
+    complete(runner, start, "/w/eng/fix", Map.of("fixed", true), session);
+
+    // Un mensaje continúa la sesión con el agente del YAML.
+    String resumedRun =
+        post("/api/agent-runs/" + agentId + "/messages", Map.of("text", "Añade subtract()"))
+            .path("id")
+            .asString();
+    JsonNode resume = runner.claim().getFirst();
+    assertThat(resume.path("type").asString()).isEqualTo("RESUME");
+    assertKeepsTheAgent(resume);
+    assertThat(resume.path("start").path("sessionId").asString()).isEqualTo(session);
+    assertThat(resume.path("start").path("resume").path("fork").asBoolean()).isFalse();
+    complete(runner, resume, "/w/eng/fix", Map.of("fixed", true), session);
+    assertThat(get("/api/workflow-runs/" + resumedRun).path("status").asString())
+        .isEqualTo("SUCCEEDED");
+
+    // Bifurcar el lanzamiento parte de la última continuación, que se ejecutó aparte: el agente
+    // sigue siendo el del YAML, no el adhoc de la continuación.
+    post("/api/agent-runs/" + agentId + "/fork", Map.of("text", "Añade multiply()"));
+    JsonNode fork = runner.claim().getFirst();
+    assertThat(fork.path("type").asString()).isEqualTo("RESUME");
+    assertKeepsTheAgent(fork);
+    assertThat(fork.path("start").path("sessionId").asString()).isNotEqualTo(session);
+    assertThat(fork.path("start").path("resume").path("fork").asBoolean()).isTrue();
+    assertThat(fork.path("start").path("resume").path("sessionId").asString()).isEqualTo(session);
+
+    // Y un mensaje a la rama bifurcada, también.
+    String branch = UUID.randomUUID().toString();
+    complete(runner, fork, "/w/eng/fork", Map.of("fixed", true), branch);
+    post(
+        "/api/agent-runs/" + fork.path("agentRunId").asString() + "/messages",
+        Map.of("text", "Y documenta"));
+    assertKeepsTheAgent(runner.claim().getFirst());
+  }
+
+  private static void assertKeepsTheAgent(JsonNode command) {
+    JsonNode start = command.path("start");
+    assertThat(start.path("provider").asString()).isEqualTo("codex");
+    assertThat(start.path("model").asString()).isEqualTo("gpt-5.5");
+    assertThat(start.path("permissionMode").asString()).isEqualTo("plan");
+    assertThat(start.path("outputSchema").asString()).contains("\"fixed\"");
+  }
+
+  @Test
   void aFalseConditionSkipsItsStageAndTheOptionalDependentRuns() {
     String definitionId = publish(FIX);
     Runner runner = register("laptop");
@@ -740,6 +815,16 @@ class WorkflowEngineIT extends IntegrationTest {
   /** Igual, devolviendo {@code output} como salida estructurada. */
   private void complete(
       Runner runner, JsonNode command, String worktree, Map<String, Object> output) {
+    complete(runner, command, worktree, output, UUID.randomUUID().toString());
+  }
+
+  /** Igual, con la sesión que confirma el proveedor. */
+  private void complete(
+      Runner runner,
+      JsonNode command,
+      String worktree,
+      Map<String, Object> output,
+      String session) {
     Events events = new Events(UUID.fromString(command.path("agentRunId").asString()));
     events.add(
         AgentEventType.WORKSPACE_READY,
@@ -750,7 +835,7 @@ class WorkflowEngineIT extends IntegrationTest {
             "skynet/" + worktree.substring(worktree.lastIndexOf('/') + 1),
             "baseCommit",
             "abc"));
-    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", UUID.randomUUID().toString()));
+    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", session));
     Map<String, Object> result =
         new LinkedHashMap<>(Map.of("subtype", "success", "isError", false));
     if (output != null) {
@@ -834,10 +919,17 @@ class WorkflowEngineIT extends IntegrationTest {
   }
 
   private Runner register(String name) {
+    return register(name, null);
+  }
+
+  /** Runner con esos proveedores ({@code null}: solo Claude Code). */
+  private Runner register(String name, List<ProviderInfo> providers) {
     JsonNode registered =
         http.post()
             .uri("/api/runner/register")
-            .body(new RunnerRegistration(name, RUNNER_REGISTRATION_TOKEN, "dev", 4, "2.1.288"))
+            .body(
+                new RunnerRegistration(
+                    name, RUNNER_REGISTRATION_TOKEN, "dev", 4, "2.1.288", providers))
             .retrieve()
             .body(JsonNode.class);
     return new Runner(registered.path("token").asString());

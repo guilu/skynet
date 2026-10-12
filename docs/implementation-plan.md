@@ -526,6 +526,14 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito PV (proveedores), planificado el 2026-10-12:** PV-A interfaz `AgentProvider` y reparto por proveedor, PV-B Codex, PV-C Gemini, PV-D web y E2E con revisores de los tres proveedores.
 
+**Implementado (PV-B), Codex:**
+
+- `runner/provider/codex`: `CodexProvider` lanza `codex exec --json` (arranque, `exec resume <thread>` y `exec fork <thread>`), traduce `permissionMode` a sandbox (`plan` → `read-only`, `bypassPermissions` → sin sandbox, el resto → `workspace-write`) y escribe el `output` del agente en modo estricto (`additionalProperties: false`, todo `required`) para `--output-schema`. `CodexEventParser` normaliza los eventos y `CodexCostMeter` estima el coste con la tabla de precios, que ahora incluye los `gpt-5*` de OpenAI. El detalle está en [`codex-exec-json.md`](codex-exec-json.md); los fixtures están escritos a mano a partir del código de Codex, no grabados, a falta de una cuenta de OpenAI.
+- `AgentEnvironment` reúne el filtrado del entorno de todos los proveedores: variables básicas, las del proveedor y `SKYNET_AGENT_ENV`. `SKYNET_CODEX_BIN` (por defecto `codex`).
+- Control plane: `provider: codex` deja de ser `UNSUPPORTED`; con Codex, `tools` y `limits.maxTurns` se ignoran con aviso. `RESULT.costUsd` (coste de la invocación) se acepta además de `costUsdCumulative`: el acumulado es el de la predecesora más el de la invocación.
+- Prueba real (2026-10-12): Claude Code y Codex reales lanzan, continúan y bifurcan. Se corrigió que una continuación de una continuación (p. ej. bifurcar tras enviar un mensaje) perdía el modelo, el modo de permisos y el `output` del agente del YAML: las continuaciones se ejecutan en ejecuciones `adhoc`, y ahora la política se resuelve desde el lanzamiento original del linaje.
+- fake-codex: segundo lanzador del módulo `tools/fake-claude` (`bin/fake-codex`), en vez de renombrarlo a `fake-agent`: así no cambian las rutas que ya usan las guías y los E2E.
+
 **Implementado (PV-A), interfaz `AgentProvider`:**
 
 - El corte de §4.1 cambia: el proveedor **traduce** y el runner **ejecuta**. `runner/provider/AgentProvider` construye la línea de comandos (arranque, reanudación o fork), filtra el entorno, crea el `EventParser` y el `CostMeter` de cada invocación, prepara la sesión en otro worktree al bifurcar (`copySession`) y dice su versión. Lanzar, supervisar, cancelar, el tiempo máximo y los artefactos siguen en `AgentExecutor`, iguales para todos. `ClaudeCodeProvider` es la primera implementación, sin cambios de comportamiento; los comandos (`provider: command`) siguen su camino aparte, con el entorno de Claude Code como antes.
@@ -534,7 +542,7 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 - Migración `V16`: tabla `runner_provider`, rellenada con `claude-code` para los runners existentes. `CommandQueue.claim` solo entrega un `START` sin asignar a un runner con su proveedor (los comandos, a cualquiera). Continuar o bifurcar una sesión responde 409 si el proveedor no lo admite.
 - `agent_run.provider` sale del `provider` del agente del YAML (`EffectivePolicy.provider`); el modelo global `skynet.agent.model` solo se aplica a Claude Code.
 - Dashboard: `providerShortages` (agentes en cola de un proveedor sin ningún runner en línea que lo tenga) en «Necesita tu atención». Runners y la tarjeta de cada runner listan sus proveedores con la versión.
-- fake-claude responde a `--version`. El cambio de nombre a `fake-agent` del plan se deja para PV-B, cuando haya más de un formato que simular.
+- fake-claude responde a `--version`. El cambio de nombre a `fake-agent` del plan se deja para PV-B (allí se decidió añadir un segundo lanzador, `fake-codex`, en su lugar).
 
 **Implementado (W1-A), definiciones en el backend:**
 

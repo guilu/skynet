@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
  * @param capacity agentes simultáneos ({@code SKYNET_RUNNER_CAPACITY})
  * @param home directorio de datos: journal, logs y worktrees ({@code SKYNET_RUNNER_HOME})
  * @param claudeExecutable ejecutable de Claude Code ({@code SKYNET_CLAUDE_BIN})
+ * @param codexExecutable ejecutable de Codex ({@code SKYNET_CODEX_BIN})
  * @param extraEnv variables de entorno adicionales que se pasan al agente ({@code
  *     SKYNET_AGENT_ENV}, separadas por comas)
  * @param modelPrices fichero de precios por modelo que amplía o corrige la tabla con la que se
@@ -36,6 +37,7 @@ public record RunnerConfig(
     int capacity,
     Path home,
     String claudeExecutable,
+    String codexExecutable,
     List<String> extraEnv,
     Duration pollWait,
     Duration heartbeatInterval,
@@ -72,6 +74,7 @@ public record RunnerConfig(
                 "SKYNET_RUNNER_HOME",
                 Path.of(System.getProperty("user.home"), ".skynet-runner").toString())),
         env.getOrDefault("SKYNET_CLAUDE_BIN", "claude"),
+        env.getOrDefault("SKYNET_CODEX_BIN", "codex"),
         Arrays.stream(env.getOrDefault("SKYNET_AGENT_ENV", "").split(","))
             .map(String::trim)
             .filter(s -> !s.isEmpty())

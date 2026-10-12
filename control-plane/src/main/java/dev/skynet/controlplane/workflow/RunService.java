@@ -248,7 +248,9 @@ public class RunService {
   private EffectivePolicy inheritedPolicy(AgentRun parent, CodeRepository repository) {
     AgentPolicy policy = projects.agentPolicy(repository);
     AgentLimits limits = cappedByPolicy(parent.limits(), policy);
-    StageRun stage = stageRuns.findById(parent.getStageRunId()).orElseThrow();
+    // Las continuaciones viven en ejecuciones adhoc: el agente del YAML es el del lanzamiento.
+    AgentRun origin = origin(parent);
+    StageRun stage = stageRuns.findById(origin.getStageRunId()).orElseThrow();
     WorkflowDefinition definition =
         definitions.published(runEntity(stage.getWorkflowRunId()).getDefinitionId()).definition();
     AgentDefinition agent =
@@ -256,12 +258,24 @@ public class RunService {
             .stage(stage.getStageKey())
             .map(
                 s ->
-                    parent.getChildKey() == null
+                    origin.getChildKey() == null
                         ? s.agent()
-                        : s.child(parent.getChildKey()).map(ChildDefinition::agent).orElse(null))
+                        : s.child(origin.getChildKey()).map(ChildDefinition::agent).orElse(null))
             .flatMap(definition::agent)
             .orElse(null);
     return EffectivePolicy.of(policy, agent, limits).withLimits(limits);
+  }
+
+  /**
+   * Lanzamiento del que desciende {@code agent}: sube por sus mensajes, bifurcaciones y reintentos,
+   * que se ejecutan aparte, hasta la invocación que arrancó una fase de su workflow.
+   */
+  private AgentRun origin(AgentRun agent) {
+    AgentRun current = agent;
+    while (current.getKind() != AgentRunKind.START && current.getParentAgentRunId() != null) {
+      current = agentRuns.findById(current.getParentAgentRunId()).orElseThrow();
+    }
+    return current;
   }
 
   /** Límites como se guardan en {@code launch_limits}. */

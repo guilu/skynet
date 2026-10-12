@@ -6,10 +6,11 @@ import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerCommandType;
 import dev.skynet.protocol.runner.StartAgent;
 import dev.skynet.protocol.runner.WorkspaceRef;
+import dev.skynet.runner.provider.ModelPrices;
 import dev.skynet.runner.provider.ProviderRegistry;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
 import dev.skynet.runner.provider.claude.ClaudeSessions;
-import dev.skynet.runner.provider.claude.ModelPrices;
+import dev.skynet.runner.provider.codex.CodexProvider;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -18,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** fake-claude como agente y órdenes START para los tests. */
+/** fake-claude y fake-codex como agentes y órdenes START para los tests. */
 public final class TestAgents {
 
   private TestAgents() {}
@@ -40,6 +41,67 @@ public final class TestAgents {
   /** Registro con fake-claude como único proveedor. */
   public static ProviderRegistry fakeProviders(Map<String, String> runnerEnv) {
     return ProviderRegistry.of(fakeClaude(runnerEnv));
+  }
+
+  /** Proveedor que lanza fake-codex (lo instala Gradle antes de los tests). */
+  public static CodexProvider fakeCodex() {
+    return new CodexProvider(
+        Path.of(System.getProperty("skynet.fakeCodex")).toAbsolutePath().toString(),
+        List.of(
+            "JAVA_HOME",
+            "FAKE_CODEX_FIXTURE",
+            "FAKE_CODEX_RESUME_FIXTURE",
+            "FAKE_CODEX_DELAY_MS",
+            "FAKE_CODEX_HANG",
+            "FAKE_CODEX_STRUCTURED_OUTPUT"),
+        ModelPrices.defaults());
+  }
+
+  /** Registro con fake-claude y fake-codex. */
+  public static ProviderRegistry fakeProvidersWithCodex(Map<String, String> runnerEnv) {
+    return ProviderRegistry.of(fakeClaude(runnerEnv), fakeCodex());
+  }
+
+  /**
+   * Entorno del runner con el que fake-codex reproduce {@code fixture}, con sus sesiones en {@code
+   * home}.
+   */
+  public static Map<String, String> fakeCodexEnv(String fixture, Path home) {
+    Map<String, String> env = new HashMap<>(System.getenv());
+    env.put("JAVA_HOME", System.getProperty("java.home"));
+    env.put("FAKE_CODEX_FIXTURE", fixture);
+    env.put("FAKE_CODEX_DELAY_MS", "0");
+    env.put("CODEX_HOME", home.toString());
+    return env;
+  }
+
+  /** La orden con el agente de otro proveedor. */
+  public static RunnerCommand withProvider(RunnerCommand command, String provider) {
+    StartAgent s = command.start();
+    return new RunnerCommand(
+        command.id(),
+        command.type(),
+        command.agentRunId(),
+        command.createdAt(),
+        new StartAgent(
+            s.workflowRunId(),
+            s.workItemKey(),
+            s.repositoryPath(),
+            s.baseBranch(),
+            s.sessionId(),
+            s.prompt(),
+            s.allowedTools(),
+            s.permissionMode(),
+            s.model(),
+            s.limits(),
+            s.resume(),
+            s.environment(),
+            s.workspace(),
+            s.command(),
+            s.outputSchema(),
+            provider),
+        command.verify(),
+        command.cleanup());
   }
 
   /** Entorno del runner con el que fake-claude reproduce {@code fixture}. */

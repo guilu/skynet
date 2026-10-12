@@ -112,7 +112,10 @@ public final class DefinitionParser {
       List.of("boolean", "string", "number", "integer", "array", "object");
 
   /** Proveedores que llegan con el hito de proveedores, después de W3. */
-  static final Set<String> FUTURE_PROVIDERS = Set.of("codex", "gemini", "opencode");
+  static final Set<String> FUTURE_PROVIDERS = Set.of("gemini", "opencode");
+
+  /** Proveedores que el motor ya ejecuta además de Claude Code. */
+  static final Set<String> PROVIDERS = Set.of(AgentDefinition.CODEX);
 
   private static final Pattern VARIABLE = Pattern.compile("\\{\\{([^{}]*)}}");
 
@@ -413,6 +416,13 @@ public final class DefinitionParser {
             String permissionMode = permissionMode(fields.get("permissionMode"), path);
             String model = model(fields.get("model"), path + ".model");
             String provider = provider(fields.get("provider"), path + ".provider");
+            if (tools != null && AgentDefinition.CODEX.equals(provider)) {
+              warning(
+                  fields.get("tools").value(),
+                  path + ".tools",
+                  "Codex no admite una lista de herramientas: se ignora. Lo que puede hacer lo"
+                      + " fija `permissionMode` (`plan` es solo lectura)");
+            }
             Map<String, Object> output = output(fields.get("output"), path + ".output");
             Integer maxTurns = null;
             BigDecimal maxBudgetUsd = null;
@@ -423,6 +433,14 @@ public final class DefinitionParser {
                   mapping(limitsEntry.value(), path + ".limits", LIMIT_KEYS, Map.of());
               if (limits != null) {
                 maxTurns = integer(limits.get("maxTurns"), path + ".limits.maxTurns", 1, 1000);
+                if (maxTurns != null && AgentDefinition.CODEX.equals(provider)) {
+                  warning(
+                      limits.get("maxTurns").value(),
+                      path + ".limits.maxTurns",
+                      "Codex no admite `maxTurns`: se ignora. Acota el agente con `maxBudgetUsd` o"
+                          + " `timeoutMinutes`");
+                  maxTurns = null;
+                }
                 maxBudgetUsd =
                     decimal(
                         limits.get("maxBudgetUsd"),
@@ -577,6 +595,9 @@ public final class DefinitionParser {
       if (provider == null || provider.equals(AgentDefinition.CLAUDE_CODE)) {
         return AgentDefinition.CLAUDE_CODE;
       }
+      if (PROVIDERS.contains(provider)) {
+        return provider;
+      }
       if (FUTURE_PROVIDERS.contains(provider)) {
         add(
             Severity.UNSUPPORTED,
@@ -586,10 +607,13 @@ public final class DefinitionParser {
                 + provider
                 + "` todavía no se ejecuta: llega con el hito de proveedores. Por ahora solo `"
                 + AgentDefinition.CLAUDE_CODE
+                + "` y `"
+                + AgentDefinition.CODEX
                 + "`");
         return provider;
       }
       List<String> known = new ArrayList<>(List.of(AgentDefinition.CLAUDE_CODE));
+      known.addAll(new java.util.TreeSet<>(PROVIDERS));
       known.addAll(new java.util.TreeSet<>(FUTURE_PROVIDERS));
       error(
           entry.value(),

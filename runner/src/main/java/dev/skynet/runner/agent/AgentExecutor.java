@@ -322,16 +322,16 @@ public final class AgentExecutor implements AutoCloseable {
                   + " pide variables que el runner no permite (SKYNET_AGENT_ENV): "
                   + refused);
     }
-    EventParser parser = provider.newParser();
+    EventParser parser = provider.newParser(start);
     BigDecimal budget = start.limits().maxBudgetUsd();
-    CostMeter cost = provider.newCostMeter();
+    CostMeter cost = provider.newCostMeter(start);
     SupervisedProcess process;
     try {
       process =
           execution.launch(
               () ->
                   supervisor.start(
-                      provider.command(start),
+                      provider.command(start, logs.resolve(id.toString())),
                       workspace.path(),
                       provider.environment(runnerEnv, start.environment()),
                       logs.resolve(id + ".ndjson"),

@@ -21,8 +21,13 @@ public interface AgentProvider {
   /** Ejecutable del CLI. */
   String executable();
 
-  /** Línea de comandos de una invocación: arranque, reanudación o fork ({@code start.resume()}). */
-  List<String> command(StartAgent start);
+  /**
+   * Línea de comandos de una invocación: arranque, reanudación o fork ({@code start.resume()}).
+   *
+   * @param files ruta base para los ficheros auxiliares que necesite el CLI (p. ej. {@code
+   *     <files>.schema.json}); están junto a los logs de la invocación y se borran con ellos
+   */
+  List<String> command(StartAgent start, Path files) throws IOException;
 
   /**
    * Entorno de una invocación: las variables básicas y las de este proveedor y, de las adicionales
@@ -34,10 +39,10 @@ public interface AgentProvider {
   List<String> refusedEnvironment(StartAgent start);
 
   /** Traductor de la salida de una invocación nueva. */
-  EventParser newParser();
+  EventParser newParser(StartAgent start);
 
   /** Estimador de coste de una invocación nueva. */
-  CostMeter newCostMeter();
+  CostMeter newCostMeter(StartAgent start);
 
   /**
    * Deja la sesión {@code sessionId} del worktree {@code from} lista para continuarla desde {@code

@@ -78,6 +78,23 @@ class AgentExecutorTest {
     return executor;
   }
 
+  /** Ejecutor con fake-claude y fake-codex, que reproduce el fixture de Codex {@code fixture}. */
+  private AgentExecutor codexExecutor(String fixture) {
+    Map<String, String> env = TestAgents.fakeCodexEnv(fixture, dir.resolve("codex"));
+    executor =
+        new AgentExecutor(
+            journal,
+            new ProcessSupervisor(),
+            new WorkspaceManager(dir.resolve("workspaces")),
+            TestAgents.fakeProvidersWithCodex(env),
+            env,
+            dir.resolve("logs"),
+            Duration.ofSeconds(2),
+            () -> {},
+            new ArtifactSpool(journal, dir.resolve("artifacts"), () -> {}));
+    return executor;
+  }
+
   private List<NormalizedEvent> eventsOf(UUID agentRunId) {
     return journal.pending(1000).stream().filter(e -> e.agentRunId().equals(agentRunId)).toList();
   }
@@ -132,8 +149,75 @@ class AgentExecutorTest {
 
     NormalizedEvent exit = awaitExit(id);
     assertThat(exit.type()).isEqualTo(AgentEventType.PROCESS_EXITED);
-    assertThat(exit.payload().get("error")).isEqualTo("Este runner no tiene codex disponible");
+    assertThat(exit.payload().get("error")).isEqualTo("Este runner no tiene Codex disponible");
     assertThat(eventsOf(id)).hasSize(1);
+  }
+
+  @Test
+  void aCodexAgentRunsInAWorktreeAndItsSessionCanBeResumed() throws Exception {
+    UUID first = UUID.randomUUID();
+    codexExecutor("02-tools")
+        .start(TestAgents.withProvider(TestAgents.start(first, repo.toString(), null), "codex"));
+
+    NormalizedEvent exit = awaitExit(first);
+    assertThat(exit.payload()).containsEntry("exitCode", 0).doesNotContainKey("error");
+    List<NormalizedEvent> events = eventsOf(first);
+    assertThat(events.getFirst().type()).isEqualTo(AgentEventType.WORKSPACE_READY);
+    NormalizedEvent session = events.get(1);
+    assertThat(session.type()).isEqualTo(AgentEventType.SESSION_STARTED);
+    assertThat(session.payload()).containsEntry("provider", "codex");
+    String thread = (String) session.payload().get("sessionId");
+    assertThat(events)
+        .filteredOn(e -> e.type() == AgentEventType.TOOL_STARTED)
+        .extracting(e -> e.payload().get("name"))
+        .contains("Bash", "apply_patch", "mcp__docs__search", "WebSearch");
+    assertThat(events)
+        .filteredOn(e -> e.type() == AgentEventType.FILE_CHANGED)
+        .extracting(e -> e.payload().get("path"))
+        .containsExactly("calc.py");
+    assertThat(events)
+        .filteredOn(e -> e.type() == AgentEventType.RESULT)
+        .singleElement()
+        .satisfies(r -> assertThat(r.payload()).containsEntry("isError", false));
+    assertThat(dir.resolve("codex/sessions").resolve(thread + ".jsonl")).exists();
+
+    Map<String, Object> ready = events.getFirst().payload();
+    UUID resumed = UUID.randomUUID();
+    executor.start(
+        TestAgents.withProvider(
+            TestAgents.resume(
+                resumed,
+                repo.toString(),
+                UUID.randomUUID(),
+                new ResumeFrom(
+                    thread, false, (String) ready.get("path"), (String) ready.get("branch"))),
+            "codex"));
+    exit = awaitExit(resumed);
+
+    assertThat(exit.payload()).containsEntry("exitCode", 0).doesNotContainKey("error");
+    List<NormalizedEvent> again = eventsOf(resumed);
+    assertThat(again.getFirst().payload()).containsEntry("path", ready.get("path"));
+    assertThat(again.get(1).payload()).containsEntry("sessionId", thread);
+  }
+
+  @Test
+  void aFailedCodexTurnEndsWithAnErrorResult() throws Exception {
+    UUID id = UUID.randomUUID();
+    codexExecutor("04-failed")
+        .start(TestAgents.withProvider(TestAgents.start(id, repo.toString(), null), "codex"));
+
+    NormalizedEvent exit = awaitExit(id);
+    assertThat(exit.payload()).containsEntry("exitCode", 1);
+    assertThat(eventsOf(id))
+        .filteredOn(e -> e.type() == AgentEventType.RESULT)
+        .singleElement()
+        .satisfies(
+            r ->
+                assertThat(r.payload())
+                    .containsEntry("isError", true)
+                    .containsEntry(
+                        "errors",
+                        List.of("stream disconnected before completion: rate limit reached")));
   }
 
   @Test

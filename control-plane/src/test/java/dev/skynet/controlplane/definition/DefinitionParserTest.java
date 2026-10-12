@@ -571,6 +571,13 @@ class DefinitionParserTest {
               otro:
                 prompt: hola
                 provider: codex
+                tools: [Read]
+                limits:
+                  maxTurns: 5
+                  maxBudgetUsd: 1
+              futuro:
+                prompt: hola
+                provider: gemini
               raro:
                 prompt: hola
                 provider: gpt
@@ -588,15 +595,28 @@ class DefinitionParserTest {
               - id: d
                 type: agent
                 agent: raro
+              - id: e
+                type: agent
+                agent: futuro
             """);
     WorkflowDefinition definition = parsed.definition();
     assertThat(definition.agent("rapido").orElseThrow().model()).isEqualTo("claude-haiku-4-5");
     assertThat(definition.agent("rapido").orElseThrow().provider()).isEqualTo("claude-code");
     assertThat(definition.agent("listo").orElseThrow().model()).isEqualTo("opus");
+    AgentDefinition codex = definition.agent("otro").orElseThrow();
+    assertThat(codex.provider()).isEqualTo("codex");
+    assertThat(codex.maxTurns()).isNull();
+    assertThat(codex.maxBudgetUsd()).isEqualByComparingTo("1");
+    assertThat(messages(parsed, Severity.WARNING))
+        .containsExactly(
+            "Codex no admite una lista de herramientas: se ignora. Lo que puede hacer lo fija"
+                + " `permissionMode` (`plan` es solo lectura)",
+            "Codex no admite `maxTurns`: se ignora. Acota el agente con `maxBudgetUsd` o"
+                + " `timeoutMinutes`");
     assertThat(messages(parsed, Severity.UNSUPPORTED))
         .containsExactly(
-            "El proveedor `codex` todavía no se ejecuta: llega con el hito de proveedores. Por"
-                + " ahora solo `claude-code`");
+            "El proveedor `gemini` todavía no se ejecuta: llega con el hito de proveedores. Por"
+                + " ahora solo `claude-code` y `codex`");
     assertThat(messages(parsed, Severity.ERROR))
         .containsExactly(
             "Proveedor `gpt` desconocido. Admite: claude-code, codex, gemini, opencode",

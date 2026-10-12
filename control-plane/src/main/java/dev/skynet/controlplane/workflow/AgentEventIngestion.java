@@ -179,6 +179,7 @@ public class AgentEventIngestion {
             integer(p.get("numTurns")),
             TokenUsage.of(p.get("usage")),
             decimal(p.get("costUsdCumulative")),
+            decimal(p.get("costUsd")),
             previousCumulativeCost(agent),
             errors(p));
       }

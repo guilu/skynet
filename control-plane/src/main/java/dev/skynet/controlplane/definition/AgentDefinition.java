@@ -30,8 +30,11 @@ public record AgentDefinition(
     String provider,
     Map<String, Object> output) {
 
-  /** Proveedor por defecto, y por ahora el único que se ejecuta. */
+  /** Proveedor por defecto. */
   public static final String CLAUDE_CODE = "claude-code";
+
+  /** Codex de OpenAI ({@code codex exec --json}). */
+  public static final String CODEX = "codex";
 
   public AgentDefinition {
     tools = tools == null ? null : List.copyOf(tools);

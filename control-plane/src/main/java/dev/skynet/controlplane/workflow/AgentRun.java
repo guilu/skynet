@@ -318,7 +318,8 @@ public class AgentRun {
 
   /**
    * Registra el resultado que declara el proveedor. Claude Code informa del coste acumulado de la
-   * sesión, así que el de esta invocación es la diferencia con el de su predecesora.
+   * sesión, así que el de esta invocación es la diferencia con el de su predecesora; los demás
+   * proveedores (Codex) informan del de la invocación, y el acumulado es la suma.
    */
   void recordResult(
       String subtype,
@@ -326,6 +327,7 @@ public class AgentRun {
       Integer numTurns,
       TokenUsage usage,
       BigDecimal costCumulative,
+      BigDecimal costInvocation,
       BigDecimal previousCumulative,
       String error) {
     resultSubtype = subtype;
@@ -343,6 +345,10 @@ public class AgentRun {
           previousCumulative == null
               ? costCumulative
               : costCumulative.subtract(previousCumulative).max(BigDecimal.ZERO);
+    } else if (costInvocation != null) {
+      costUsd = costInvocation;
+      costUsdCumulative =
+          previousCumulative == null ? costInvocation : previousCumulative.add(costInvocation);
     }
     if (isError && error != null) {
       this.error = error;
