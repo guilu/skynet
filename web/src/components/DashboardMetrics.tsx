@@ -11,33 +11,47 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { lazy, Suspense } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Link } from 'react-router'
 import { api, type MetricsPeriod, type RunMetrics } from '../api'
-import { formatCost, formatDuration, formatNumber } from '../format'
+import { formatCompact, formatCost, formatDuration, formatNumber } from '../format'
 import { cn } from '../lib/cn'
 import { ErrorMessage } from './ErrorMessage'
 import { bucketTitle } from './metricsFormat'
 import { TilesSkeleton } from './ui/Skeleton'
+import { PERIODS, usePeriod } from './usePeriod'
 
 const RunsChart = lazy(() => import('./RunsChart'))
-
-const PERIODS: { id: MetricsPeriod; label: string }[] = [
-  { id: '24h', label: '24 horas' },
-  { id: '7d', label: '7 días' },
-  { id: '30d', label: '30 días' },
-]
 
 /** Zona del navegador: los tramos del gráfico siguen su calendario. */
 const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 
+/** Selector 24 h · 7 días · 30 días: cambia a la vez las tarjetas y el gráfico. */
+export function PeriodSelector() {
+  const [period, choose] = usePeriod()
+  return (
+    <div className="segmented" role="group" aria-label="Periodo">
+      {PERIODS.map((p) => (
+        <button
+          key={p.id}
+          type="button"
+          aria-pressed={p.id === period}
+          onClick={() => choose(p.id)}
+        >
+          {p.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /**
- * Métricas de las ejecuciones creadas en el periodo elegido (24 h, 7 o 30 días): cuántas hay por
- * estado, su duración mediana, tokens y coste, y las ejecuciones por hora o por día. Las cifras
- * de ejecuciones enlazan a la lista con el mismo filtro. El periodo vive en la URL.
+ * Métricas de las ejecuciones creadas en el periodo elegido (24 h, 7 o 30 días): ocho tarjetas
+ * con cuántas hay por estado, su duración mediana, tokens y coste, y un panel con las
+ * ejecuciones por hora o por día. Las cifras de ejecuciones enlazan a la lista con el mismo
+ * filtro. El selector del periodo está en la cabecera del dashboard.
  */
 export function DashboardMetrics() {
-  const [params, setParams] = useSearchParams()
-  const period = (PERIODS.find((p) => p.id === params.get('period'))?.id ?? '7d') as MetricsPeriod
+  const [period] = usePeriod()
   const metrics = useQuery({
     queryKey: ['dashboard', 'metrics', period],
     queryFn: () => api.dashboardMetrics(period, zone()),
@@ -45,33 +59,12 @@ export function DashboardMetrics() {
     refetchInterval: 60_000,
   })
 
-  function choose(next: MetricsPeriod) {
-    const p = new URLSearchParams(params)
-    p.set('period', next)
-    setParams(p, { replace: true })
-  }
-
   const data = metrics.data
   return (
-    <section className="card dashboard-metrics" aria-labelledby="metrics-title">
-      <div className="metrics-head">
-        <h2 id="metrics-title">Métricas</h2>
-        <div className="segmented" role="group" aria-label="Periodo">
-          {PERIODS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              aria-pressed={p.id === period}
-              onClick={() => choose(p.id)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <section className="dashboard-metrics" aria-label="Métricas">
       <ErrorMessage error={metrics.error} />
       {metrics.isPending && <TilesSkeleton />}
-      {data && <Tiles data={data} />}
+      {data && <Tiles data={data} period={period} />}
       {data && <RunsChartFigure data={data} />}
     </section>
   )
@@ -88,31 +81,73 @@ interface Tile {
   label: string
   value: string
   icon: LucideIcon
-  tone: 'live' | 'bad' | 'ok' | 'idle' | 'primary'
+  tone: 'live' | 'bad' | 'ok' | 'warn' | 'idle' | 'primary'
   to?: string
-  /** Las cuatro cifras principales van más grandes. */
-  main?: boolean
+  /** Línea secundaria bajo la cifra. */
+  sub?: string
 }
 
-function Tiles({ data }: { data: RunMetrics }) {
+const PERIOD_TEXT: Record<MetricsPeriod, string> = {
+  '24h': 'últimas 24 horas',
+  '7d': 'últimos 7 días',
+  '30d': 'últimos 30 días',
+}
+
+function Tiles({ data, period }: { data: RunMetrics; period: MetricsPeriod }) {
+  const finished = data.succeeded + data.failed + data.cancelled
+  const share = (n: number) =>
+    finished > 0 ? `${Math.round((n / finished) * 100)} % de las terminadas` : undefined
   const tiles: Tile[] = [
     {
       label: 'Activas',
       value: formatNumber(data.active),
       icon: CirclePlay,
       tone: 'live',
-      main: true,
+      sub: 'pendientes o en curso',
       to: runsLink(data.since, ['PENDING', 'RUNNING']),
+    },
+    {
+      label: 'Completadas',
+      value: formatNumber(data.succeeded),
+      icon: CircleCheck,
+      tone: 'ok',
+      sub: share(data.succeeded),
+      to: runsLink(data.since, ['SUCCEEDED']),
     },
     {
       label: 'Fallidas',
       value: formatNumber(data.failed),
       icon: CircleX,
       tone: 'bad',
-      main: true,
+      sub: share(data.failed),
       to: runsLink(data.since, ['FAILED']),
     },
-    { label: 'Coste', value: formatCost(data.costUsd), icon: Coins, tone: 'primary', main: true },
+    {
+      label: 'Coste',
+      value: formatCost(data.costUsd),
+      icon: Coins,
+      tone: 'warn',
+      sub:
+        data.costUsd != null && data.total > 0
+          ? `${formatCost(data.costUsd / data.total)} por ejecución`
+          : undefined,
+    },
+    {
+      label: 'Ejecuciones',
+      value: formatNumber(data.total),
+      icon: Layers,
+      tone: 'primary',
+      sub: PERIOD_TEXT[period],
+      to: runsLink(data.since),
+    },
+    {
+      label: 'Canceladas',
+      value: formatNumber(data.cancelled),
+      icon: Square,
+      tone: 'idle',
+      sub: share(data.cancelled),
+      to: runsLink(data.since, ['CANCELLED']),
+    },
     {
       label: 'Duración mediana',
       value:
@@ -121,45 +156,26 @@ function Tiles({ data }: { data: RunMetrics }) {
           : formatDuration(Math.round(data.medianDurationSeconds * 1000)),
       icon: Timer,
       tone: 'primary',
-      main: true,
+      sub: 'de las terminadas',
     },
     {
-      label: 'Ejecuciones',
-      value: formatNumber(data.total),
-      icon: Layers,
-      tone: 'idle',
-      to: runsLink(data.since),
-    },
-    {
-      label: 'Completadas',
-      value: formatNumber(data.succeeded),
-      icon: CircleCheck,
-      tone: 'ok',
-      to: runsLink(data.since, ['SUCCEEDED']),
-    },
-    {
-      label: 'Canceladas',
-      value: formatNumber(data.cancelled),
-      icon: Square,
-      tone: 'idle',
-      to: runsLink(data.since, ['CANCELLED']),
-    },
-    {
-      label: 'Tokens (entrada / salida)',
-      value: `${formatNumber(data.inputTokens)} / ${formatNumber(data.outputTokens)}`,
+      label: 'Tokens',
+      value: `${formatCompact(data.inputTokens)} / ${formatCompact(data.outputTokens)}`,
       icon: Type,
-      tone: 'idle',
+      tone: 'primary',
+      sub: 'entrada / salida',
     },
   ]
   return (
-    <dl className="kpis">
+    <dl className="kpis dash-kpis">
       {tiles.map((t) => (
-        <div key={t.label} className={cn('kpi', `kpi-${t.tone}`, t.main && 'kpi-main')}>
+        <div key={t.label} className={cn('kpi kpi-main', `kpi-${t.tone}`)}>
           <span className="kpi-icon" aria-hidden="true">
-            <t.icon size={t.main ? 24 : 18} strokeWidth={2.5} />
+            <t.icon size={24} strokeWidth={2.5} />
           </span>
           <dt>{t.label}</dt>
           <dd>{t.to ? <Link to={t.to}>{t.value}</Link> : t.value}</dd>
+          {t.sub && <dd className="kpi-sub">{t.sub}</dd>}
         </div>
       ))}
     </dl>
@@ -173,9 +189,9 @@ function RunsChartFigure({ data }: { data: RunMetrics }) {
   const unit = data.bucket
   const max = Math.max(0, ...buckets.map((b) => b.total))
   return (
-    <figure className="runs-chart">
+    <figure className="card runs-chart">
       <figcaption>
-        Ejecuciones por {unit === 'hour' ? 'hora' : 'día'}
+        <h2>Ejecuciones por {unit === 'hour' ? 'hora' : 'día'}</h2>
         <span className="chart-legend" aria-hidden="true">
           <span className="legend-ok">Completadas</span>
           <span className="legend-bad">Fallidas</span>

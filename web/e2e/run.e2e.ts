@@ -289,7 +289,7 @@ test('login: una contraseña incorrecta no entra, salir cierra la sesión', asyn
   await expect(page.getByRole('alert')).toHaveText('Usuario o contraseña incorrectos')
 
   await login(page)
-  await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: /^Buen/ })).toBeVisible()
   expect((await page.request.get('/api/projects')).status()).toBe(200)
 
   await page.getByRole('button', { name: /^Cuenta:/ }).click()

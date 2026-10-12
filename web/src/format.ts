@@ -208,3 +208,13 @@ export function toolSummary(input: unknown): string {
   const value = i.command ?? i.file_path ?? i.pattern ?? i.path ?? i.url
   return typeof value === 'string' ? `: ${truncate(value, 100)}` : ''
 }
+
+/** Cifra corta para las tarjetas: 14.845 → «14,8 k», 2.300.000 → «2,3 M». */
+export function formatCompact(n: number | null): string {
+  if (n == null) return '—'
+  const short = (v: number, unit: string) =>
+    `${v.toLocaleString('es-ES', { maximumFractionDigits: 1 })} ${unit}`
+  if (Math.abs(n) >= 1_000_000) return short(n / 1_000_000, 'M')
+  if (Math.abs(n) >= 10_000) return short(n / 1_000, 'k')
+  return n.toLocaleString('es-ES')
+}

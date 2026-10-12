@@ -184,27 +184,38 @@ describe('App', () => {
     )
   })
 
-  it('el dashboard lista solo las excepciones, enlazadas', async () => {
-    stubApi({ '/api/dashboard': dashboardSummary })
+  it('el dashboard saluda y lista lo que necesita atención, enlazado', async () => {
+    stubApi({ '/api/dashboard': dashboardSummary, '/api/runners': runners })
     renderAt('/', <App />)
-    expect(
-      await screen.findByRole('heading', { name: 'Agentes sin actividad (1)' }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: /^Buen.*, admin$/ })).toBeVisible()
+    const attention = await screen.findByRole('region', { name: 'Necesita tu atención (2)' })
     const stuck = dashboardSummary.unresponsiveAgents[0]
-    expect(screen.getByRole('link', { name: stuck.workItemKey! })).toHaveAttribute(
+    expect(within(attention).getByRole('link', { name: /TKM-1/ })).toHaveAttribute(
       'href',
       `/runs/${stuck.workflowRunId}?agent=${stuck.agentRunId}`,
     )
-    expect(screen.getByRole('heading', { name: 'Runners sin latido (1)' })).toBeInTheDocument()
+    expect(within(attention).getByRole('link', { name: /Runner «runner-02»/ })).toHaveAttribute(
+      'href',
+      '/runners',
+    )
+    expect(
+      await screen.findByText('1 agente trabajando y 2 cosas que necesitan tu atención.'),
+    ).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Ejecuciones activas (1)' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Ver todas las activas' })).toHaveAttribute(
       'href',
       '/runs?status=PENDING&status=RUNNING',
     )
-    expect(screen.queryByRole('heading', { name: /Fallidas/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Lanzar agente/ })).toHaveAttribute('href', '/projects')
+    // Los runners, en tarjetas con su estado.
+    const runnersSection = screen.getByRole('region', { name: 'Runners' })
+    expect(within(runnersSection).getByRole('link', { name: /runner-01.*En línea/ })).toBeVisible()
+    expect(
+      within(runnersSection).getByRole('link', { name: /runner-02.*Desconectado/ }),
+    ).toBeVisible()
   })
 
-  it('el dashboard sin excepciones lo dice', async () => {
+  it('el dashboard sin avisos no muestra la sección de atención', async () => {
     stubApi({
       '/api/dashboard': {
         activeRuns: [],
@@ -214,9 +225,13 @@ describe('App', () => {
         staleRunners: [],
         generatedAt: '2026-10-05T09:10:00Z',
       },
+      '/api/runners': [],
     })
     renderAt('/', <App />)
-    expect(await screen.findByText('Nada requiere atención ahora mismo.')).toBeInTheDocument()
+    expect(await screen.findByText('0 agentes trabajando. Todo en orden.')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Necesita tu atención/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Ejecuciones activas/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Aún no hay runners registrados.')).toBeInTheDocument()
   })
 
   it('las métricas del periodo enlazan a la lista filtrada y cambian de periodo', async () => {
@@ -249,14 +264,11 @@ describe('App', () => {
     // La misma información, en tabla.
     expect(within(metrics).getAllByRole('row')).toHaveLength(3)
 
-    fireEvent.click(within(metrics).getByRole('button', { name: '24 horas' }))
+    fireEvent.click(screen.getByRole('button', { name: '24 horas' }))
     expect(
       await within(metrics).findByRole('img', { name: /Ejecuciones por hora/ }),
     ).toBeInTheDocument()
-    expect(within(metrics).getByRole('button', { name: '24 horas' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    expect(screen.getByRole('button', { name: '24 horas' })).toHaveAttribute('aria-pressed', 'true')
     expect(fetch).toHaveBeenCalledWith(
       `/api/dashboard/metrics?period=24h&tz=${tz}`,
       expect.anything(),

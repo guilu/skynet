@@ -100,7 +100,7 @@ test('las páginas principales pasan axe', async ({ page }) => {
   await expectAccessible(page, 'ejecución · herramienta en la conversación')
 
   const pages: [string, string][] = [
-    ['/', 'Dashboard'],
+    ['/', 'Buen'],
     ['/runs', 'Ejecuciones'],
     ['/projects', 'Proyectos'],
     ['/runners', 'Runners'],
@@ -177,7 +177,7 @@ test('en tema oscuro las páginas también pasan axe', async ({ page }) => {
   await expectAccessible(page, 'oscuro · cascada')
 
   for (const [path, name] of [
-    ['/', 'Dashboard'],
+    ['/', 'Buen'],
     ['/runs', 'Ejecuciones'],
     ['/projects', 'Proyectos'],
     ['/runners', 'Runners'],
@@ -224,7 +224,7 @@ test('una paleta personalizada se guarda, se aplica a toda la web y pasa axe', a
     await expectAccessible(page, 'ajustes con paleta propia')
 
     await page.goto('/')
-    await expect(page.getByRole('heading', { level: 1, name: /^Dashboard/ })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: /^Buen/ })).toBeVisible()
     await expectAccessible(page, 'dashboard con paleta propia')
     await page.emulateMedia({ colorScheme: 'dark' })
     await expect.poll(primary).not.toBe('#c2255c')
