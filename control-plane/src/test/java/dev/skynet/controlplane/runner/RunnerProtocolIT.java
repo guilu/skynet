@@ -454,7 +454,7 @@ class RunnerProtocolIT extends IntegrationTest {
     assertThat(child.path("costUsdCumulative").decimalValue()).isEqualByComparingTo("0.03");
 
     // Un proveedor que Skynet no sabe continuar responde 409.
-    jdbc.sql("UPDATE agent_run SET provider = 'gemini' WHERE id = ?")
+    jdbc.sql("UPDATE agent_run SET provider = 'opencode' WHERE id = ?")
         .param(resumed.agentId())
         .update();
     assertStatus(HttpStatus.CONFLICT, () -> continueWith(resumed.agentId(), "messages", "otra"));

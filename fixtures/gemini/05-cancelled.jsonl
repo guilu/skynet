@@ -1,0 +1,3 @@
+{"type":"init","timestamp":"2026-10-12T10:00:00.000Z","session_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","model":"auto"}
+{"type":"message","timestamp":"2026-10-12T10:00:00.000Z","role":"user","content":"Arregla add()"}
+{"type":"tool_use","timestamp":"2026-10-12T10:00:00.000Z","tool_name":"run_shell_command","tool_id":"run_shell_command-1","parameters":{"command":"sleep 600"}}

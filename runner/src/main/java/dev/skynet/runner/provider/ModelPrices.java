@@ -52,6 +52,16 @@ public final class ModelPrices {
     DEFAULTS.put("gpt-5.1-codex", price("1.25", "10", "0.125"));
     DEFAULTS.put("gpt-5-codex", price("1.25", "10", "0.125"));
     DEFAULTS.put("gpt-5", price("1.25", "10", "0.125"));
+    // Google (Gemini CLI), según agregadores de precios (octubre de 2026), sin el recargo de los
+    // prompts de más de 200k tokens: conviene comprobarlos en la página de precios de la API de
+    // Gemini y corregirlos con SKYNET_MODEL_PRICES si han cambiado.
+    DEFAULTS.put("gemini-3.1-pro", price("2", "12", "0.20"));
+    DEFAULTS.put("gemini-3-pro", price("2", "12", "0.20"));
+    DEFAULTS.put("gemini-3.1-flash-lite", price("0.25", "1.50", "0.025"));
+    DEFAULTS.put("gemini-3-flash", price("0.50", "3", "0.05"));
+    DEFAULTS.put("gemini-2.5-pro", price("1.25", "10", "0.125"));
+    DEFAULTS.put("gemini-2.5-flash-lite", price("0.10", "0.40", "0.01"));
+    DEFAULTS.put("gemini-2.5-flash", price("0.30", "2.50", "0.03"));
   }
 
   private final Map<String, Price> byPrefix;

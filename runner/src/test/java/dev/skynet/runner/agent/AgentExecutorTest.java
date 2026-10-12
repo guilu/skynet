@@ -95,6 +95,25 @@ class AgentExecutorTest {
     return executor;
   }
 
+  /** Ejecutor con los tres proveedores, que reproduce el fixture de Gemini {@code fixture}. */
+  private AgentExecutor geminiExecutor(String fixture, Map<String, String> extraEnv) {
+    Map<String, String> env =
+        new HashMap<>(TestAgents.fakeGeminiEnv(fixture, dir.resolve("gemini")));
+    env.putAll(extraEnv);
+    executor =
+        new AgentExecutor(
+            journal,
+            new ProcessSupervisor(),
+            new WorkspaceManager(dir.resolve("workspaces")),
+            TestAgents.fakeProvidersWithAll(env),
+            env,
+            dir.resolve("logs"),
+            Duration.ofSeconds(2),
+            () -> {},
+            new ArtifactSpool(journal, dir.resolve("artifacts"), () -> {}));
+    return executor;
+  }
+
   private List<NormalizedEvent> eventsOf(UUID agentRunId) {
     return journal.pending(1000).stream().filter(e -> e.agentRunId().equals(agentRunId)).toList();
   }
@@ -198,6 +217,69 @@ class AgentExecutorTest {
     List<NormalizedEvent> again = eventsOf(resumed);
     assertThat(again.getFirst().payload()).containsEntry("path", ready.get("path"));
     assertThat(again.get(1).payload()).containsEntry("sessionId", thread);
+  }
+
+  @Test
+  void aGeminiAgentKeepsItsSessionAndReturnsItsStructuredOutput() throws Exception {
+    String schema = "{\"type\":\"object\",\"properties\":{\"fixed\":{\"type\":\"boolean\"}}}";
+    UUID first = UUID.randomUUID();
+    RunnerCommand start =
+        TestAgents.withProvider(TestAgents.start(first, repo.toString(), null), "gemini", schema);
+    geminiExecutor("02-tools", Map.of("FAKE_GEMINI_STRUCTURED_OUTPUT", "{\"fixed\": true}"))
+        .start(start);
+
+    NormalizedEvent exit = awaitExit(first);
+    assertThat(exit.payload()).containsEntry("exitCode", 0).doesNotContainKey("error");
+    List<NormalizedEvent> events = eventsOf(first);
+    assertThat(events.get(1).payload())
+        .containsEntry("provider", "gemini")
+        .containsEntry("sessionId", start.start().sessionId().toString());
+    assertThat(events)
+        .filteredOn(e -> e.type() == AgentEventType.TOOL_STARTED)
+        .extracting(e -> e.payload().get("name"))
+        .containsExactly("read_file", "replace", "Bash", "Bash");
+    assertThat(events)
+        .filteredOn(e -> e.type() == AgentEventType.RESULT)
+        .singleElement()
+        .satisfies(
+            r ->
+                assertThat(r.payload())
+                    .containsEntry("isError", false)
+                    .containsEntry("structuredOutput", Map.of("fixed", true)));
+
+    Map<String, Object> ready = events.getFirst().payload();
+    UUID resumed = UUID.randomUUID();
+    UUID session = start.start().sessionId();
+    executor.start(
+        TestAgents.withProvider(
+            TestAgents.resume(
+                resumed,
+                repo.toString(),
+                session,
+                new ResumeFrom(
+                    session.toString(),
+                    false,
+                    (String) ready.get("path"),
+                    (String) ready.get("branch"))),
+            "gemini"));
+    exit = awaitExit(resumed);
+
+    assertThat(exit.payload()).containsEntry("exitCode", 0).doesNotContainKey("error");
+    assertThat(eventsOf(resumed).get(1).payload()).containsEntry("sessionId", session.toString());
+  }
+
+  @Test
+  void aGeminiAgentThatReachesItsTurnLimitFails() throws Exception {
+    UUID id = UUID.randomUUID();
+    geminiExecutor("04-turn-limit", Map.of())
+        .start(TestAgents.withProvider(TestAgents.start(id, repo.toString(), null), "gemini"));
+
+    NormalizedEvent exit = awaitExit(id);
+    assertThat(exit.payload()).containsEntry("exitCode", 53);
+    assertThat(eventsOf(id))
+        .filteredOn(e -> e.type() == AgentEventType.RESULT)
+        .singleElement()
+        .satisfies(r -> assertThat(r.payload()).containsEntry("isError", true));
   }
 
   @Test

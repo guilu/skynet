@@ -11,6 +11,7 @@ import dev.skynet.runner.provider.ProviderRegistry;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
 import dev.skynet.runner.provider.claude.ClaudeSessions;
 import dev.skynet.runner.provider.codex.CodexProvider;
+import dev.skynet.runner.provider.gemini.GeminiProvider;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -57,6 +58,38 @@ public final class TestAgents {
         ModelPrices.defaults());
   }
 
+  /** Proveedor que lanza fake-gemini (lo instala Gradle antes de los tests). */
+  public static GeminiProvider fakeGemini() {
+    return new GeminiProvider(
+        Path.of(System.getProperty("skynet.fakeGemini")).toAbsolutePath().toString(),
+        List.of(
+            "JAVA_HOME",
+            "FAKE_GEMINI_FIXTURE",
+            "FAKE_GEMINI_RESUME_FIXTURE",
+            "FAKE_GEMINI_DELAY_MS",
+            "FAKE_GEMINI_HANG",
+            "FAKE_GEMINI_STRUCTURED_OUTPUT"),
+        ModelPrices.defaults());
+  }
+
+  /** Registro con fake-claude, fake-codex y fake-gemini. */
+  public static ProviderRegistry fakeProvidersWithAll(Map<String, String> runnerEnv) {
+    return ProviderRegistry.of(fakeClaude(runnerEnv), fakeCodex(), fakeGemini());
+  }
+
+  /**
+   * Entorno del runner con el que fake-gemini reproduce {@code fixture}, con sus sesiones en {@code
+   * home}.
+   */
+  public static Map<String, String> fakeGeminiEnv(String fixture, Path home) {
+    Map<String, String> env = new HashMap<>(System.getenv());
+    env.put("JAVA_HOME", System.getProperty("java.home"));
+    env.put("FAKE_GEMINI_FIXTURE", fixture);
+    env.put("FAKE_GEMINI_DELAY_MS", "0");
+    env.put("GEMINI_CLI_HOME", home.toString());
+    return env;
+  }
+
   /** Registro con fake-claude y fake-codex. */
   public static ProviderRegistry fakeProvidersWithCodex(Map<String, String> runnerEnv) {
     return ProviderRegistry.of(fakeClaude(runnerEnv), fakeCodex());
@@ -77,6 +110,12 @@ public final class TestAgents {
 
   /** La orden con el agente de otro proveedor. */
   public static RunnerCommand withProvider(RunnerCommand command, String provider) {
+    return withProvider(command, provider, command.start().outputSchema());
+  }
+
+  /** La orden con el agente de otro proveedor y esa salida estructurada. */
+  public static RunnerCommand withProvider(
+      RunnerCommand command, String provider, String outputSchema) {
     StartAgent s = command.start();
     return new RunnerCommand(
         command.id(),
@@ -98,7 +137,7 @@ public final class TestAgents {
             s.environment(),
             s.workspace(),
             s.command(),
-            s.outputSchema(),
+            outputSchema,
             provider),
         command.verify(),
         command.cleanup());

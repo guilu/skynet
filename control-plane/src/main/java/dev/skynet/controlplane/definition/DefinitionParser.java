@@ -5,6 +5,7 @@ import dev.skynet.controlplane.definition.StageDefinition.ChildDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.Dependency;
 import dev.skynet.controlplane.definition.StageDefinition.WorkspaceMode;
 import dev.skynet.controlplane.project.AgentPolicy;
+import dev.skynet.protocol.AgentProviderKind;
 import java.io.StringReader;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -112,10 +113,10 @@ public final class DefinitionParser {
       List.of("boolean", "string", "number", "integer", "array", "object");
 
   /** Proveedores que llegan con el hito de proveedores, después de W3. */
-  static final Set<String> FUTURE_PROVIDERS = Set.of("gemini", "opencode");
+  static final Set<String> FUTURE_PROVIDERS = Set.of("opencode");
 
   /** Proveedores que el motor ya ejecuta además de Claude Code. */
-  static final Set<String> PROVIDERS = Set.of(AgentDefinition.CODEX);
+  static final Set<String> PROVIDERS = Set.of(AgentDefinition.CODEX, AgentDefinition.GEMINI);
 
   private static final Pattern VARIABLE = Pattern.compile("\\{\\{([^{}]*)}}");
 
@@ -416,11 +417,14 @@ public final class DefinitionParser {
             String permissionMode = permissionMode(fields.get("permissionMode"), path);
             String model = model(fields.get("model"), path + ".model");
             String provider = provider(fields.get("provider"), path + ".provider");
-            if (tools != null && AgentDefinition.CODEX.equals(provider)) {
+            AgentProviderKind kind =
+                provider == null ? null : AgentProviderKind.byId(provider).orElse(null);
+            if (tools != null && kind != null && kind != AgentProviderKind.CLAUDE_CODE) {
               warning(
                   fields.get("tools").value(),
                   path + ".tools",
-                  "Codex no admite una lista de herramientas: se ignora. Lo que puede hacer lo"
+                  kind.displayName()
+                      + " no admite una lista de herramientas: se ignora. Lo que puede hacer lo"
                       + " fija `permissionMode` (`plan` es solo lectura)");
             }
             Map<String, Object> output = output(fields.get("output"), path + ".output");
@@ -433,12 +437,15 @@ public final class DefinitionParser {
                   mapping(limitsEntry.value(), path + ".limits", LIMIT_KEYS, Map.of());
               if (limits != null) {
                 maxTurns = integer(limits.get("maxTurns"), path + ".limits.maxTurns", 1, 1000);
-                if (maxTurns != null && AgentDefinition.CODEX.equals(provider)) {
+                if (maxTurns != null
+                    && kind != null
+                    && !kind.supports(AgentProviderKind.Capability.MAX_TURNS)) {
                   warning(
                       limits.get("maxTurns").value(),
                       path + ".limits.maxTurns",
-                      "Codex no admite `maxTurns`: se ignora. Acota el agente con `maxBudgetUsd` o"
-                          + " `timeoutMinutes`");
+                      kind.displayName()
+                          + " no admite `maxTurns`: se ignora. Acota el agente con `maxBudgetUsd`"
+                          + " o `timeoutMinutes`");
                   maxTurns = null;
                 }
                 maxBudgetUsd =
@@ -605,10 +612,12 @@ public final class DefinitionParser {
             entry.value(),
             "El proveedor `"
                 + provider
-                + "` todavía no se ejecuta: llega con el hito de proveedores. Por ahora solo `"
+                + "` todavía no se ejecuta. Por ahora solo `"
                 + AgentDefinition.CLAUDE_CODE
-                + "` y `"
+                + "`, `"
                 + AgentDefinition.CODEX
+                + "` y `"
+                + AgentDefinition.GEMINI
                 + "`");
         return provider;
       }

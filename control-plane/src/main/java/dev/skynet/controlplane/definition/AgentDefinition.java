@@ -36,6 +36,9 @@ public record AgentDefinition(
   /** Codex de OpenAI ({@code codex exec --json}). */
   public static final String CODEX = "codex";
 
+  /** Gemini CLI de Google ({@code gemini --output-format stream-json}). */
+  public static final String GEMINI = "gemini";
+
   public AgentDefinition {
     tools = tools == null ? null : List.copyOf(tools);
   }
