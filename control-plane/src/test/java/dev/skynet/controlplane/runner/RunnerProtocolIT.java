@@ -419,7 +419,7 @@ class RunnerProtocolIT extends IntegrationTest {
   void startsOnlyGoToRunnersThatHaveTheAgentsProvider() {
     Runner claude = register("laptop", 2);
     Launched run = launch("revisa");
-    // El YAML aún no admite otros proveedores: el agente se cambia a mano.
+    // Un agente lanzado a mano es de Claude Code: se cambia en la base de datos.
     jdbc.sql("UPDATE agent_run SET provider = 'codex' WHERE id = ?").param(run.agentId()).update();
 
     assertThat(poll(claude, 0)).isEmpty();
@@ -433,12 +433,31 @@ class RunnerProtocolIT extends IntegrationTest {
         .extracting(c -> c.path("agentRunId").asString())
         .containsExactly(run.agentId().toString());
 
+    // Codex informa del coste de cada invocación, no del acumulado de la sesión.
+    String thread = "0199a213-81c0-7800-8aa1-bbab2a035a53";
+    completed(codex, run.agentId(), thread, "/w/run/c1", Map.of("costUsd", new BigDecimal("0.02")));
+    assertThat(agent(run).path("costUsd").decimalValue()).isEqualByComparingTo("0.02");
+    assertThat(agent(run).path("costUsdCumulative").decimalValue()).isEqualByComparingTo("0.02");
+
+    // Codex sabe continuar una sesión: la reanudación va al mismo runner, con su proveedor.
+    Launched resumed = continueWith(run.agentId(), "messages", "sigue");
+    assertThat(poll(claude, 0)).isEmpty();
+    JsonNode resume = poll(codex, 0).getFirst();
+    assertThat(resume.path("type").asString()).isEqualTo("RESUME");
+    assertThat(resume.path("start").path("provider").asString()).isEqualTo("codex");
+    assertThat(resume.path("start").path("resume").path("sessionId").asString()).isEqualTo(thread);
+    ack(codex, resume);
+    completed(
+        codex, resumed.agentId(), thread, "/w/run/c1", Map.of("costUsd", new BigDecimal("0.01")));
+    JsonNode child = agent(resumed);
+    assertThat(child.path("costUsd").decimalValue()).isEqualByComparingTo("0.01");
+    assertThat(child.path("costUsdCumulative").decimalValue()).isEqualByComparingTo("0.03");
+
     // Un proveedor que Skynet no sabe continuar responde 409.
-    Events events = new Events(run.agentId());
-    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", UUID.randomUUID().toString()));
-    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 0));
-    send(codex, events.batch());
-    assertStatus(HttpStatus.CONFLICT, () -> continueWith(run.agentId(), "messages", "sigue"));
+    jdbc.sql("UPDATE agent_run SET provider = 'gemini' WHERE id = ?")
+        .param(resumed.agentId())
+        .update();
+    assertStatus(HttpStatus.CONFLICT, () -> continueWith(resumed.agentId(), "messages", "otra"));
   }
 
   @Test
@@ -881,6 +900,17 @@ class RunnerProtocolIT extends IntegrationTest {
   /** Recorre una invocación completa: worktree, sesión, un mensaje, resultado y salida limpia. */
   private void completed(
       Runner runner, UUID agentRunId, String session, String worktree, String cumulativeCost) {
+    completed(
+        runner,
+        agentRunId,
+        session,
+        worktree,
+        Map.of("costUsdCumulative", new BigDecimal(cumulativeCost)));
+  }
+
+  /** Igual, con el coste que declara el proveedor ({@code costUsd} o {@code costUsdCumulative}). */
+  private void completed(
+      Runner runner, UUID agentRunId, String session, String worktree, Map<String, ?> cost) {
     Events events = new Events(agentRunId);
     events.add(
         AgentEventType.WORKSPACE_READY,
@@ -893,15 +923,10 @@ class RunnerProtocolIT extends IntegrationTest {
             "abc"));
     events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", session));
     events.add(AgentEventType.MESSAGE_RECEIVED, Map.of("text", "Hecho"));
-    events.add(
-        AgentEventType.RESULT,
-        Map.of(
-            "subtype",
-            "success",
-            "isError",
-            false,
-            "costUsdCumulative",
-            new BigDecimal(cumulativeCost)));
+    Map<String, Object> result = new java.util.HashMap<>(cost);
+    result.put("subtype", "success");
+    result.put("isError", false);
+    events.add(AgentEventType.RESULT, result);
     events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 0));
     send(runner, events.batch());
     assertThat(get("/api/agent-runs/" + agentRunId).path("agent").path("status").asString())

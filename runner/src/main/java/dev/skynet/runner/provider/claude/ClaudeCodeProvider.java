@@ -4,12 +4,13 @@ import dev.skynet.protocol.AgentProviderKind;
 import dev.skynet.protocol.runner.AgentLimits;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.StartAgent;
+import dev.skynet.runner.provider.AgentEnvironment;
 import dev.skynet.runner.provider.AgentProvider;
 import dev.skynet.runner.provider.CliVersion;
+import dev.skynet.runner.provider.ModelPrices;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -22,35 +23,12 @@ import java.util.Set;
  */
 public class ClaudeCodeProvider implements AgentProvider {
 
-  /**
-   * Variables de entorno que el agente hereda del runner. El resto se filtra para no filtrar
-   * secretos del runner al agente.
-   */
-  static final Set<String> INHERITED_ENV =
-      Set.of(
-          "PATH",
-          "HOME",
-          "USER",
-          "LOGNAME",
-          "SHELL",
-          "LANG",
-          "LC_ALL",
-          "LC_CTYPE",
-          "TERM",
-          "TMPDIR",
-          "TZ",
-          "ANTHROPIC_API_KEY",
-          "ANTHROPIC_BASE_URL",
-          "CLAUDE_CONFIG_DIR",
-          "HTTP_PROXY",
-          "HTTPS_PROXY",
-          "NO_PROXY",
-          "http_proxy",
-          "https_proxy",
-          "no_proxy");
+  /** Variables propias de Claude Code que hereda el agente, además de las básicas. */
+  static final Set<String> CLAUDE_ENV =
+      Set.of("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR");
 
   private final String executable;
-  private final List<String> extraEnv;
+  private final AgentEnvironment env;
   private final ModelPrices prices;
   private final ClaudeSessions sessions;
 
@@ -77,7 +55,7 @@ public class ClaudeCodeProvider implements AgentProvider {
   public ClaudeCodeProvider(
       String executable, List<String> extraEnv, ModelPrices prices, ClaudeSessions sessions) {
     this.executable = executable;
-    this.extraEnv = List.copyOf(extraEnv);
+    this.env = new AgentEnvironment(CLAUDE_ENV, extraEnv);
     this.prices = prices;
     this.sessions = sessions;
   }
@@ -93,12 +71,12 @@ public class ClaudeCodeProvider implements AgentProvider {
   }
 
   @Override
-  public ClaudeStreamParser newParser() {
+  public ClaudeStreamParser newParser(StartAgent start) {
     return new ClaudeStreamParser();
   }
 
   @Override
-  public CostEstimator newCostMeter() {
+  public CostEstimator newCostMeter(StartAgent start) {
     return new CostEstimator(prices);
   }
 
@@ -108,7 +86,12 @@ public class ClaudeCodeProvider implements AgentProvider {
     return sessions != null && sessions.copy(sessionId, from, to);
   }
 
+  /** Claude Code no necesita ficheros auxiliares: el schema va en la línea de comandos. */
   @Override
+  public List<String> command(StartAgent start, Path files) {
+    return command(start);
+  }
+
   public List<String> command(StartAgent start) {
     List<String> command = new ArrayList<>();
     command.add(executable);
@@ -167,30 +150,13 @@ public class ClaudeCodeProvider implements AgentProvider {
     return environment(runnerEnv, null);
   }
 
-  /**
-   * Entorno de una invocación: las variables básicas y, de las adicionales que permite el runner,
-   * solo las que pide la política del repositorio ({@code null}: todas). Las que pide y el runner
-   * no permite no se pasan.
-   */
   @Override
   public Map<String, String> environment(Map<String, String> runnerEnv, List<String> requested) {
-    Map<String, String> env = new LinkedHashMap<>();
-    runnerEnv.forEach(
-        (name, value) -> {
-          if (INHERITED_ENV.contains(name)
-              || (extraEnv.contains(name) && (requested == null || requested.contains(name)))) {
-            env.put(name, value);
-          }
-        });
-    return env;
+    return env.of(runnerEnv, requested);
   }
 
   @Override
   public List<String> refusedEnvironment(StartAgent start) {
-    return start.environment() == null
-        ? List.of()
-        : start.environment().stream()
-            .filter(name -> !INHERITED_ENV.contains(name) && !extraEnv.contains(name))
-            .toList();
+    return env.refused(start.environment());
   }
 }

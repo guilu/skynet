@@ -16,7 +16,12 @@ public enum AgentProviderKind {
       "claude-code",
       "Claude Code",
       EnumSet.of(
-          Capability.RESUME, Capability.FORK, Capability.STRUCTURED_OUTPUT, Capability.MAX_TURNS));
+          Capability.RESUME, Capability.FORK, Capability.STRUCTURED_OUTPUT, Capability.MAX_TURNS)),
+  /** Codex de OpenAI ({@code codex exec --json}); no limita los turnos. */
+  CODEX(
+      "codex",
+      "Codex",
+      EnumSet.of(Capability.RESUME, Capability.FORK, Capability.STRUCTURED_OUTPUT));
 
   /** Lo que un proveedor puede hacer además de arrancar una sesión. */
   public enum Capability {

@@ -23,12 +23,16 @@ sourceSets {
     }
 }
 
-// Los tests del ejecutor lanzan fake-claude como un proceso real.
+// Los tests del ejecutor lanzan fake-claude y fake-codex como procesos reales.
 val fakeClaude = project(":tools:fake-claude")
 tasks.test {
     dependsOn(fakeClaude.tasks.named("installDist"))
     systemProperty(
         "skynet.fakeClaude",
         fakeClaude.layout.buildDirectory.file("install/fake-claude/bin/fake-claude").get().asFile.path,
+    )
+    systemProperty(
+        "skynet.fakeCodex",
+        fakeClaude.layout.buildDirectory.file("install/fake-claude/bin/fake-codex").get().asFile.path,
     )
 }

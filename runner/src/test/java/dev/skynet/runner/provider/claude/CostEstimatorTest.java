@@ -3,6 +3,7 @@ package dev.skynet.runner.provider.claude;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.skynet.runner.provider.ModelPrices;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;

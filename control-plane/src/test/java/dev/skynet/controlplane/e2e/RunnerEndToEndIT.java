@@ -11,10 +11,10 @@ import dev.skynet.runner.agent.ArtifactSender;
 import dev.skynet.runner.agent.ArtifactSpool;
 import dev.skynet.runner.agent.EventSender;
 import dev.skynet.runner.journal.Journal;
+import dev.skynet.runner.provider.ModelPrices;
 import dev.skynet.runner.provider.ProviderRegistry;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
 import dev.skynet.runner.provider.claude.ClaudeSessions;
-import dev.skynet.runner.provider.claude.ModelPrices;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.transport.ControlPlaneClient;
 import dev.skynet.runner.workspace.WorkspaceManager;
@@ -286,6 +286,7 @@ class RunnerEndToEndIT extends IntegrationTest {
             RUNNER_REGISTRATION_TOKEN,
             2,
             dir.resolve("runner"),
+            null,
             null,
             List.of(),
             Duration.ofSeconds(2),

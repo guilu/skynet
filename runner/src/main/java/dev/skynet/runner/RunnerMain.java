@@ -5,10 +5,11 @@ import dev.skynet.runner.agent.ArtifactSender;
 import dev.skynet.runner.agent.ArtifactSpool;
 import dev.skynet.runner.agent.EventSender;
 import dev.skynet.runner.journal.Journal;
+import dev.skynet.runner.provider.ModelPrices;
 import dev.skynet.runner.provider.ProviderRegistry;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
 import dev.skynet.runner.provider.claude.ClaudeSessions;
-import dev.skynet.runner.provider.claude.ModelPrices;
+import dev.skynet.runner.provider.codex.CodexProvider;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.transport.ControlPlaneClient;
 import dev.skynet.runner.workspace.WorkspaceManager;
@@ -55,16 +56,19 @@ public final class RunnerMain {
       throws IOException, InterruptedException {
     ControlPlaneClient client = new ControlPlaneClient(config.controlPlane());
     ProcessSupervisor supervisor = new ProcessSupervisor();
+    ModelPrices prices =
+        config.modelPrices() == null
+            ? ModelPrices.defaults()
+            : ModelPrices.load(config.modelPrices());
     ClaudeCodeProvider claude =
         new ClaudeCodeProvider(
             config.claudeExecutable(),
             config.extraEnv(),
-            config.modelPrices() == null
-                ? ModelPrices.defaults()
-                : ModelPrices.load(config.modelPrices()),
+            prices,
             ClaudeSessions.of(System.getenv()).orElse(null));
+    CodexProvider codex = new CodexProvider(config.codexExecutable(), config.extraEnv(), prices);
     ProviderRegistry providers =
-        ProviderRegistry.detect(List.of(claude), config.providers(), System.getenv());
+        ProviderRegistry.detect(List.of(claude, codex), config.providers(), System.getenv());
     try (EventSender sender =
             new EventSender(journal, client, Duration.ofMillis(500), Duration.ofSeconds(2));
         ArtifactSender artifactSender =

@@ -1,4 +1,4 @@
-package dev.skynet.runner.provider.claude;
+package dev.skynet.runner.provider;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -22,12 +22,12 @@ import java.util.Optional;
 public final class ModelPrices {
 
   /**
-   * Precio de un modelo en US$ por millón de tokens. Escribir en la caché cuesta 1,25 veces la
-   * entrada con la duración de 5 minutos y el doble con la de 1 hora.
+   * Precio de un modelo en US$ por millón de tokens. En Claude, escribir en la caché cuesta 1,25
+   * veces la entrada con la duración de 5 minutos y el doble con la de 1 hora.
    */
   public record Price(BigDecimal input, BigDecimal output, BigDecimal cacheRead) {}
 
-  /** Tarifas de la API de Anthropic (septiembre de 2026). */
+  /** Tarifas de la API de Anthropic (septiembre de 2026) y de OpenAI (ver abajo). */
   private static final Map<String, Price> DEFAULTS = new LinkedHashMap<>();
 
   static {
@@ -42,6 +42,16 @@ public final class ModelPrices {
     DEFAULTS.put("claude-sonnet-5", price("2", "10", "0.20"));
     DEFAULTS.put("claude-sonnet-4", price("3", "15", "0.30"));
     DEFAULTS.put("claude-haiku-4", price("1", "5", "0.10"));
+    // OpenAI (Codex), según agregadores de precios (octubre de 2026): conviene comprobarlos en la
+    // página de precios de OpenAI y corregirlos con SKYNET_MODEL_PRICES si han cambiado.
+    DEFAULTS.put("gpt-5.5", price("5", "30", "0.50"));
+    DEFAULTS.put("gpt-5.4", price("2.50", "15", "0.25"));
+    DEFAULTS.put("gpt-5.3-codex", price("1.75", "14", "0.175"));
+    DEFAULTS.put("gpt-5.2-codex", price("1.75", "14", "0.175"));
+    DEFAULTS.put("gpt-5.1-codex-mini", price("0.25", "2", "0.025"));
+    DEFAULTS.put("gpt-5.1-codex", price("1.25", "10", "0.125"));
+    DEFAULTS.put("gpt-5-codex", price("1.25", "10", "0.125"));
+    DEFAULTS.put("gpt-5", price("1.25", "10", "0.125"));
   }
 
   private final Map<String, Price> byPrefix;
@@ -59,7 +69,7 @@ public final class ModelPrices {
     return parse(Files.readAllLines(file, StandardCharsets.UTF_8));
   }
 
-  static ModelPrices parse(List<String> lines) {
+  public static ModelPrices parse(List<String> lines) {
     Map<String, Price> prices = new LinkedHashMap<>(DEFAULTS);
     for (int i = 0; i < lines.size(); i++) {
       String line = lines.get(i).strip();
