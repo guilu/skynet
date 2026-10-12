@@ -1,5 +1,6 @@
 package dev.skynet.controlplane.dashboard;
 
+import dev.skynet.controlplane.runner.ProviderShortage;
 import dev.skynet.controlplane.runner.RunnerView;
 import dev.skynet.controlplane.workflow.RunView;
 import dev.skynet.controlplane.workflow.UnresponsiveAgent;
@@ -14,6 +15,7 @@ import java.util.List;
  * @param recentFailures ejecuciones fallidas en las últimas 24 horas
  * @param unresponsiveAgents agentes que han dejado de dar señales de actividad
  * @param staleRunners runners sin latido reciente
+ * @param providerShortages proveedores con agentes en cola y ningún runner en línea que los tenga
  */
 public record DashboardSummary(
     List<RunView> activeRuns,
@@ -21,4 +23,5 @@ public record DashboardSummary(
     List<RunView> recentFailures,
     List<UnresponsiveAgent> unresponsiveAgents,
     List<RunnerView> staleRunners,
+    List<ProviderShortage> providerShortages,
     Instant generatedAt) {}

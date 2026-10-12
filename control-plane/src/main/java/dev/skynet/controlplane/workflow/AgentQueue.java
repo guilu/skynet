@@ -65,7 +65,7 @@ class AgentQueue {
                 stage.getId(),
                 repository.getId(),
                 invocation.command() == null
-                    ? AgentRun.PROVIDER_CLAUDE_CODE
+                    ? policy.providerOrDefault()
                     : AgentRun.PROVIDER_COMMAND,
                 invocation.sessionId(),
                 invocation.workspaceId(),
@@ -98,7 +98,7 @@ class AgentQueue {
     spawned.put("promptSha256", prompt.getSha256());
     spawned.put("allowedTools", policy.allowedTools());
     spawned.put("permissionMode", policy.permissionMode());
-    String model = model(invocation);
+    String model = model(invocation, agent.getProvider());
     if (model != null) {
       spawned.put("model", model);
     }
@@ -141,20 +141,25 @@ class AgentQueue {
                 policy.environment(),
                 invocation.workspace(),
                 invocation.command(),
-                outputSchema),
+                outputSchema,
+                agent.isCommand() ? null : agent.getProvider()),
             invocation.runnerId()));
     return agent;
   }
 
   /**
-   * Modelo de la invocación: el de su agente del YAML o, si no fija ninguno, el global. Un comando
-   * no tiene modelo.
+   * Modelo de la invocación: el de su agente del YAML o, si no fija ninguno, el global de Claude
+   * Code ({@code skynet.agent.model}); los demás proveedores usan entonces el predeterminado de su
+   * CLI. Un comando no tiene modelo.
    */
-  private String model(Invocation invocation) {
+  private String model(Invocation invocation, String provider) {
     if (invocation.command() != null) {
       return null;
     }
     String model = invocation.policy().model();
-    return model != null ? model : defaults.model();
+    if (model != null) {
+      return model;
+    }
+    return AgentRun.PROVIDER_CLAUDE_CODE.equals(provider) ? defaults.model() : null;
   }
 }

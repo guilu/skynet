@@ -220,9 +220,12 @@ Para actualizarlo, repite los cinco primeros comandos de la instalación y reini
 | `SKYNET_RUNNER_CAPACITY` | `2` | Agentes simultáneos |
 | `SKYNET_RUNNER_HOME` | `~/.skynet-runner` | Journal, logs y worktrees |
 | `SKYNET_CLAUDE_BIN` | `claude` | Ejecutable de Claude Code (o fake-claude para probar) |
+| `SKYNET_PROVIDERS` | — | Proveedores de agentes que declara el runner, separados por comas (p. ej. `claude-code`). Sin definir, los que respondan a `--version` |
 | `SKYNET_AGENT_ENV` | — | Variables extra que hereda el agente, separadas por comas |
 | `SKYNET_MODEL_PRICES` | — | Fichero que amplía la tabla de precios con la que se estima el coste (ver abajo) |
 | `SKYNET_LOG_RETENTION_DAYS` | `7` | Días que se conservan los logs locales (`SKYNET_RUNNER_HOME/logs`); ya están subidos como artefactos |
+
+Al arrancar, el runner prueba `--version` de cada CLI de agentes que conoce (de momento solo Claude Code, `SKYNET_CLAUDE_BIN`) y declara al control plane los que responden, al registrarse y en cada latido; los ves con su versión en **Runners**. Un agente solo se entrega a un runner que tiene su proveedor; si ninguno en línea lo tiene, se queda en cola y el Dashboard lo avisa en «Necesita tu atención». `SKYNET_PROVIDERS` fija la lista a mano, también si un CLI no responde bien a `--version`. Los comandos de las fases `command` van a cualquier runner.
 
 En **Runners**, «Revocar token…» invalida el token de un runner al momento. Si es el tuyo, se vuelve a registrar solo con `SKYNET_RUNNER_REGISTRATION_TOKEN`; quien tenga solo el token robado se queda fuera. Si el secreto de registro también se ha filtrado, cámbialo en el control plane y en tus runners.
 

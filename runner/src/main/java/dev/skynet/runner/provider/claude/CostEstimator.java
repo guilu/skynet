@@ -24,7 +24,7 @@ import tools.jackson.databind.json.JsonMapper;
  * <p>Tiene estado y no es seguro entre hilos: una instancia por invocación, alimentada desde el
  * hilo que lee su salida.
  */
-public final class CostEstimator {
+public final class CostEstimator implements dev.skynet.runner.provider.CostMeter {
 
   private static final ObjectMapper JSON = JsonMapper.builder().build();
   private static final BigDecimal MILLION = BigDecimal.valueOf(1_000_000);
@@ -44,16 +44,17 @@ public final class CostEstimator {
     this.prices = prices;
   }
 
-  /** Coste estimado hasta ahora, en US$. */
+  @Override
   public BigDecimal estimatedUsd() {
     return total;
   }
 
-  /** Modelos que han aparecido sin precio en la tabla. */
+  @Override
   public Set<String> unpricedModels() {
     return Set.copyOf(unpriced);
   }
 
+  @Override
   public void accept(String line) {
     if (line == null || line.isBlank()) {
       return;

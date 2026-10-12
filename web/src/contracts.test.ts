@@ -35,6 +35,8 @@ import type {
   RunMetrics,
   RunPage,
   RunTotals,
+  ProviderInfo,
+  ProviderShortage,
   Runner,
   StageDefinition,
   StagePolicy,
@@ -178,6 +180,13 @@ const RUNNER: Keys<Runner> = {
   lastHeartbeatAt: true,
   status: true,
   archivedAt: true,
+  providers: true,
+}
+const PROVIDER_INFO: Keys<ProviderInfo> = { id: true, version: true }
+const PROVIDER_SHORTAGE: Keys<ProviderShortage> = {
+  provider: true,
+  displayName: true,
+  queuedAgents: true,
 }
 const UNRESPONSIVE_AGENT: Keys<UnresponsiveAgent> = {
   agentRunId: true,
@@ -214,6 +223,7 @@ const DASHBOARD: Keys<DashboardSummary> = {
   recentFailures: true,
   unresponsiveAgents: true,
   staleRunners: true,
+  providerShortages: true,
   generatedAt: true,
 }
 const STORED_EVENT: Keys<StoredEvent> = {
@@ -399,6 +409,7 @@ describe('contratos con el backend', () => {
   it('runners', () => {
     expect(runners.map((r) => r.status)).toEqual(['ONLINE', 'STALE'])
     runners.forEach((r) => expectShape(r, RUNNER))
+    runners.forEach((r) => r.providers.forEach((p) => expectShape(p, PROVIDER_INFO)))
   })
 
   it('dashboard', () => {
@@ -406,6 +417,7 @@ describe('contratos con el backend', () => {
     ;(dashboardSummary.activeRuns as Run[]).forEach(expectRun)
     dashboardSummary.unresponsiveAgents.forEach((a) => expectShape(a, UNRESPONSIVE_AGENT))
     dashboardSummary.staleRunners.forEach((r) => expectShape(r, RUNNER))
+    dashboardSummary.providerShortages.forEach((p) => expectShape(p, PROVIDER_SHORTAGE))
   })
 
   it('métricas del dashboard', () => {

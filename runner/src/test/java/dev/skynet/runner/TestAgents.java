@@ -6,7 +6,10 @@ import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerCommandType;
 import dev.skynet.protocol.runner.StartAgent;
 import dev.skynet.protocol.runner.WorkspaceRef;
+import dev.skynet.runner.provider.ProviderRegistry;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
+import dev.skynet.runner.provider.claude.ClaudeSessions;
+import dev.skynet.runner.provider.claude.ModelPrices;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -22,9 +25,21 @@ public final class TestAgents {
 
   /** Proveedor que lanza fake-claude (lo instala Gradle antes de los tests). */
   public static ClaudeCodeProvider fakeClaude() {
+    return fakeClaude(Map.of());
+  }
+
+  /** fake-claude con las sesiones donde las deja según {@code runnerEnv}, para bifurcar. */
+  public static ClaudeCodeProvider fakeClaude(Map<String, String> runnerEnv) {
     return new ClaudeCodeProvider(
         Path.of(System.getProperty("skynet.fakeClaude")).toAbsolutePath().toString(),
-        List.of("JAVA_HOME", "FAKE_CLAUDE_FIXTURE", "FAKE_CLAUDE_DELAY_MS", "FAKE_CLAUDE_APPLY"));
+        List.of("JAVA_HOME", "FAKE_CLAUDE_FIXTURE", "FAKE_CLAUDE_DELAY_MS", "FAKE_CLAUDE_APPLY"),
+        ModelPrices.defaults(),
+        ClaudeSessions.of(runnerEnv).orElse(null));
+  }
+
+  /** Registro con fake-claude como único proveedor. */
+  public static ProviderRegistry fakeProviders(Map<String, String> runnerEnv) {
+    return ProviderRegistry.of(fakeClaude(runnerEnv));
   }
 
   /** Entorno del runner con el que fake-claude reproduce {@code fixture}. */

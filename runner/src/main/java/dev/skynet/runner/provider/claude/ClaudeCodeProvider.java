@@ -1,12 +1,18 @@
 package dev.skynet.runner.provider.claude;
 
+import dev.skynet.protocol.AgentProviderKind;
 import dev.skynet.protocol.runner.AgentLimits;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.StartAgent;
+import dev.skynet.runner.provider.AgentProvider;
+import dev.skynet.runner.provider.CliVersion;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -14,7 +20,7 @@ import java.util.Set;
  * {@code docs/claude-code-stream-json.md}): salida {@code stream-json} completa, id de sesión
  * fijado por el control plane o sesión que se reanuda, herramientas permitidas y límites.
  */
-public class ClaudeCodeProvider {
+public class ClaudeCodeProvider implements AgentProvider {
 
   /**
    * Variables de entorno que el agente hereda del runner. El resto se filtra para no filtrar
@@ -46,6 +52,7 @@ public class ClaudeCodeProvider {
   private final String executable;
   private final List<String> extraEnv;
   private final ModelPrices prices;
+  private final ClaudeSessions sessions;
 
   /**
    * @param executable ejecutable de Claude Code ({@code claude}, o fake-claude en pruebas)
@@ -60,16 +67,48 @@ public class ClaudeCodeProvider {
    *     presupuesto
    */
   public ClaudeCodeProvider(String executable, List<String> extraEnv, ModelPrices prices) {
+    this(executable, extraEnv, prices, null);
+  }
+
+  /**
+   * @param sessions dónde guarda Claude Code las sesiones, para copiarlas al bifurcar; {@code null}
+   *     si no se sabe
+   */
+  public ClaudeCodeProvider(
+      String executable, List<String> extraEnv, ModelPrices prices, ClaudeSessions sessions) {
     this.executable = executable;
     this.extraEnv = List.copyOf(extraEnv);
     this.prices = prices;
+    this.sessions = sessions;
   }
 
-  /** Estimador de coste para una invocación nueva. */
-  public CostEstimator costEstimator() {
+  @Override
+  public AgentProviderKind kind() {
+    return AgentProviderKind.CLAUDE_CODE;
+  }
+
+  @Override
+  public String executable() {
+    return executable;
+  }
+
+  @Override
+  public ClaudeStreamParser newParser() {
+    return new ClaudeStreamParser();
+  }
+
+  @Override
+  public CostEstimator newCostMeter() {
     return new CostEstimator(prices);
   }
 
+  /** {@code --resume} solo busca en el directorio del cwd: la sesión se copia al worktree nuevo. */
+  @Override
+  public boolean copySession(String sessionId, Path from, Path to) throws IOException {
+    return sessions != null && sessions.copy(sessionId, from, to);
+  }
+
+  @Override
   public List<String> command(StartAgent start) {
     List<String> command = new ArrayList<>();
     command.add(executable);
@@ -118,25 +157,9 @@ public class ClaudeCodeProvider {
   }
 
   /** Versión del CLI instalado ({@code claude --version}), si se puede obtener. */
-  public java.util.Optional<String> version(Map<String, String> runnerEnv) {
-    try {
-      ProcessBuilder builder =
-          new ProcessBuilder(executable, "--version").redirectErrorStream(true);
-      builder.environment().clear();
-      builder.environment().putAll(environment(runnerEnv));
-      Process process = builder.start();
-      process.getOutputStream().close();
-      String output = new String(process.getInputStream().readAllBytes()).trim();
-      if (!process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS) || process.exitValue() != 0) {
-        return java.util.Optional.empty();
-      }
-      return java.util.Optional.of(output.lines().findFirst().orElse(output));
-    } catch (java.io.IOException e) {
-      return java.util.Optional.empty();
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      return java.util.Optional.empty();
-    }
+  @Override
+  public Optional<String> version(Map<String, String> runnerEnv) {
+    return CliVersion.of(executable, environment(runnerEnv));
   }
 
   /** Entorno del agente: solo las variables permitidas del runner. */
@@ -149,6 +172,7 @@ public class ClaudeCodeProvider {
    * solo las que pide la política del repositorio ({@code null}: todas). Las que pide y el runner
    * no permite no se pasan.
    */
+  @Override
   public Map<String, String> environment(Map<String, String> runnerEnv, List<String> requested) {
     Map<String, String> env = new LinkedHashMap<>();
     runnerEnv.forEach(
@@ -161,7 +185,7 @@ public class ClaudeCodeProvider {
     return env;
   }
 
-  /** Variables que pide la invocación y el runner no permite: no las recibe el agente. */
+  @Override
   public List<String> refusedEnvironment(StartAgent start) {
     return start.environment() == null
         ? List.of()

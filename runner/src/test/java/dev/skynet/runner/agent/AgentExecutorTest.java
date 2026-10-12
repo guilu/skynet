@@ -10,6 +10,8 @@ import dev.skynet.protocol.runner.CleanupWorkspace;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
+import dev.skynet.protocol.runner.RunnerCommandType;
+import dev.skynet.protocol.runner.StartAgent;
 import dev.skynet.protocol.runner.WorkspaceRef;
 import dev.skynet.runner.TestAgents;
 import dev.skynet.runner.TestRepos;
@@ -67,7 +69,7 @@ class AgentExecutorTest {
             journal,
             new ProcessSupervisor(),
             new WorkspaceManager(dir.resolve("workspaces")),
-            TestAgents.fakeClaude(),
+            TestAgents.fakeProviders(env),
             env,
             dir.resolve("logs"),
             Duration.ofSeconds(2),
@@ -99,6 +101,39 @@ class AgentExecutorTest {
       }
       Thread.sleep(20);
     }
+  }
+
+  @Test
+  void anAgentOfAProviderTheRunnerDoesNotHaveFailsWithoutAWorktree() throws Exception {
+    UUID id = UUID.randomUUID();
+    StartAgent base = TestAgents.start(id, repo.toString(), null).start();
+    StartAgent codex =
+        new StartAgent(
+            base.workflowRunId(),
+            base.workItemKey(),
+            base.repositoryPath(),
+            base.baseBranch(),
+            base.sessionId(),
+            base.prompt(),
+            base.allowedTools(),
+            base.permissionMode(),
+            base.model(),
+            base.limits(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            "codex");
+    executor("01-simple-text")
+        .start(
+            new RunnerCommand(
+                UUID.randomUUID(), RunnerCommandType.START, id, Instant.now(), codex, null, null));
+
+    NormalizedEvent exit = awaitExit(id);
+    assertThat(exit.type()).isEqualTo(AgentEventType.PROCESS_EXITED);
+    assertThat(exit.payload().get("error")).isEqualTo("Este runner no tiene codex disponible");
+    assertThat(eventsOf(id)).hasSize(1);
   }
 
   @Test

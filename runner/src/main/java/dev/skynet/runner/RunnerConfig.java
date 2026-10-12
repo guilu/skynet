@@ -7,6 +7,8 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Configuración del runner, leída de variables de entorno.
@@ -24,6 +26,8 @@ import java.util.Map;
  *     estima el coste ({@code SKYNET_MODEL_PRICES}), o {@code null}
  * @param logRetention cuánto se conservan los logs locales ya subidos ({@code
  *     SKYNET_LOG_RETENTION_DAYS}, 7 días por defecto)
+ * @param providers proveedores que declara el runner ({@code SKYNET_PROVIDERS}, separados por
+ *     comas), o {@code null} para los que respondan a {@code --version}
  */
 public record RunnerConfig(
     URI controlPlane,
@@ -37,7 +41,8 @@ public record RunnerConfig(
     Duration heartbeatInterval,
     Duration cancelGrace,
     Path modelPrices,
-    Duration logRetention) {
+    Duration logRetention,
+    Set<String> providers) {
 
   public Path journalFile() {
     return home.resolve("journal.db");
@@ -75,7 +80,18 @@ public record RunnerConfig(
         Duration.ofSeconds(15),
         Duration.ofSeconds(10),
         env.containsKey("SKYNET_MODEL_PRICES") ? Path.of(env.get("SKYNET_MODEL_PRICES")) : null,
-        Duration.ofDays(Long.parseLong(env.getOrDefault("SKYNET_LOG_RETENTION_DAYS", "7"))));
+        Duration.ofDays(Long.parseLong(env.getOrDefault("SKYNET_LOG_RETENTION_DAYS", "7"))),
+        providers(env.get("SKYNET_PROVIDERS")));
+  }
+
+  private static Set<String> providers(String value) {
+    if (value == null || value.isBlank()) {
+      return null;
+    }
+    return Arrays.stream(value.split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
   }
 
   private static String hostname() {

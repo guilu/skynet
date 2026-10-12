@@ -188,7 +188,7 @@ describe('App', () => {
     stubApi({ '/api/dashboard': dashboardSummary, '/api/runners': runners })
     renderAt('/', <App />)
     expect(await screen.findByRole('heading', { level: 1, name: /^Buen.*, admin$/ })).toBeVisible()
-    const attention = await screen.findByRole('region', { name: 'Necesita tu atención (2)' })
+    const attention = await screen.findByRole('region', { name: 'Necesita tu atención (3)' })
     const stuck = dashboardSummary.unresponsiveAgents[0]
     expect(within(attention).getByRole('link', { name: /TKM-1/ })).toHaveAttribute(
       'href',
@@ -198,8 +198,14 @@ describe('App', () => {
       'href',
       '/runners',
     )
+    // Agentes de un proveedor que no tiene ningún runner en línea.
     expect(
-      await screen.findByText('1 agente trabajando y 2 cosas que necesitan tu atención.'),
+      within(attention).getByRole('link', {
+        name: /Gemini CLI.*2 agentes esperan: ningún runner en línea tiene Gemini CLI/,
+      }),
+    ).toHaveAttribute('href', '/runners')
+    expect(
+      await screen.findByText('1 agente trabajando y 3 cosas que necesitan tu atención.'),
     ).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Ejecuciones activas (1)' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Ver todas las activas' })).toHaveAttribute(
@@ -209,7 +215,11 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: /Lanzar agente/ })).toHaveAttribute('href', '/projects')
     // Los runners, en tarjetas con su estado.
     const runnersSection = screen.getByRole('region', { name: 'Runners' })
-    expect(within(runnersSection).getByRole('link', { name: /runner-01.*En línea/ })).toBeVisible()
+    expect(
+      within(runnersSection).getByRole('link', {
+        name: /runner-01.*En línea.*Claude Code 2\.1\.288 · Codex/,
+      }),
+    ).toBeVisible()
     expect(
       within(runnersSection).getByRole('link', { name: /runner-02.*Desconectado/ }),
     ).toBeVisible()
@@ -223,6 +233,7 @@ describe('App', () => {
         recentFailures: [],
         unresponsiveAgents: [],
         staleRunners: [],
+        providerShortages: [],
         generatedAt: '2026-10-05T09:10:00Z',
       },
       '/api/runners': [],

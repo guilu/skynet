@@ -27,6 +27,8 @@ import java.util.UUID;
  *     -c} en el worktree en lugar de lanzar el agente; {@code null} para un agente
  * @param outputSchema JSON Schema de la salida estructurada que debe devolver el agente ({@code
  *     --json-schema}), o {@code null} si no tiene que devolver ninguna
+ * @param provider proveedor que ejecuta el agente ({@link dev.skynet.protocol.AgentProviderKind});
+ *     {@code null} para {@code claude-code}. No aplica a un comando.
  */
 public record StartAgent(
     UUID workflowRunId,
@@ -43,7 +45,8 @@ public record StartAgent(
     List<String> environment,
     WorkspaceRef workspace,
     String command,
-    String outputSchema) {
+    String outputSchema,
+    String provider) {
 
   public StartAgent {
     Objects.requireNonNull(workflowRunId, "workflowRunId");
@@ -62,6 +65,47 @@ public record StartAgent(
     if (command != null && outputSchema != null) {
       throw new IllegalArgumentException("Un comando no devuelve salida estructurada");
     }
+  }
+
+  /** Invocación de Claude Code (o un comando). */
+  public StartAgent(
+      UUID workflowRunId,
+      String workItemKey,
+      String repositoryPath,
+      String baseBranch,
+      UUID sessionId,
+      String prompt,
+      List<String> allowedTools,
+      String permissionMode,
+      String model,
+      AgentLimits limits,
+      ResumeFrom resume,
+      List<String> environment,
+      WorkspaceRef workspace,
+      String command,
+      String outputSchema) {
+    this(
+        workflowRunId,
+        workItemKey,
+        repositoryPath,
+        baseBranch,
+        sessionId,
+        prompt,
+        allowedTools,
+        permissionMode,
+        model,
+        limits,
+        resume,
+        environment,
+        workspace,
+        command,
+        outputSchema,
+        null);
+  }
+
+  /** Proveedor efectivo: {@code claude-code} si no se indica. */
+  public String providerOrDefault() {
+    return provider == null ? dev.skynet.protocol.AgentProviderKind.CLAUDE_CODE.id() : provider;
   }
 
   /** Invocación sin salida estructurada. */

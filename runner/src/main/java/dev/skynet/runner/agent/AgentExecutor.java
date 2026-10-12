@@ -8,11 +8,11 @@ import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.StartAgent;
 import dev.skynet.runner.journal.Journal;
+import dev.skynet.runner.provider.AgentProvider;
+import dev.skynet.runner.provider.CostMeter;
+import dev.skynet.runner.provider.EventParser;
 import dev.skynet.runner.provider.ParsedEvent;
-import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
-import dev.skynet.runner.provider.claude.ClaudeSessions;
-import dev.skynet.runner.provider.claude.ClaudeStreamParser;
-import dev.skynet.runner.provider.claude.CostEstimator;
+import dev.skynet.runner.provider.ProviderRegistry;
 import dev.skynet.runner.supervisor.ProcessExit;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.supervisor.SupervisedProcess;
@@ -44,10 +44,10 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Ejecuta las invocaciones (arranques, reanudaciones y forks): prepara el worktree, lanza Claude
- * Code, traduce su salida a eventos en el journal y registra el fin del proceso. Toda invocación
- * que recibe termina con un único evento {@code agent.process.exited}, también si no llega a
- * arrancar.
+ * Ejecuta las invocaciones (arranques, reanudaciones y forks): prepara el worktree, lanza el CLI
+ * del proveedor del agente, traduce su salida a eventos en el journal y registra el fin del
+ * proceso. Toda invocación que recibe termina con un único evento {@code agent.process.exited},
+ * también si no llega a arrancar.
  */
 public final class AgentExecutor implements AutoCloseable {
 
@@ -65,7 +65,7 @@ public final class AgentExecutor implements AutoCloseable {
   private final Journal journal;
   private final ProcessSupervisor supervisor;
   private final WorkspaceManager workspaces;
-  private final ClaudeCodeProvider provider;
+  private final ProviderRegistry providers;
   private final Map<String, String> runnerEnv;
   private final Path logs;
   private final Duration cancelGrace;
@@ -76,14 +76,13 @@ public final class AgentExecutor implements AutoCloseable {
   private final Map<UUID, Execution> executions = new ConcurrentHashMap<>();
   private final Map<Path, UUID> busyWorkspaces = new ConcurrentHashMap<>();
   private final Map<UUID, SupervisedProcess> verifications = new ConcurrentHashMap<>();
-  private final ClaudeSessions sessions;
   private final ArtifactSpool spool;
 
   public AgentExecutor(
       Journal journal,
       ProcessSupervisor supervisor,
       WorkspaceManager workspaces,
-      ClaudeCodeProvider provider,
+      ProviderRegistry providers,
       Map<String, String> runnerEnv,
       Path logs,
       Duration cancelGrace,
@@ -92,12 +91,11 @@ public final class AgentExecutor implements AutoCloseable {
     this.journal = journal;
     this.supervisor = supervisor;
     this.workspaces = workspaces;
-    this.provider = provider;
+    this.providers = providers;
     this.runnerEnv = Map.copyOf(runnerEnv);
     this.logs = logs;
     this.cancelGrace = cancelGrace;
     this.eventsAvailable = eventsAvailable;
-    this.sessions = ClaudeSessions.of(runnerEnv).orElse(null);
     this.spool = spool;
   }
 
@@ -209,9 +207,22 @@ public final class AgentExecutor implements AutoCloseable {
 
   private void run(UUID id, StartAgent start, Execution execution) {
     try {
-      Workspace workspace = prepareOrFinish(id, start);
+      AgentProvider provider = null;
+      if (start.command() == null) {
+        provider = providers.get(start.providerOrDefault()).orElse(null);
+        if (provider == null) {
+          finish(
+              id,
+              failure(
+                  "Este runner no tiene "
+                      + ProviderRegistry.displayName(start.providerOrDefault())
+                      + " disponible"));
+          return;
+        }
+      }
+      Workspace workspace = prepareOrFinish(id, start, provider);
       if (workspace != null) {
-        runExclusively(id, start, execution, workspace);
+        runExclusively(id, start, provider, execution, workspace);
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -224,9 +235,10 @@ public final class AgentExecutor implements AutoCloseable {
   }
 
   /** Prepara el worktree; si no se puede, registra el fin de la invocación y devuelve null. */
-  private Workspace prepareOrFinish(UUID id, StartAgent start) throws InterruptedException {
+  private Workspace prepareOrFinish(UUID id, StartAgent start, AgentProvider provider)
+      throws InterruptedException {
     try {
-      return prepare(id, start);
+      return prepare(id, start, provider);
     } catch (IOException e) {
       finish(id, failure("No se pudo preparar el worktree: " + e.getMessage()));
       return null;
@@ -234,14 +246,15 @@ public final class AgentExecutor implements AutoCloseable {
   }
 
   /** Un solo escritor por worktree, aunque el control plane ya lo garantiza. */
-  private void runExclusively(UUID id, StartAgent start, Execution execution, Workspace workspace)
+  private void runExclusively(
+      UUID id, StartAgent start, AgentProvider provider, Execution execution, Workspace workspace)
       throws InterruptedException {
     if (busyWorkspaces.putIfAbsent(workspace.path(), id) != null) {
       finish(id, failure("Ya hay otra invocación en curso en el worktree " + workspace.path()));
       return;
     }
     try {
-      run(id, start, execution, workspace);
+      run(id, start, provider, execution, workspace);
     } finally {
       busyWorkspaces.remove(workspace.path(), id);
     }
@@ -251,9 +264,10 @@ public final class AgentExecutor implements AutoCloseable {
    * Worktree de la invocación: uno nuevo para un arranque, el indicado para una fase que continúa
    * el de otra, uno nuevo desde una instantánea del indicado para un hijo de una fase {@code
    * parallel}, el de la invocación anterior para reanudar y uno nuevo desde ese para bifurcar, con
-   * la sesión copiada para que {@code --resume} la encuentre desde allí.
+   * la sesión copiada si el proveedor la guarda por directorio.
    */
-  private Workspace prepare(UUID id, StartAgent start) throws IOException, InterruptedException {
+  private Workspace prepare(UUID id, StartAgent start, AgentProvider provider)
+      throws IOException, InterruptedException {
     ResumeFrom resume = start.resume();
     if (resume == null && start.workspace() != null) {
       Path path = Path.of(start.workspace().path());
@@ -274,7 +288,7 @@ public final class AgentExecutor implements AutoCloseable {
       return workspaces.existing(parent);
     }
     Workspace fork = workspaces.fork(parent, start.workflowRunId(), start.workItemKey(), id);
-    if (sessions == null || !sessions.copy(resume.sessionId(), parent, fork.path())) {
+    if (!provider.copySession(resume.sessionId(), parent, fork.path())) {
       LOG.warning(
           () ->
               "No se encontró la sesión "
@@ -286,7 +300,8 @@ public final class AgentExecutor implements AutoCloseable {
     return fork;
   }
 
-  private void run(UUID id, StartAgent start, Execution execution, Workspace workspace)
+  private void run(
+      UUID id, StartAgent start, AgentProvider provider, Execution execution, Workspace workspace)
       throws InterruptedException {
     Map<String, Object> ready = new LinkedHashMap<>();
     ready.put("path", workspace.path().toString());
@@ -307,9 +322,9 @@ public final class AgentExecutor implements AutoCloseable {
                   + " pide variables que el runner no permite (SKYNET_AGENT_ENV): "
                   + refused);
     }
-    ClaudeStreamParser parser = new ClaudeStreamParser();
+    EventParser parser = provider.newParser();
     BigDecimal budget = start.limits().maxBudgetUsd();
-    CostEstimator cost = provider.costEstimator();
+    CostMeter cost = provider.newCostMeter();
     SupervisedProcess process;
     try {
       process =
@@ -490,7 +505,7 @@ public final class AgentExecutor implements AutoCloseable {
                   supervisor.start(
                       List.of("sh", "-c", "exec 2>&1\n" + start.command()),
                       workspace.path(),
-                      provider.environment(runnerEnv, start.environment()),
+                      providers.commandEnvironment(runnerEnv, start.environment()),
                       log,
                       line -> {}));
     } catch (IOException e) {
@@ -701,7 +716,7 @@ public final class AgentExecutor implements AutoCloseable {
           supervisor.start(
               List.of("sh", "-c", "exec 2>&1\n" + verification.command()),
               workspace.path(),
-              provider.environment(runnerEnv),
+              providers.commandEnvironment(runnerEnv, null),
               log,
               line -> {});
     } catch (IOException e) {

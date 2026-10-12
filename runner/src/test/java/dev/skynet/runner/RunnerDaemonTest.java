@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import dev.skynet.protocol.AgentEventType;
+import dev.skynet.protocol.runner.ProviderInfo;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.runner.agent.AgentExecutor;
 import dev.skynet.runner.agent.ArtifactSender;
@@ -84,7 +85,8 @@ class RunnerDaemonTest {
             Duration.ofMillis(200),
             Duration.ofSeconds(2),
             null,
-            Duration.ofDays(7));
+            Duration.ofDays(7),
+            null);
     ControlPlaneClient client = new ControlPlaneClient(config.controlPlane());
     EventSender sender =
         new EventSender(journal, client, Duration.ofMillis(100), Duration.ofMillis(100));
@@ -96,7 +98,7 @@ class RunnerDaemonTest {
             journal,
             supervisor,
             new WorkspaceManager(config.workspacesDir()),
-            TestAgents.fakeClaude(),
+            TestAgents.fakeProviders(Map.of()),
             TestAgents.fakeClaudeEnv("02-tools"),
             config.logsDir(),
             config.cancelGrace(),
@@ -104,7 +106,14 @@ class RunnerDaemonTest {
             new ArtifactSpool(journal, config.artifactsDir(), artifactSender::wakeUp));
     RunnerDaemon daemon =
         new RunnerDaemon(
-            config, client, journal, executor, sender, artifactSender, supervisor, "2.1.0");
+            config,
+            client,
+            journal,
+            executor,
+            sender,
+            artifactSender,
+            supervisor,
+            List.of(new ProviderInfo("claude-code", "2.1.0")));
     closeables.add(sender);
     closeables.add(artifactSender);
     closeables.add(daemon);
@@ -155,6 +164,13 @@ class RunnerDaemonTest {
     assertThat(events.getLast().get("payload").get("exitCode").asInt()).isZero();
     await("journal vacío", () -> journal.pending(1).isEmpty());
     await("latido", () -> !controlPlane.heartbeats.isEmpty());
+    // Declara sus proveedores al registrarse y en cada latido, y mantiene providerVersion para
+    // los control planes anteriores.
+    JsonNode registration = controlPlane.registrationBodies.getFirst();
+    assertThat(registration.get("providerVersion").asString()).isEqualTo("2.1.0");
+    assertThat(registration.get("providers").get(0).get("id").asString()).isEqualTo("claude-code");
+    assertThat(controlPlane.heartbeats.getFirst().get("providers").get(0).get("version").asString())
+        .isEqualTo("2.1.0");
     await("artefactos subidos", () -> journal.pendingArtifacts(1).isEmpty());
     assertThat(controlPlane.artifactUploads)
         .hasSize(4)
@@ -253,6 +269,7 @@ class RunnerDaemonTest {
   static final class StubControlPlane {
 
     final AtomicInteger registrations = new AtomicInteger();
+    final List<JsonNode> registrationBodies = new CopyOnWriteArrayList<>();
     final AtomicInteger failEventsTimes = new AtomicInteger();
     final AtomicInteger failArtifactsTimes = new AtomicInteger();
     final List<String> artifactUploads = new CopyOnWriteArrayList<>();
@@ -303,6 +320,7 @@ class RunnerDaemonTest {
         byte[] body = exchange.getRequestBody().readAllBytes();
         if (path.equals("/api/runner/register")) {
           registrations.incrementAndGet();
+          registrationBodies.add(JSON.readTree(body));
           String token = "token-" + UUID.randomUUID();
           validTokens.add(token);
           respond(exchange, 200, Map.of("runnerId", UUID.randomUUID().toString(), "token", token));

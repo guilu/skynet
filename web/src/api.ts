@@ -265,18 +265,35 @@ export interface RunPage {
   total: number
 }
 
+/** Un proveedor de agentes que tiene un runner (Claude Code, Codex, Gemini…). */
+export interface ProviderInfo {
+  id: string
+  /** Versión de su CLI; null si no respondió a --version. */
+  version: string | null
+}
+
 export interface Runner {
   id: string
   name: string
   capacity: number
   activeAgents: number
   runnerVersion: string | null
+  /** Versión de Claude Code; obsoleto, usa providers. */
   providerVersion: string | null
   registeredAt: string
   lastHeartbeatAt: string | null
   status: 'ONLINE' | 'STALE'
   /** Cuándo se olvidó; null si no. */
   archivedAt: string | null
+  /** Proveedores de agentes que tiene, con la versión de su CLI. */
+  providers: ProviderInfo[]
+}
+
+/** Agentes en cola de un proveedor que no tiene ningún runner en línea. */
+export interface ProviderShortage {
+  provider: string
+  displayName: string
+  queuedAgents: number
 }
 
 export interface UnresponsiveAgent {
@@ -292,6 +309,7 @@ export interface DashboardSummary {
   recentFailures: Run[]
   unresponsiveAgents: UnresponsiveAgent[]
   staleRunners: Runner[]
+  providerShortages: ProviderShortage[]
   generatedAt: string
 }
 

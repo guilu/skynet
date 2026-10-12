@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { CirclePlay, CircleX, Pause, Plug, Server, type LucideIcon } from 'lucide-react'
+import { CirclePlay, CircleX, Hourglass, Pause, Plug, Server, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router'
 import { api, SESSION_KEY, type DashboardSummary, type Runner } from '../api'
 import { DashboardMetrics, PeriodSelector } from '../components/DashboardMetrics'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { RunsTable } from '../components/RunsTable'
 import { Pill } from '../components/ui/Pill'
-import { formatDateTime, type StatusTone } from '../format'
+import { formatDateTime, formatProviders, type StatusTone } from '../format'
 import { cn } from '../lib/cn'
 import { useNow } from '../useNow'
 import { TableSkeleton } from '../components/ui/Skeleton'
@@ -142,7 +142,10 @@ interface Alert {
   filled?: boolean
 }
 
-/** Lo que requiere atención: fallidas en 24 h, agentes sin respuesta y runners sin latido. */
+/**
+ * Lo que requiere atención: fallidas en 24 h, agentes sin respuesta, runners sin latido y agentes
+ * de un proveedor que no tiene ningún runner en línea.
+ */
 function attentionItems(data: DashboardSummary): Alert[] {
   return [
     ...data.recentFailures.map((r) => ({
@@ -173,6 +176,18 @@ function attentionItems(data: DashboardSummary): Alert[] {
       detail: `Sin latido desde el ${formatDateTime(r.lastHeartbeatAt)}`,
       status: 'Desconectado',
     })),
+    ...data.providerShortages.map((p) => ({
+      key: `provider-${p.provider}`,
+      to: '/runners',
+      icon: Hourglass,
+      tone: 'warn' as const,
+      title: p.displayName,
+      detail:
+        p.queuedAgents === 1
+          ? `1 agente espera: ningún runner en línea tiene ${p.displayName}`
+          : `${p.queuedAgents} agentes esperan: ningún runner en línea tiene ${p.displayName}`,
+      status: 'Sin runner',
+    })),
   ]
 }
 
@@ -185,7 +200,7 @@ function workTitle(key: string | null, title: string | null, fallback: string) {
 function RunnerCard({ runner }: { runner: Runner }) {
   const online = runner.status === 'ONLINE'
   const agents = `${runner.activeAgents} ${runner.activeAgents === 1 ? 'agente activo' : 'agentes activos'}`
-  const version = runner.providerVersion && `Claude Code ${runner.providerVersion}`
+  const version = runner.providers.length > 0 ? formatProviders(runner.providers) : null
   return (
     <Link to="/runners" className={cn('kpi kpi-main', online ? 'kpi-ok' : 'kpi-bad')}>
       <span className="kpi-icon" aria-hidden="true">

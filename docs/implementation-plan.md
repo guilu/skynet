@@ -524,6 +524,18 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Proveedores (decidido el 2026-10-10):** después de W3 va un hito propio, adelantado de la Fase 4: la interfaz `AgentProvider` (§4.1) en el runner, adaptadores headless de Codex (`codex exec --json`) y Gemini (`gemini -p --output-format stream-json`) y runners que declaran qué CLIs tienen. W3-A ya deja `model` por agente y la clave `provider` reservada en el YAML.
 
+**Hito PV (proveedores), planificado el 2026-10-12:** PV-A interfaz `AgentProvider` y reparto por proveedor, PV-B Codex, PV-C Gemini, PV-D web y E2E con revisores de los tres proveedores.
+
+**Implementado (PV-A), interfaz `AgentProvider`:**
+
+- El corte de §4.1 cambia: el proveedor **traduce** y el runner **ejecuta**. `runner/provider/AgentProvider` construye la línea de comandos (arranque, reanudación o fork), filtra el entorno, crea el `EventParser` y el `CostMeter` de cada invocación, prepara la sesión en otro worktree al bifurcar (`copySession`) y dice su versión. Lanzar, supervisar, cancelar, el tiempo máximo y los artefactos siguen en `AgentExecutor`, iguales para todos. `ClaudeCodeProvider` es la primera implementación, sin cambios de comportamiento; los comandos (`provider: command`) siguen su camino aparte, con el entorno de Claude Code como antes.
+- `protocol/AgentProviderKind`: proveedores conocidos y sus capacidades (`RESUME`, `FORK`, `STRUCTURED_OUTPUT`, `MAX_TURNS`), compartidos por runner y control plane. `StartAgent.provider` (`null` = `claude-code`); el runner falla la invocación con «Este runner no tiene X disponible» si le llega uno que no tiene, antes de crear el worktree.
+- `ProviderRegistry`: al arrancar prueba `--version` de cada CLI y declara los que responden; `SKYNET_PROVIDERS` fija la lista a mano. `RunnerRegistration.providers` y `RunnerHeartbeat.providers` (un runner que reutiliza su token tras reiniciar no se registra otra vez; el latido actualiza la lista y emite `runner.providers.changed`). `providerVersion` se mantiene para control planes anteriores; un runner que no declara `providers` cuenta como solo `claude-code`.
+- Migración `V16`: tabla `runner_provider`, rellenada con `claude-code` para los runners existentes. `CommandQueue.claim` solo entrega un `START` sin asignar a un runner con su proveedor (los comandos, a cualquiera). Continuar o bifurcar una sesión responde 409 si el proveedor no lo admite.
+- `agent_run.provider` sale del `provider` del agente del YAML (`EffectivePolicy.provider`); el modelo global `skynet.agent.model` solo se aplica a Claude Code.
+- Dashboard: `providerShortages` (agentes en cola de un proveedor sin ningún runner en línea que lo tenga) en «Necesita tu atención». Runners y la tarjeta de cada runner listan sus proveedores con la versión.
+- fake-claude responde a `--version`. El cambio de nombre a `fake-agent` del plan se deja para PV-B, cuando haya más de un formato que simular.
+
 **Implementado (W1-A), definiciones en el backend:**
 
 - Módulo `definition`: `DefinitionParser` lee el YAML con SnakeYAML (posición de cada nodo) y lo valida: claves desconocidas con sugerencia, ids, tipos, dependencias inexistentes, a sí misma y ciclos (con la cadena), agentes, herramientas, modo de permisos, límites, variables de los prompts (línea y columna exactas dentro de un bloque `|`) y el worktree de las fases con varias dependencias (`workspaceFrom`). Lo que el motor aún no ejecuta es `UNSUPPORTED`: válido, pero no publicable. El formato está en [`workflows.md`](workflows.md).

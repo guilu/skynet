@@ -1,6 +1,8 @@
 package dev.skynet.controlplane.runner;
 
+import dev.skynet.protocol.runner.ProviderInfo;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -9,6 +11,7 @@ import java.util.UUID;
  * @param activeAgents agentes asignados que aún no han terminado
  * @param status {@code ONLINE} si ha enviado un latido recientemente; {@code STALE} si no
  * @param archivedAt cuándo se olvidó, o {@code null}
+ * @param providers proveedores de agentes que tiene, con la versión de su CLI
  */
 public record RunnerView(
     UUID id,
@@ -20,7 +23,8 @@ public record RunnerView(
     Instant registeredAt,
     Instant lastHeartbeatAt,
     Status status,
-    Instant archivedAt) {
+    Instant archivedAt,
+    List<ProviderInfo> providers) {
 
   public enum Status {
     ONLINE,

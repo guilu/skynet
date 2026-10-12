@@ -9,7 +9,7 @@ import { ColumnsMenu, DataTable, EmptyState, type Column } from '../components/l
 import { useHiddenColumns } from '../components/list/columns'
 import { FilterChips, ListToolbar, type ChipOption } from '../components/list/Toolbar'
 import { StatusBadge } from '../components/StatusBadge'
-import { formatDateTime } from '../format'
+import { formatDateTime, formatProviders } from '../format'
 import { Button } from '../components/ui/Button'
 import { TableSkeleton } from '../components/ui/Skeleton'
 
@@ -32,7 +32,8 @@ const COLUMNS: Column<Runner>[] = [
     header: 'Versiones',
     cell: (r) => (
       <span className="muted small">
-        runner {r.runnerVersion ?? '—'} · Claude Code {r.providerVersion ?? '—'}
+        runner {r.runnerVersion ?? '—'} ·{' '}
+        {r.providers.length > 0 ? formatProviders(r.providers) : 'sin proveedores de agentes'}
       </span>
     ),
   },

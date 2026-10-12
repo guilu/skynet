@@ -7,6 +7,8 @@ import dev.skynet.controlplane.shared.Archiving;
 import dev.skynet.controlplane.shared.ConflictException;
 import dev.skynet.controlplane.shared.NotFoundException;
 import dev.skynet.controlplane.shared.TimeSource;
+import dev.skynet.protocol.AgentProviderKind;
+import dev.skynet.protocol.runner.ProviderInfo;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
 import dev.skynet.protocol.runner.RunnerRegistration;
@@ -19,6 +21,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -86,7 +89,15 @@ class RunnerRegistry {
     payload.put("capacity", registration.capacity());
     payload.put("runnerVersion", registration.runnerVersion());
     payload.put("providerVersion", registration.providerVersion());
+    List<ProviderInfo> providers =
+        registration.providers() != null
+            ? registration.providers()
+            : List.of(
+                new ProviderInfo(
+                    AgentProviderKind.CLAUDE_CODE.id(), registration.providerVersion()));
+    payload.put("providers", providers);
     events.append(EventDraft.of("runner", id, "runner.registered", null, payload, now));
+    saveProviders(id, providers);
     return new RunnerRegistered(id, token);
   }
 
@@ -177,6 +188,49 @@ class RunnerRegistry {
     jdbc.sql("UPDATE runner SET last_heartbeat_at = ?, capacity = ? WHERE id = ?")
         .params(Timestamp.from(time.now()), Math.max(1, heartbeat.capacity()), runnerId)
         .update();
+    if (heartbeat.providers() != null
+        && !new java.util.HashSet<>(heartbeat.providers())
+            .equals(new java.util.HashSet<>(providers(runnerId)))) {
+      saveProviders(runnerId, heartbeat.providers());
+      events.append(
+          EventDraft.of(
+              "runner",
+              runnerId,
+              "runner.providers.changed",
+              null,
+              Map.of("providers", heartbeat.providers()),
+              time.now()));
+    }
+  }
+
+  /** Proveedores que declaró el runner, por id. */
+  List<ProviderInfo> providers(UUID runnerId) {
+    return jdbc.sql(
+            "SELECT provider, version FROM runner_provider WHERE runner_id = ? ORDER BY provider")
+        .param(runnerId)
+        .query((rs, row) -> new ProviderInfo(rs.getString("provider"), rs.getString("version")))
+        .list();
+  }
+
+  private void saveProviders(UUID runnerId, List<ProviderInfo> providers) {
+    jdbc.sql("DELETE FROM runner_provider WHERE runner_id = ?").param(runnerId).update();
+    providers.stream()
+        .map(ProviderInfo::id)
+        .distinct()
+        .forEach(
+            id ->
+                jdbc.sql(
+                        "INSERT INTO runner_provider (runner_id, provider, version)"
+                            + " VALUES (?, ?, ?)")
+                    .params(
+                        runnerId,
+                        id,
+                        providers.stream()
+                            .filter(p -> p.id().equals(id))
+                            .findFirst()
+                            .map(ProviderInfo::version)
+                            .orElse(null))
+                    .update());
   }
 
   int capacity(UUID runnerId) {

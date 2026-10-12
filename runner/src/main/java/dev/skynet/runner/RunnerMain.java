@@ -5,13 +5,16 @@ import dev.skynet.runner.agent.ArtifactSender;
 import dev.skynet.runner.agent.ArtifactSpool;
 import dev.skynet.runner.agent.EventSender;
 import dev.skynet.runner.journal.Journal;
+import dev.skynet.runner.provider.ProviderRegistry;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
+import dev.skynet.runner.provider.claude.ClaudeSessions;
 import dev.skynet.runner.provider.claude.ModelPrices;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.transport.ControlPlaneClient;
 import dev.skynet.runner.workspace.WorkspaceManager;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -52,13 +55,16 @@ public final class RunnerMain {
       throws IOException, InterruptedException {
     ControlPlaneClient client = new ControlPlaneClient(config.controlPlane());
     ProcessSupervisor supervisor = new ProcessSupervisor();
-    ClaudeCodeProvider provider =
+    ClaudeCodeProvider claude =
         new ClaudeCodeProvider(
             config.claudeExecutable(),
             config.extraEnv(),
             config.modelPrices() == null
                 ? ModelPrices.defaults()
-                : ModelPrices.load(config.modelPrices()));
+                : ModelPrices.load(config.modelPrices()),
+            ClaudeSessions.of(System.getenv()).orElse(null));
+    ProviderRegistry providers =
+        ProviderRegistry.detect(List.of(claude), config.providers(), System.getenv());
     try (EventSender sender =
             new EventSender(journal, client, Duration.ofMillis(500), Duration.ofSeconds(2));
         ArtifactSender artifactSender =
@@ -68,7 +74,7 @@ public final class RunnerMain {
                 journal,
                 supervisor,
                 new WorkspaceManager(config.workspacesDir()),
-                provider,
+                providers,
                 System.getenv(),
                 config.logsDir(),
                 config.cancelGrace(),
@@ -83,7 +89,7 @@ public final class RunnerMain {
                 sender,
                 artifactSender,
                 supervisor,
-                provider.version(System.getenv()).orElse(null))) {
+                providers.available())) {
       daemon.start();
       System.out.println(
           "skynet-runner "
@@ -92,6 +98,12 @@ public final class RunnerMain {
               + config.controlPlane()
               + " (capacidad "
               + config.capacity()
+              + "; proveedores: "
+              + (providers.available().isEmpty()
+                  ? "ninguno"
+                  : providers.available().stream()
+                      .map(p -> p.id() + (p.version() == null ? "" : " " + p.version()))
+                      .collect(java.util.stream.Collectors.joining(", ")))
               + ")");
       stopRequested.await();
     }

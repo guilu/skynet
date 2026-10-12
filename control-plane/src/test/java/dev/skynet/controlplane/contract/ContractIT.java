@@ -12,6 +12,7 @@ import dev.skynet.controlplane.definition.VersionView;
 import dev.skynet.controlplane.definition.WorkflowSummary;
 import dev.skynet.controlplane.definition.WorkflowView;
 import dev.skynet.controlplane.event.StoredEvent;
+import dev.skynet.controlplane.runner.ProviderShortage;
 import dev.skynet.controlplane.runner.RunnerView;
 import dev.skynet.controlplane.support.IntegrationTest;
 import dev.skynet.controlplane.workflow.AgentRunDetail;
@@ -32,6 +33,7 @@ import dev.skynet.controlplane.workflow.WorkspaceView;
 import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
+import dev.skynet.protocol.runner.ProviderInfo;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -407,7 +409,8 @@ class ContractIT extends IntegrationTest {
           at(-3600),
           at(30),
           RunnerView.Status.ONLINE,
-          null);
+          null,
+          List.of(new ProviderInfo("claude-code", "2.1.288"), new ProviderInfo("codex", null)));
     }
 
     static RunnerView staleRunner() {
@@ -421,7 +424,8 @@ class ContractIT extends IntegrationTest {
           at(-7200),
           at(-600),
           RunnerView.Status.STALE,
-          null);
+          null,
+          List.of(new ProviderInfo("claude-code", "2.1.288")));
     }
 
     static DashboardSummary dashboard() {
@@ -431,6 +435,7 @@ class ContractIT extends IntegrationTest {
           List.of(),
           List.of(new UnresponsiveAgent(AGENT, RUN, "TKM-1", at(17))),
           List.of(staleRunner()),
+          List.of(new ProviderShortage("gemini", "Gemini CLI", 2)),
           at(600));
     }
 
