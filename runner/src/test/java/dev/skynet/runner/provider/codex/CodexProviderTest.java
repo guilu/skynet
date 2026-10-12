@@ -67,6 +67,25 @@ class CodexProviderTest {
   }
 
   @Test
+  void aForkKeepsTheModelAndTheSchemaOfTheAgent() throws Exception {
+    ResumeFrom fork = new ResumeFrom("thread-1", true, "/w/b", "skynet/b");
+    String schema = "{\"type\":\"object\",\"properties\":{\"fixed\":{\"type\":\"boolean\"}}}";
+
+    List<String> command =
+        provider.command(start("gpt-5.5", "acceptEdits", fork, schema), dir.resolve("f"));
+
+    assertThat(command)
+        .containsSubsequence(
+            "--model",
+            "gpt-5.5",
+            "--output-schema",
+            dir.resolve("f.schema.json").toString(),
+            "fork",
+            "thread-1");
+    assertThat(dir.resolve("f.schema.json")).content().contains("\"required\":[\"fixed\"]");
+  }
+
+  @Test
   void thePermissionModeChoosesTheSandbox() {
     assertThat(CodexProvider.sandbox("plan")).containsExactly("--sandbox", "read-only");
     assertThat(CodexProvider.sandbox("bypassPermissions"))

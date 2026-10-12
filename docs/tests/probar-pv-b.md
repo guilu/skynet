@@ -74,8 +74,10 @@ No hay migraciones ni dependencias nuevas.
 ## 4. Continuar y bifurcar
 
 1. En el agente de `fix`, **Enviar mensaje** con «Añade un test». Arranca en el mismo runner y worktree y termina «Completada» con «Sigo donde lo dejamos: he añadido el test que pedías.». La conversación tiene los dos turnos y el coste acumulado suma el de los dos.
-2. **Bifurcar** con «Prueba otra solución»: termina «Completada» en un worktree nuevo, con otra sesión.
-3. En `/tmp/fake-codex-home/sessions` hay un fichero por sesión (la primera y la bifurcada).
+2. Vuelve al agente **original** de `fix` (el del lanzamiento, no el de la continuación) y **Bifurcar** con «Prueba otra solución»: parte de la última continuación y termina «Completada» en un worktree nuevo, con otra sesión.
+3. Las dos invocaciones nuevas conservan la configuración del agente del YAML: modelo `gpt-5.5` y un coste de unos 0,01 US$ cada una (no vacío). Antes de este arreglo, la bifurcación tras una continuación salía sin modelo ni coste.
+4. Haz lo mismo con el agente de `review`: **Enviar mensaje** y después **Bifurcar** desde el original. Las dos terminan «Completada» con la salida estructurada `{"hasBlockingFindings": false}`.
+5. En `/tmp/fake-codex-home/sessions` hay un fichero por sesión (las de los lanzamientos y las bifurcadas).
 
 ## 5. Fallos
 
@@ -89,7 +91,7 @@ Necesita una cuenta de OpenAI y `codex` instalado con `codex login` hecho (o `OP
 
 - Las fases terminan y la conversación y las herramientas se ven como con fake-codex.
 - `review` devuelve una salida estructurada válida (el schema estricto lo acepta Codex).
-- **Enviar mensaje** continúa la sesión.
+- **Enviar mensaje** continúa la sesión, y **Bifurcar** desde el agente original después de un mensaje termina con el modelo del YAML (aunque `~/.codex/config.toml` tenga otro), su coste y su salida estructurada.
 
 Si algo no cuadra, guarda el log NDJSON del agente (`~/.skynet-runner/logs/<agente>.ndjson`) y pásamelo: con él se corrige el fixture y el traductor.
 
