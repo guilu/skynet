@@ -218,3 +218,21 @@ export function formatCompact(n: number | null): string {
   if (Math.abs(n) >= 10_000) return short(n / 1_000, 'k')
   return n.toLocaleString('es-ES')
 }
+
+const PROVIDER_NAMES: Record<string, string> = {
+  'claude-code': 'Claude Code',
+  codex: 'Codex',
+  gemini: 'Gemini CLI',
+}
+
+/** Nombre para mostrar de un proveedor de agentes (el id si no se conoce). */
+export function providerName(id: string): string {
+  return PROVIDER_NAMES[id] ?? id
+}
+
+/** Proveedores de un runner: «Claude Code 2.1.288 · Codex». */
+export function formatProviders(providers: { id: string; version: string | null }[]): string {
+  return providers
+    .map((p) => (p.version ? `${providerName(p.id)} ${p.version}` : providerName(p.id)))
+    .join(' · ')
+}

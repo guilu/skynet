@@ -57,7 +57,13 @@ class DashboardController {
             .filter(r -> r.finishedAt() != null && r.finishedAt().isAfter(since))
             .toList();
     return new DashboardSummary(
-        active.items(), active.total(), failures, runs.unresponsiveAgents(), runners.stale(), now);
+        active.items(),
+        active.total(),
+        failures,
+        runs.unresponsiveAgents(),
+        runners.stale(),
+        runners.shortages(),
+        now);
   }
 
   /**

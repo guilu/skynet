@@ -61,8 +61,16 @@ public final class FakeClaude {
     System.exit(code);
   }
 
+  /** Versión que anuncia {@code --version}. */
+  static final String VERSION = "2.1.0";
+
   static int run(String[] args, Map<String, String> env, Path cwd, PrintStream out, PrintStream err)
       throws IOException, InterruptedException {
+    if (args.length == 1 && "--version".equals(args[0])) {
+      // Como el CLI real: el runner lo usa para saber que Claude Code está disponible.
+      out.println(VERSION + " (fake-claude)");
+      return 0;
+    }
     Invocation inv = Invocation.parse(args);
     if (!"stream-json".equals(inv.outputFormat())) {
       err.println("fake-claude: solo se admite --output-format stream-json");

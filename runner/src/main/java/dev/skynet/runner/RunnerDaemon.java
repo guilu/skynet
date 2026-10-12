@@ -1,5 +1,7 @@
 package dev.skynet.runner;
 
+import dev.skynet.protocol.AgentProviderKind;
+import dev.skynet.protocol.runner.ProviderInfo;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
@@ -42,7 +44,7 @@ public final class RunnerDaemon implements AutoCloseable {
   private final EventSender sender;
   private final ArtifactSender artifactSender;
   private final ProcessSupervisor supervisor;
-  private final String providerVersion;
+  private final List<ProviderInfo> providers;
   private final ScheduledExecutorService heartbeats =
       Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon().factory());
   private volatile boolean running;
@@ -56,7 +58,7 @@ public final class RunnerDaemon implements AutoCloseable {
       EventSender sender,
       ArtifactSender artifactSender,
       ProcessSupervisor supervisor,
-      String providerVersion) {
+      List<ProviderInfo> providers) {
     this.config = config;
     this.client = client;
     this.journal = journal;
@@ -64,7 +66,7 @@ public final class RunnerDaemon implements AutoCloseable {
     this.sender = sender;
     this.artifactSender = artifactSender;
     this.supervisor = supervisor;
-    this.providerVersion = providerVersion;
+    this.providers = List.copyOf(providers);
   }
 
   public void start() throws IOException, InterruptedException {
@@ -135,7 +137,8 @@ public final class RunnerDaemon implements AutoCloseable {
                 config.registrationToken(),
                 RunnerMain.version(),
                 config.capacity(),
-                providerVersion));
+                claudeVersion(),
+                providers));
     journal.saveCredentials(
         new Journal.Credentials(
             config.controlPlane().toString(), registered.runnerId(), registered.token()));
@@ -187,13 +190,22 @@ public final class RunnerDaemon implements AutoCloseable {
     }
   }
 
+  /** Versión de Claude Code, para los control planes que aún no leen {@code providers}. */
+  private String claudeVersion() {
+    return providers.stream()
+        .filter(p -> p.id().equals(AgentProviderKind.CLAUDE_CODE.id()))
+        .map(ProviderInfo::version)
+        .findFirst()
+        .orElse(null);
+  }
+
   private void heartbeat() {
     try {
       // También las que ya terminaron con eventos por enviar: el control plane da por perdida
       // una invocación activa que deja de aparecer aquí.
       Set<UUID> agents = new LinkedHashSet<>(executor.running());
       agents.addAll(journal.agentsWithPendingEvents());
-      client.heartbeat(new RunnerHeartbeat(config.capacity(), List.copyOf(agents)));
+      client.heartbeat(new RunnerHeartbeat(config.capacity(), List.copyOf(agents), providers));
     } catch (IOException e) {
       LOG.log(Level.FINE, "No se pudo enviar el latido", e);
     } catch (InterruptedException e) {

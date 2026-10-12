@@ -20,6 +20,8 @@ import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.controlplane.workitem.WorkItem;
 import dev.skynet.controlplane.workitem.WorkItemService;
 import dev.skynet.protocol.AgentObservableStatus;
+import dev.skynet.protocol.AgentProviderKind;
+import dev.skynet.protocol.AgentProviderKind.Capability;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
 import dev.skynet.protocol.runner.AgentLimits;
@@ -321,6 +323,7 @@ public class RunService {
   private WorkflowRun continueSession(UUID agentRunId, String text, boolean fork) {
     AgentRun requested = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
     requireAgent(requested);
+    requireCapability(requested, fork ? Capability.FORK : Capability.RESUME);
     WorkspaceView workspace =
         workspaces
             .find(requested.getWorkspaceId())
@@ -361,6 +364,18 @@ public class RunService {
                 parent.getProviderSessionId(), fork, workspace.path(), workspace.branch()),
             null,
             parent.getRunnerId()));
+  }
+
+  /** El proveedor del agente tiene que permitir continuar (o bifurcar) su sesión. */
+  private static void requireCapability(AgentRun agent, Capability capability) {
+    AgentProviderKind kind = AgentProviderKind.byId(agent.getProvider()).orElse(null);
+    if (kind == null || !kind.supports(capability)) {
+      String name = kind == null ? agent.getProvider() : kind.displayName();
+      throw new ConflictException(
+          capability == Capability.FORK
+              ? name + " no permite bifurcar una sesión"
+              : name + " no permite continuar una sesión");
+    }
   }
 
   /** Un comando no tiene sesión que continuar, y reintentar una fase llega con W6. */

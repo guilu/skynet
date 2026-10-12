@@ -11,7 +11,10 @@ import dev.skynet.runner.agent.ArtifactSender;
 import dev.skynet.runner.agent.ArtifactSpool;
 import dev.skynet.runner.agent.EventSender;
 import dev.skynet.runner.journal.Journal;
+import dev.skynet.runner.provider.ProviderRegistry;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
+import dev.skynet.runner.provider.claude.ClaudeSessions;
+import dev.skynet.runner.provider.claude.ModelPrices;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.transport.ControlPlaneClient;
 import dev.skynet.runner.workspace.WorkspaceManager;
@@ -289,7 +292,8 @@ class RunnerEndToEndIT extends IntegrationTest {
             Duration.ofMillis(500),
             Duration.ofSeconds(2),
             null,
-            Duration.ofDays(7));
+            Duration.ofDays(7),
+            null);
     Map<String, String> env = new HashMap<>(System.getenv());
     env.put("JAVA_HOME", System.getProperty("java.home"));
     env.put("FAKE_CLAUDE_FIXTURE", fixture);
@@ -301,7 +305,10 @@ class RunnerEndToEndIT extends IntegrationTest {
         new ClaudeCodeProvider(
             Path.of(System.getProperty("skynet.fakeClaude")).toAbsolutePath().toString(),
             List.of(
-                "JAVA_HOME", "FAKE_CLAUDE_FIXTURE", "FAKE_CLAUDE_DELAY_MS", "FAKE_CLAUDE_APPLY"));
+                "JAVA_HOME", "FAKE_CLAUDE_FIXTURE", "FAKE_CLAUDE_DELAY_MS", "FAKE_CLAUDE_APPLY"),
+            ModelPrices.defaults(),
+            ClaudeSessions.of(env).orElse(null));
+    ProviderRegistry providers = ProviderRegistry.detect(List.of(provider), null, env);
     ControlPlaneClient client = new ControlPlaneClient(config.controlPlane());
     EventSender sender =
         new EventSender(journal, client, Duration.ofMillis(100), Duration.ofMillis(200));
@@ -313,7 +320,7 @@ class RunnerEndToEndIT extends IntegrationTest {
             journal,
             supervisor,
             new WorkspaceManager(config.workspacesDir()),
-            provider,
+            providers,
             env,
             config.logsDir(),
             config.cancelGrace(),
@@ -321,7 +328,14 @@ class RunnerEndToEndIT extends IntegrationTest {
             new ArtifactSpool(journal, config.artifactsDir(), artifactSender::wakeUp));
     RunnerDaemon daemon =
         new RunnerDaemon(
-            config, client, journal, executor, sender, artifactSender, supervisor, "fake");
+            config,
+            client,
+            journal,
+            executor,
+            sender,
+            artifactSender,
+            supervisor,
+            providers.available());
     closeables.add(sender);
     closeables.add(artifactSender);
     closeables.add(executor);

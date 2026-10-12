@@ -7,6 +7,7 @@ import dev.skynet.controlplane.support.IntegrationTest;
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.runner.EventBatch;
+import dev.skynet.protocol.runner.ProviderInfo;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistration;
 import java.math.BigDecimal;
@@ -412,6 +413,64 @@ class RunnerProtocolIT extends IntegrationTest {
     assertThat(poll(runner, 0))
         .extracting(c -> c.path("agentRunId").asString())
         .containsExactly(second.agentId().toString());
+  }
+
+  @Test
+  void startsOnlyGoToRunnersThatHaveTheAgentsProvider() {
+    Runner claude = register("laptop", 2);
+    Launched run = launch("revisa");
+    // El YAML aún no admite otros proveedores: el agente se cambia a mano.
+    jdbc.sql("UPDATE agent_run SET provider = 'codex' WHERE id = ?").param(run.agentId()).update();
+
+    assertThat(poll(claude, 0)).isEmpty();
+    JsonNode shortage = get("/api/dashboard").path("providerShortages").get(0);
+    assertThat(shortage.path("provider").asString()).isEqualTo("codex");
+    assertThat(shortage.path("queuedAgents").asInt()).isEqualTo(1);
+
+    Runner codex = register("servidor", 2, List.of(new ProviderInfo("codex", "0.50.0")));
+    assertThat(get("/api/dashboard").path("providerShortages")).isEmpty();
+    assertThat(poll(codex, 0))
+        .extracting(c -> c.path("agentRunId").asString())
+        .containsExactly(run.agentId().toString());
+
+    // Un proveedor que Skynet no sabe continuar responde 409.
+    Events events = new Events(run.agentId());
+    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", UUID.randomUUID().toString()));
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 0));
+    send(codex, events.batch());
+    assertStatus(HttpStatus.CONFLICT, () -> continueWith(run.agentId(), "messages", "sigue"));
+  }
+
+  @Test
+  void theRunnerDeclaresItsProvidersOnRegistrationAndHeartbeats() {
+    Runner runner = register("laptop", 1);
+    assertThat(runnerView("laptop").path("providers"))
+        .extracting(p -> p.path("id").asString() + " " + p.path("version").asString())
+        .containsExactly("claude-code 2.1.288");
+
+    List<ProviderInfo> both =
+        List.of(new ProviderInfo("codex", "0.50.0"), new ProviderInfo("claude-code", "2.1.300"));
+    http.post()
+        .uri("/api/runner/heartbeat")
+        .header(HttpHeaders.AUTHORIZATION, "Bearer " + runner.token())
+        .body(new RunnerHeartbeat(1, List.of(), both))
+        .retrieve()
+        .toBodilessEntity();
+    heartbeat(runner); // Sin providers: se conservan.
+
+    assertThat(runnerView("laptop").path("providers"))
+        .extracting(p -> p.path("id").asString() + " " + p.path("version").asString())
+        .containsExactly("claude-code 2.1.300", "codex 0.50.0");
+    assertThat(eventTypesOf("runner")).containsOnlyOnce("runner.providers.changed");
+  }
+
+  private JsonNode runnerView(String name) {
+    for (JsonNode runner : get("/api/runners")) {
+      if (runner.path("name").asString().equals(name)) {
+        return runner;
+      }
+    }
+    throw new AssertionError("No existe el runner " + name);
   }
 
   @Test
@@ -929,11 +988,16 @@ class RunnerProtocolIT extends IntegrationTest {
   }
 
   private Runner register(String name, int capacity) {
+    return register(name, capacity, null);
+  }
+
+  private Runner register(String name, int capacity, List<ProviderInfo> providers) {
     JsonNode registered =
         http.post()
             .uri("/api/runner/register")
             .body(
-                new RunnerRegistration(name, RUNNER_REGISTRATION_TOKEN, "dev", capacity, "2.1.288"))
+                new RunnerRegistration(
+                    name, RUNNER_REGISTRATION_TOKEN, "dev", capacity, "2.1.288", providers))
             .retrieve()
             .body(JsonNode.class);
     return new Runner(

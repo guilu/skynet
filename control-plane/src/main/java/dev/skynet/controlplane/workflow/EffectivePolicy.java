@@ -2,6 +2,7 @@ package dev.skynet.controlplane.workflow;
 
 import dev.skynet.controlplane.definition.AgentDefinition;
 import dev.skynet.controlplane.project.AgentPolicy;
+import dev.skynet.protocol.AgentProviderKind;
 import dev.skynet.protocol.runner.AgentLimits;
 import java.time.Duration;
 import java.util.List;
@@ -17,6 +18,7 @@ import tools.jackson.databind.json.JsonMapper;
  *     skynet.agent.model})
  * @param outputSchema JSON Schema de la salida estructurada que pide el agente ({@code output}), o
  *     {@code null}
+ * @param provider proveedor que pide el agente; {@code null} para {@code claude-code}
  */
 record EffectivePolicy(
     List<String> allowedTools,
@@ -24,7 +26,8 @@ record EffectivePolicy(
     List<String> environment,
     AgentLimits limits,
     String model,
-    String outputSchema) {
+    String outputSchema,
+    String provider) {
 
   EffectivePolicy(
       List<String> allowedTools,
@@ -32,7 +35,12 @@ record EffectivePolicy(
       List<String> environment,
       AgentLimits limits,
       String model) {
-    this(allowedTools, permissionMode, environment, limits, model, null);
+    this(allowedTools, permissionMode, environment, limits, model, null, null);
+  }
+
+  /** Proveedor efectivo: {@code claude-code} si el agente no pide otro. */
+  String providerOrDefault() {
+    return provider == null ? AgentProviderKind.CLAUDE_CODE.id() : provider;
   }
 
   /** Del menos al más permisivo; {@code default} y {@code dontAsk} solo usan lo permitido. */
@@ -79,13 +87,14 @@ record EffectivePolicy(
         policy.environment(),
         limits,
         agent.model(),
-        agent.output() == null ? null : JsonMapper.shared().writeValueAsString(agent.output()));
+        agent.output() == null ? null : JsonMapper.shared().writeValueAsString(agent.output()),
+        agent.provider());
   }
 
   /** La misma política con otros límites. */
   EffectivePolicy withLimits(AgentLimits other) {
     return new EffectivePolicy(
-        allowedTools, permissionMode, environment, other, model, outputSchema);
+        allowedTools, permissionMode, environment, other, model, outputSchema, provider);
   }
 
   /** {@code Bash(git:*)} cabe en {@code Bash}; {@code Bash} no cabe en {@code Bash(git:*)}. */

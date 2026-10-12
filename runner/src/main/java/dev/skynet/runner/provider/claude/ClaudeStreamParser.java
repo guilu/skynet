@@ -37,7 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
  * <p>Tiene estado (recuerda qué herramienta abrió cada {@code tool_use_id}), así que se usa una
  * instancia por invocación. No es seguro entre hilos.
  */
-public final class ClaudeStreamParser {
+public final class ClaudeStreamParser implements dev.skynet.runner.provider.EventParser {
 
   /** Longitud máxima del texto de salida de una herramienta que viaja en el evento. */
   static final int MAX_TOOL_OUTPUT = 16 * 1024;
@@ -60,14 +60,13 @@ public final class ClaudeStreamParser {
     return sessionId;
   }
 
-  /**
-   * Si ha llegado la línea {@code result}. Una invocación cancelada no la tiene: su estado final se
-   * deduce de la señal y el código de salida.
-   */
+  /** Si ha llegado la línea {@code result}. */
+  @Override
   public boolean sawResult() {
     return sawResult;
   }
 
+  @Override
   public List<ParsedEvent> parse(String line) {
     if (line == null || line.isBlank()) {
       return List.of();

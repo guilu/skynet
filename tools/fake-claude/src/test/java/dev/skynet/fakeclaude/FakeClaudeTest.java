@@ -48,6 +48,17 @@ class FakeClaudeTest {
   }
 
   @Test
+  void answersVersionLikeTheRealCli() throws Exception {
+    var buffer = new ByteArrayOutputStream();
+    var out = new PrintStream(buffer, true, StandardCharsets.UTF_8);
+
+    int code = FakeClaude.run(new String[] {"--version"}, Map.of(), CWD, out, out);
+
+    assertThat(code).isZero();
+    assertThat(buffer.toString(StandardCharsets.UTF_8)).startsWith(FakeClaude.VERSION);
+  }
+
+  @Test
   void resumeKeepsSessionAndForkCreatesANewOne() throws Exception {
     Result resumed =
         run("03-resume", "-p", "x", "--output-format", "stream-json", "--resume", SESSION);

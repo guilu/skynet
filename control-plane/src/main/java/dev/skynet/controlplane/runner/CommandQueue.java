@@ -3,6 +3,7 @@ package dev.skynet.controlplane.runner;
 import dev.skynet.controlplane.shared.NotFoundException;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.controlplane.workflow.AgentCancelRequested;
+import dev.skynet.controlplane.workflow.AgentRun;
 import dev.skynet.controlplane.workflow.AgentRunQueued;
 import dev.skynet.controlplane.workflow.AgentRunWithdrawn;
 import dev.skynet.controlplane.workflow.RunService;
@@ -157,8 +158,9 @@ class CommandQueue {
   /**
    * Reclama las órdenes que corresponden al runner: las suyas pendientes, las entregadas hace más
    * de {@code redeliverAfter} sin confirmar y, mientras tenga capacidad libre, sus reanudaciones
-   * pendientes (y arranques en un worktree suyo) y arranques sin asignar. Una invocación reclamada
-   * pasa el agente a {@code STARTING} en la misma transacción.
+   * pendientes (y arranques en un worktree suyo) y arranques sin asignar de un proveedor que tiene
+   * (los comandos, cualquier runner). Una invocación reclamada pasa el agente a {@code STARTING} en
+   * la misma transacción.
    */
   @Transactional
   List<RunnerCommand> claim(UUID runnerId) {
@@ -198,11 +200,16 @@ class CommandQueue {
       List<Row> invocations =
           jdbc.sql(
                   "SELECT * FROM runner_command WHERE status = ? AND ((runner_id IS NULL AND type"
-                      + " = ?) OR (runner_id = ? AND type IN (?, ?) AND delivery_count = 0))"
-                      + " ORDER BY created_at LIMIT ? FOR UPDATE SKIP LOCKED")
+                      + " = ? AND agent_run_id IN (SELECT a.id FROM agent_run a WHERE a.provider"
+                      + " = ? OR a.provider IN (SELECT p.provider FROM runner_provider p"
+                      + " WHERE p.runner_id = ?))) OR (runner_id = ? AND type IN (?, ?)"
+                      + " AND delivery_count = 0)) ORDER BY created_at LIMIT ? FOR UPDATE SKIP"
+                      + " LOCKED")
               .params(
                   PENDING,
                   RunnerCommandType.START.name(),
+                  AgentRun.PROVIDER_COMMAND,
+                  runnerId,
                   runnerId,
                   RunnerCommandType.START.name(),
                   RunnerCommandType.RESUME.name(),
