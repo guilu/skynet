@@ -171,6 +171,52 @@ class WorkflowEngineIT extends IntegrationTest {
           workspaceFrom: review
       """;
 
+  /**
+   * Una especificación con su salida en la fase, otra fase con el schema en un fichero del
+   * repositorio y un plan que lee las dos en su prompt.
+   */
+  static final String DATA =
+      """
+      id: datos
+      version: 1
+      inputs:
+        conExterno:
+          type: boolean
+          default: true
+      agents:
+        analista:
+          prompt: Especifica
+          output:
+            type: object
+            properties:
+              borrador:
+                type: string
+      stages:
+        - id: spec
+          type: agent
+          agent: analista
+          outputSchema:
+            type: object
+            properties:
+              summary:
+                type: string
+              risks:
+                type: array
+        - id: externo
+          type: agent
+          prompt: Externo
+          outputSchema: schemas/externo.json
+          condition: inputs.conExterno
+        - id: plan
+          type: agent
+          dependsOn: [spec, "externo?"]
+          workspaceFrom: spec
+          prompt: |
+            Resumen: {{stages.spec.output.summary}}
+            Riesgos: {{stages.spec.output.risks}}
+            Externo: {{stages.externo.status}} {{stages.externo.output.nota}}
+      """;
+
   /** Un agente de Codex con modelo, modo de permisos y salida estructurada propios. */
   static final String CODEX =
       """
@@ -774,6 +820,59 @@ class WorkflowEngineIT extends IntegrationTest {
     assertThat(start.path("model").asString()).isEqualTo("gpt-5.5");
     assertThat(start.path("permissionMode").asString()).isEqualTo("plan");
     assertThat(start.path("outputSchema").asString()).contains("\"fixed\"");
+  }
+
+  @Test
+  void theNextStageReceivesTheOutputOfThePreviousOnesInItsPrompt() {
+    String definitionId = publish(DATA);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    Map<String, JsonNode> started = new LinkedHashMap<>();
+    runner.claim().forEach(c -> started.put(c.path("start").path("prompt").asString(), c));
+    assertThat(started).containsOnlyKeys("Especifica", "Externo");
+
+    // El outputSchema de la fase manda sobre el output del agente; el de un fichero va como $ref.
+    JsonNode spec = started.get("Especifica");
+    assertThat(spec.path("start").path("outputSchema").asString())
+        .contains("\"summary\"")
+        .doesNotContain("borrador");
+    JsonNode externo = started.get("Externo");
+    assertThat(externo.path("start").path("outputSchema").asString())
+        .isEqualTo("{\"$ref\":\"schemas/externo.json\"}");
+
+    complete(runner, spec, "/w/eng/spec", Map.of("summary", "Hacer X", "risks", List.of("a", "b")));
+    complete(runner, externo, "/w/eng/externo", Map.of("nota", 7));
+
+    JsonNode plan = runner.claim().getFirst();
+    assertThat(plan.path("start").path("prompt").asString())
+        .isEqualTo("Resumen: Hacer X\nRiesgos: [\"a\",\"b\"]\nExterno: SUCCEEDED 7\n");
+    assertThat(plan.path("start").path("outputSchema").isNull()).isTrue();
+    complete(runner, plan, "/w/eng/spec");
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("SUCCEEDED");
+  }
+
+  @Test
+  void aSkippedStageLeavesItsDataEmptyInThePrompt() {
+    String definitionId = publish(DATA);
+    Runner runner = register("laptop");
+    launch(definitionId, Map.of("conExterno", false));
+    JsonNode spec = runner.claim().getFirst();
+    complete(runner, spec, "/w/eng/spec", Map.of("summary", "Hacer X", "risks", List.of()));
+
+    assertThat(runner.claim().getFirst().path("start").path("prompt").asString())
+        .isEqualTo("Resumen: Hacer X\nRiesgos: []\nExterno: SKIPPED \n");
+  }
+
+  @Test
+  void aStageWithoutItsDeclaredOutputFails() {
+    String definitionId = publish(DATA);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of("conExterno", false)).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/spec");
+
+    JsonNode run = get("/api/workflow-runs/" + runId);
+    assertThat(run.path("status").asString()).isEqualTo("FAILED");
+    assertThat(stageStatuses(runId)).containsEntry("spec", "FAILED");
   }
 
   @Test

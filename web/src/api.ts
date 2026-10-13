@@ -454,6 +454,10 @@ export interface StageDefinition {
   children: { id: string; agent: string; prompt: string | null }[]
   /** Condición que decide si la fase se ejecuta; null: siempre. */
   condition: string | null
+  /** Salida estructurada de la fase en línea, que manda sobre el `output` de su agente. */
+  outputSchema: { type: 'object'; properties: Record<string, { type: string }> } | null
+  /** La misma, en un fichero del repositorio que el runner lee del worktree. */
+  outputSchemaPath: string | null
 }
 
 /** El workflow leído del YAML. */

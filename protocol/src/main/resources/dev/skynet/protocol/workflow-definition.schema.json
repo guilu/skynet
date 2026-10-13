@@ -39,6 +39,25 @@
     }
   },
   "$defs": {
+    "output": {
+      "type": "object",
+      "required": ["type", "properties"],
+      "properties": {
+        "type": { "const": "object" },
+        "properties": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$" },
+          "additionalProperties": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": { "enum": ["boolean", "string", "number", "integer", "array", "object"] }
+            }
+          }
+        }
+      }
+    },
     "input": {
       "type": "object",
       "additionalProperties": false,
@@ -81,24 +100,8 @@
           "enum": ["claude-code", "codex", "gemini", "opencode"]
         },
         "output": {
-          "description": "Salida estructurada que devuelve el agente: un JSON Schema de objeto con sus campos en properties. Las condiciones los leen como <fase>.<campo>.",
-          "type": "object",
-          "required": ["type", "properties"],
-          "properties": {
-            "type": { "const": "object" },
-            "properties": {
-              "type": "object",
-              "minProperties": 1,
-              "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$" },
-              "additionalProperties": {
-                "type": "object",
-                "required": ["type"],
-                "properties": {
-                  "type": { "enum": ["boolean", "string", "number", "integer", "array", "object"] }
-                }
-              }
-            }
-          }
+          "description": "Salida estructurada que devuelve el agente: un JSON Schema de objeto con sus campos en properties. Las condiciones los leen como <fase>.<campo> y los prompts como {{stages.<fase>.output.<campo>}}.",
+          "$ref": "#/$defs/output"
         },
         "limits": {
           "description": "Límites de cada invocación, nunca por encima de los del repositorio.",
@@ -166,7 +169,13 @@
           "minLength": 1
         },
         "promptTemplate": { "description": "Llega en S3.", "type": "string" },
-        "outputSchema": { "description": "Llega en W4.", "type": "string" },
+        "outputSchema": {
+          "description": "Solo en fases agent: la salida estructurada de la fase, que manda sobre el output de su agente. Un JSON Schema de objeto en línea o la ruta de un fichero del repositorio (p. ej. schemas/spec.json), que el runner lee del worktree al arrancar.",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "$ref": "#/$defs/output" }
+          ]
+        },
         "artifacts": { "description": "Llega en W4.", "type": "array", "items": { "type": "string" } },
         "retry": { "description": "Llega en W6.", "type": "object" },
         "timeout": { "description": "Llega en W6." },

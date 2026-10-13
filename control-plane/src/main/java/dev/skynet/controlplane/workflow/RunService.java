@@ -39,6 +39,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
@@ -303,9 +304,9 @@ public class RunService {
     StageRun stage = stageRuns.findById(origin.getStageRunId()).orElseThrow();
     WorkflowDefinition definition =
         definitions.published(runEntity(stage.getWorkflowRunId()).getDefinitionId()).definition();
+    StageDefinition stageDefinition = definition.stage(stage.getStageKey()).orElse(null);
     AgentDefinition agent =
-        definition
-            .stage(stage.getStageKey())
+        Optional.ofNullable(stageDefinition)
             .map(
                 s ->
                     origin.getChildKey() == null
@@ -313,7 +314,13 @@ public class RunService {
                         : s.child(origin.getChildKey()).map(ChildDefinition::agent).orElse(null))
             .flatMap(definition::agent)
             .orElse(null);
-    EffectivePolicy effective = EffectivePolicy.of(policy, agent, limits).withLimits(limits);
+    EffectivePolicy effective =
+        EffectivePolicy.of(policy, agent, limits)
+            .withLimits(limits)
+            .withOutputSchema(
+                stageDefinition == null || origin.getChildKey() != null
+                    ? null
+                    : stageDefinition.outputSchemaJson());
     return agent == null
         ? effective.withAgent(LaunchAgent.of(jdbc, stage.getWorkflowRunId()))
         : effective;

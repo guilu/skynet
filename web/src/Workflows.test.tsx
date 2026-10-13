@@ -94,6 +94,9 @@ describe('Workflows', () => {
     expect(within(summary).getAllByRole('listitem')[2]).toHaveTextContent(
       'verify verification · Depende de fix (opcional)',
     )
+    expect(within(summary).getAllByRole('listitem')[0]).toHaveTextContent(
+      'review agent · Agente: reviewer · Salida: summary',
+    )
 
     // Mientras se escribe, el control plane valida el texto como borrador de esta versión.
     fireEvent.change(editor, { target: { value: `${draft.sourceYaml}colr: azul\n` } })

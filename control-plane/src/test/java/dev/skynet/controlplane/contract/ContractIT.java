@@ -573,9 +573,14 @@ class ContractIT extends IntegrationTest {
           - id: review
             type: agent
             agent: reviewer
+            outputSchema:
+              type: object
+              properties:
+                summary:
+                  type: string
           - id: fix
             type: agent
-            prompt: Corrige lo que encontró la revisión.
+            prompt: "Corrige lo que encontró la revisión: {{stages.review.output.summary}}"
             dependsOn: [review]
           - id: verify
             type: verification

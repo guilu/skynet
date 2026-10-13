@@ -254,6 +254,7 @@ public class RunSteps {
                     "El hijo " + child.id() + " de la fase " + stageKey,
                     child.agent(),
                     child.prompt(),
+                    null,
                     definition,
                     workItem,
                     repository);
@@ -271,6 +272,7 @@ public class RunSteps {
                   "La fase " + stageKey,
                   stageDefinition.agent(),
                   stageDefinition.prompt(),
+                  stageDefinition.outputSchemaJson(),
                   definition,
                   workItem,
                   repository);
@@ -400,14 +402,16 @@ public class RunSteps {
   }
 
   /**
-   * Un agente con su prompt (el propio o, si no tiene, el de {@code agentName}) y lo que se le
-   * permite; {@code who} lo nombra en el error si se queda sin prompt.
+   * Un agente con su prompt (el propio o, si no tiene, el de {@code agentName}), con los datos de
+   * otras fases que use, y lo que se le permite; {@code who} lo nombra en el error si se queda sin
+   * prompt. {@code outputSchema} es el de la fase, que manda sobre el {@code output} del agente.
    */
   private Invocation agentInvocation(
       WorkflowRun run,
       String who,
       String agentName,
       String promptTemplate,
+      String outputSchema,
       WorkflowDefinition definition,
       WorkItem workItem,
       CodeRepository repository) {
@@ -417,13 +421,18 @@ public class RunSteps {
     String prompt =
         template == null
             ? ""
-            : new PromptRenderer(workItem, projects.get(workItem.getProjectId()), inputsOf(run))
+            : new PromptRenderer(
+                    workItem,
+                    projects.get(workItem.getProjectId()),
+                    inputsOf(run),
+                    new ConditionData(run, definition)::value)
                 .render(template);
     if (prompt.isBlank()) {
       throw new ConflictException(who + " se queda sin prompt");
     }
     EffectivePolicy policy =
-        EffectivePolicy.of(projects.agentPolicy(repository), agent, launchLimitsOf(run));
+        EffectivePolicy.of(projects.agentPolicy(repository), agent, launchLimitsOf(run))
+            .withOutputSchema(outputSchema);
     if (agent == null) {
       policy = policy.withAgent(LaunchAgent.of(jdbc, run.getId()));
     }

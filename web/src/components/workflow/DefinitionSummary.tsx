@@ -41,6 +41,18 @@ export function DefinitionSummary({ definition }: { definition: WorkflowModel })
                   ` · A la vez: ${s.children
                     .map((c) => (c.id === c.agent ? c.id : `${c.id} (${c.agent})`))
                     .join(', ')}`}
+                {s.outputSchema && (
+                  <>
+                    {' · Salida: '}
+                    <code>{Object.keys(s.outputSchema.properties).join(', ')}</code>
+                  </>
+                )}
+                {s.outputSchemaPath && (
+                  <>
+                    {' · Salida: '}
+                    <code>{s.outputSchemaPath}</code>
+                  </>
+                )}
                 {s.condition && (
                   <>
                     {s.type === 'conditional' ? ' · Evalúa ' : ' · Solo si '}

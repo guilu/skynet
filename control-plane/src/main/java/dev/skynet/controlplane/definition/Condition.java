@@ -36,6 +36,33 @@ public final class Condition {
     }
   }
 
+  /**
+   * La ruta de condición que lee una variable de prompt {@code {{stages.…}}}: {@code
+   * stages.<fase>.output.<campo>} es {@code <fase>.<campo>}, {@code
+   * stages.<fase>.<hijo>.output.<campo>} es {@code <fase>.<hijo>.<campo>} y {@code
+   * stages.<fase>.status} y {@code stages.<fase>.exitCode} quedan igual. {@code null} si la
+   * variable no tiene ninguna de esas formas.
+   */
+  public static List<String> promptPath(String variable) {
+    if (!variable.startsWith("stages.")) {
+      return null;
+    }
+    List<String> parts = List.of(variable.substring("stages.".length()).split("\\.", -1));
+    if (parts.contains("")) {
+      return null;
+    }
+    if (parts.size() == 2 && List.of("status", "exitCode").contains(parts.get(1))) {
+      return parts;
+    }
+    if (parts.size() == 3 && parts.get(1).equals("output")) {
+      return List.of(parts.get(0), parts.get(2));
+    }
+    if (parts.size() == 4 && parts.get(2).equals("output")) {
+      return List.of(parts.get(0), parts.get(1), parts.get(3));
+    }
+    return null;
+  }
+
   public record Not(Expr operand, int position) implements Expr {}
 
   /** {@code op}: {@code && || == != < <= > >= in}. */

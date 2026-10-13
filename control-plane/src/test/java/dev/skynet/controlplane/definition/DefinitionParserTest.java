@@ -156,6 +156,8 @@ class DefinitionParserTest {
     assertThat(developer.maxBudgetUsd()).isEqualByComparingTo(new BigDecimal("3"));
     assertThat(definition.stage("implementation").orElseThrow().workspace())
         .isEqualTo(StageDefinition.WorkspaceMode.ISOLATED);
+    assertThat(definition.stage("specification").orElseThrow().outputSchemaPath())
+        .isEqualTo("schemas/specification.json");
   }
 
   @Test
@@ -392,8 +394,8 @@ class DefinitionParserTest {
         0);
     assertCondition(
         "implement.done",
-        "`implement` no devuelve salida estructurada: declara `output` en su agente para leer"
-            + " `done`",
+        "`implement` no devuelve salida estructurada: declara `output` en su agente u"
+            + " `outputSchema` en la fase para leer `done`",
         0);
     assertCondition(
         "review.calidad.nada", "El `output` del agente `calidad` no tiene el campo `nada`", 0);
@@ -802,12 +804,211 @@ class DefinitionParserTest {
             "`{{inputs.isue}}` usa un dato que no está en `inputs`; ¿quisiste decir `issue`?",
             "Variable `{{workitem.key}}` desconocida; ¿quisiste decir `workItem.key`?. Admite:"
                 + " workItem.key, workItem.title, workItem.description, workItem.type,"
-                + " workItem.externalRef, project.key, project.name e inputs.<nombre>");
+                + " workItem.externalRef, project.key, project.name, inputs.<nombre> y"
+                + " stages.<fase>.output.<campo>",
+            "`{{stages.plan.summary}}` no es un dato de otra fase: usa"
+                + " `{{stages.<fase>.output.<campo>}}`, `{{stages.<fase>.<hijo>.output.<campo>}}`,"
+                + " `{{stages.<fase>.status}}` o `{{stages.<fase>.exitCode}}`");
     assertThat(errors.get(0).line()).isEqualTo(10);
     assertThat(errors.get(0).column()).isEqualTo(17);
     assertThat(errors.get(1).column()).isEqualTo(35);
-    assertThat(messages(parsed, Severity.UNSUPPORTED))
-        .containsExactly("`{{stages.plan.summary}}`: usar la salida de otra fase llega en W4");
+    assertThat(errors.get(2).line()).isEqualTo(11);
+    assertThat(errors.get(2).column()).isEqualTo(13);
+    assertThat(messages(parsed, Severity.UNSUPPORTED)).isEmpty();
+  }
+
+  /** Una especificación con su salida en la fase, un plan que la lee y una revisión en paralelo. */
+  private static final String SPEC_PLAN =
+      """
+      id: especificar
+      agents:
+        analista:
+          prompt: Especifica {{workItem.title}}
+          output:
+            type: object
+            properties:
+              borrador:
+                type: string
+        planificador:
+          prompt: "Planifica a partir de: {{stages.spec.output.summary}}"
+        revisor:
+          prompt: Revisa
+          output:
+            type: object
+            properties:
+              hasBlockingFindings:
+                type: boolean
+      stages:
+        - id: spec
+          type: agent
+          agent: analista
+          outputSchema:
+            type: object
+            properties:
+              summary:
+                type: string
+              risks:
+                type: array
+        - id: externo
+          type: agent
+          prompt: Usa el schema del repositorio
+          outputSchema: schemas/externo.json
+        - id: tests
+          type: command
+          command: make test
+          dependsOn: [spec]
+        - id: review
+          type: parallel
+          dependsOn: [tests]
+          children:
+            - agent: revisor
+        - id: plan
+          type: agent
+          agent: planificador
+          dependsOn: [review, externo]
+          workspaceFrom: review
+        - id: resumen
+          type: agent
+          dependsOn: [plan]
+          condition: spec.summary != null && externo.loQueSea == 'x'
+          prompt: |
+            Riesgos: {{stages.spec.output.risks}}
+            Tests: {{stages.tests.status}} ({{stages.tests.exitCode}})
+            Bloqueos: {{stages.review.revisor.output.hasBlockingFindings}}
+            Externo: {{stages.externo.output.cualquiera}}
+      """;
+
+  @Test
+  void aStageOutputSchemaWinsOverItsAgentsAndPromptsReadOtherStages() {
+    Parsed parsed = parse(SPEC_PLAN);
+    assertThat(parsed.validation().problems()).isEmpty();
+    assertThat(parsed.validation().publishable()).isTrue();
+    StageDefinition spec = parsed.definition().stage("spec").orElseThrow();
+    assertThat(AgentDefinition.fieldsOf(spec.outputSchema()))
+        .containsExactly(
+            java.util.Map.entry("summary", "string"), java.util.Map.entry("risks", "array"));
+    assertThat(spec.outputSchemaJson()).contains("\"summary\"").doesNotContain("borrador");
+    StageDefinition externo = parsed.definition().stage("externo").orElseThrow();
+    assertThat(externo.outputSchemaPath()).isEqualTo("schemas/externo.json");
+    assertThat(externo.outputSchemaJson()).isEqualTo("{\"$ref\":\"schemas/externo.json\"}");
+  }
+
+  @Test
+  void eachWrongStageVariableSaysWhy() {
+    assertStageVariable(
+        "{{stages.spec.output.borrador}}",
+        "`{{stages.spec.output.borrador}}`: El `outputSchema` de la fase `spec` no tiene el campo"
+            + " `borrador`");
+    assertStageVariable(
+        "{{stages.resumen.status}}",
+        "`{{stages.resumen.status}}`: `resumen` no es una dependencia de `resumen`: un prompt"
+            + " solo lee fases que han terminado antes (ponla en `dependsOn`)");
+    assertStageVariable(
+        "{{stages.nadie.output.x}}", "`{{stages.nadie.output.x}}`: no hay ninguna fase `nadie`");
+    assertStageVariable(
+        "{{stages.review.output.hasBlockingFindings}}",
+        "`{{stages.review.output.hasBlockingFindings}}`: `review` es `parallel` y cada hijo"
+            + " devuelve su salida; usa `{{stages.review.<hijo>.output.hasBlockingFindings}}`");
+    assertStageVariable(
+        "{{stages.review.otro.output.x}}",
+        "`{{stages.review.otro.output.x}}`: La fase `review` no tiene ningún hijo `otro`");
+    assertStageVariable(
+        "{{stages.plan.output.x}}",
+        "`{{stages.plan.output.x}}`: `plan` no devuelve salida estructurada: declara `output` en"
+            + " su agente u `outputSchema` en la fase para leer `x`");
+    assertStageVariable(
+        "{{stages.spec.exitCode}}",
+        "`{{stages.spec.exitCode}}`: Solo las fases `command` tienen `exitCode`; `spec` es"
+            + " `agent`");
+  }
+
+  private static void assertStageVariable(String variable, String message) {
+    Parsed parsed =
+        parse(SPEC_PLAN.replace("{{stages.tests.status}}", "{{stages.tests.status}} " + variable));
+    assertThat(errors(parsed))
+        .as(variable)
+        .singleElement()
+        .satisfies(
+            p -> {
+              assertThat(p.message()).isEqualTo(message);
+              assertThat(p.path()).isEqualTo("stages.resumen.prompt");
+            });
+  }
+
+  @Test
+  void anAgentPromptIsCheckedFromEveryStageThatUsesIt() {
+    Parsed parsed =
+        parse(
+            SPEC_PLAN
+                + """
+                  - id: suelto
+                    type: agent
+                    agent: planificador
+                """);
+    assertThat(errors(parsed))
+        .singleElement()
+        .satisfies(
+            p -> {
+              assertThat(p.path()).isEqualTo("agents.planificador.prompt");
+              assertThat(p.message())
+                  .isEqualTo(
+                      "`{{stages.spec.output.summary}}`: `spec` no es una dependencia de"
+                          + " `suelto`: un prompt solo lee fases que han terminado antes (ponla"
+                          + " en `dependsOn`)");
+            });
+  }
+
+  @Test
+  void anOutputSchemaIsInlineOrARepositoryPathOnAgentStages() {
+    Parsed parsed =
+        parse(
+            """
+            id: schemas
+            stages:
+              - id: fuera
+                type: agent
+                prompt: a
+                outputSchema: ../secretos.json
+              - id: absoluta
+                type: agent
+                prompt: a
+                outputSchema: /etc/schema.json
+              - id: sin-campos
+                type: agent
+                prompt: a
+                outputSchema:
+                  type: object
+              - id: lista
+                type: agent
+                prompt: a
+                outputSchema: [ok]
+              - id: comando
+                type: command
+                command: make
+                outputSchema: schemas/x.json
+              - id: paralela
+                type: parallel
+                outputSchema: schemas/x.json
+                children:
+                  - agent: r
+            agents:
+              r:
+                prompt: r
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .containsExactly(
+            "`outputSchema: ../secretos.json` tiene que ser una ruta dentro del repositorio, p. ej."
+                + " `schemas/spec.json`",
+            "`outputSchema: /etc/schema.json` tiene que ser una ruta dentro del repositorio, p. ej."
+                + " `schemas/spec.json`",
+            "A `outputSchema` le faltan sus campos en `properties`, p. ej. `outputSchema: {type:"
+                + " object, properties: {hasBlockingFindings: {type: boolean}}}`",
+            "`outputSchema` debe ser un JSON Schema de un objeto o la ruta de un fichero del"
+                + " repositorio, p. ej. `outputSchema: {type: object, properties:"
+                + " {hasBlockingFindings: {type: boolean}}}`",
+            "`outputSchema` solo vale en fases `agent`",
+            "`outputSchema` solo vale en fases `agent`: en una `parallel`, declara `output` en el"
+                + " agente de cada hijo");
   }
 
   @Test

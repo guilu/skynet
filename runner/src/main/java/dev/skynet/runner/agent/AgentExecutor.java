@@ -13,6 +13,7 @@ import dev.skynet.runner.provider.CostMeter;
 import dev.skynet.runner.provider.EventParser;
 import dev.skynet.runner.provider.ParsedEvent;
 import dev.skynet.runner.provider.ProviderRegistry;
+import dev.skynet.runner.provider.StructuredOutput;
 import dev.skynet.runner.supervisor.ProcessExit;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.supervisor.SupervisedProcess;
@@ -312,6 +313,21 @@ public final class AgentExecutor implements AutoCloseable {
       runCommand(id, start, execution, workspace);
       return;
     }
+    StartAgent resolved;
+    try {
+      resolved =
+          start.withOutputSchema(StructuredOutput.resolve(start.outputSchema(), workspace.path()));
+    } catch (IllegalArgumentException | IOException e) {
+      finish(id, failure("Salida estructurada de la fase: " + e.getMessage()));
+      return;
+    }
+    launch(id, resolved, provider, execution, workspace);
+  }
+
+  /** Lanza el CLI del proveedor en el worktree y sigue su salida hasta que termina. */
+  private void launch(
+      UUID id, StartAgent start, AgentProvider provider, Execution execution, Workspace workspace)
+      throws InterruptedException {
 
     List<String> refused = provider.refusedEnvironment(start);
     if (!refused.isEmpty()) {

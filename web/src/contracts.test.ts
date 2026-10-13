@@ -367,6 +367,8 @@ const STAGE_DEFINITION: Keys<StageDefinition> = {
   command: true,
   children: true,
   condition: true,
+  outputSchema: true,
+  outputSchemaPath: true,
 }
 
 function expectSummary(summary: WorkflowSummary) {

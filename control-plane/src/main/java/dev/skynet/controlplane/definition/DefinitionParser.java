@@ -74,14 +74,14 @@ public final class DefinitionParser {
           "workspaceFrom",
           "command",
           "children",
-          "condition");
+          "condition",
+          "outputSchema");
   static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt");
 
   /** Claves de §11 que llegan con hitos posteriores, con el hito que las ejecuta. */
   static final Map<String, String> FUTURE_STAGE_KEYS =
       Map.of(
           "promptTemplate", "S3",
-          "outputSchema", "W4",
           "artifacts", "W4",
           "retry", "W6",
           "timeout", "W6");
@@ -427,7 +427,7 @@ public final class DefinitionParser {
                       + " no admite una lista de herramientas: se ignora. Lo que puede hacer lo"
                       + " fija `permissionMode` (`plan` es solo lectura)");
             }
-            Map<String, Object> output = output(fields.get("output"), path + ".output");
+            Map<String, Object> output = output(fields.get("output"), path + ".output", "output");
             Integer maxTurns = null;
             BigDecimal maxBudgetUsd = null;
             Integer timeoutMinutes = null;
@@ -480,20 +480,29 @@ public final class DefinitionParser {
      * properties}, cada uno con su {@code type}. Lo demás (descripciones, {@code required}...) pasa
      * tal cual a Claude Code, que valida la salida contra él.
      */
-    private Map<String, Object> output(Entry entry, String path) {
+    private Map<String, Object> output(Entry entry, String path, String key) {
       if (entry == null || isNull(entry.value())) {
         return null;
       }
       String example =
-          ", p. ej. `output: {type: object, properties: {hasBlockingFindings: {type: boolean}}}`";
+          ", p. ej. `"
+              + key
+              + ": {type: object, properties: {hasBlockingFindings: {type: boolean}}}`";
       if (!(entry.value() instanceof MappingNode mapping)) {
-        error(entry.value(), path, "`output` debe ser un JSON Schema de un objeto" + example);
+        error(
+            entry.value(),
+            path,
+            "`"
+                + key
+                + "` debe ser un JSON Schema de un objeto"
+                + (key.equals("outputSchema") ? " o la ruta de un fichero del repositorio" : "")
+                + example);
         return null;
       }
       Map<String, Node> schema = new LinkedHashMap<>();
       for (NodeTuple tuple : mapping.getValue()) {
-        if (tuple.getKeyNode() instanceof ScalarNode key) {
-          schema.put(key.getValue(), tuple.getValueNode());
+        if (tuple.getKeyNode() instanceof ScalarNode name) {
+          schema.put(name.getValue(), tuple.getValueNode());
         }
       }
       Node type = schema.get("type");
@@ -510,7 +519,7 @@ public final class DefinitionParser {
         error(
             properties == null ? entry.key() : properties,
             path + ".properties",
-            "A `output` le faltan sus campos en `properties`" + example);
+            "A `" + key + "` le faltan sus campos en `properties`" + example);
         return null;
       }
       boolean valid = true;
@@ -523,7 +532,9 @@ public final class DefinitionParser {
               fieldPath,
               "`"
                   + name
-                  + "` no vale como campo de `output`: usa letras, números y `_`, empezando por"
+                  + "` no vale como campo de `"
+                  + key
+                  + "`: usa letras, números y `_`, empezando por"
                   + " una letra");
           valid = false;
           continue;
@@ -543,7 +554,9 @@ public final class DefinitionParser {
               fieldPath + ".type",
               "El campo `"
                   + name
-                  + "` de `output` necesita `type`: "
+                  + "` de `"
+                  + key
+                  + "` necesita `type`: "
                   + String.join(", ", OUTPUT_TYPES));
           valid = false;
         }
@@ -850,6 +863,24 @@ public final class DefinitionParser {
       String command = command(fields, type, node, path);
       List<ChildAt> children = children(fields, type, node, path);
       String condition = condition(fields, type, node, path);
+      Entry schemaEntry = fields.get("outputSchema");
+      Map<String, Object> outputSchema = null;
+      String outputSchemaPath = null;
+      if (schemaEntry != null && !isNull(schemaEntry.value())) {
+        if (type != StageType.AGENT) {
+          error(
+              schemaEntry.key(),
+              path + ".outputSchema",
+              "`outputSchema` solo vale en fases `agent`"
+                  + (type == StageType.PARALLEL
+                      ? ": en una `parallel`, declara `output` en el agente de cada hijo"
+                      : ""));
+        } else if (schemaEntry.value() instanceof ScalarNode) {
+          outputSchemaPath = schemaPath(schemaEntry, path + ".outputSchema");
+        } else {
+          outputSchema = output(schemaEntry, path + ".outputSchema", "outputSchema");
+        }
+      }
       StageDefinition stage =
           new StageDefinition(
               id,
@@ -862,8 +893,37 @@ public final class DefinitionParser {
               text(fields.get("workspaceFrom"), path + ".workspaceFrom"),
               command,
               children.stream().map(ChildAt::child).toList(),
-              condition);
+              condition,
+              outputSchema,
+              outputSchemaPath);
       return new StageAt(stage, path, node, fields, dependencyNodes, children);
+    }
+
+    /**
+     * La ruta del {@code outputSchema} de una fase: un fichero del repositorio, que el runner lee
+     * del worktree al arrancar la invocación. Aquí solo se comprueba que no salga del repositorio.
+     */
+    private String schemaPath(Entry entry, String path) {
+      String value = text(entry, path);
+      if (value == null) {
+        return null;
+      }
+      List<String> segments = Arrays.asList(value.split("[/\\\\]", -1));
+      if (value.isBlank()
+          || value.startsWith("/")
+          || value.contains("://")
+          || segments.contains("..")
+          || value.matches("^[A-Za-z]:.*")) {
+        error(
+            entry.value(),
+            path,
+            "`outputSchema: "
+                + value
+                + "` tiene que ser una ruta dentro del repositorio, p. ej."
+                + " `schemas/spec.json`");
+        return null;
+      }
+      return value;
     }
 
     /**
@@ -1070,6 +1130,7 @@ public final class DefinitionParser {
       Set<String> inputNames =
           inputs.stream().map(InputDefinition::name).collect(Collectors.toSet());
       Set<String> usedAgents = new HashSet<>();
+      Stages scope = new Stages(byId, agentsByName, inputs);
 
       for (StageAt at : stages) {
         StageDefinition stage = at.stage();
@@ -1118,7 +1179,11 @@ public final class DefinitionParser {
             }
             if (child.child().prompt() != null) {
               checkVariables(
-                  child.fields().get("prompt").value(), child.path() + ".prompt", inputNames);
+                  child.fields().get("prompt").value(),
+                  child.path() + ".prompt",
+                  inputNames,
+                  scope,
+                  List.of(stage.id()));
             }
           }
           checkWorkspace(at, byId);
@@ -1142,7 +1207,12 @@ public final class DefinitionParser {
           }
         }
         if (stage.prompt() != null) {
-          checkVariables(at.fields().get("prompt").value(), at.path() + ".prompt", inputNames);
+          checkVariables(
+              at.fields().get("prompt").value(),
+              at.path() + ".prompt",
+              inputNames,
+              scope,
+              List.of(stage.id()));
         } else if (agent != null && agent.prompt() == null) {
           error(
               at.node(),
@@ -1165,7 +1235,12 @@ public final class DefinitionParser {
         if (agent.prompt() != null) {
           Node prompt = promptNode(agent.name());
           if (prompt != null) {
-            checkVariables(prompt, "agents." + agent.name() + ".prompt", inputNames);
+            checkVariables(
+                prompt,
+                "agents." + agent.name() + ".prompt",
+                inputNames,
+                scope,
+                promptReaders(agent.name(), stages));
           }
         }
         if (!usedAgents.contains(agent.name())) {
@@ -1202,7 +1277,8 @@ public final class DefinitionParser {
       try {
         Condition.Expr expr = Condition.parse(scalar.getValue());
         Condition.check(
-            expr, p -> conditionType(p, at.stage().id(), ancestors, byId, agents, inputs));
+            expr,
+            p -> conditionType(p, at.stage().id(), ancestors, byId, agents, inputs, CONDITION));
       } catch (Condition.SyntaxError e) {
         int[] position = position(scalar, Math.min(e.position(), scalar.getValue().length()));
         add(Severity.ERROR, path, position[0], position[1], e.getMessage());
@@ -1228,21 +1304,37 @@ public final class DefinitionParser {
       return seen;
     }
 
-    /** El tipo del dato al que lleva una ruta de una condición, o un error si no vale. */
+    /** Quién lee los datos de otras fases y cómo se escriben, para los mensajes de error. */
+    private record DataReader(String who, String usage) {}
+
+    private static final DataReader CONDITION =
+        new DataReader(
+            "una condición",
+            "no es un dato que pueda leer una condición: usa `<fase>.status`, `<fase>.exitCode`,"
+                + " `<fase>.<campo>` o `inputs.<nombre>`");
+
+    private static final DataReader PROMPT =
+        new DataReader(
+            "un prompt",
+            "no es un dato de otra fase: usa `{{stages.<fase>.output.<campo>}}`,"
+                + " `{{stages.<fase>.<hijo>.output.<campo>}}`, `{{stages.<fase>.status}}` o"
+                + " `{{stages.<fase>.exitCode}}`");
+
+    /**
+     * El tipo del dato al que lleva una ruta de una condición (o, con {@code reader} {@link
+     * #PROMPT}, de una variable {@code {{stages.…}}} de un prompt), o un error si no vale.
+     */
     private static Condition.Type conditionType(
         Condition.Path path,
         String stageId,
         Set<String> ancestors,
         Map<String, StageAt> byId,
         Map<String, AgentDefinition> agents,
-        List<InputDefinition> inputs) {
+        List<InputDefinition> inputs,
+        DataReader reader) {
       List<String> parts = path.parts();
       String first = parts.getFirst();
-      String usage =
-          "`"
-              + path.text()
-              + "` no es un dato que pueda leer una condición: usa `<fase>.status`,"
-              + " `<fase>.exitCode`, `<fase>.<campo>` o `inputs.<nombre>`";
+      String usage = "`" + path.text() + "` " + reader.usage();
       if (first.equals("inputs")) {
         if (parts.size() != 2) {
           throw new Condition.SyntaxError(usage, path.position());
@@ -1275,7 +1367,9 @@ public final class DefinitionParser {
                 + first
                 + "` no es una dependencia de `"
                 + stageId
-                + "`: una condición solo lee fases que han terminado antes (ponla en `dependsOn`)",
+                + "`: "
+                + reader.who()
+                + " solo lee fases que han terminado antes (ponla en `dependsOn`)",
             path.position());
       }
       if (parts.size() < 2) {
@@ -1312,7 +1406,8 @@ public final class DefinitionParser {
                         field, stage.children().stream().map(ChildDefinition::id).toList()),
                 path.position());
           }
-          return outputType(path, agents.get(child.agent()), parts.get(2), first + "." + field);
+          return outputType(
+              path, null, agents.get(child.agent()), parts.get(2), first + "." + field);
         }
         if (parts.size() == 2) {
           boolean declared = false;
@@ -1356,32 +1451,51 @@ public final class DefinitionParser {
       }
       if (stage.type() == StageType.AGENT && parts.size() == 2) {
         AgentDefinition agent = stage.agent() == null ? null : agents.get(stage.agent());
-        return outputType(path, agent, field, first);
+        return outputType(path, stage, agent, field, first);
       }
       throw new Condition.SyntaxError(usage, path.position());
     }
 
-    /** El tipo del campo {@code field} del {@code output} de {@code agent}. */
+    /**
+     * El tipo del campo {@code field} de la salida de una fase {@code agent} ({@code stage}) o de
+     * un hijo ({@code stage} {@code null}): la del {@code outputSchema} de la fase si tiene, o la
+     * del {@code output} de {@code agent}. Con un {@code outputSchema} en un fichero los campos no
+     * se conocen hasta ejecutar, así que vale cualquiera.
+     */
     private static Condition.Type outputType(
-        Condition.Path path, AgentDefinition agent, String field, String who) {
-      if (agent == null || agent.output() == null) {
+        Condition.Path path,
+        StageDefinition stage,
+        AgentDefinition agent,
+        String field,
+        String who) {
+      if (stage != null && stage.outputSchemaPath() != null) {
+        return Condition.Type.ANY;
+      }
+      boolean own = stage != null && stage.outputSchema() != null;
+      Map<String, Object> schema =
+          own ? stage.outputSchema() : agent == null ? null : agent.output();
+      if (schema == null) {
         throw new Condition.SyntaxError(
             "`"
                 + who
-                + "` no devuelve salida estructurada: declara `output` en su agente para leer `"
+                + "` no devuelve salida estructurada: declara `output` en su agente"
+                + (stage == null ? "" : " u `outputSchema` en la fase")
+                + " para leer `"
                 + field
                 + "`",
             path.position());
       }
-      String type = agent.outputFields().get(field);
+      Map<String, String> fields = AgentDefinition.fieldsOf(schema);
+      String type = fields.get(field);
       if (type == null) {
         throw new Condition.SyntaxError(
-            "El `output` del agente `"
-                + agent.name()
-                + "` no tiene el campo `"
+            (own
+                    ? "El `outputSchema` de la fase `" + stage.id() + "`"
+                    : "El `output` del agente `" + agent.name() + "`")
+                + " no tiene el campo `"
                 + field
                 + "`"
-                + suggestion(field, agent.outputFields().keySet()),
+                + suggestion(field, fields.keySet()),
             path.position());
       }
       return switch (type) {
@@ -1511,7 +1625,89 @@ public final class DefinitionParser {
       state.put(id, 2);
     }
 
-    private void checkVariables(Node node, String path, Set<String> inputs) {
+    /** Las fases del workflow por id, los agentes por nombre y los datos de entrada. */
+    private record Stages(
+        Map<String, StageAt> byId,
+        Map<String, AgentDefinition> agents,
+        List<InputDefinition> inputs) {}
+
+    /**
+     * Fases que usan el prompt del agente {@code agent}: las {@code agent} y las {@code parallel}
+     * con un hijo de ese agente, sin prompt propio.
+     */
+    private static List<String> promptReaders(String agent, List<StageAt> stages) {
+      List<String> readers = new ArrayList<>();
+      for (StageAt at : stages) {
+        StageDefinition stage = at.stage();
+        boolean uses =
+            switch (stage.type()) {
+              case AGENT -> agent.equals(stage.agent()) && stage.prompt() == null;
+              case PARALLEL ->
+                  stage.children().stream()
+                      .anyMatch(c -> agent.equals(c.agent()) && c.prompt() == null);
+              default -> false;
+            };
+        if (uses) {
+          readers.add(stage.id());
+        }
+      }
+      return readers;
+    }
+
+    /**
+     * Comprueba una variable {@code {{stages.…}}} desde la fase {@code reader}: que tenga una de
+     * sus formas, que la fase sea una dependencia (directa o indirecta) y que el campo esté en su
+     * salida, como en las condiciones. Devuelve el error o {@code null}.
+     */
+    private static String stageVariable(String variable, String reader, Stages scope) {
+      List<String> data = Condition.promptPath(variable);
+      if (data == null) {
+        return "`{{" + variable + "}}` " + PROMPT.usage();
+      }
+      String first = data.getFirst();
+      StageAt source = scope.byId().get(first);
+      if (source == null) {
+        return "`{{"
+            + variable
+            + "}}`: no hay ninguna fase `"
+            + first
+            + "`"
+            + suggestion(first, scope.byId().keySet());
+      }
+      if (source.stage().type() == StageType.PARALLEL
+          && data.size() == 2
+          && !List.of("status", "exitCode").contains(data.get(1))) {
+        return "`{{"
+            + variable
+            + "}}`: `"
+            + first
+            + "` es `parallel` y cada hijo devuelve su salida; usa `{{stages."
+            + first
+            + ".<hijo>.output."
+            + data.get(1)
+            + "}}`";
+      }
+      try {
+        conditionType(
+            new Condition.Path(data, 0),
+            reader,
+            ancestors(reader, scope.byId()),
+            scope.byId(),
+            scope.agents(),
+            scope.inputs(),
+            PROMPT);
+        return null;
+      } catch (Condition.SyntaxError e) {
+        return "`{{" + variable + "}}`: " + e.getMessage();
+      }
+    }
+
+    /**
+     * Comprueba las variables de un prompt. Las {@code {{stages.…}}} se comprueban desde cada fase
+     * que usa el prompt ({@code readers}).
+     */
+    private void checkVariables(
+        Node node, String path, Set<String> inputs, Stages scope, List<String> readers) {
       if (!(node instanceof ScalarNode scalar)) {
         return;
       }
@@ -1534,12 +1730,16 @@ public final class DefinitionParser {
                     + suggestion(name, inputs));
           }
         } else if (variable.startsWith("stages.")) {
-          add(
-              Severity.UNSUPPORTED,
-              path,
-              position[0],
-              position[1],
-              "`{{" + variable + "}}`: usar la salida de otra fase llega en W4");
+          Set<String> problems = new LinkedHashSet<>();
+          for (String reader : readers) {
+            String problem = stageVariable(variable, reader, scope);
+            if (problem != null) {
+              problems.add(problem);
+            }
+          }
+          for (String problem : problems) {
+            add(Severity.ERROR, path, position[0], position[1], problem);
+          }
         } else if (!CONTEXT_VARIABLES.contains(variable)) {
           add(
               Severity.ERROR,
@@ -1552,7 +1752,7 @@ public final class DefinitionParser {
                   + suggestion(variable, CONTEXT_VARIABLES)
                   + ". Admite: "
                   + String.join(", ", CONTEXT_VARIABLES)
-                  + " e inputs.<nombre>");
+                  + ", inputs.<nombre> y stages.<fase>.output.<campo>");
         }
       }
     }

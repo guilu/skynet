@@ -1,7 +1,9 @@
 package dev.skynet.controlplane.definition;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Una fase del workflow.
@@ -18,6 +20,10 @@ import java.util.Optional;
  *     demás
  * @param condition condición que se evalúa cuando la fase está lista: si es falsa, la fase se
  *     omite; {@code null} si no tiene
+ * @param outputSchema JSON Schema en línea de la salida estructurada de una fase {@code agent}, que
+ *     manda sobre el {@code output} de su agente; {@code null} si no tiene
+ * @param outputSchemaPath el mismo schema como ruta de un fichero del repositorio, que el runner
+ *     lee del worktree al arrancar; {@code null} si no tiene
  */
 public record StageDefinition(
     String id,
@@ -30,11 +36,54 @@ public record StageDefinition(
     String workspaceFrom,
     String command,
     List<ChildDefinition> children,
-    String condition) {
+    String condition,
+    Map<String, Object> outputSchema,
+    String outputSchemaPath) {
 
   public StageDefinition {
     dependsOn = List.copyOf(dependsOn);
     children = children == null ? List.of() : List.copyOf(children);
+  }
+
+  /** Una fase sin {@code outputSchema} propio. */
+  public StageDefinition(
+      String id,
+      String name,
+      StageType type,
+      String agent,
+      String prompt,
+      List<Dependency> dependsOn,
+      WorkspaceMode workspace,
+      String workspaceFrom,
+      String command,
+      List<ChildDefinition> children,
+      String condition) {
+    this(
+        id,
+        name,
+        type,
+        agent,
+        prompt,
+        dependsOn,
+        workspace,
+        workspaceFrom,
+        command,
+        children,
+        condition,
+        null,
+        null);
+  }
+
+  /**
+   * El schema de la salida de la fase como lo recibe el runner: el JSON en línea o, con una ruta,
+   * {@code {"$ref": "<ruta>"}}, que el runner resuelve en el worktree; {@code null} si la fase no
+   * tiene uno propio.
+   */
+  public String outputSchemaJson() {
+    if (outputSchemaPath != null) {
+      return JsonMapper.shared().writeValueAsString(Map.of("$ref", outputSchemaPath));
+    }
+    return outputSchema == null ? null : JsonMapper.shared().writeValueAsString(outputSchema);
   }
 
   /** Una fase sin hijos. */
@@ -59,6 +108,8 @@ public record StageDefinition(
         workspaceFrom,
         command,
         List.of(),
+        null,
+        null,
         null);
   }
 
