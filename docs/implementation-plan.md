@@ -526,6 +526,12 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito PV (proveedores), planificado el 2026-10-12:** PV-A interfaz `AgentProvider` y reparto por proveedor, PV-B Codex, PV-C Gemini, PV-D web y E2E con revisores de los tres proveedores.
 
+**Implementado (PV-C), Gemini CLI:**
+
+- `runner/provider/gemini`: `GeminiProvider` lanza `gemini --output-format stream-json` con el id de sesión del control plane (`--session-id`) o `--resume <id>`, traduce `permissionMode` a `--approval-mode` (`plan`, `yolo` o `auto_edit`) y confía en el worktree (`GEMINI_CLI_TRUST_WORKSPACE`). `GeminiEventParser` junta los fragmentos de texto en mensajes y normaliza herramientas y resultado; `GeminiCostMeter` cobra cada modelo de `result.stats.models` a su precio (precios de `gemini-2.5-*` y `gemini-3*` de agregadores, sin comprobar en la página de Google). Formato en [`gemini-stream-json.md`](gemini-stream-json.md), escrito a partir del código fuente de Gemini CLI y sin grabar con el CLI real.
+- Salida estructurada sin soporte del CLI (decisión 6A): `runner/provider/StructuredOutput` añade al prompt la instrucción con el schema, toma el último bloque JSON del último mensaje y comprueba campos y tipos del subconjunto de JSON Schema que admite `output`, sin librería nueva. Si no cumple, `error_structured_output` y el agente falla.
+- `AgentProviderKind.GEMINI` (reanudar y salida estructurada; bifurcar responde 409). `provider: gemini` deja de ser `UNSUPPORTED`; los avisos de `tools` y `maxTurns` valen para cualquier proveedor que no los admite. `SKYNET_GEMINI_BIN` (por defecto `gemini`) y fake-gemini como tercer lanzador de `tools/fake-claude`.
+
 **Implementado (PV-B), Codex:**
 
 - `runner/provider/codex`: `CodexProvider` lanza `codex exec --json` (arranque, `exec resume <thread>` y `exec fork <thread>`), traduce `permissionMode` a sandbox (`plan` → `read-only`, `bypassPermissions` → sin sandbox, el resto → `workspace-write`) y escribe el `output` del agente en modo estricto (`additionalProperties: false`, todo `required`) para `--output-schema`. `CodexEventParser` normaliza los eventos y `CodexCostMeter` estima el coste con la tabla de precios, que ahora incluye los `gpt-5*` de OpenAI. El detalle está en [`codex-exec-json.md`](codex-exec-json.md); los fixtures están escritos a mano a partir del código de Codex, no grabados, a falta de una cuenta de OpenAI.

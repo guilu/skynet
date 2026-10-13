@@ -193,6 +193,27 @@ class WorkflowEngineIT extends IntegrationTest {
           agent: worker
       """;
 
+  /** Un revisor de Gemini con salida estructurada. */
+  static final String GEMINI =
+      """
+      id: gemini
+      version: 1
+      agents:
+        revisor:
+          provider: gemini
+          permissionMode: plan
+          prompt: Revisa la seguridad
+          output:
+            type: object
+            properties:
+              hasBlockingFindings:
+                type: boolean
+      stages:
+        - id: review
+          type: agent
+          agent: revisor
+      """;
+
   private String projectId;
   private String repositoryId;
   private String workItemId;
@@ -628,6 +649,34 @@ class WorkflowEngineIT extends IntegrationTest {
         "/api/agent-runs/" + fork.path("agentRunId").asString() + "/messages",
         Map.of("text", "Y documenta"));
     assertKeepsTheAgent(runner.claim().getFirst());
+  }
+
+  @Test
+  void aGeminiAgentRunsOnARunnerWithGeminiAndCanBeContinuedButNotForked() {
+    String definitionId = publish(GEMINI);
+    Runner claude = register("laptop");
+    Runner gemini = register("servidor", List.of(new ProviderInfo("gemini", "0.65.0")));
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+
+    assertThat(claude.claim()).isEmpty();
+    JsonNode start = gemini.claim().getFirst();
+    assertThat(start.path("start").path("provider").asString()).isEqualTo("gemini");
+    assertThat(start.path("start").path("permissionMode").asString()).isEqualTo("plan");
+    assertThat(start.path("start").path("outputSchema").asString())
+        .contains("\"hasBlockingFindings\"");
+    String session = start.path("start").path("sessionId").asString();
+    complete(gemini, start, "/w/eng/review", Map.of("hasBlockingFindings", false), session);
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("SUCCEEDED");
+
+    String agentId = start.path("agentRunId").asString();
+    assertConflict(() -> post("/api/agent-runs/" + agentId + "/fork", Map.of("text", "otra")));
+    post("/api/agent-runs/" + agentId + "/messages", Map.of("text", "Mira también el login"));
+    JsonNode resume = gemini.claim().getFirst();
+    assertThat(resume.path("type").asString()).isEqualTo("RESUME");
+    assertThat(resume.path("start").path("provider").asString()).isEqualTo("gemini");
+    assertThat(resume.path("start").path("resume").path("sessionId").asString()).isEqualTo(session);
+    assertThat(resume.path("start").path("outputSchema").asString())
+        .contains("\"hasBlockingFindings\"");
   }
 
   private static void assertKeepsTheAgent(JsonNode command) {

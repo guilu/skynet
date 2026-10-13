@@ -81,6 +81,7 @@ class RunnerDaemonTest {
             dir,
             null,
             null,
+            null,
             List.of(),
             Duration.ofSeconds(1),
             Duration.ofMillis(200),

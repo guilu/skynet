@@ -10,6 +10,7 @@ import dev.skynet.runner.provider.ProviderRegistry;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
 import dev.skynet.runner.provider.claude.ClaudeSessions;
 import dev.skynet.runner.provider.codex.CodexProvider;
+import dev.skynet.runner.provider.gemini.GeminiProvider;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.transport.ControlPlaneClient;
 import dev.skynet.runner.workspace.WorkspaceManager;
@@ -67,8 +68,11 @@ public final class RunnerMain {
             prices,
             ClaudeSessions.of(System.getenv()).orElse(null));
     CodexProvider codex = new CodexProvider(config.codexExecutable(), config.extraEnv(), prices);
+    GeminiProvider gemini =
+        new GeminiProvider(config.geminiExecutable(), config.extraEnv(), prices);
     ProviderRegistry providers =
-        ProviderRegistry.detect(List.of(claude, codex), config.providers(), System.getenv());
+        ProviderRegistry.detect(
+            List.of(claude, codex, gemini), config.providers(), System.getenv());
     try (EventSender sender =
             new EventSender(journal, client, Duration.ofMillis(500), Duration.ofSeconds(2));
         ArtifactSender artifactSender =

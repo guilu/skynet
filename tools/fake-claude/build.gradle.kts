@@ -22,11 +22,13 @@ sourceSets {
     }
 }
 
-// fake-codex vive en el mismo módulo: otro lanzador en bin/, con sus fixtures de /fixtures/codex.
+// fake-codex y fake-gemini viven en el mismo módulo: otros lanzadores en bin/, con sus fixtures de
+// /fixtures/codex y /fixtures/gemini.
 sourceSets {
     main {
         resources {
             include("codex/**")
+            include("gemini/**")
         }
     }
 }
@@ -38,10 +40,18 @@ val fakeCodexScripts by tasks.registering(CreateStartScripts::class) {
     classpath = tasks.named<CreateStartScripts>("startScripts").get().classpath
 }
 
+val fakeGeminiScripts by tasks.registering(CreateStartScripts::class) {
+    mainClass = "dev.skynet.fakeclaude.FakeGemini"
+    applicationName = "fake-gemini"
+    outputDir = layout.buildDirectory.dir("fake-gemini-scripts").get().asFile
+    classpath = tasks.named<CreateStartScripts>("startScripts").get().classpath
+}
+
 distributions {
     main {
         contents {
             from(fakeCodexScripts) { into("bin") }
+            from(fakeGeminiScripts) { into("bin") }
         }
     }
 }

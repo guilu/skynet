@@ -77,7 +77,7 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/\\[\\]-]{0,99}$"
         },
         "provider": {
-          "description": "Quién ejecuta el agente: claude-code (por defecto) o codex; gemini y opencode llegan con el hito de proveedores. Codex ignora limits.maxTurns.",
+          "description": "Quién ejecuta el agente: claude-code (por defecto), codex o gemini; opencode aún no se ejecuta. Codex y Gemini ignoran tools y limits.maxTurns.",
           "enum": ["claude-code", "codex", "gemini", "opencode"]
         },
         "output": {

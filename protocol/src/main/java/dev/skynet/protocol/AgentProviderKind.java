@@ -21,7 +21,12 @@ public enum AgentProviderKind {
   CODEX(
       "codex",
       "Codex",
-      EnumSet.of(Capability.RESUME, Capability.FORK, Capability.STRUCTURED_OUTPUT));
+      EnumSet.of(Capability.RESUME, Capability.FORK, Capability.STRUCTURED_OUTPUT)),
+  /**
+   * Gemini CLI de Google ({@code gemini -p --output-format stream-json}): reanuda pero no bifurca;
+   * la salida estructurada la valida el runner.
+   */
+  GEMINI("gemini", "Gemini CLI", EnumSet.of(Capability.RESUME, Capability.STRUCTURED_OUTPUT));
 
   /** Lo que un proveedor puede hacer además de arrancar una sesión. */
   public enum Capability {

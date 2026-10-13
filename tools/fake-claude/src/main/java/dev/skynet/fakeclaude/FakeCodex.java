@@ -1,13 +1,10 @@
 package dev.skynet.fakeclaude;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -51,11 +48,7 @@ public final class FakeCodex {
 
   public static void main(String[] args) throws Exception {
     int code = run(args, System.getenv(), Path.of("").toAbsolutePath(), System.out, System.err);
-    if (code == FakeClaude.EXIT_KILLED
-        && !"false".equalsIgnoreCase(System.getenv().getOrDefault("FAKE_CODEX_HANG", "true"))) {
-      Thread.currentThread().join(); // Simula una ejecución larga hasta recibir SIGTERM.
-    }
-    System.exit(code);
+    FakeCli.exit(code, "FAKE_CODEX_HANG");
   }
 
   static int run(String[] args, Map<String, String> env, Path cwd, PrintStream out, PrintStream err)
@@ -89,8 +82,11 @@ public final class FakeCodex {
             ? env.getOrDefault("FAKE_CODEX_FIXTURE", DEFAULT_FIXTURE)
             : env.getOrDefault("FAKE_CODEX_RESUME_FIXTURE", RESUME_FIXTURE);
     long delayMs = Long.parseLong(env.getOrDefault("FAKE_CODEX_DELAY_MS", "10"));
-    String structured = inv.outputSchema() == null ? null : structuredOutput(env, cwd);
-    List<String> lines = loadFixture(fixture);
+    String structured =
+        inv.outputSchema() == null
+            ? null
+            : FakeCli.structuredOutput(env, "FAKE_CODEX_STRUCTURED_OUTPUT", cwd);
+    List<String> lines = FakeCli.loadFixture("codex", fixture);
     int lastMessage = -1;
     for (int i = 0; i < lines.size(); i++) {
       if (lines.get(i).contains("\"agent_message\"")) {
@@ -114,39 +110,12 @@ public final class FakeCodex {
       }
       finished |= "turn.completed".equals(type) || "turn.failed".equals(type);
       failed |= "turn.failed".equals(type);
-      String json = JSON.writeValueAsString(node);
-      out.println(json);
-      out.flush();
-      if (sessionFile != null) {
-        Files.createDirectories(sessionFile.getParent());
-        Files.writeString(
-            sessionFile,
-            json + "\n",
-            StandardCharsets.UTF_8,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.APPEND);
-      }
-      if (delayMs > 0) {
-        Thread.sleep(delayMs);
-      }
+      FakeCli.emit(out, sessionFile, JSON.writeValueAsString(node), delayMs);
     }
     if (!finished) {
       return FakeClaude.EXIT_KILLED;
     }
     return failed ? 1 : 0;
-  }
-
-  static List<String> loadFixture(String fixture) throws IOException {
-    Path path = Path.of(fixture);
-    if (Files.isRegularFile(path)) {
-      return Files.readAllLines(path, StandardCharsets.UTF_8);
-    }
-    try (InputStream in = FakeCodex.class.getResourceAsStream("/codex/" + fixture + ".jsonl")) {
-      if (in == null) {
-        throw new IllegalArgumentException("Fixture no encontrado: " + fixture);
-      }
-      return new String(in.readAllBytes(), StandardCharsets.UTF_8).lines().toList();
-    }
   }
 
   /** Fichero de la sesión; {@code null} sin {@code CODEX_HOME}. */
@@ -156,17 +125,6 @@ public final class FakeCodex {
       return null;
     }
     return Path.of(home).resolve("sessions").resolve(threadId + ".jsonl");
-  }
-
-  static String structuredOutput(Map<String, String> env, Path cwd) throws IOException {
-    String value = env.get("FAKE_CODEX_STRUCTURED_OUTPUT");
-    if (value == null || !value.startsWith("@")) {
-      return value;
-    }
-    Path file = cwd.resolve(value.substring(1));
-    return Files.isRegularFile(file)
-        ? Files.readString(file, StandardCharsets.UTF_8).strip()
-        : null;
   }
 
   /** Lo que importa de {@code codex exec [opciones] [resume|fork <sesión>] [--] <prompt>}. */
