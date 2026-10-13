@@ -50,6 +50,9 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
+    env:
+      # Ejercita la configuración: las E2E no deben depender de que :8080 esté libre.
+      E2E_API_PORT: 18084
     services:
       postgres:
         image: postgres:16
