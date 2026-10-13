@@ -13,6 +13,7 @@ import dev.skynet.controlplane.definition.WorkflowSummary;
 import dev.skynet.controlplane.definition.WorkflowView;
 import dev.skynet.controlplane.event.StoredEvent;
 import dev.skynet.controlplane.runner.ProviderShortage;
+import dev.skynet.controlplane.runner.ProviderView;
 import dev.skynet.controlplane.runner.RunnerView;
 import dev.skynet.controlplane.support.IntegrationTest;
 import dev.skynet.controlplane.workflow.AgentRunDetail;
@@ -31,6 +32,7 @@ import dev.skynet.controlplane.workflow.VerificationResult;
 import dev.skynet.controlplane.workflow.WorkflowDefinitionView;
 import dev.skynet.controlplane.workflow.WorkspaceView;
 import dev.skynet.protocol.AgentObservableStatus;
+import dev.skynet.protocol.AgentProviderKind.Capability;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
 import dev.skynet.protocol.runner.ProviderInfo;
@@ -39,6 +41,7 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,7 +89,8 @@ class ContractIT extends IntegrationTest {
         Arguments.of("conversation", Samples.conversation()),
         Arguments.of("artifacts", Samples.artifacts()),
         Arguments.of("verifications", Samples.verifications()),
-        Arguments.of("effective-policy", Samples.effectivePolicy()));
+        Arguments.of("effective-policy", Samples.effectivePolicy()),
+        Arguments.of("providers", Samples.providers()));
   }
 
   @ParameterizedTest(name = "{0}")
@@ -356,7 +360,24 @@ class ContractIT extends IntegrationTest {
               new BigDecimal("2.50"),
               null,
               "claude-haiku-4-5",
-              null),
+              null,
+              "claude-code",
+              List.of()),
+          new StagePolicy(
+              "second-opinion",
+              "Segunda opinión",
+              StageType.AGENT,
+              "gemini-reviewer",
+              List.of("Read", "Grep"),
+              "plan",
+              null,
+              null,
+              null,
+              null,
+              "gemini-2.5-pro",
+              null,
+              "gemini",
+              List.of("allowedTools", "maxTurns")),
           new StagePolicy(
               "fix",
               null,
@@ -369,7 +390,9 @@ class ContractIT extends IntegrationTest {
               null,
               null,
               null,
-              null),
+              null,
+              null,
+              List.of()),
           new StagePolicy(
               "tests",
               "Tests",
@@ -382,7 +405,9 @@ class ContractIT extends IntegrationTest {
               null,
               null,
               null,
-              "./gradlew test"));
+              "./gradlew test",
+              null,
+              List.of()));
     }
 
     static AgentRunDetail agentDetail() {
@@ -396,6 +421,29 @@ class ContractIT extends IntegrationTest {
                   "Implementa el importador de precios de modelos",
                   "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
                   at(0))));
+    }
+
+    static List<ProviderView> providers() {
+      return List.of(
+          new ProviderView(
+              "claude-code",
+              "Claude Code",
+              EnumSet.of(
+                  Capability.RESUME,
+                  Capability.FORK,
+                  Capability.STRUCTURED_OUTPUT,
+                  Capability.MAX_TURNS),
+              2),
+          new ProviderView(
+              "codex",
+              "Codex",
+              EnumSet.of(Capability.RESUME, Capability.FORK, Capability.STRUCTURED_OUTPUT),
+              1),
+          new ProviderView(
+              "gemini",
+              "Gemini CLI",
+              EnumSet.of(Capability.RESUME, Capability.STRUCTURED_OUTPUT),
+              0));
     }
 
     static RunnerView onlineRunner() {

@@ -158,7 +158,7 @@ El YAML admite ya todo §11 para poder escribir los workflows de la especificaci
 | `retry` y `timeout` | W6 |
 | Fases `github-pr`, `github-check`, `github-merge` y `merge` | S2 |
 | `promptTemplate` | S3 |
-| `provider` distinto de `claude-code` | Hito de proveedores, tras W3 |
+| `provider: opencode` | sin fecha |
 | Fase `deploy` | sin fecha |
 
 ## Cómo se ejecuta
@@ -167,9 +167,11 @@ Una ejecución se lanza sobre un trabajo y un repositorio con una versión publi
 
 ```json
 { "repositoryId": "…", "definitionId": "…", "inputs": { "issue": "#42" },
-  "maxTurns": 30, "maxBudgetUsd": 5, "timeoutMinutes": 60 }
+  "maxTurns": 30, "maxBudgetUsd": 5, "timeoutMinutes": 60,
+  "provider": "codex", "model": "gpt-5.5" }
 ```
 
+- `provider` y `model` son para las fases de agente sin agente con nombre (como la de `adhoc`, y también sus mensajes, bifurcaciones y reintentos); sin ellos, Claude Code con el modelo global. Si todas las fases fijan su agente, se rechazan: ahí manda el YAML.
 - Sin `definitionId` se lanza la última versión de `adhoc`; `prompt` es un atajo para el dato `prompt` de los workflows que lo piden (como `adhoc`) y se rechaza en los demás.
 - Los datos se comprueban contra `inputs`: sobra uno, falta uno obligatorio o no es de su tipo → 400 con el motivo. Los que faltan toman su `default`.
 - Los límites valen para los agentes que no fijan los suyos y no pueden pasar de la política del repositorio.
@@ -192,7 +194,7 @@ La ejecución nace `RUNNING` con todas sus fases en `PENDING` (`stage.pending`, 
 | `SKYNET_ENGINE_LEASE` | `2m` | Tiempo que un worker se queda un trabajo; si cae, otro lo retoma al vencer |
 | `SKYNET_ENGINE_RETRY_DELAY` | `5s` | Espera antes de reintentar (crece con los intentos, hasta 12 veces) |
 
-**En la web.** En un trabajo, **Lanzar workflow** pide el workflow (por defecto `adhoc`), el repositorio y los datos de entrada según su tipo (texto, número o casilla), y enseña la política del repositorio y, si el workflow tiene agentes con nombre, lo que se le permitirá a cada fase. La ejecución lista todas sus fases desde el principio, en el orden del YAML: las que esperan dicen a qué fases («Espera a izquierda y derecha»), las omitidas por qué («Omitida porque se omitió build»), las canceladas sin arrancar qué fase falló, y las demás detrás de cuáles van. La cabecera enlaza con el workflow y su versión; con varias fases, **Cancelar ejecución** cancela la ejecución entera.
+**En la web.** En un trabajo, **Lanzar workflow** pide el workflow (por defecto `adhoc`), el repositorio y los datos de entrada según su tipo (texto, número o casilla), y enseña la política del repositorio y, si el workflow tiene agentes con nombre, lo que se le permitirá a cada fase, con su proveedor y tachado lo que ese proveedor no admite. Si alguna fase no fija su agente (como en `adhoc`), pide también el **proveedor** (los que no tiene ningún runner en línea salen desactivados) y el **modelo** (vacío: el predeterminado). La cabecera de la ejecución enseña el proveedor del agente, y **Bifurcar** sale desactivado con el motivo si su proveedor no lo admite (Gemini CLI). Ver [`providers.md`](providers.md). La ejecución lista todas sus fases desde el principio, en el orden del YAML: las que esperan dicen a qué fases («Espera a izquierda y derecha»), las omitidas por qué («Omitida porque se omitió build»), las canceladas sin arrancar qué fase falló, y las demás detrás de cuáles van. La cabecera enlaza con el workflow y su versión; con varias fases, **Cancelar ejecución** cancela la ejecución entera.
 
 Al abrir una fase en el progreso se ve, según su tipo, el comando que ejecuta y su código de salida, los hijos de una fase `parallel` (cada uno con su agente, su worktree y su salida estructurada, p. ej. «Salida: hasBlockingFindings: sí») o su condición con el resultado: «Omitida: review.hasBlockingFindings es falsa» o «review.hasBlockingFindings se cumplió». El timeline guarda cada evaluación con los valores que leyó.
 

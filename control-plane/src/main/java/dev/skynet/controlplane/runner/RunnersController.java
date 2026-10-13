@@ -32,6 +32,12 @@ class RunnersController {
     return directory.list(Archived.of(archived));
   }
 
+  /** Proveedores de agentes, con lo que admite cada uno y si hay runners en línea que lo tengan. */
+  @GetMapping("/api/providers")
+  List<ProviderView> providers() {
+    return directory.providerKinds();
+  }
+
   /** Invalida el token del runner; si es el legítimo, se vuelve a registrar solo. */
   @PostMapping("/api/runners/{id}/revoke")
   @ResponseStatus(HttpStatus.NO_CONTENT)

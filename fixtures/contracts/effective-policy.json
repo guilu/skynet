@@ -10,7 +10,24 @@
   "maxBudgetUsd" : 2.50,
   "timeoutMinutes" : null,
   "model" : "claude-haiku-4-5",
-  "command" : null
+  "command" : null,
+  "provider" : "claude-code",
+  "unsupported" : [ ]
+}, {
+  "stage" : "second-opinion",
+  "name" : "Segunda opinión",
+  "type" : "agent",
+  "agent" : "gemini-reviewer",
+  "allowedTools" : [ "Read", "Grep" ],
+  "permissionMode" : "plan",
+  "environment" : null,
+  "maxTurns" : null,
+  "maxBudgetUsd" : null,
+  "timeoutMinutes" : null,
+  "model" : "gemini-2.5-pro",
+  "command" : null,
+  "provider" : "gemini",
+  "unsupported" : [ "allowedTools", "maxTurns" ]
 }, {
   "stage" : "fix",
   "name" : null,
@@ -23,7 +40,9 @@
   "maxBudgetUsd" : null,
   "timeoutMinutes" : null,
   "model" : null,
-  "command" : null
+  "command" : null,
+  "provider" : null,
+  "unsupported" : [ ]
 }, {
   "stage" : "tests",
   "name" : "Tests",
@@ -36,5 +55,7 @@
   "maxBudgetUsd" : null,
   "timeoutMinutes" : null,
   "model" : null,
-  "command" : "./gradlew test"
+  "command" : "./gradlew test",
+  "provider" : null,
+  "unsupported" : [ ]
 } ]

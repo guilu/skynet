@@ -19,6 +19,10 @@ import java.util.List;
  * @param timeoutMinutes tiempo máximo que fija el agente; {@code null}: el del lanzamiento
  * @param model modelo que pide el agente; {@code null}: el global
  * @param command comando de una fase {@code command}, o {@code null}
+ * @param provider proveedor que pide el agente; {@code null} en una fase {@code command} o sin
+ *     agente con nombre (la elige el lanzamiento)
+ * @param unsupported lo de la política que el proveedor no admite y se ignora ({@code
+ *     allowedTools}, {@code maxTurns})
  */
 public record StagePolicy(
     String stage,
@@ -32,4 +36,6 @@ public record StagePolicy(
     BigDecimal maxBudgetUsd,
     Integer timeoutMinutes,
     String model,
-    String command) {}
+    String command,
+    String provider,
+    List<String> unsupported) {}

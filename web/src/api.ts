@@ -256,6 +256,10 @@ export interface StagePolicy {
   model: string | null
   /** Comando de una fase `command`. */
   command: string | null
+  /** Proveedor que pide el agente; null en un comando o sin agente con nombre (lo elige el lanzamiento). */
+  provider: string | null
+  /** Lo de la política que el proveedor ignora. */
+  unsupported: ('allowedTools' | 'maxTurns')[]
 }
 
 export interface RunPage {
@@ -287,6 +291,18 @@ export interface Runner {
   archivedAt: string | null
   /** Proveedores de agentes que tiene, con la versión de su CLI. */
   providers: ProviderInfo[]
+}
+
+/** Lo que un proveedor admite además de arrancar una sesión. */
+export type ProviderCapability = 'RESUME' | 'FORK' | 'STRUCTURED_OUTPUT' | 'MAX_TURNS'
+
+/** Un proveedor de agentes que Skynet sabe ejecutar. */
+export interface ProviderKind {
+  id: string
+  displayName: string
+  capabilities: ProviderCapability[]
+  /** Runners en línea que lo tienen. */
+  onlineRunners: number
 }
 
 /** Agentes en cola de un proveedor que no tiene ningún runner en línea. */
@@ -565,6 +581,10 @@ export interface LaunchRequest {
   maxTurns?: number
   maxBudgetUsd?: number
   timeoutMinutes?: number
+  /** Proveedor de las fases sin agente con nombre (como la de `adhoc`); sin él, Claude Code. */
+  provider?: string
+  /** Modelo de esas fases; sin él, el predeterminado del proveedor. */
+  model?: string
 }
 
 /** Paleta guardada en el servidor: un color base `#rrggbb` por pieza, o `null` para el de Skynet. */
@@ -825,6 +845,7 @@ export const api = {
   /** Reejecuta solo la verificación del worktree del agente. */
   verify: (agentId: string) =>
     request<VerificationResult>('POST', `/api/agent-runs/${agentId}/verifications`),
+  providers: () => request<ProviderKind[]>('GET', '/api/providers'),
   runners: (archived?: ArchivedFilter) =>
     request<Runner[]>('GET', `/api/runners${archivedQuery(archived)}`),
   archive: (target: ArchiveTarget) =>

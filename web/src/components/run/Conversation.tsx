@@ -11,6 +11,7 @@ import { JsonView } from './JsonView'
 import { LongText } from './LongText'
 import { Button } from '../ui/Button'
 import { Pill } from '../ui/Pill'
+import { unsupportedReason, useProviders } from '../providers'
 
 const KIND_LABELS: Record<AgentRun['kind'], string> = {
   START: 'Lanzamiento',
@@ -217,8 +218,13 @@ function Composer({ last }: { last: AgentRun }) {
       void navigate(`/runs/${run.id}`)
     },
   })
+  const providers = useProviders()
+  const resumeBlocked = unsupportedReason(providers.data, last.provider, 'RESUME')
   const ready =
-    isTerminal(last.status) && !!last.providerSessionId && workspaceUsable(last.workspace)
+    isTerminal(last.status) &&
+    !!last.providerSessionId &&
+    workspaceUsable(last.workspace) &&
+    resumeBlocked == null
   const runner = runners.data?.find((r) => r.id === last.workspace?.runnerId)
 
   function submit(e: FormEvent) {
@@ -248,11 +254,13 @@ function Composer({ last }: { last: AgentRun }) {
         <p className="muted small">
           {!isTerminal(last.status)
             ? 'Podrás escribir cuando termine la invocación en curso.'
-            : last.workspace?.removedAt
-              ? 'El worktree de esta sesión se eliminó: no se puede continuar.'
-              : last.workspace?.cleanupRequestedAt
-                ? 'El worktree de esta sesión se está eliminando: no se puede continuar.'
-                : 'La sesión no llegó a arrancar: no se puede continuar.'}
+            : resumeBlocked
+              ? `${resumeBlocked}.`
+              : last.workspace?.removedAt
+                ? 'El worktree de esta sesión se eliminó: no se puede continuar.'
+                : last.workspace?.cleanupRequestedAt
+                  ? 'El worktree de esta sesión se está eliminando: no se puede continuar.'
+                  : 'La sesión no llegó a arrancar: no se puede continuar.'}
         </p>
       )}
       <Button type="submit" disabled={!ready || !text.trim() || send.isPending}>

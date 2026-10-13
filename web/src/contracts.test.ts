@@ -10,6 +10,7 @@ import dashboardSummary from '../../fixtures/contracts/dashboard-summary.json'
 import effectivePolicy from '../../fixtures/contracts/effective-policy.json'
 import runPage from '../../fixtures/contracts/run-page.json'
 import runView from '../../fixtures/contracts/run-view.json'
+import providers from '../../fixtures/contracts/providers.json'
 import runners from '../../fixtures/contracts/runners.json'
 import storedEvent from '../../fixtures/contracts/stored-event.json'
 import verifications from '../../fixtures/contracts/verifications.json'
@@ -36,6 +37,7 @@ import type {
   RunPage,
   RunTotals,
   ProviderInfo,
+  ProviderKind,
   ProviderShortage,
   Runner,
   StageDefinition,
@@ -165,6 +167,8 @@ const STAGE_POLICY: Keys<StagePolicy> = {
   type: true,
   model: true,
   command: true,
+  provider: true,
+  unsupported: true,
 }
 const RUN_PAGE: Keys<RunPage> = { items: true, page: true, size: true, total: true }
 const PROMPT: Keys<Prompt> = { id: true, role: true, content: true, sha256: true, createdAt: true }
@@ -183,6 +187,12 @@ const RUNNER: Keys<Runner> = {
   providers: true,
 }
 const PROVIDER_INFO: Keys<ProviderInfo> = { id: true, version: true }
+const PROVIDER_KIND: Keys<ProviderKind> = {
+  id: true,
+  displayName: true,
+  capabilities: true,
+  onlineRunners: true,
+}
 const PROVIDER_SHORTAGE: Keys<ProviderShortage> = {
   provider: true,
   displayName: true,
@@ -391,8 +401,14 @@ describe('contratos con el backend', () => {
 
   it('política efectiva por fase', () => {
     ;(effectivePolicy as StagePolicy[]).forEach((p) => expectShape(p, STAGE_POLICY))
-    expect(effectivePolicy.map((p) => p.agent)).toEqual(['reviewer', null, null])
-    expect(effectivePolicy.map((p) => p.type)).toEqual(['agent', 'agent', 'command'])
+    expect(effectivePolicy.map((p) => p.agent)).toEqual(['reviewer', 'gemini-reviewer', null, null])
+    expect(effectivePolicy.map((p) => p.type)).toEqual(['agent', 'agent', 'agent', 'command'])
+    expect(effectivePolicy[1].unsupported).toEqual(['allowedTools', 'maxTurns'])
+  })
+
+  it('proveedores', () => {
+    ;(providers as ProviderKind[]).forEach((p) => expectShape(p, PROVIDER_KIND))
+    expect(providers.map((p) => p.id)).toEqual(['claude-code', 'codex', 'gemini'])
   })
 
   it('página de ejecuciones', () => {

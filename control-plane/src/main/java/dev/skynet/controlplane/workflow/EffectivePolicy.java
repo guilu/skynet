@@ -97,6 +97,21 @@ record EffectivePolicy(
         allowedTools, permissionMode, environment, other, model, outputSchema, provider);
   }
 
+  /**
+   * La misma política con el proveedor y el modelo del lanzamiento, para una fase sin agente con
+   * nombre.
+   */
+  EffectivePolicy withAgent(LaunchAgent launch) {
+    return new EffectivePolicy(
+        allowedTools,
+        permissionMode,
+        environment,
+        limits,
+        launch.model(),
+        outputSchema,
+        launch.provider());
+  }
+
   /** {@code Bash(git:*)} cabe en {@code Bash}; {@code Bash} no cabe en {@code Bash(git:*)}. */
   private static boolean allows(List<String> allowed, String tool) {
     int paren = tool.indexOf('(');

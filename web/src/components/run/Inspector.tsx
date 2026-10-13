@@ -8,6 +8,7 @@ import {
   formatDuration,
   formatNumber,
   formatTime,
+  providerName,
   toolSummary,
 } from '../../format'
 import { ErrorMessage } from '../ErrorMessage'
@@ -70,7 +71,7 @@ function Summary({ agent, events }: { agent: AgentRun; events: StoredEvent[] }) 
   const { branch, result } = agentOutcome(events)
   const facts: [string, ReactNode][] = [
     ['Estado', <StatusBadge key="s" status={agent.status} />],
-    ['Proveedor', `${agent.provider} · ${agent.kind}`],
+    ['Proveedor', `${providerName(agent.provider)} · ${agent.kind}`],
     ['Modelo', agent.model ?? '—'],
     ['Sesión', agent.providerSessionId ? <code key="c">{agent.providerSessionId}</code> : '—'],
     ['Rama', branch ? <code key="b">{branch}</code> : '—'],

@@ -679,6 +679,95 @@ class WorkflowEngineIT extends IntegrationTest {
         .contains("\"hasBlockingFindings\"");
   }
 
+  @Test
+  void theProviderAndModelOfTheLaunchRunTheAgentWithoutNameAndItsContinuations() {
+    Runner claude = register("laptop");
+    Runner codex = register("servidor", List.of(new ProviderInfo("codex", "0.160.0")));
+    JsonNode providers = get("/api/providers");
+    assertThat(providers.findValuesAsString("id"))
+        .containsExactly("claude-code", "codex", "gemini");
+    assertThat(providers.get(1).path("onlineRunners").asInt()).isEqualTo(1);
+    assertThat(providers.get(2).path("capabilities").toString()).doesNotContain("FORK");
+
+    String runId =
+        post(
+                "/api/work-items/" + workItemId + "/runs",
+                Map.of(
+                    "repositoryId",
+                    repositoryId,
+                    "prompt",
+                    "Arregla el login",
+                    "provider",
+                    "codex",
+                    "model",
+                    "gpt-5.5"))
+            .path("id")
+            .asString();
+    assertThat(claude.claim()).isEmpty();
+    JsonNode start = codex.claim().getFirst();
+    assertThat(start.path("start").path("provider").asString()).isEqualTo("codex");
+    assertThat(start.path("start").path("model").asString()).isEqualTo("gpt-5.5");
+    String session = UUID.randomUUID().toString();
+    complete(codex, start, "/w/eng/agent", null, session);
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("SUCCEEDED");
+
+    // Mandar un mensaje y bifurcar siguen con el proveedor y el modelo del lanzamiento.
+    String agentId = start.path("agentRunId").asString();
+    post("/api/agent-runs/" + agentId + "/messages", Map.of("text", "Y el logout"));
+    JsonNode resume = codex.claim().getFirst();
+    assertThat(resume.path("start").path("provider").asString()).isEqualTo("codex");
+    assertThat(resume.path("start").path("model").asString()).isEqualTo("gpt-5.5");
+    complete(codex, resume, "/w/eng/agent", null, session);
+    post("/api/agent-runs/" + agentId + "/fork", Map.of("text", "Otra solución"));
+    JsonNode fork = codex.claim().getFirst();
+    assertThat(fork.path("start").path("model").asString()).isEqualTo("gpt-5.5");
+
+    // Claude Code sin modelo es lo de siempre.
+    post(
+        "/api/work-items/" + workItemId + "/runs",
+        Map.of("repositoryId", repositoryId, "prompt", "Otra", "provider", "claude-code"));
+    JsonNode plain = claude.claim().getFirst();
+    assertThat(plain.path("start").path("provider").asString()).isEqualTo("claude-code");
+  }
+
+  @Test
+  void theLaunchRejectsAnUnknownProviderAndOneForAWorkflowWhoseAgentsChooseTheirs() {
+    assertBadRequest(
+        () ->
+            post(
+                "/api/work-items/" + workItemId + "/runs",
+                Map.of("repositoryId", repositoryId, "prompt", "x", "provider", "opencode")),
+        "El proveedor `opencode` no existe");
+    assertBadRequest(
+        () ->
+            post(
+                "/api/work-items/" + workItemId + "/runs",
+                Map.of("repositoryId", repositoryId, "prompt", "x", "model", "gpt 5; rm -rf")),
+        "no es válido");
+    String definitionId = publish(GEMINI);
+    assertBadRequest(
+        () ->
+            post(
+                "/api/work-items/" + workItemId + "/runs",
+                Map.of(
+                    "repositoryId",
+                    repositoryId,
+                    "definitionId",
+                    definitionId,
+                    "provider",
+                    "codex")),
+        "En gemini cada fase fija su agente");
+
+    JsonNode policy =
+        get("/api/workflow-versions/"
+                + definitionId
+                + "/effective-policy?repositoryId="
+                + repositoryId)
+            .get(0);
+    assertThat(policy.path("provider").asString()).isEqualTo("gemini");
+    assertThat(policy.path("unsupported").toString()).contains("allowedTools", "maxTurns");
+  }
+
   private static void assertKeepsTheAgent(JsonNode command) {
     JsonNode start = command.path("start");
     assertThat(start.path("provider").asString()).isEqualTo("codex");

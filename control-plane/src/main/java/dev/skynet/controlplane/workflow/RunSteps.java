@@ -424,6 +424,9 @@ public class RunSteps {
     }
     EffectivePolicy policy =
         EffectivePolicy.of(projects.agentPolicy(repository), agent, launchLimitsOf(run));
+    if (agent == null) {
+      policy = policy.withAgent(LaunchAgent.of(jdbc, run.getId()));
+    }
     return Invocation.fresh(AgentRunKind.START, null, prompt, policy);
   }
 

@@ -6,6 +6,7 @@ import dashboardMetrics from '../../fixtures/contracts/dashboard-metrics.json'
 import dashboardSummary from '../../fixtures/contracts/dashboard-summary.json'
 import runPage from '../../fixtures/contracts/run-page.json'
 import runView from '../../fixtures/contracts/run-view.json'
+import providers from '../../fixtures/contracts/providers.json'
 import runners from '../../fixtures/contracts/runners.json'
 import storedEvent from '../../fixtures/contracts/stored-event.json'
 import type { StoredEvent } from './api'
@@ -495,6 +496,7 @@ describe('App', () => {
       [`/api/workflow-runs/${runningRun.id}`]: runningRun,
       '/api/workflows': [adhoc.summary],
       '/api/workflow-versions/v-adhoc': adhoc.detail,
+      '/api/providers': providers,
     })
     renderAt('/work-items/w1', <App />)
     const open = await screen.findByRole('button', { name: 'Lanzar workflow' })
@@ -502,6 +504,18 @@ describe('App', () => {
     fireEvent.click(open)
     fireEvent.change(await screen.findByLabelText('Prompt'), { target: { value: 'Haz X' } })
     fireEvent.change(screen.getByLabelText('Turnos máximos'), { target: { value: '7' } })
+    // Los proveedores sin runners en línea no se pueden elegir.
+    const provider = screen.getByLabelText('Proveedor')
+    await waitFor(() =>
+      expect(within(provider).getByRole('option', { name: /Gemini CLI/ })).toBeDisabled(),
+    )
+    expect(within(provider).getByRole('option', { name: 'Codex' })).toBeEnabled()
+    fireEvent.change(provider, { target: { value: 'codex' } })
+    expect(screen.getByLabelText('Modelo')).toHaveAttribute(
+      'placeholder',
+      'el predeterminado de Codex',
+    )
+    fireEvent.change(screen.getByLabelText('Modelo'), { target: { value: 'gpt-5.5' } })
     await waitFor(() => expect(screen.getByRole('button', { name: 'Lanzar' })).toBeEnabled())
     // Se ve la política del repositorio y sus máximos.
     expect(
@@ -527,6 +541,8 @@ describe('App', () => {
       definitionId: 'v-adhoc',
       inputs: { prompt: 'Haz X' },
       maxTurns: 7,
+      provider: 'codex',
+      model: 'gpt-5.5',
     })
     // Termina en la página de la ejecución lanzada.
     expect(

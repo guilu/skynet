@@ -45,7 +45,8 @@ class RunController {
    * Lanzamiento de un workflow publicado ({@code definitionId}; sin él, la última versión de {@code
    * adhoc}) con sus datos de entrada. {@code prompt} es un atajo para el dato {@code prompt} de los
    * workflows que lo piden, como {@code adhoc}. Los límites son opcionales: sin ellos se aplican
-   * los de {@code skynet.agent}, y valen para los agentes que no fijan los suyos.
+   * los de {@code skynet.agent}, y valen para los agentes que no fijan los suyos. {@code provider}
+   * y {@code model} valen para las fases sin agente con nombre, como la de {@code adhoc}.
    */
   record LaunchRun(
       @NotNull UUID repositoryId,
@@ -54,7 +55,9 @@ class RunController {
       @Size(max = 100_000) String prompt,
       @Positive @Max(1_000) Integer maxTurns,
       @Positive @DecimalMax("1000") BigDecimal maxBudgetUsd,
-      @Positive @Max(24 * 60) Integer timeoutMinutes) {
+      @Positive @Max(24 * 60) Integer timeoutMinutes,
+      @Size(max = 100) String provider,
+      @Size(max = 100) String model) {
 
     AgentLimits limits() {
       return new AgentLimits(
@@ -76,7 +79,9 @@ class RunController {
                     request.definitionId(),
                     request.inputs(),
                     request.prompt(),
-                    request.limits()))
+                    request.limits(),
+                    request.provider(),
+                    request.model()))
             .getId());
   }
 

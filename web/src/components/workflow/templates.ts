@@ -97,6 +97,19 @@ stages:
     workspaceFrom: review
 `
 
+/**
+ * La misma revisión en paralelo con una segunda opinión de otros modelos: Codex revisa la calidad
+ * y Gemini la seguridad. Ninguno de los dos admite una lista de herramientas, así que sus revisores
+ * no la llevan; siguen en solo lectura con `permissionMode: plan`.
+ */
+const MULTI_PROVIDER_REVIEW = PARALLEL_REVIEW.replace(
+  'id: revision-en-paralelo\nname: Revisión en paralelo\n',
+  'id: revision-con-codex-y-gemini\nname: Revisión con Codex y Gemini\n',
+)
+  .replace(/( {2}calidad:\n)/, '$1    provider: codex\n')
+  .replace(/( {2}seguridad:\n)/, '$1    provider: gemini\n')
+  .replaceAll('    tools: [Read, Grep, Glob]\n    permissionMode: plan', '    permissionMode: plan')
+
 export const TEMPLATES: WorkflowTemplate[] = [
   {
     id: 'basico',
@@ -110,5 +123,12 @@ export const TEMPLATES: WorkflowTemplate[] = [
     description:
       'Implementar, tests, revisión de calidad y de seguridad a la vez, corregir solo si hay hallazgos que bloquean y tests finales.',
     yaml: PARALLEL_REVIEW,
+  },
+  {
+    id: 'revision-con-codex-y-gemini',
+    name: 'Revisión con Codex y Gemini',
+    description:
+      'La revisión en paralelo con otros modelos: Codex revisa la calidad y Gemini la seguridad; el resto lo hace Claude Code.',
+    yaml: MULTI_PROVIDER_REVIEW,
   },
 ]

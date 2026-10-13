@@ -1,4 +1,5 @@
 import type { WorkflowModel } from '../../api'
+import { providerName } from '../../format'
 
 const WORKSPACE = { INHERIT: 'Continúa el de su dependencia', ISOLATED: 'Uno nuevo' } as const
 const WITH_WORKSPACE = ['agent', 'command', 'parallel']
@@ -83,6 +84,7 @@ export function DefinitionSummary({ definition }: { definition: WorkflowModel })
                   {' '}
                   · Herramientas:{' '}
                   {agent.tools ? agent.tools.join(', ') || 'ninguna' : 'las del repositorio'}
+                  {agent.provider && ` · ${providerName(agent.provider)}`}
                   {agent.model && ` · Modelo ${agent.model}`}
                   {agent.permissionMode && ` · ${agent.permissionMode}`}
                   {agent.maxTurns != null && ` · ${agent.maxTurns} turnos`}
