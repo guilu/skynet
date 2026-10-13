@@ -74,13 +74,21 @@ public record AgentDefinition(
    * orden; vacío si no tiene.
    */
   public Map<String, String> outputFields() {
+    return fieldsOf(output);
+  }
+
+  /**
+   * Los campos de un JSON Schema de salida ({@code output} de un agente u {@code outputSchema} de
+   * una fase) con su tipo JSON, en orden; vacío si es {@code null}.
+   */
+  public static Map<String, String> fieldsOf(Map<String, Object> schema) {
     Map<String, String> fields = new LinkedHashMap<>();
-    if (output != null && output.get("properties") instanceof Map<?, ?> properties) {
+    if (schema != null && schema.get("properties") instanceof Map<?, ?> properties) {
       properties.forEach(
-          (name, schema) ->
+          (name, field) ->
               fields.put(
                   name.toString(),
-                  schema instanceof Map<?, ?> m && m.get("type") instanceof String type
+                  field instanceof Map<?, ?> m && m.get("type") instanceof String type
                       ? type
                       : "object"));
     }

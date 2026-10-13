@@ -26,7 +26,8 @@ import java.util.UUID;
  * @param command comando de shell de una fase {@code command}: el runner lo ejecuta con {@code sh
  *     -c} en el worktree en lugar de lanzar el agente; {@code null} para un agente
  * @param outputSchema JSON Schema de la salida estructurada que debe devolver el agente ({@code
- *     --json-schema}), o {@code null} si no tiene que devolver ninguna
+ *     --json-schema}), o {@code null} si no tiene que devolver ninguna. {@code {"$ref": "<ruta>"}}
+ *     apunta a un fichero del repositorio, que el runner lee del worktree al arrancar
  * @param provider proveedor que ejecuta el agente ({@link dev.skynet.protocol.AgentProviderKind});
  *     {@code null} para {@code claude-code}. No aplica a un comando.
  */
@@ -101,6 +102,27 @@ public record StartAgent(
         command,
         outputSchema,
         null);
+  }
+
+  /** La misma invocación con otro {@code outputSchema}. */
+  public StartAgent withOutputSchema(String schema) {
+    return new StartAgent(
+        workflowRunId,
+        workItemKey,
+        repositoryPath,
+        baseBranch,
+        sessionId,
+        prompt,
+        allowedTools,
+        permissionMode,
+        model,
+        limits,
+        resume,
+        environment,
+        workspace,
+        command,
+        schema,
+        provider);
   }
 
   /** Proveedor efectivo: {@code claude-code} si no se indica. */

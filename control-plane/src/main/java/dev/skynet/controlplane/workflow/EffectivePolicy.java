@@ -91,6 +91,17 @@ record EffectivePolicy(
         agent.provider());
   }
 
+  /**
+   * La misma política con el {@code outputSchema} de la fase, que manda sobre el {@code output} de
+   * su agente; sin él ({@code null}), la misma.
+   */
+  EffectivePolicy withOutputSchema(String stageSchema) {
+    return stageSchema == null
+        ? this
+        : new EffectivePolicy(
+            allowedTools, permissionMode, environment, limits, model, stageSchema, provider);
+  }
+
   /** La misma política con otros límites. */
   EffectivePolicy withLimits(AgentLimits other) {
     return new EffectivePolicy(

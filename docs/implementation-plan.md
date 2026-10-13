@@ -528,6 +528,14 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito PV (proveedores), planificado el 2026-10-12:** PV-A interfaz `AgentProvider` y reparto por proveedor, PV-B Codex, PV-C Gemini, PV-D web y E2E con revisores de los tres proveedores.
 
+**Hito W4 (resultado estructurado), planificado el 2026-10-13:** W4-A salida de fase y datos entre fases, W4-B verificación de fase (`artifacts`, `checks`) y nodo `verification`, W4-C verificación en la web, plantilla «Especificar, planificar e implementar» y E2E.
+
+**Implementado (W4-A), salida de fase y datos entre fases:**
+
+- `outputSchema` en las fases `agent` deja de ser `UNSUPPORTED`: un JSON Schema en línea (como `output`) o la ruta de un fichero del repositorio. Manda sobre el `output` del agente, también en sus mensajes, bifurcaciones y reintentos. Las condiciones leen sus campos; con una ruta no se conocen al publicar y no se comprueban.
+- Una ruta viaja al runner como `StartAgent.outputSchema = {"$ref": "<ruta>"}`, sin cambiar el protocolo. El runner lo resuelve en el worktree antes de lanzar el CLI (`StructuredOutput.resolve`), así que vale para los tres proveedores; si el fichero no existe, se sale del worktree o no es el schema de un objeto, la invocación falla con el motivo.
+- `{{stages.<fase>.output.<campo>}}`, `{{stages.<fase>.<hijo>.output.<campo>}}`, `{{stages.<fase>.status}}` y `{{stages.<fase>.exitCode}}` en los prompts. Al publicar se comprueban con las reglas de las condiciones (dependencia y campo), y el prompt de un agente desde cada fase que lo usa. Al arrancar la fase, `PromptRenderer` los lee como una condición: un texto tal cual, lo demás en JSON, lo que falta vacío.
+
 **Implementado (PV-D), web y E2E:**
 
 - `GET /api/providers`: los proveedores con sus capacidades y los runners en línea que tienen cada uno. La política efectiva de cada fase (`StagePolicy`) lleva su `provider` y lo que ignora (`unsupported`: `allowedTools`, `maxTurns`), que la web enseña tachado.

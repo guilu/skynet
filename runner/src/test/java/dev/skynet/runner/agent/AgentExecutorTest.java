@@ -269,6 +269,52 @@ class AgentExecutorTest {
   }
 
   @Test
+  void aStageSchemaInTheRepositoryIsReadFromTheWorktree() throws Exception {
+    Files.createDirectories(repo.resolve("schemas"));
+    Files.writeString(
+        repo.resolve("schemas/spec.json"),
+        "{\"type\":\"object\",\"properties\":{\"summary\":{\"type\":\"string\"}}}");
+    TestRepos.git(repo, "add", ".");
+    TestRepos.git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "s");
+    UUID id = UUID.randomUUID();
+    geminiExecutor("02-tools", Map.of("FAKE_GEMINI_STRUCTURED_OUTPUT", "{\"summary\": \"hecho\"}"))
+        .start(
+            TestAgents.withProvider(
+                TestAgents.start(id, repo.toString(), null),
+                "gemini",
+                "{\"$ref\":\"schemas/spec.json\"}"));
+
+    NormalizedEvent exit = awaitExit(id);
+    assertThat(exit.payload()).containsEntry("exitCode", 0).doesNotContainKey("error");
+    assertThat(eventsOf(id))
+        .filteredOn(e -> e.type() == AgentEventType.RESULT)
+        .singleElement()
+        .satisfies(
+            r ->
+                assertThat(r.payload())
+                    .containsEntry("structuredOutput", Map.of("summary", "hecho")));
+  }
+
+  @Test
+  void aStageSchemaMissingFromTheWorktreeFailsTheInvocation() throws Exception {
+    UUID id = UUID.randomUUID();
+    executor("01-simple-text")
+        .start(
+            TestAgents.withProvider(
+                TestAgents.start(id, repo.toString(), null),
+                "claude-code",
+                "{\"$ref\":\"schemas/spec.json\"}"));
+
+    NormalizedEvent exit = awaitExit(id);
+    assertThat(eventsOf(id).getFirst().type()).isEqualTo(AgentEventType.WORKSPACE_READY);
+    assertThat(exit.payload())
+        .containsEntry(
+            "error",
+            "Salida estructurada de la fase: No existe `schemas/spec.json` en el worktree");
+    assertThat(eventsOf(id)).hasSize(2);
+  }
+
+  @Test
   void aGeminiAgentThatReachesItsTurnLimitFails() throws Exception {
     UUID id = UUID.randomUUID();
     geminiExecutor("04-turn-limit", Map.of())

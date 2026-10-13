@@ -68,6 +68,7 @@ stages:
 - `command`: solo en las fases `type: command`, y obligatorio en ellas. Ver abajo.
 - `children`: solo en las fases `type: parallel`, y obligatorio en ellas. Ver abajo.
 - `condition`: la fase solo se ejecuta si es verdadera; si es falsa, se omite. Ver «Condiciones».
+- `outputSchema`: solo en las fases `type: agent`. La salida estructurada que devuelve la fase, y manda sobre el `output` de su agente, así que un mismo agente sirve en fases con salidas distintas. Es un JSON Schema en línea, como `output`, o la ruta de un fichero del repositorio (`outputSchema: schemas/spec.json`). Ver «Salida de una fase en un fichero».
 
 **Fases `command`:** ejecutan un comando de shell en lugar de un agente, p. ej. los tests después de implementar:
 
@@ -133,11 +134,11 @@ stages:
     workspaceFrom: review
 ```
 
-- **Salida estructurada:** un agente con `output` se lanza con `--json-schema` y lo que devuelve se guarda en la invocación (`structuredOutput`). Si termina bien pero no la devuelve, la invocación falla.
+- **Salida estructurada:** un agente con `output`, o en una fase con `outputSchema`, se lanza pidiendo esa salida (`--json-schema` en Claude Code) y lo que devuelve se guarda en la invocación (`structuredOutput`). Si termina bien pero no la devuelve, la invocación falla.
 - **Qué se puede leer** (solo de fases de las que depende, directa o indirectamente):
   - `<fase>.status`: el estado de la fase, p. ej. `review.status == 'SUCCEEDED'`.
   - `<fase>.exitCode`: el código de salida de una fase `command`.
-  - `<fase>.<campo>`: un campo del `output` del agente de la fase.
+  - `<fase>.<campo>`: un campo de la salida de la fase: la de su `outputSchema` o, si no tiene, la del `output` de su agente.
   - `<fase>.<hijo>.<campo>`: el de un hijo de una fase `parallel`.
   - `<fase>.<campo>` en una fase `parallel`: solo para campos booleanos; es verdadero si algún hijo devuelve `true`.
   - `inputs.<nombre>`: un dato de entrada.
@@ -145,7 +146,40 @@ stages:
 - Al publicar se comprueba cada condición: la sintaxis, que cada dato exista y sea de una fase de la que depende, y los tipos (no se compara un número con un texto). Un error dice qué falla y en qué línea y columna.
 - Cada evaluación deja `stage.condition.evaluated` con la condición, los valores leídos y el resultado.
 
-**Variables de los prompts:** `{{workItem.key}}`, `{{workItem.title}}`, `{{workItem.description}}`, `{{workItem.type}}`, `{{workItem.externalRef}}`, `{{project.key}}`, `{{project.name}}` e `{{inputs.<nombre>}}`.
+**Variables de los prompts:** `{{workItem.key}}`, `{{workItem.title}}`, `{{workItem.description}}`, `{{workItem.type}}`, `{{workItem.externalRef}}`, `{{project.key}}`, `{{project.name}}`, `{{inputs.<nombre>}}` y los datos de otras fases.
+
+**Datos de otras fases en los prompts.** Un prompt puede usar lo que dejó una fase de la que depende (directa o indirectamente), con los mismos datos que las condiciones:
+
+```yaml
+stages:
+  - id: spec
+    type: agent
+    agent: analista
+    outputSchema:
+      type: object
+      properties:
+        summary: {type: string}
+        risks: {type: array}
+  - id: plan
+    type: agent
+    dependsOn: [spec]
+    prompt: |
+      Planifica a partir de esta especificación: {{stages.spec.output.summary}}
+      Riesgos: {{stages.spec.output.risks}}
+```
+
+- `{{stages.<fase>.output.<campo>}}`: un campo de la salida de una fase `agent`.
+- `{{stages.<fase>.<hijo>.output.<campo>}}`: el de un hijo de una fase `parallel`.
+- `{{stages.<fase>.status}}` y `{{stages.<fase>.exitCode}}` (de una fase `command`).
+- Un texto entra tal cual; un número o un booleano, escrito; una lista o un objeto, como JSON. Lo que no existe (una fase omitida, un campo que no devolvió) queda vacío.
+- Al publicar se comprueba como una condición: que la fase sea una dependencia y que el campo esté en su salida. En el prompt de un agente se comprueba desde cada fase que lo usa.
+- Se sustituye al arrancar la fase, y el prompt efectivo (un artefacto de la invocación) enseña lo que recibió el agente.
+
+**Salida de una fase en un fichero.** Con `outputSchema: schemas/spec.json`, el schema es un fichero del repositorio:
+- La ruta es relativa a la raíz del repositorio y no puede salir de él (ni `/` al principio ni `..`).
+- El runner lo lee del worktree de la fase al arrancar cada invocación, así que vale la versión de la rama en la que trabaja. Funciona igual con los tres proveedores.
+- Tiene que ser JSON, el schema de un objeto (`"type": "object"`) con sus campos en `properties`. Si no existe o no lo es, la invocación falla con el motivo, p. ej. «No existe `schemas/spec.json` en el worktree».
+- Al publicar no se conocen sus campos (el repositorio está en el runner): las condiciones y los prompts que los leen no se comprueban hasta ejecutar.
 
 ## Lo que aún no se ejecuta
 
@@ -153,7 +187,7 @@ El YAML admite ya todo §11 para poder escribir los workflows de la especificaci
 
 | Qué | Hito |
 |---|---|
-| Fase `verification`; `outputSchema` de fase y `artifacts`; `{{stages.<id>...}}` en los prompts | W4 |
+| Fase `verification` y `artifacts` | W4 |
 | Fase `human-approval` | W5 |
 | `retry` y `timeout` | W6 |
 | Fases `github-pr`, `github-check`, `github-merge` y `merge` | S2 |
