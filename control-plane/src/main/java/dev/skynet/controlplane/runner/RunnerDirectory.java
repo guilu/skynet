@@ -7,6 +7,7 @@ import dev.skynet.protocol.runner.ProviderInfo;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -101,6 +102,28 @@ public class RunnerDirectory {
                         .orElse(rs.getString("provider")),
                     rs.getInt("queued")))
         .list();
+  }
+
+  /** Los proveedores que Skynet sabe ejecutar, con cuántos runners en línea tiene cada uno. */
+  @Transactional(readOnly = true)
+  public List<ProviderView> providerKinds() {
+    Instant staleBefore = time.now().minus(properties.staleAfter());
+    Map<String, Integer> online = new HashMap<>();
+    jdbc.sql(
+            "SELECT p.provider, count(*) AS runners FROM runner_provider p"
+                + " JOIN runner r ON r.id = p.runner_id WHERE r.archived_at IS NULL"
+                + " AND r.last_heartbeat_at >= ? GROUP BY p.provider")
+        .param(Timestamp.from(staleBefore))
+        .query(
+            rs -> {
+              online.put(rs.getString("provider"), rs.getInt("runners"));
+            });
+    return Arrays.stream(AgentProviderKind.values())
+        .map(
+            k ->
+                new ProviderView(
+                    k.id(), k.displayName(), k.capabilities(), online.getOrDefault(k.id(), 0)))
+        .toList();
   }
 
   /** Runners sin latido reciente, sin contar los olvidados. */

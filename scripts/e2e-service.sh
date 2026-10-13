@@ -26,13 +26,19 @@ start() {
       return 1
       ;;
     runner)
+      local FAKE=$ROOT/tools/fake-claude/build/install/fake-claude/bin
       SKYNET_RUNNER_HOME=$OUT/runner-home \
       SKYNET_RUNNER_NAME=${E2E_RUNNER_NAME:-e2e} \
-      SKYNET_CLAUDE_BIN=$ROOT/tools/fake-claude/build/install/fake-claude/bin/fake-claude \
-      SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE,FAKE_CLAUDE_DELAY_MS,FAKE_CLAUDE_APPLY,FAKE_CLAUDE_STRUCTURED_OUTPUT \
+      # Los tres proveedores con sus fakes; cada revisor devuelve lo que dejó en .revision.json la
+      # fase anterior del worktree (web/e2e/nodes.e2e.ts y providers.e2e.ts).
+      SKYNET_CLAUDE_BIN=$FAKE/fake-claude SKYNET_CODEX_BIN=$FAKE/fake-codex \
+      SKYNET_GEMINI_BIN=$FAKE/fake-gemini \
+      SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE,FAKE_CLAUDE_DELAY_MS,FAKE_CLAUDE_APPLY,FAKE_CLAUDE_STRUCTURED_OUTPUT,FAKE_CODEX_FIXTURE,FAKE_CODEX_DELAY_MS,FAKE_CODEX_STRUCTURED_OUTPUT,FAKE_GEMINI_FIXTURE,FAKE_GEMINI_DELAY_MS,FAKE_GEMINI_STRUCTURED_OUTPUT \
       FAKE_CLAUDE_FIXTURE=02-tools FAKE_CLAUDE_DELAY_MS=${FAKE_CLAUDE_DELAY_MS:-500} FAKE_CLAUDE_APPLY=1 \
       FAKE_CLAUDE_STRUCTURED_OUTPUT=@.revision.json \
-      CLAUDE_CONFIG_DIR=$OUT/claude \
+      FAKE_CODEX_DELAY_MS=200 FAKE_CODEX_STRUCTURED_OUTPUT=@.revision.json \
+      FAKE_GEMINI_DELAY_MS=200 FAKE_GEMINI_STRUCTURED_OUTPUT=@.revision.json \
+      CLAUDE_CONFIG_DIR=$OUT/claude CODEX_HOME=$OUT/codex GEMINI_CLI_HOME=$OUT/gemini \
         "$ROOT/runner/build/install/skynet-runner/bin/skynet-runner" >> "$OUT/runner.log" 2>&1 &
       echo $! > "$pidfile"
       ;;

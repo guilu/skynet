@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Bot,
   Clock,
   Coins,
   Cpu,
@@ -20,6 +21,7 @@ import {
   formatDuration,
   formatNumber,
   isTerminal,
+  providerName,
   statusTone,
 } from '../../format'
 import { cn } from '../../lib/cn'
@@ -36,8 +38,9 @@ import { AgentActions } from './AgentActions'
 import { headlineAgent } from './headlineAgent'
 
 /**
- * Cabecera de una ejecución (ADR-0001 §3.5): estado, clave y título; workflow, runner, modelo y
- * rama como chips; las acciones del agente elegido, y debajo duración, tokens, coste y tests.
+ * Cabecera de una ejecución (ADR-0001 §3.5): estado, clave y título; workflow, runner, proveedor,
+ * modelo y rama como chips; las acciones del agente elegido, y debajo duración, tokens, coste y
+ * tests.
  * Todo sale de las proyecciones del backend.
  */
 export function RunHeader({
@@ -62,6 +65,7 @@ export function RunHeader({
     agents.map((a) => a && of(a)).find((v) => v != null)
   const runnerId = pick((a) => a.runnerId)
   const model = pick((a) => a.model)
+  const provider = pick((a) => (a.provider === 'command' ? null : a.provider))
   const branch = pick((a) => a.workspace?.branch)
   const runners = useQuery({
     // También los olvidados: la ejecución puede ser de uno que ya no está.
@@ -145,6 +149,11 @@ export function RunHeader({
             <Chip icon={Server} label="Runner">
               {runner?.name ?? (runnerId ? runnerId.slice(0, 8) : 'sin asignar')}
             </Chip>
+            {provider && (
+              <Chip icon={Bot} label="Proveedor">
+                {providerName(provider)}
+              </Chip>
+            )}
             {model && (
               <Chip icon={Cpu} label="Modelo">
                 {model}

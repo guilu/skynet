@@ -111,13 +111,28 @@ public class RunService {
    * @param prompt atajo para el dato {@code prompt} (el de {@code adhoc}), o {@code null}
    * @param limits límites para los agentes que no fijan los suyos; los que falten (o todos, con
    *     {@code null}) se toman de la política del repositorio, y ninguno puede superar los suyos
+   * @param provider proveedor de las fases de agente sin agente con nombre (como la de {@code
+   *     adhoc}), o {@code null} para Claude Code
+   * @param model modelo de esas fases, o {@code null} para el predeterminado del proveedor
    */
   public record Launch(
       UUID repositoryId,
       UUID definitionId,
       Map<String, Object> inputs,
       String prompt,
-      AgentLimits limits) {}
+      AgentLimits limits,
+      String provider,
+      String model) {
+
+    public Launch(
+        UUID repositoryId,
+        UUID definitionId,
+        Map<String, Object> inputs,
+        String prompt,
+        AgentLimits limits) {
+      this(repositoryId, definitionId, inputs, prompt, limits, null, null);
+    }
+  }
 
   /** Lanza {@code adhoc}: una fase con un agente y ese prompt. */
   @Transactional
@@ -155,6 +170,13 @@ public class RunService {
       given.putIfAbsent("prompt", launch.prompt());
     }
     Map<String, Object> inputs = LaunchInputs.resolve(definition.definition().inputs(), given);
+    LaunchAgent launchAgent = LaunchAgent.of(launch.provider(), launch.model());
+    if (!launchAgent.isDefault() && !hasUnnamedAgents(definition.definition())) {
+      throw new InvalidRequestException(
+          "En "
+              + definition.key()
+              + " cada fase fija su agente: el proveedor y el modelo los elige su YAML");
+    }
     AgentLimits limits = withinPolicy(launch.limits(), projects.agentPolicy(repository));
     Instant now = time.now();
 
@@ -163,11 +185,14 @@ public class RunService {
     run = workflowRuns.save(run);
     jdbc.sql(
             "UPDATE workflow_run SET repository_id = ?, inputs = CAST(? AS jsonb),"
-                + " launch_limits = CAST(? AS jsonb) WHERE id = ?")
+                + " launch_limits = CAST(? AS jsonb), launch_provider = ?, launch_model = ?"
+                + " WHERE id = ?")
         .params(
             repository.getId(),
             json.writeValueAsString(inputs),
             json.writeValueAsString(limitsJson(limits)),
+            launchAgent.provider(),
+            launchAgent.model(),
             run.getId())
         .update();
     Map<String, Object> started = new LinkedHashMap<>();
@@ -187,6 +212,18 @@ public class RunService {
     }
     publisher.publishEvent(new WorkflowRunChanged(run.getId()));
     return run;
+  }
+
+  /** Si alguna fase (o hijo de una {@code parallel}) usa un agente sin nombre. */
+  static boolean hasUnnamedAgents(WorkflowDefinition definition) {
+    return definition.stages().stream()
+        .anyMatch(
+            s ->
+                switch (s.type()) {
+                  case AGENT -> s.agent() == null;
+                  case PARALLEL -> s.children().stream().anyMatch(c -> c.agent() == null);
+                  default -> false;
+                });
   }
 
   /**
@@ -237,7 +274,20 @@ public class RunService {
         limits.maxBudgetUsd(),
         limits.timeout() == null ? null : Math.toIntExact(limits.timeout().toMinutes()),
         effective.model(),
-        command);
+        command,
+        agent == null ? null : effective.providerOrDefault(),
+        agent == null ? List.of() : unsupported(effective.providerOrDefault()));
+  }
+
+  /** Lo de la política que un proveedor ignora: la lista de herramientas y el límite de turnos. */
+  static List<String> unsupported(String provider) {
+    AgentProviderKind kind = AgentProviderKind.byId(provider).orElse(null);
+    if (kind == null || kind == AgentProviderKind.CLAUDE_CODE) {
+      return List.of();
+    }
+    return kind.supports(Capability.MAX_TURNS)
+        ? List.of("allowedTools")
+        : List.of("allowedTools", "maxTurns");
   }
 
   /**
@@ -263,7 +313,10 @@ public class RunService {
                         : s.child(origin.getChildKey()).map(ChildDefinition::agent).orElse(null))
             .flatMap(definition::agent)
             .orElse(null);
-    return EffectivePolicy.of(policy, agent, limits).withLimits(limits);
+    EffectivePolicy effective = EffectivePolicy.of(policy, agent, limits).withLimits(limits);
+    return agent == null
+        ? effective.withAgent(LaunchAgent.of(jdbc, stage.getWorkflowRunId()))
+        : effective;
   }
 
   /**

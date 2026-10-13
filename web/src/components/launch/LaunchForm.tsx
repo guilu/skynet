@@ -1,20 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Play } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { Fragment, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import {
   api,
   type AgentPolicy,
   type InputDefinition,
+  type ProviderKind,
   type Repository,
   type StagePolicy,
   type WorkflowSummary,
 } from '../../api'
+import { providerName } from '../../format'
 import { ErrorMessage } from '../ErrorMessage'
+import { ignoredBy, useProviders } from '../providers'
 import { Button } from '../ui/Button'
 
 /** El workflow que se lanza si no se elige otro. */
 const ADHOC = 'adhoc'
+/** El proveedor por defecto. */
+const CLAUDE_CODE = 'claude-code'
 
 type Value = string | boolean
 
@@ -38,6 +43,9 @@ export function LaunchForm({
   const [maxTurns, setMaxTurns] = useState('')
   const [maxBudgetUsd, setMaxBudgetUsd] = useState('')
   const [timeoutMinutes, setTimeoutMinutes] = useState('')
+  const [provider, setProvider] = useState(CLAUDE_CODE)
+  const [agentModel, setAgentModel] = useState('')
+  const providers = useProviders()
 
   const workflows = useQuery({ queryKey: ['workflows'], queryFn: () => api.workflows() })
   const launchable = launchableWorkflows(workflows.data ?? [])
@@ -54,6 +62,8 @@ export function LaunchForm({
   const repository = repositories.find((r) => r.id === repositoryId) ?? repositories[0]
   const policy = repository?.agentPolicy
   const namedAgents = model?.stages.some((s) => s.agent != null) ?? false
+  // El proveedor y el modelo del lanzamiento son para las fases que no fijan su agente.
+  const unnamedAgents = model?.stages.some((s) => s.type === 'agent' && s.agent == null) ?? false
   // Fases con su propia política o que no son un agente: se enseña qué hará cada una.
   const perStage = namedAgents || (model?.stages.some((s) => s.type !== 'agent') ?? false)
   const stagePolicies = useQuery({
@@ -76,6 +86,8 @@ export function LaunchForm({
         maxTurns: optionalNumber(maxTurns),
         maxBudgetUsd: optionalNumber(maxBudgetUsd),
         timeoutMinutes: optionalNumber(timeoutMinutes),
+        provider: unnamedAgents && provider !== CLAUDE_CODE ? provider : undefined,
+        model: unnamedAgents && agentModel.trim() ? agentModel.trim() : undefined,
       }),
     onSuccess: (run) => {
       void queryClient.invalidateQueries({ queryKey: ['runs', workItemId] })
@@ -114,6 +126,14 @@ export function LaunchForm({
           ))}
         </select>
       </label>
+      {unnamedAgents && (
+        <AgentFields
+          providers={providers.data}
+          provider={[provider, setProvider]}
+          model={[agentModel, setAgentModel]}
+          named={namedAgents}
+        />
+      )}
       {model?.inputs.map((input) => (
         <InputField
           key={`${versionId}:${input.name}`}
@@ -143,7 +163,12 @@ export function LaunchForm({
               {stagePolicies.data.map((p) => (
                 <li key={p.stage}>
                   <strong>{p.name ?? p.stage}</strong>
-                  {p.agent && <span className="muted"> · agente {p.agent}</span>}: {policyText(p)}
+                  {p.agent && <span className="muted"> · agente {p.agent}</span>}:{' '}
+                  <PolicyText
+                    policy={p}
+                    provider={p.provider ?? (p.type === 'agent' ? provider : null)}
+                    model={p.model ?? (p.provider == null ? agentModel.trim() || null : null)}
+                  />
                 </li>
               ))}
             </ul>
@@ -166,6 +191,57 @@ export function LaunchForm({
       <p className="hint">Si no hay ningún runner conectado, mira «Runner local» en el README.</p>
       <ErrorMessage error={launch.error} />
     </form>
+  )
+}
+
+/**
+ * Quién ejecuta las fases sin agente con nombre: el proveedor (los que no tiene ningún runner en
+ * línea salen desactivados) y el modelo, vacío para el predeterminado de su CLI.
+ */
+function AgentFields({
+  providers,
+  provider: [provider, setProvider],
+  model: [model, setModel],
+  named,
+}: {
+  providers: ProviderKind[] | undefined
+  provider: [string, (v: string) => void]
+  model: [string, (v: string) => void]
+  named: boolean
+}) {
+  const options = providers ?? [
+    { id: CLAUDE_CODE, displayName: 'Claude Code', capabilities: [], onlineRunners: 1 },
+  ]
+  const chosen = options.find((p) => p.id === provider)
+  return (
+    <fieldset className="agent-fields">
+      <legend>Agente{named && ' (para las fases sin agente con nombre)'}</legend>
+      <label>
+        Proveedor
+        <select value={provider} onChange={(e) => setProvider(e.target.value)}>
+          {options.map((p) => (
+            <option key={p.id} value={p.id} disabled={p.onlineRunners === 0 && p.id !== provider}>
+              {p.displayName}
+              {p.onlineRunners === 0 && ' (ningún runner en línea)'}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Modelo
+        <input
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          placeholder={
+            provider === CLAUDE_CODE
+              ? 'el de Skynet'
+              : `el predeterminado de ${chosen?.displayName ?? provider}`
+          }
+          maxLength={100}
+          spellCheck={false}
+        />
+      </label>
+    </fieldset>
   )
 }
 
@@ -316,23 +392,66 @@ function environmentText(environment: string[] | null): string {
   return environment.length > 0 ? environment.join(', ') : 'sin variables extra'
 }
 
-/** «herramientas Read, Edit; modo plan; 40 turnos, 2 US$, 30 min», o el comando que ejecuta. */
-function policyText(p: StagePolicy): string {
+/**
+ * «Codex; herramientas Read, Edit; modo plan; 40 turnos, 2 US$, 30 min», o el comando que ejecuta.
+ * Lo que el proveedor ignora sale tachado.
+ */
+function PolicyText({
+  policy: p,
+  provider,
+  model,
+}: {
+  policy: StagePolicy
+  provider: string | null
+  model: string | null
+}) {
   if (p.type === 'command') {
-    return `ejecuta \`${p.command}\` en el worktree, entorno ${environmentText(p.environment)}`
+    return (
+      <>
+        ejecuta <code>{p.command}</code> en el worktree, entorno {environmentText(p.environment)}
+      </>
+    )
   }
-  const parts = [
-    `herramientas ${p.allowedTools.length > 0 ? p.allowedTools.join(', ') : 'ninguna'}`,
-    `modo ${p.permissionMode ?? 'el del runner'}`,
-  ]
+  const ignored = new Set(p.unsupported)
+  if (provider && provider !== CLAUDE_CODE && p.provider == null) {
+    // Sin agente con nombre, lo que ignora el proveedor elegido al lanzar (Codex y Gemini).
+    ignored.add('allowedTools')
+    ignored.add('maxTurns')
+  }
+  const ignore = (field: 'allowedTools' | 'maxTurns', text: string) =>
+    ignored.has(field) && provider ? (
+      <span>
+        <s>{text}</s> ({ignoredBy(provider)})
+      </span>
+    ) : (
+      text
+    )
   const limits = [
-    p.maxTurns != null && `${p.maxTurns} turnos`,
+    p.maxTurns != null && ignore('maxTurns', `${p.maxTurns} turnos`),
     p.maxBudgetUsd != null && `${p.maxBudgetUsd} US$`,
     p.timeoutMinutes != null && `${p.timeoutMinutes} min`,
-  ].filter(Boolean)
-  parts.push(limits.length > 0 ? limits.join(', ') : 'límites del lanzamiento')
-  if (p.model) parts.push(`modelo ${p.model}`)
-  return parts.join('; ')
+  ].filter((part) => part !== false)
+  const parts: ReactNode[] = [
+    provider && provider !== CLAUDE_CODE ? providerName(provider) : null,
+    ignore(
+      'allowedTools',
+      `herramientas ${p.allowedTools.length > 0 ? p.allowedTools.join(', ') : 'ninguna'}`,
+    ),
+    `modo ${p.permissionMode ?? 'el del runner'}`,
+    limits.length > 0 ? joined(limits, ', ') : 'límites del lanzamiento',
+    model ? `modelo ${model}` : null,
+  ].filter((part) => part != null)
+  return <>{joined(parts, '; ')}</>
+}
+
+/** Las partes separadas por `separator`, sin perder las que llevan marcado. */
+function joined(parts: ReactNode[], separator: string): ReactNode {
+  return parts.map((part, i) => (
+    <Fragment key={i}>
+      {i > 0 && separator}
+      {part}
+    </Fragment>
+  ))
 }
 
 const optionalNumber = (value: string) => (value.trim() === '' ? undefined : Number(value))

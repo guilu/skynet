@@ -86,6 +86,8 @@ interface AgentProvider {
 
 `sendMessage()` de la especificación se implementa como `resume()` sobre la sesión (sin PTY persistente, según §9.2).
 
+> **Actualizado en el hito PV:** el corte quedó en otro sitio: el proveedor **traduce** (línea de comandos, entorno, parser de su salida, coste y versión) y el runner **ejecuta** (lanzar, supervisar, cancelar, tiempo máximo y artefactos, igual para todos). Hay tres implementaciones: Claude Code, Codex y Gemini CLI. Qué admite cada una, los permisos y las credenciales: [`providers.md`](providers.md).
+
 ### 4.2. Eventos normalizados (`protocol`)
 
 Mapeo inicial desde `claude -p --output-format stream-json`:
@@ -525,6 +527,13 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 **Proveedores (decidido el 2026-10-10):** después de W3 va un hito propio, adelantado de la Fase 4: la interfaz `AgentProvider` (§4.1) en el runner, adaptadores headless de Codex (`codex exec --json`) y Gemini (`gemini -p --output-format stream-json`) y runners que declaran qué CLIs tienen. W3-A ya deja `model` por agente y la clave `provider` reservada en el YAML.
 
 **Hito PV (proveedores), planificado el 2026-10-12:** PV-A interfaz `AgentProvider` y reparto por proveedor, PV-B Codex, PV-C Gemini, PV-D web y E2E con revisores de los tres proveedores.
+
+**Implementado (PV-D), web y E2E:**
+
+- `GET /api/providers`: los proveedores con sus capacidades y los runners en línea que tienen cada uno. La política efectiva de cada fase (`StagePolicy`) lleva su `provider` y lo que ignora (`unsupported`: `allowedTools`, `maxTurns`), que la web enseña tachado.
+- Lanzamiento con `provider` y `model` (`V17`: `workflow_run.launch_provider` y `launch_model`) para las fases sin agente con nombre, como la de `adhoc`; sus mensajes, bifurcaciones y reintentos los conservan. Se rechazan en un workflow cuyas fases fijan todas su agente. En **Lanzar workflow**, selector de proveedor (los que no tiene ningún runner en línea, desactivados) y campo de modelo.
+- La cabecera de la ejecución enseña el proveedor del agente; **Bifurcar** y la caja de mensajes se desactivan con el motivo si el proveedor no lo admite. El resumen del workflow enseña el proveedor de cada agente; el editor ya autocompletaba `provider` desde el schema.
+- Plantilla «Revisión con Codex y Gemini»: la revisión en paralelo con Codex en calidad y Gemini en seguridad. E2E de aceptación (`web/e2e/providers.e2e.ts`) con fake-claude, fake-codex y fake-gemini: con hallazgos corrige y sin ellos omite la corrección; axe en la plantilla, el lanzamiento y el agente de Gemini. Documentación en [`providers.md`](providers.md).
 
 **Implementado (PV-C), Gemini CLI:**
 

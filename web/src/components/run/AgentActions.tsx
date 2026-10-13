@@ -6,6 +6,7 @@ import { formatDateTime, isTerminal, workspaceUsable } from '../../format'
 import { ErrorMessage } from '../ErrorMessage'
 import { Button } from '../ui/Button'
 import { Sheet } from '../ui/Sheet'
+import { unsupportedReason, useProviders } from '../providers'
 
 type Action = 'retry' | 'fork' | 'cleanup'
 
@@ -16,11 +17,14 @@ type Action = 'retry' | 'fork' | 'cleanup'
  */
 export function AgentActions({ agent }: { agent: AgentRun }) {
   const [open, setOpen] = useState<Action | null>(null)
+  const providers = useProviders()
   if (!isTerminal(agent.status)) return null
   const usable = workspaceUsable(agent.workspace)
   // Un reintento repite el lanzamiento: solo tiene sentido sobre uno (o sobre otro reintento).
   const canRetry = agent.kind === 'START' || agent.kind === 'RETRY'
   const canFork = !!agent.providerSessionId && usable
+  // El proveedor que no bifurca enseña el botón desactivado con el motivo.
+  const forkBlocked = canFork ? unsupportedReason(providers.data, agent.provider, 'FORK') : null
   if (!canRetry && !canFork && !agent.workspace) return null
   const close = (isOpen: boolean) => !isOpen && setOpen(null)
 
@@ -34,7 +38,14 @@ export function AgentActions({ agent }: { agent: AgentRun }) {
           </Button>
         )}
         {canFork && (
-          <Button type="button" aria-haspopup="dialog" onClick={() => setOpen('fork')}>
+          <Button
+            type="button"
+            aria-haspopup="dialog"
+            disabled={forkBlocked != null}
+            aria-describedby={forkBlocked ? `fork-blocked-${agent.id}` : undefined}
+            title={forkBlocked ?? undefined}
+            onClick={() => setOpen('fork')}
+          >
             Bifurcar…
           </Button>
         )}
@@ -49,11 +60,16 @@ export function AgentActions({ agent }: { agent: AgentRun }) {
           </Button>
         )}
       </div>
+      {forkBlocked && (
+        <p id={`fork-blocked-${agent.id}`} className="muted small">
+          {forkBlocked}.
+        </p>
+      )}
       <Sheet open={open === 'retry'} onOpenChange={close} title="Reintentar el agente">
         <RetryPanel agent={agent} onClose={() => setOpen(null)} />
       </Sheet>
       <Sheet open={open === 'fork'} onOpenChange={close} title="Bifurcar la sesión">
-        {canFork && <ForkPanel agent={agent} onClose={() => setOpen(null)} />}
+        {canFork && !forkBlocked && <ForkPanel agent={agent} onClose={() => setOpen(null)} />}
       </Sheet>
       <Sheet open={open === 'cleanup'} onOpenChange={close} title="Eliminar el worktree">
         {usable && <CleanupPanel agent={agent} onClose={() => setOpen(null)} />}
