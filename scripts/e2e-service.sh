@@ -19,7 +19,8 @@ start() {
       java -jar "$ROOT/control-plane/build/libs/control-plane.jar" >> "$OUT/control-plane.log" 2>&1 &
       echo $! > "$pidfile"
       for _ in $(seq 90); do
-        curl -fsS http://localhost:8080/actuator/health 2>/dev/null | grep -q '"UP"' && return 0
+        curl -fsS "${SKYNET_URL:-http://127.0.0.1:8080}/actuator/health" 2>/dev/null \
+          | grep -q '"UP"' && return 0
         sleep 1
       done
       echo "El control plane no arrancó: mira $OUT/control-plane.log" >&2

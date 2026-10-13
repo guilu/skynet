@@ -3,10 +3,12 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
+import { e2eApiUrl } from './e2e-config.js'
 
+const E2E_API_URL = e2eApiUrl(process.env.E2E_API_PORT)
 const API_PROXY = {
-  '/api': 'http://localhost:8080',
-  '/actuator': 'http://localhost:8080',
+  '/api': E2E_API_URL,
+  '/actuator': E2E_API_URL,
 }
 
 export default defineConfig({
@@ -23,7 +25,7 @@ export default defineConfig({
       },
     ],
   },
-  // En desarrollo (y en la E2E, que usa `vite preview`), la API del control plane corre en :8080.
+  // En desarrollo y E2E, el proxy apunta al puerto configurable del control plane.
   server: { proxy: API_PROXY },
   preview: { proxy: API_PROXY },
   // Monaco ocupa unos 2,7 MB, pero va en un trozo aparte que solo se descarga al abrir un diff o
