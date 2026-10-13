@@ -6,6 +6,7 @@ import dev.skynet.controlplane.definition.StageDefinition.Dependency;
 import dev.skynet.controlplane.definition.StageDefinition.WorkspaceMode;
 import dev.skynet.controlplane.project.AgentPolicy;
 import dev.skynet.protocol.AgentProviderKind;
+import dev.skynet.protocol.runner.VerificationCheck;
 import java.io.StringReader;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -75,14 +76,16 @@ public final class DefinitionParser {
           "command",
           "children",
           "condition",
-          "outputSchema");
+          "outputSchema",
+          "artifacts",
+          "checks",
+          "scope");
   static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt");
 
   /** Claves de §11 que llegan con hitos posteriores, con el hito que las ejecuta. */
   static final Map<String, String> FUTURE_STAGE_KEYS =
       Map.of(
           "promptTemplate", "S3",
-          "artifacts", "W4",
           "retry", "W6",
           "timeout", "W6");
 
@@ -863,6 +866,7 @@ public final class DefinitionParser {
       String command = command(fields, type, node, path);
       List<ChildAt> children = children(fields, type, node, path);
       String condition = condition(fields, type, node, path);
+      List<VerificationCheck> checks = verification(fields, type, node, path);
       Entry schemaEntry = fields.get("outputSchema");
       Map<String, Object> outputSchema = null;
       String outputSchemaPath = null;
@@ -895,7 +899,8 @@ public final class DefinitionParser {
               children.stream().map(ChildAt::child).toList(),
               condition,
               outputSchema,
-              outputSchemaPath);
+              outputSchemaPath,
+              checks);
       return new StageAt(stage, path, node, fields, dependencyNodes, children);
     }
 
@@ -908,12 +913,7 @@ public final class DefinitionParser {
       if (value == null) {
         return null;
       }
-      List<String> segments = Arrays.asList(value.split("[/\\\\]", -1));
-      if (value.isBlank()
-          || value.startsWith("/")
-          || value.contains("://")
-          || segments.contains("..")
-          || value.matches("^[A-Za-z]:.*")) {
+      if (!insideRepository(value)) {
         error(
             entry.value(),
             path,
@@ -924,6 +924,205 @@ public final class DefinitionParser {
         return null;
       }
       return value;
+    }
+
+    /** Una ruta relativa que no sale del repositorio: ni absoluta ni con {@code ..}. */
+    private static boolean insideRepository(String value) {
+      List<String> segments = Arrays.asList(value.split("[/\\\\]", -1));
+      return !value.isBlank()
+          && !value.startsWith("/")
+          && !value.contains("://")
+          && !segments.contains("..")
+          && !value.matches("^[A-Za-z]:.*");
+    }
+
+    /** Tipos de fase que dejan un worktree que comprobar con {@code artifacts} y {@code checks}. */
+    private static final Set<StageType> VERIFIABLE =
+        Set.of(StageType.AGENT, StageType.COMMAND, StageType.PARALLEL, StageType.VERIFICATION);
+
+    /**
+     * Lo que comprueba Skynet en el worktree de la fase cuando termina ({@code artifacts}, {@code
+     * checks} y los globs de {@code scope}), como {@link VerificationCheck} en el orden en que se
+     * ejecutan: primero los artefactos. Una fase {@code verification} no hace otra cosa.
+     */
+    private List<VerificationCheck> verification(
+        Map<String, Entry> fields, StageType type, Node node, String path) {
+      List<String> used =
+          List.of("artifacts", "checks", "scope").stream()
+              .filter(k -> fields.get(k) != null)
+              .toList();
+      if (!used.isEmpty() && !VERIFIABLE.contains(type)) {
+        for (String key : used) {
+          error(
+              fields.get(key).key(),
+              path + "." + key,
+              "`"
+                  + key
+                  + "` solo vale en fases `agent`, `command`, `parallel` o `verification`: comprueba"
+                  + " el worktree que dejan");
+        }
+        return List.of();
+      }
+      if (type == StageType.VERIFICATION) {
+        for (String key : List.of("agent", "prompt", "command", "children", "outputSchema")) {
+          Entry entry = fields.get(key);
+          if (entry != null) {
+            error(
+                entry.key(),
+                path + "." + key,
+                "Una fase `verification` no ejecuta nada, solo comprueba el worktree que hereda:"
+                    + " quita `"
+                    + key
+                    + "`");
+          }
+        }
+      }
+      List<String> artifacts = globs(fields.get("artifacts"), path + ".artifacts", "artifacts");
+      List<String> scope = globs(fields.get("scope"), path + ".scope", "scope");
+      List<VerificationCheck> checks = new ArrayList<>();
+      if (!artifacts.isEmpty()) {
+        checks.add(VerificationCheck.withPaths(VerificationCheck.ARTIFACTS, artifacts));
+      }
+      Entry checksEntry = fields.get("checks");
+      boolean scopeChecked = false;
+      if (checksEntry != null && !isNull(checksEntry.value())) {
+        if (!(checksEntry.value() instanceof SequenceNode sequence)) {
+          error(
+              checksEntry.value(),
+              path + ".checks",
+              "`checks` debe ser una lista, p. ej. `checks: [tests, diff]`");
+        } else {
+          Set<String> seen = new HashSet<>();
+          for (int i = 0; i < sequence.getValue().size(); i++) {
+            Node item = sequence.getValue().get(i);
+            String itemPath = path + ".checks[" + i + "]";
+            VerificationCheck check = check(item, itemPath, scope);
+            if (check == null) {
+              continue;
+            }
+            String key = check.name() + ":" + check.command();
+            if (!seen.add(key)) {
+              warning(item, itemPath, "`" + check.name() + "` está repetido");
+              continue;
+            }
+            scopeChecked |= check.name().equals(VerificationCheck.SCOPE);
+            checks.add(check);
+          }
+        }
+      }
+      if (fields.get("scope") != null && !scopeChecked && !scope.isEmpty()) {
+        warning(
+            fields.get("scope").key(),
+            path + ".scope",
+            "`scope` no se comprueba: añade `scope` a `checks`");
+      }
+      if (type == StageType.VERIFICATION && checks.isEmpty() && used.isEmpty()) {
+        error(
+            node,
+            path + ".checks",
+            "A esta fase le falta qué comprobar: `artifacts` (ficheros que tienen que existir) o"
+                + " `checks`, p. ej. `checks: [tests, diff]`");
+      }
+      return checks;
+    }
+
+    /** Un elemento de {@code checks}: un nombre del catálogo o {@code command: <comando>}. */
+    private VerificationCheck check(Node item, String path, List<String> scope) {
+      List<String> catalog = new ArrayList<>(VerificationCheck.NAMED);
+      catalog.add("command: <comando>");
+      if (item instanceof MappingNode mapping) {
+        if (mapping.getValue().size() != 1
+            || !(mapping.getValue().getFirst().getKeyNode() instanceof ScalarNode key)
+            || !key.getValue().equals(VerificationCheck.COMMAND)) {
+          error(
+              item,
+              path,
+              "Un check con datos solo puede ser `command: <comando>`. Admite: "
+                  + String.join(", ", catalog));
+          return null;
+        }
+        Node value = mapping.getValue().getFirst().getValueNode();
+        String command = scalarText(value, path + ".command");
+        if (command == null) {
+          return null;
+        }
+        if (VARIABLE.matcher(command).find()) {
+          error(
+              value,
+              path + ".command",
+              "Los comandos no admiten variables `{{...}}`: un dato de entrada podría colar otro"
+                  + " comando. Escríbelo tal cual");
+          return null;
+        }
+        return VerificationCheck.command(command);
+      }
+      String name = scalarText(item, path);
+      if (name == null) {
+        return null;
+      }
+      if (!VerificationCheck.NAMED.contains(name)) {
+        error(
+            item,
+            path,
+            "Check `"
+                + name
+                + "` desconocido"
+                + suggestion(name, VerificationCheck.NAMED)
+                + ". Admite: "
+                + String.join(", ", catalog));
+        return null;
+      }
+      if (name.equals(VerificationCheck.SCOPE)) {
+        if (scope.isEmpty()) {
+          error(
+              item,
+              path,
+              "El check `scope` necesita la lista `scope` con los ficheros que se pueden cambiar,"
+                  + " p. ej. `scope: [src/**, docs/**]`");
+          return null;
+        }
+        return VerificationCheck.withPaths(name, scope);
+      }
+      return VerificationCheck.named(name);
+    }
+
+    /** Una lista de globs relativos al repositorio ({@code artifacts}, {@code scope}). */
+    private List<String> globs(Entry entry, String path, String key) {
+      if (entry == null || isNull(entry.value())) {
+        return List.of();
+      }
+      if (!(entry.value() instanceof SequenceNode sequence)) {
+        error(
+            entry.value(),
+            path,
+            "`"
+                + key
+                + "` debe ser una lista de rutas, p. ej. `"
+                + key
+                + ": [openspec/proposal.md]`");
+        return List.of();
+      }
+      List<String> globs = new ArrayList<>();
+      for (int i = 0; i < sequence.getValue().size(); i++) {
+        Node item = sequence.getValue().get(i);
+        String glob = scalarText(item, path + "[" + i + "]");
+        if (glob == null) {
+          continue;
+        }
+        if (!insideRepository(glob)) {
+          error(
+              item,
+              path + "[" + i + "]",
+              "`" + glob + "` tiene que ser una ruta dentro del repositorio, p. ej. `docs/**`");
+          continue;
+        }
+        if (globs.contains(glob)) {
+          warning(item, path + "[" + i + "]", "`" + glob + "` está repetida");
+          continue;
+        }
+        globs.add(glob);
+      }
+      return globs;
     }
 
     /**
@@ -1151,6 +1350,30 @@ public final class DefinitionParser {
           }
         }
         if (stage.type() == StageType.COMMAND) {
+          checkWorkspace(at, byId);
+          continue;
+        }
+        if (stage.type() == StageType.VERIFICATION) {
+          boolean inherits =
+              stage.workspaceFrom() != null
+                  || stage.dependsOn().stream()
+                      .anyMatch(
+                          d ->
+                              byId.containsKey(d.stage())
+                                  && byId.get(d.stage()).stage().type().hasWorkspace());
+          if (stage.workspace() == WorkspaceMode.ISOLATED) {
+            error(
+                at.fields().get("workspace").value(),
+                at.path() + ".workspace",
+                "Una fase `verification` comprueba el worktree que hereda: quita `workspace:"
+                    + " isolated-worktree`");
+          } else if (!inherits) {
+            error(
+                at.node(),
+                at.path() + ".dependsOn",
+                "Una fase `verification` comprueba el worktree de la fase de la que depende:"
+                    + " ponla en `dependsOn` detrás de una fase `agent`, `command` o `parallel`");
+          }
           checkWorkspace(at, byId);
           continue;
         }

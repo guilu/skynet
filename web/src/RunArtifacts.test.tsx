@@ -180,6 +180,16 @@ describe('artefactos y verificación', () => {
     expect(await within(verified).findByText('CalcTest.subtracts')).toBeInTheDocument()
     expect(within(verified).getByText(/expected 3 but was -1/)).toBeInTheDocument()
 
+    // Una verificación de la fase enseña cada comprobación con su motivo.
+    const older = within(panel)
+      .getAllByText(/Comprobaciones de la fase/)[0]
+      .closest('details')!
+    const checks = within(older).getByRole('list', { name: 'Comprobaciones' })
+    expect(within(checks).getAllByRole('listitem')[0]).toHaveTextContent(
+      '✗ artifacts docs/spec.md · `docs/spec.md` no existe',
+    )
+    expect(within(checks).getAllByRole('listitem')[1]).toHaveTextContent('✓ diff')
+
     fireEvent.click(within(panel).getByRole('button', { name: 'Reejecutar verificación' }))
     await waitFor(() =>
       expect(

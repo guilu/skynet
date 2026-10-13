@@ -7,6 +7,7 @@ import dev.skynet.controlplane.definition.DefinitionParser.Parsed;
 import dev.skynet.controlplane.definition.Problem.Severity;
 import dev.skynet.controlplane.definition.StageDefinition.ChildDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.Dependency;
+import dev.skynet.protocol.runner.VerificationCheck;
 import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -1009,6 +1010,143 @@ class DefinitionParserTest {
             "`outputSchema` solo vale en fases `agent`",
             "`outputSchema` solo vale en fases `agent`: en una `parallel`, declara `output` en el"
                 + " agente de cada hijo");
+  }
+
+  @Test
+  void aStageDeclaresWhatSkynetChecksInItsWorktree() {
+    Parsed parsed =
+        parse(
+            """
+            id: verificada
+            stages:
+              - id: spec
+                type: agent
+                prompt: Especifica
+                artifacts: [docs/spec.md, "openspec/**/*.md"]
+                checks: [diff, commit, scope, {command: npm run lint}, tests]
+                scope: ["docs/**", openspec/**]
+              - id: verify
+                type: verification
+                dependsOn: [spec]
+                checks: [tests]
+            """);
+    assertThat(parsed.validation().problems()).isEmpty();
+    StageDefinition spec = parsed.definition().stage("spec").orElseThrow();
+    assertThat(spec.checks())
+        .containsExactly(
+            VerificationCheck.withPaths("artifacts", List.of("docs/spec.md", "openspec/**/*.md")),
+            VerificationCheck.named("diff"),
+            VerificationCheck.named("commit"),
+            VerificationCheck.withPaths("scope", List.of("docs/**", "openspec/**")),
+            VerificationCheck.command("npm run lint"),
+            VerificationCheck.named("tests"));
+    assertThat(spec.verified()).isTrue();
+    assertThat(spec.runsTests()).isTrue();
+    StageDefinition verify = parsed.definition().stage("verify").orElseThrow();
+    assertThat(verify.checks()).containsExactly(VerificationCheck.named("tests"));
+    assertThat(parsed.definition().stage("verify").orElseThrow().type().executable()).isTrue();
+  }
+
+  @Test
+  void eachWrongCheckSaysWhy() {
+    Parsed parsed =
+        parse(
+            """
+            id: checks-mal
+            inputs:
+              cmd:
+                type: string
+            stages:
+              - id: a
+                type: agent
+                prompt: a
+                artifacts: [../fuera.md]
+                checks: [test, scope, {run: make}, {command: "make {{inputs.cmd}}"}]
+              - id: b
+                type: agent
+                prompt: b
+                dependsOn: [a]
+                checks: tests
+                artifacts: docs/spec.md
+              - id: c
+                type: conditional
+                dependsOn: [b]
+                condition: b.status == "SUCCEEDED"
+                checks: [diff]
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .containsExactly(
+            "`../fuera.md` tiene que ser una ruta dentro del repositorio, p. ej. `docs/**`",
+            "Check `test` desconocido; ¿quisiste decir `tests`?. Admite: tests, diff, commit,"
+                + " scope, command: <comando>",
+            "El check `scope` necesita la lista `scope` con los ficheros que se pueden cambiar,"
+                + " p. ej. `scope: [src/**, docs/**]`",
+            "Un check con datos solo puede ser `command: <comando>`. Admite: tests, diff, commit,"
+                + " scope, command: <comando>",
+            "Los comandos no admiten variables `{{...}}`: un dato de entrada podría colar otro"
+                + " comando. Escríbelo tal cual",
+            "`checks` debe ser una lista, p. ej. `checks: [tests, diff]`",
+            "`artifacts` debe ser una lista de rutas, p. ej. `artifacts: [openspec/proposal.md]`",
+            "`checks` solo vale en fases `agent`, `command`, `parallel` o `verification`: comprueba"
+                + " el worktree que dejan");
+  }
+
+  @Test
+  void scopeWithoutItsCheckAndRepeatedChecksAreWarnings() {
+    Parsed parsed =
+        parse(
+            """
+            id: avisos
+            stages:
+              - id: a
+                type: agent
+                prompt: a
+                checks: [diff, diff]
+                scope: [src/**]
+            """);
+    assertThat(errors(parsed)).isEmpty();
+    assertThat(messages(parsed, Severity.WARNING))
+        .containsExactly(
+            "`diff` está repetido", "`scope` no se comprueba: añade `scope` a `checks`");
+  }
+
+  @Test
+  void aVerificationStageOnlyChecksTheWorktreeItInherits() {
+    Parsed parsed =
+        parse(
+            """
+            id: nodos
+            stages:
+              - id: build
+                type: command
+                command: make
+              - id: vacia
+                type: verification
+                dependsOn: [build]
+              - id: hace-cosas
+                type: verification
+                dependsOn: [build]
+                prompt: Revisa
+                checks: [tests]
+              - id: aislada
+                type: verification
+                dependsOn: [build]
+                workspace: isolated-worktree
+                checks: [tests]
+              - id: huerfana
+                type: verification
+                checks: [diff]
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .containsExactly(
+            "A esta fase le falta qué comprobar: `artifacts` (ficheros que tienen que existir) o"
+                + " `checks`, p. ej. `checks: [tests, diff]`",
+            "Una fase `verification` no ejecuta nada, solo comprueba el worktree que hereda:"
+                + " quita `prompt`",
+            "Una fase `verification` comprueba el worktree que hereda: quita `workspace:"
+                + " isolated-worktree`",
+            "Una fase `verification` comprueba el worktree de la fase de la que depende: ponla"
+                + " en `dependsOn` detrás de una fase `agent`, `command` o `parallel`");
   }
 
   @Test

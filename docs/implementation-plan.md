@@ -530,6 +530,14 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito W4 (resultado estructurado), planificado el 2026-10-13:** W4-A salida de fase y datos entre fases, W4-B verificación de fase (`artifacts`, `checks`) y nodo `verification`, W4-C verificación en la web, plantilla «Especificar, planificar e implementar» y E2E.
 
+**Implementado (W4-B), verificación de fase y nodo `verification`:**
+
+- YAML: `artifacts` (globs), `checks` del catálogo cerrado (`tests`, `diff`, `commit`, `scope`, `{command: <cmd>}`) y `scope` (globs) en las fases `agent`, `command`, `parallel` y `verification`. Se guardan como `StageDefinition.checks` (`VerificationCheck` en `protocol`), con los artefactos primero. `type: verification` deja de ser `UNSUPPORTED`: necesita qué comprobar y una dependencia con worktree.
+- Runner: `RunVerification` lleva `checks` y `baseCommit` (y `command` pasa a ser opcional). `StageChecks` hace cada comprobación en el worktree y devuelve `{name, target, passed, reason}`; `WorktreeState` mide commits nuevos, ficheros cambiados y cambios sin confirmar con git respecto al commit base.
+- Control plane: `V18` añade `verification_run.stage_run_id` y `checks` (jsonb), hace `command` opcional y guarda `agent_run.base_commit` (el del primer `WORKSPACE_READY`). `StageVerifications`: al terminar bien el agente de una fase con comprobaciones, pone en cola una verificación `STAGE` en vez de la `AUTO`, y la fase sigue `RUNNING` hasta que llega; termina `SUCCEEDED` («verification-passed») o `FAILED` («verification-failed»), con fail-fast. En una `parallel`, la de cada hijo; una que falla hace fallar la fase aunque se cancelen sus hermanos. Eventos `stage.verification.started` y `stage.verification.completed`.
+- Una fase `verification` crea una invocación sintética (proveedor `verification`, sin orden `START`) en el worktree que hereda y con su runner, cuya verificación mide desde `workspace.base_commit`; termina `COMPLETED` o `FAILED` con los motivos. Se cancela en el acto y no se continúa ni se reintenta.
+- Límite conocido: si el runner desaparece a mitad de una verificación, la fase se queda «Verificando» (las verificaciones no se reconcilian con los latidos, igual que en M5).
+
 **Implementado (W4-A), salida de fase y datos entre fases:**
 
 - `outputSchema` en las fases `agent` deja de ser `UNSUPPORTED`: un JSON Schema en línea (como `output`) o la ruta de un fichero del repositorio. Manda sobre el `output` del agente, también en sus mensajes, bifurcaciones y reintentos. Las condiciones leen sus campos; con una ruta no se conocen al publicar y no se comprueban.

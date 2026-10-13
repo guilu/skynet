@@ -1,5 +1,7 @@
 package dev.skynet.controlplane.workflow;
 
+import dev.skynet.controlplane.definition.StageDefinition;
+import dev.skynet.controlplane.definition.StageType;
 import dev.skynet.controlplane.event.EventDraft;
 import dev.skynet.controlplane.event.EventStore;
 import dev.skynet.controlplane.project.CodeRepository;
@@ -9,6 +11,7 @@ import dev.skynet.controlplane.shared.NotFoundException;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.runner.RunVerification;
+import dev.skynet.protocol.runner.VerificationCheck;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,6 +32,7 @@ public class VerificationService {
 
   static final String AUTO = "AUTO";
   static final String MANUAL = "MANUAL";
+  static final String STAGE = "STAGE";
 
   private final AgentRunRepository agentRuns;
   private final StageRunRepository stageRuns;
@@ -102,7 +106,7 @@ public class VerificationService {
               + workspace.path()
               + ": espera a que termine");
     }
-    UUID id = queue(agent, workspace, MANUAL, command, time.now());
+    UUID id = queue(agent, workspace, MANUAL, command, null, time.now());
     return verifications.find(id).orElseThrow();
   }
 
@@ -117,8 +121,37 @@ public class VerificationService {
     }
     workspaces
         .find(agent.getWorkspaceId())
-        .ifPresent(workspace -> queue(agent, workspace, AUTO, command, now));
+        .ifPresent(workspace -> queue(agent, workspace, AUTO, command, null, now));
   }
+
+  /**
+   * La verificación de una fase con {@code artifacts} o {@code checks} en el worktree de {@code
+   * agent}: sus comprobaciones y, si una es {@code tests} o la fase tiene agente, el comando del
+   * repositorio (que solo cuenta para la fase con {@code tests}). Los cambios se miden desde {@code
+   * baseCommit}.
+   */
+  UUID queueStage(
+      AgentRun agent,
+      WorkspaceView workspace,
+      StageRun stage,
+      StageDefinition definition,
+      String baseCommit,
+      Instant now) {
+    boolean runsCommand =
+        definition.runsTests()
+            || (definition.type() != StageType.VERIFICATION && !agent.isCommand());
+    String command = runsCommand ? commandOf(agent) : null;
+    return queue(
+        agent,
+        workspace,
+        STAGE,
+        command,
+        new StageChecks(stage.getId(), definition.checks(), baseCommit),
+        now);
+  }
+
+  /** Las comprobaciones de la verificación de una fase. */
+  private record StageChecks(UUID stageRunId, List<VerificationCheck> checks, String baseCommit) {}
 
   /**
    * Aplica un evento de verificación que envía el runner. Devuelve {@code false} si la verificación
@@ -142,23 +175,44 @@ public class VerificationService {
               integer(payload.get("exitCode")),
               string(payload.get("signal")),
               string(payload.get("error")),
-              tests(payload.get("tests"))),
+              tests(payload.get("tests")),
+              checks(payload.get("checks"))),
           at);
     }
   }
 
   private UUID queue(
-      AgentRun agent, WorkspaceView workspace, String trigger, String command, Instant now) {
+      AgentRun agent,
+      WorkspaceView workspace,
+      String trigger,
+      String command,
+      StageChecks stage,
+      Instant now) {
     CodeRepository repository = projects.getRepository(agent.getRepositoryId());
     UUID id =
         verifications.create(
-            agent.getId(), workspace.id(), workspace.runnerId(), trigger, command, now);
+            agent.getId(),
+            workspace.id(),
+            workspace.runnerId(),
+            trigger,
+            command,
+            stage == null ? null : stage.stageRunId(),
+            stage == null
+                ? List.of()
+                : stage.checks().stream()
+                    .map(c -> new VerificationResult.CheckResult(c.name(), c.target(), null, null))
+                    .toList(),
+            now);
     UUID workflowRunId = stageRuns.findById(agent.getStageRunId()).orElseThrow().getWorkflowRunId();
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("agentRunId", agent.getId());
     payload.put("trigger", trigger);
     payload.put("command", command);
     payload.put("runnerId", workspace.runnerId());
+    if (stage != null) {
+      payload.put("stageRunId", stage.stageRunId());
+      payload.put("checks", stage.checks().stream().map(VerificationCheck::name).toList());
+    }
     events.append(
         EventDraft.of("verification_run", id, "verification.queued", workflowRunId, payload, now));
     publisher.publishEvent(
@@ -170,7 +224,9 @@ public class VerificationService {
                 workspace.path(),
                 command,
                 repository.getTestReportPaths(),
-                properties.timeout())));
+                properties.timeout(),
+                stage == null ? List.of() : stage.checks(),
+                stage == null ? null : stage.baseCommit())));
     return id;
   }
 
@@ -193,6 +249,24 @@ public class VerificationService {
         orZero(integer(map.get("failed"))),
         orZero(integer(map.get("errors"))),
         orZero(integer(map.get("skipped"))));
+  }
+
+  /** Las comprobaciones que devuelve el runner, o {@code null} si no las devuelve. */
+  private static List<VerificationResult.CheckResult> checks(Object value) {
+    if (!(value instanceof List<?> list)) {
+      return null;
+    }
+    return list.stream()
+        .filter(Map.class::isInstance)
+        .map(Map.class::cast)
+        .map(
+            m ->
+                new VerificationResult.CheckResult(
+                    string(m.get("name")),
+                    string(m.get("target")),
+                    Boolean.TRUE.equals(m.get("passed")),
+                    string(m.get("reason"))))
+        .toList();
   }
 
   private static int orZero(Integer value) {

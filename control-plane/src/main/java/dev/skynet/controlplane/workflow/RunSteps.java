@@ -86,6 +86,8 @@ public class RunSteps {
   private final JdbcClient jdbc;
   private final ObjectMapper json;
   private final VerificationProperties verification;
+  private final Verifications verifications;
+  private final StageVerifications stageVerifications;
   private final TimeSource time;
 
   RunSteps(
@@ -101,6 +103,8 @@ public class RunSteps {
       JdbcClient jdbc,
       ObjectMapper json,
       VerificationProperties verification,
+      Verifications verifications,
+      StageVerifications stageVerifications,
       TimeSource time) {
     this.runs = runs;
     this.workflowRuns = workflowRuns;
@@ -114,6 +118,8 @@ public class RunSteps {
     this.jdbc = jdbc;
     this.json = json;
     this.verification = verification;
+    this.verifications = verifications;
+    this.stageVerifications = stageVerifications;
     this.time = time;
   }
 
@@ -144,7 +150,10 @@ public class RunSteps {
           stage.getStatus().isTerminal()
               ? null
               : switch (RunTransitions.outcome(finished)) {
-                case COMPLETED -> null;
+                // Un hijo que terminó bien pero no pasó su verificación también hace fallar la
+                // fase.
+                case COMPLETED ->
+                    verifications.stageFailed(stage.getId()) ? StageStatus.FAILED : null;
                 case CANCELLED -> StageStatus.CANCELLED;
                 default -> StageStatus.FAILED;
               };
@@ -234,6 +243,15 @@ public class RunSteps {
         if (workspaces.hasLiveInvocation(source.id())) {
           return StartOutcome.DEFERRED;
         }
+      }
+      if (stageDefinition.type() == StageType.VERIFICATION) {
+        if (source == null) {
+          throw new ConflictException(
+              "La fase " + stageKey + " no tiene un worktree que comprobar");
+        }
+        stageVerifications.startNode(
+            runId, repository.getId(), stage, stageDefinition, source, now);
+        return StartOutcome.STARTED;
       }
       Map<String, Invocation> invocations = new LinkedHashMap<>();
       switch (stageDefinition.type()) {

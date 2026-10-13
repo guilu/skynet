@@ -20,6 +20,7 @@ import workflow from '../../fixtures/contracts/workflow.json'
 import workflows from '../../fixtures/contracts/workflows.json'
 import type {
   AgentDefinition,
+  CheckResult,
   AgentRun,
   AgentRunDetail,
   ArtifactSummary,
@@ -47,6 +48,7 @@ import type {
   TestTotals,
   UnresponsiveAgent,
   Validation,
+  VerificationCheck,
   VerificationResult,
   VersionView,
   WorkflowDefinition,
@@ -282,7 +284,10 @@ const VERIFICATION: Keys<VerificationResult> = {
   startedAt: true,
   finishedAt: true,
   live: true,
+  stageRunId: true,
+  checks: true,
 }
+const CHECK_RESULT: Keys<CheckResult> = { name: true, target: true, passed: true, reason: true }
 const TEST_TOTALS: Keys<TestTotals> = { total: true, failed: true, errors: true, skipped: true }
 
 const VERSION: Keys<VersionView> = {
@@ -369,7 +374,9 @@ const STAGE_DEFINITION: Keys<StageDefinition> = {
   condition: true,
   outputSchema: true,
   outputSchemaPath: true,
+  checks: true,
 }
+const VERIFICATION_CHECK: Keys<VerificationCheck> = { name: true, command: true, paths: true }
 
 function expectSummary(summary: WorkflowSummary) {
   expectShape(summary, WORKFLOW_SUMMARY)
@@ -479,6 +486,9 @@ describe('contratos con el backend', () => {
     model.agents.forEach((a) => expectShape(a, AGENT_DEFINITION))
     model.stages.forEach((s) => expectShape(s, STAGE_DEFINITION))
     expect(model.stages.map((s) => s.type)).toEqual(['agent', 'agent', 'verification'])
+    const checks = model.stages[2].checks
+    expect(checks.map((c) => c.name)).toEqual(['artifacts', 'tests', 'scope', 'command'])
+    checks.forEach((c) => expectShape(c, VERIFICATION_CHECK))
   })
 
   it('artefactos', () => {
@@ -490,6 +500,8 @@ describe('contratos con el backend', () => {
     verifications.forEach((v) => {
       expectShape(v, VERIFICATION)
       if (v.tests) expectShape(v.tests, TEST_TOTALS)
+      v.checks.forEach((c) => expectShape(c, CHECK_RESULT))
     })
+    expect(verifications.map((v) => v.trigger)).toEqual(['AUTO', 'STAGE'])
   })
 })

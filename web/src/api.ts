@@ -458,6 +458,17 @@ export interface StageDefinition {
   outputSchema: { type: 'object'; properties: Record<string, { type: string }> } | null
   /** La misma, en un fichero del repositorio que el runner lee del worktree. */
   outputSchemaPath: string | null
+  /** Lo que Skynet comprueba en su worktree antes de darla por buena (`artifacts`, `checks`, `scope`). */
+  checks: VerificationCheck[]
+}
+
+/** Una comprobación de fase: `artifacts`, `tests`, `diff`, `commit`, `scope` o `command`. */
+export interface VerificationCheck {
+  name: 'artifacts' | 'tests' | 'diff' | 'commit' | 'scope' | 'command'
+  /** El comando de `command`. */
+  command: string | null
+  /** Los globs de `artifacts` y `scope`. */
+  paths: string[]
 }
 
 /** El workflow leído del YAML. */
@@ -560,9 +571,11 @@ export interface TestTotals {
 export interface VerificationResult {
   id: string
   agentRunId: string
-  trigger: 'AUTO' | 'MANUAL'
+  /** `STAGE`: la verificación de una fase con comprobaciones, que decide si la fase pasa. */
+  trigger: 'AUTO' | 'MANUAL' | 'STAGE'
   status: VerificationStatus
-  command: string
+  /** Comando de validación del repositorio, o null si esta verificación no lo ejecuta. */
+  command: string | null
   exitCode: number | null
   signal: string | null
   error: string | null
@@ -571,6 +584,19 @@ export interface VerificationResult {
   startedAt: string | null
   finishedAt: string | null
   live: boolean
+  /** Fase que verifica, con `trigger` `STAGE`. */
+  stageRunId: string | null
+  /** Las comprobaciones de la fase; `passed` es null mientras no ha terminado. */
+  checks: CheckResult[]
+}
+
+export interface CheckResult {
+  name: string
+  /** Lo que comprueba (los globs o el comando). */
+  target: string | null
+  passed: boolean | null
+  /** Por qué no pasó. */
+  reason: string | null
 }
 
 /** Lanzamiento de un agente; los límites que falten usan los valores por defecto del servidor. */

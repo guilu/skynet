@@ -47,6 +47,7 @@ public class AgentEventIngestion {
   private final PayloadRedactor redactor;
   private final Workspaces workspaces;
   private final VerificationService verifications;
+  private final StageVerifications stageVerifications;
   private final TimeSource time;
 
   AgentEventIngestion(
@@ -58,6 +59,7 @@ public class AgentEventIngestion {
       PayloadRedactor redactor,
       Workspaces workspaces,
       VerificationService verifications,
+      StageVerifications stageVerifications,
       TimeSource time) {
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
@@ -67,6 +69,7 @@ public class AgentEventIngestion {
     this.redactor = redactor;
     this.workspaces = workspaces;
     this.verifications = verifications;
+    this.stageVerifications = stageVerifications;
     this.time = time;
   }
 
@@ -112,6 +115,8 @@ public class AgentEventIngestion {
       // La verificación llega cuando el agente ya ha terminado y no cambia su estado.
       verifications.apply(verificationRunId, event.type(), redacted, event.occurredAt());
       if (event.type() == AgentEventType.VERIFICATION_COMPLETED) {
+        // Una verificación de fase decide si la fase termina bien.
+        stageVerifications.completed(verificationRunId, event.occurredAt());
         // Libera el worktree: la fase que lo continúa puede arrancar.
         publisher.publishEvent(new WorkflowRunChanged(stage.getWorkflowRunId()));
       }
@@ -143,6 +148,7 @@ public class AgentEventIngestion {
       case WORKSPACE_READY -> {
         String path = string(p, "path");
         String branch = string(p, "branch");
+        agent.recordBaseCommit(string(p, "baseCommit"));
         if (path != null && branch != null) {
           agent.useWorkspace(
               workspaces.register(
@@ -187,10 +193,8 @@ public class AgentEventIngestion {
         AgentObservableStatus outcome =
             agent.exited(integer(p.get("exitCode")), string(p, "signal"), string(p, "error"));
         agent = transitions.advanceAgent(agent, outcome, runId, "process-exited", now);
-        transitions.finishStage(stage, now);
-        if (agent.getStatus() == AgentObservableStatus.COMPLETED) {
-          verifications.afterCompletion(agent, now);
-        }
+        // Con comprobaciones, la fase sigue «Verificando» hasta que pasan (W4-B).
+        stageVerifications.afterAgent(agent, stage, now);
       }
       default -> {}
     }

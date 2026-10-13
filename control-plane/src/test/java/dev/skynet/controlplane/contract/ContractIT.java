@@ -585,6 +585,10 @@ class ContractIT extends IntegrationTest {
           - id: verify
             type: verification
             dependsOn: ["fix?"]
+            artifacts: [docs/review.md]
+            checks: [tests, scope, {command: npm run lint}]
+            scope: ["src/**", "docs/**"]
+            retry: {attempts: 2}
         """;
 
     static VersionView reviewV1() {
@@ -630,6 +634,7 @@ class ContractIT extends IntegrationTest {
     static final UUID VERIFICATION = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0f");
     static final UUID DIFF_ARTIFACT = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a10");
     static final UUID REPORT_ARTIFACT = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a11");
+    static final UUID STAGE_VERIFICATION = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a20");
 
     static List<ArtifactSummary> artifacts() {
       Map<String, Object> changes = new LinkedHashMap<>();
@@ -687,7 +692,27 @@ class ContractIT extends IntegrationTest {
               new VerificationResult.TestTotals(12, 1, 0, 2),
               at(43),
               at(44),
-              at(58)));
+              at(58),
+              null,
+              List.of()),
+          new VerificationResult(
+              STAGE_VERIFICATION,
+              AGENT,
+              "STAGE",
+              "FAILED",
+              null,
+              null,
+              null,
+              null,
+              null,
+              at(43),
+              at(44),
+              at(50),
+              STAGE,
+              List.of(
+                  new VerificationResult.CheckResult(
+                      "artifacts", "docs/spec.md", false, "`docs/spec.md` no existe"),
+                  new VerificationResult.CheckResult("diff", null, true, null))));
     }
 
     private Samples() {}

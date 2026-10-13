@@ -260,6 +260,66 @@ class WorkflowEngineIT extends IntegrationTest {
           agent: revisor
       """;
 
+  /** Una especificación que tiene que dejar su documento y cambios, y un plan detrás. */
+  static final String VERIFIED =
+      """
+      id: verificada
+      version: 1
+      stages:
+        - id: spec
+          type: agent
+          prompt: Especifica
+          artifacts: [docs/spec.md]
+          checks: [diff]
+        - id: plan
+          type: agent
+          prompt: Planifica
+          dependsOn: [spec]
+      """;
+
+  /** Un agente, una fase verification que pasa los tests en su worktree y una revisión. */
+  static final String NODE =
+      """
+      id: nodo
+      version: 1
+      stages:
+        - id: implement
+          type: agent
+          prompt: Implementa
+        - id: verify
+          type: verification
+          dependsOn: [implement]
+          checks: [tests, commit]
+        - id: review
+          type: agent
+          prompt: Revisa
+          dependsOn: [verify]
+      """;
+
+  /** Dos revisores en paralelo que tienen que dejar cambios en su copia. */
+  static final String PARALLEL_CHECKS =
+      """
+      id: paralela-verificada
+      version: 1
+      agents:
+        uno:
+          prompt: Uno
+        dos:
+          prompt: Dos
+      stages:
+        - id: review
+          type: parallel
+          checks: [diff]
+          children:
+            - agent: uno
+            - agent: dos
+        - id: fix
+          type: agent
+          prompt: Corrige
+          dependsOn: [review]
+          workspace: isolated-worktree
+      """;
+
   private String projectId;
   private String repositoryId;
   private String workItemId;
@@ -649,6 +709,141 @@ class WorkflowEngineIT extends IntegrationTest {
     security = new Events(security.agentRunId, 1);
     security.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 143, "signal", "SIGTERM"));
     runner.send(security);
+    assertThat(stageStatuses(runId)).containsEntry("review", "FAILED");
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("FAILED");
+  }
+
+  @Test
+  void aStageWithChecksKeepsRunningUntilItsVerificationPasses() {
+    String definitionId = publish(VERIFIED);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/spec");
+
+    // El agente ha terminado, pero la fase sigue en curso mientras se comprueba su worktree.
+    assertThat(stageStatuses(runId))
+        .containsEntry("spec", "RUNNING")
+        .containsEntry("plan", "PENDING");
+    JsonNode verify = runner.claim().getFirst();
+    assertThat(verify.path("type").asString()).isEqualTo("VERIFY");
+    JsonNode request = verify.path("verify");
+    assertThat(request.path("command").isNull()).isTrue();
+    assertThat(request.path("baseCommit").asString()).isEqualTo("abc");
+    assertThat(request.path("checks"))
+        .extracting(c -> c.path("name").asString())
+        .containsExactly("artifacts", "diff");
+    assertThat(request.path("checks").get(0).path("paths").get(0).asString())
+        .isEqualTo("docs/spec.md");
+
+    verified(runner, verify, true);
+    assertThat(stageStatuses(runId)).containsEntry("spec", "SUCCEEDED");
+    JsonNode plan = runner.claim().getFirst();
+    assertThat(plan.path("start").path("prompt").asString()).isEqualTo("Planifica");
+    assertThat(plan.path("start").path("workspace").path("path").asString())
+        .isEqualTo("/w/eng/spec");
+    assertThat(eventTypes(runId))
+        .containsSubsequence("stage.verification.started", "stage.verification.completed");
+  }
+
+  @Test
+  void aMissingArtifactFailsTheStageWithItsReasonAndTheNextStageDoesNotStart() {
+    String definitionId = publish(VERIFIED);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    JsonNode spec = runner.claim().getFirst();
+    complete(runner, spec, "/w/eng/spec");
+
+    verified(runner, runner.claim().getFirst(), false);
+
+    assertThat(stageStatuses(runId))
+        .containsEntry("spec", "FAILED")
+        .containsEntry("plan", "CANCELLED");
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("FAILED");
+    assertThat(runner.claim()).isEmpty();
+    JsonNode verification =
+        get("/api/agent-runs/" + spec.path("agentRunId").asString() + "/verifications").get(0);
+    assertThat(verification.path("trigger").asString()).isEqualTo("STAGE");
+    assertThat(verification.path("status").asString()).isEqualTo("FAILED");
+    assertThat(verification.path("checks").get(0).path("reason").asString())
+        .isEqualTo("`docs/spec.md` no existe");
+  }
+
+  @Test
+  void aVerificationStageChecksTheWorktreeItInheritsAndTheNextStageContinuesIt() {
+    put(
+        "/api/projects/" + projectId + "/repositories/" + repositoryId + "/verification",
+        Map.of("validationCommand", "npm test"));
+    String definitionId = publish(NODE);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+
+    // implement no tiene comprobaciones: su verificación automática solo informa.
+    JsonNode auto = runner.claim().getFirst();
+    assertThat(auto.path("verify").path("checks")).isEmpty();
+    verified(runner, auto, true);
+
+    // La fase verification no arranca ningún agente: comprueba el worktree de implement.
+    JsonNode verify = runner.claim().getFirst();
+    assertThat(verify.path("type").asString()).isEqualTo("VERIFY");
+    assertThat(verify.path("verify").path("command").asString()).isEqualTo("npm test");
+    assertThat(verify.path("verify").path("workspacePath").asString())
+        .isEqualTo("/w/eng/implement");
+    assertThat(verify.path("verify").path("baseCommit").asString()).isEqualTo("abc");
+    assertThat(provider(verify.path("agentRunId").asString())).isEqualTo("verification");
+    assertThat(stageStatuses(runId)).containsEntry("verify", "RUNNING");
+    String nodeAgent = verify.path("agentRunId").asString();
+    assertConflict(() -> post("/api/agent-runs/" + nodeAgent + "/retry", Map.of()));
+
+    verified(runner, verify, true);
+    assertThat(stageStatuses(runId)).containsEntry("verify", "SUCCEEDED");
+    JsonNode review = runner.claim().getFirst();
+    assertThat(review.path("start").path("prompt").asString()).isEqualTo("Revisa");
+    assertThat(review.path("start").path("workspace").path("path").asString())
+        .isEqualTo("/w/eng/implement");
+  }
+
+  @Test
+  void aFailingVerificationStageFailsWithTheChecksThatDidNotPass() {
+    String definitionId = publish(NODE);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+
+    // Sin comando en el repositorio, tests no pasa.
+    JsonNode verify = runner.claim().getFirst();
+    assertThat(verify.path("verify").path("command").isNull()).isTrue();
+    verified(runner, verify, false);
+
+    assertThat(stageStatuses(runId))
+        .containsEntry("verify", "FAILED")
+        .containsEntry("review", "CANCELLED");
+    JsonNode agent = get("/api/workflow-runs/" + runId).path("stages").get(1).path("agents").get(0);
+    assertThat(agent.path("status").asString()).isEqualTo("FAILED");
+    assertThat(agent.path("error").asString()).isEqualTo("tests: no pasa; commit: no pasa");
+  }
+
+  @Test
+  void aParallelChildThatFailsItsChecksFailsTheStage() {
+    String definitionId = publish(PARALLEL_CHECKS);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    List<JsonNode> children = runner.claim();
+    assertThat(children).hasSize(2);
+    complete(runner, children.get(0), "/w/eng/uno");
+    complete(runner, children.get(1), "/w/eng/dos");
+
+    // Cada hijo se verifica en su worktree.
+    List<JsonNode> verifications = runner.claim();
+    assertThat(verifications)
+        .extracting(v -> v.path("verify").path("workspacePath").asString())
+        .containsExactlyInAnyOrder("/w/eng/uno", "/w/eng/dos");
+    verified(runner, verifications.get(0), false);
+
+    assertThat(stageStatuses(runId))
+        .containsEntry("review", "FAILED")
+        .containsEntry("fix", "CANCELLED");
+    verified(runner, verifications.get(1), true);
     assertThat(stageStatuses(runId)).containsEntry("review", "FAILED");
     assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("FAILED");
   }
@@ -1080,6 +1275,34 @@ class WorkflowEngineIT extends IntegrationTest {
     }
     events.add(AgentEventType.RESULT, result);
     events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 0));
+    runner.send(events);
+  }
+
+  /** El runner termina la verificación {@code verify}: pasan todas sus comprobaciones o ninguna. */
+  private void verified(Runner runner, JsonNode verify, boolean passed) {
+    Events events = new Events(UUID.fromString(verify.path("agentRunId").asString()));
+    String id = verify.path("verify").path("verificationRunId").asString();
+    events.add(AgentEventType.VERIFICATION_STARTED, Map.of("verificationRunId", id));
+    Map<String, Object> result = new LinkedHashMap<>(Map.of("verificationRunId", id));
+    if (!verify.path("verify").path("command").isNull()) {
+      result.put("exitCode", passed ? 0 : 1);
+    }
+    List<Map<String, Object>> checks = new ArrayList<>();
+    for (JsonNode check : verify.path("verify").path("checks")) {
+      String name = check.path("name").asString();
+      String reason =
+          name.equals("artifacts")
+              ? "`" + check.path("paths").get(0).asString() + "` no existe"
+              : "no pasa";
+      checks.add(
+          passed
+              ? Map.of("name", name, "passed", true)
+              : Map.of("name", name, "passed", false, "reason", reason));
+    }
+    if (!checks.isEmpty()) {
+      result.put("checks", checks);
+    }
+    events.add(AgentEventType.VERIFICATION_COMPLETED, result);
     runner.send(events);
   }
 

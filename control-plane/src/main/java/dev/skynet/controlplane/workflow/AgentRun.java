@@ -21,6 +21,12 @@ public class AgentRun {
   /** Una fase {@code command}: el runner ejecuta un comando de shell en lugar de un agente. */
   public static final String PROVIDER_COMMAND = "command";
 
+  /**
+   * Una fase {@code verification}: no hay agente ni comando, solo la verificación de la fase en el
+   * worktree que hereda. Su estado es el de esa verificación.
+   */
+  public static final String PROVIDER_VERIFICATION = "verification";
+
   @Id private final UUID id;
   private final UUID stageRunId;
   private final UUID parentAgentRunId;
@@ -63,6 +69,9 @@ public class AgentRun {
 
   /** La salida estructurada que devolvió (JSON), o {@code null}. */
   private String structuredOutput;
+
+  /** {@code HEAD} del worktree al empezar: la base de los checks {@code diff} y {@code commit}. */
+  private String baseCommit;
 
   @Version private Long version;
 
@@ -475,6 +484,26 @@ public class AgentRun {
   /** Si es una fase {@code command}: sin sesión que reanudar ni verificación. */
   public boolean isCommand() {
     return PROVIDER_COMMAND.equals(provider);
+  }
+
+  public boolean isVerification() {
+    return PROVIDER_VERIFICATION.equals(provider);
+  }
+
+  public String getBaseCommit() {
+    return baseCommit;
+  }
+
+  /** Por qué falla una invocación que no termina con un proceso (una fase {@code verification}). */
+  void fail(String reason) {
+    this.error = reason;
+  }
+
+  /** El {@code HEAD} del worktree cuando la invocación lo recibió; solo cuenta el primero. */
+  void recordBaseCommit(String commit) {
+    if (baseCommit == null) {
+      baseCommit = commit;
+    }
   }
 
   public String getProviderSessionId() {
