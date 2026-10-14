@@ -128,7 +128,7 @@
         "name": { "description": "Nombre para mostrar.", "type": "string", "minLength": 1 },
         "description": { "description": "Qué hace la fase.", "type": "string", "minLength": 1 },
         "type": {
-          "description": "Tipo de fase. Por ahora el motor ejecuta agent, command, parallel y conditional.",
+          "description": "Tipo de fase. Por ahora el motor ejecuta agent, command, parallel, conditional y verification (comprueba el worktree que hereda sin ejecutar nada).",
           "enum": [
             "agent",
             "command",
@@ -176,7 +176,40 @@
             { "$ref": "#/$defs/output" }
           ]
         },
-        "artifacts": { "description": "Llega en W4.", "type": "array", "items": { "type": "string" } },
+        "artifacts": {
+          "description": "Ficheros que la fase tiene que dejar en su worktree, como rutas o globs del repositorio (p. ej. docs/spec.md o docs/*.md). Si falta alguno, la fase falla.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "checks": {
+          "description": "Lo que Skynet comprueba en el worktree cuando la fase termina: tests (el comando de validación del repositorio pasa), diff (hay cambios desde el inicio de la fase), commit (hay commits nuevos y nada sin confirmar), scope (los cambios están dentro de `scope`) o {command: <cmd>} (el comando termina con código 0). La fase sigue en curso mientras se comprueba y falla si algo no pasa.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              { "enum": ["tests", "diff", "commit", "scope"] },
+              {
+                "type": "object",
+                "required": ["command"],
+                "additionalProperties": false,
+                "properties": {
+                  "command": {
+                    "description": "Comando de shell (sh -c) que se ejecuta en el worktree. Sin variables.",
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "scope": {
+          "description": "Ámbito permitido de los cambios, como globs del repositorio (p. ej. src/**). Lo comprueba el check scope.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
         "retry": { "description": "Llega en W6.", "type": "object" },
         "timeout": { "description": "Llega en W6." },
         "condition": {

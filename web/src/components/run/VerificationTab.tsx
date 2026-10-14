@@ -108,7 +108,13 @@ export function VerificationTab({ agent, events }: { agent: AgentRun; events: St
   )
 }
 
-const triggerLabel = (v: VerificationResult) => (v.trigger === 'MANUAL' ? 'Manual' : 'Automática')
+const TRIGGERS: Record<VerificationResult['trigger'], string> = {
+  AUTO: 'Automática',
+  MANUAL: 'Manual',
+  STAGE: 'Comprobaciones de la fase',
+}
+
+const triggerLabel = (v: VerificationResult) => TRIGGERS[v.trigger] ?? v.trigger
 
 const testsSummary = (v: VerificationResult) =>
   v.tests
@@ -126,7 +132,7 @@ function Verification({
   const facts: [string, ReactNode][] = [
     ['Estado', <StatusBadge key="s" status={v.status} />],
     ['Origen', triggerLabel(v)],
-    ['Comando', <code key="c">{v.command}</code>],
+    ['Comando', v.command ? <code key="c">{v.command}</code> : '—'],
     ['Código de salida', v.exitCode == null ? '—' : String(v.exitCode)],
     ['Duración', formatDuration(v.startedAt ? elapsed(v.startedAt, v.finishedAt, now) : null)],
     ['Tests', v.tests ? testsSummary(v) : 'sin informes JUnit'],
@@ -142,12 +148,33 @@ function Verification({
           </div>
         ))}
       </dl>
+      {v.checks.length > 0 && <Checks checks={v.checks} />}
       {v.tests && v.tests.total > 0 && <TestsBar tests={v.tests} />}
       {v.error && <p className="error small">{v.error}</p>}
       {v.tests && v.tests.failed + v.tests.errors > 0 && (
         <Failures verificationId={v.id} agentId={agentId} />
       )}
     </>
+  )
+}
+
+/** Las comprobaciones de la fase (`artifacts`, `checks`), con el motivo de las que no pasan. */
+function Checks({ checks }: { checks: VerificationResult['checks'] }) {
+  return (
+    <ul className="list small" aria-label="Comprobaciones">
+      {checks.map((c, i) => (
+        <li key={`${c.name}.${i}`}>
+          {c.passed == null ? '…' : c.passed ? '✓' : '✗'} <strong>{c.name}</strong>
+          {c.target && (
+            <>
+              {' '}
+              <code>{c.target}</code>
+            </>
+          )}
+          {c.reason && <span className="muted"> · {c.reason}</span>}
+        </li>
+      ))}
+    </ul>
   )
 }
 

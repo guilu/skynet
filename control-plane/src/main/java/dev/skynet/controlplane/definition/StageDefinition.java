@@ -1,5 +1,6 @@
 package dev.skynet.controlplane.definition;
 
+import dev.skynet.protocol.runner.VerificationCheck;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -24,6 +25,8 @@ import tools.jackson.databind.json.JsonMapper;
  *     manda sobre el {@code output} de su agente; {@code null} si no tiene
  * @param outputSchemaPath el mismo schema como ruta de un fichero del repositorio, que el runner
  *     lee del worktree al arrancar; {@code null} si no tiene
+ * @param checks lo que Skynet comprueba en su worktree antes de darla por buena ({@code artifacts},
+ *     {@code checks} y {@code scope} del YAML), en el orden en que se ejecuta; vacío si nada
  */
 public record StageDefinition(
     String id,
@@ -38,11 +41,55 @@ public record StageDefinition(
     List<ChildDefinition> children,
     String condition,
     Map<String, Object> outputSchema,
-    String outputSchemaPath) {
+    String outputSchemaPath,
+    List<VerificationCheck> checks) {
 
   public StageDefinition {
     dependsOn = List.copyOf(dependsOn);
     children = children == null ? List.of() : List.copyOf(children);
+    checks = checks == null ? List.of() : List.copyOf(checks);
+  }
+
+  /** Una fase sin comprobaciones. */
+  public StageDefinition(
+      String id,
+      String name,
+      StageType type,
+      String agent,
+      String prompt,
+      List<Dependency> dependsOn,
+      WorkspaceMode workspace,
+      String workspaceFrom,
+      String command,
+      List<ChildDefinition> children,
+      String condition,
+      Map<String, Object> outputSchema,
+      String outputSchemaPath) {
+    this(
+        id,
+        name,
+        type,
+        agent,
+        prompt,
+        dependsOn,
+        workspace,
+        workspaceFrom,
+        command,
+        children,
+        condition,
+        outputSchema,
+        outputSchemaPath,
+        List.of());
+  }
+
+  /** Si Skynet comprueba su worktree antes de darla por buena. */
+  public boolean verified() {
+    return !checks.isEmpty();
+  }
+
+  /** Si entre sus comprobaciones está {@code tests}: el comando de validación del repositorio. */
+  public boolean runsTests() {
+    return checks.stream().anyMatch(c -> c.name().equals(VerificationCheck.TESTS));
   }
 
   /** Una fase sin {@code outputSchema} propio. */

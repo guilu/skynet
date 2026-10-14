@@ -18,6 +18,7 @@ import dev.skynet.runner.supervisor.ProcessExit;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.supervisor.SupervisedProcess;
 import dev.skynet.runner.verify.JUnitReports;
+import dev.skynet.runner.verify.StageChecks;
 import dev.skynet.runner.workspace.GitIndexer;
 import dev.skynet.runner.workspace.Workspace;
 import dev.skynet.runner.workspace.WorkspaceManager;
@@ -720,49 +721,60 @@ public final class AgentExecutor implements AutoCloseable {
     UUID id = verification.verificationRunId();
     Map<String, Object> started = new LinkedHashMap<>();
     started.put("verificationRunId", id.toString());
-    started.put("command", verification.command());
+    if (verification.command() != null) {
+      started.put("command", verification.command());
+    }
+    if (verification.hasChecks()) {
+      started.put("checks", verification.checks().stream().map(c -> c.name()).toList());
+    }
     emit(agentRunId, AgentEventType.VERIFICATION_STARTED, started);
 
+    StageChecks.TestsRun tests = new StageChecks.TestsRun(false, null, false, null);
+    if (verification.command() != null) {
+      tests = runValidation(agentRunId, verification, workspace, result);
+      if (tests == null) {
+        return;
+      }
+    }
+    if (verification.hasChecks()) {
+      result.put(
+          "checks",
+          StageChecks.run(
+              workspace.path(),
+              verification.checks(),
+              verification.baseCommit(),
+              tests,
+              (command, index) ->
+                  runCheckCommand(agentRunId, verification, workspace, command, index)));
+    }
+  }
+
+  /**
+   * El comando de validación del repositorio y sus informes JUnit. Devuelve {@code null} si no se
+   * pudo lanzar (el error queda en {@code result}).
+   */
+  private StageChecks.TestsRun runValidation(
+      UUID agentRunId,
+      RunVerification verification,
+      Workspace workspace,
+      Map<String, Object> result)
+      throws IOException, InterruptedException {
+    UUID id = verification.verificationRunId();
     Instant since = Instant.now().minusSeconds(1);
     Path log = logs.resolve("verification-" + id + ".log");
-    SupervisedProcess process;
+    Shell shell;
     try {
-      // stderr al mismo sitio que stdout: la salida se guarda entera, en orden.
-      process =
-          supervisor.start(
-              List.of("sh", "-c", "exec 2>&1\n" + verification.command()),
-              workspace.path(),
-              providers.commandEnvironment(runnerEnv, null),
-              log,
-              line -> {});
+      shell = shell(id, verification.command(), workspace, log, verification.timeout());
     } catch (IOException e) {
       result.put(ERROR, "No se pudo ejecutar el comando de verificación: " + e.getMessage());
-      return;
+      return null;
     }
-    verifications.put(id, process);
-    journal.processStarted(id, process.pid(), process.startedAt());
-    java.util.concurrent.atomic.AtomicBoolean timedOut =
-        new java.util.concurrent.atomic.AtomicBoolean();
-    ScheduledFuture<?> deadline =
-        timer.schedule(
-            () -> {
-              timedOut.set(true);
-              process.terminate(cancelGrace);
-            },
-            verification.timeout().toMillis(),
-            TimeUnit.MILLISECONDS);
-    ProcessExit exit;
-    try {
-      exit = process.awaitExit(cancelGrace);
-    } finally {
-      deadline.cancel(false);
-      verifications.remove(id);
+    result.put(EXIT_CODE, shell.exit().exitCode());
+    if (shell.exit().signal() != null) {
+      result.put("signal", shell.exit().signal());
     }
-    result.put(EXIT_CODE, exit.exitCode());
-    if (exit.signal() != null) {
-      result.put("signal", exit.signal());
-    }
-    if (timedOut.get()) {
+    // En la verificación de una fase, el tiempo agotado es el motivo del check `tests`.
+    if (shell.timedOut() && !verification.hasChecks()) {
       result.put(ERROR, "Se agotó el tiempo máximo (" + verification.timeout() + ")");
     }
 
@@ -784,7 +796,7 @@ public final class AgentExecutor implements AutoCloseable {
                   "verification.log",
                   TEXT,
                   log,
-                  Map.of(EXIT_CODE, exit.exitCode())));
+                  Map.of(EXIT_CODE, shell.exit().exitCode())));
     }
     if (tests.found() || !tests.unreadable().isEmpty()) {
       artifact(
@@ -799,6 +811,75 @@ public final class AgentExecutor implements AutoCloseable {
                   JSON_TYPE,
                   JSON.writeValueAsBytes(tests.toMap()),
                   tests.totals()));
+    }
+    return new StageChecks.TestsRun(
+        true, shell.exit().exitCode(), shell.timedOut(), tests.found() ? tests.totals() : null);
+  }
+
+  /** Un check {@code command}: su salida se sube como {@code check-<n>.log}. */
+  private StageChecks.CommandRun runCheckCommand(
+      UUID agentRunId, RunVerification verification, Workspace workspace, String command, int index)
+      throws InterruptedException {
+    UUID id = verification.verificationRunId();
+    String name = "check-" + (index + 1) + ".log";
+    Path log = logs.resolve("verification-" + id + "-" + name);
+    Shell shell;
+    try {
+      shell = shell(id, command, workspace, log, verification.timeout());
+    } catch (IOException e) {
+      return new StageChecks.CommandRun(
+          null, false, "No se pudo ejecutar `" + command + "`: " + e.getMessage());
+    }
+    if (Files.exists(log)) {
+      artifact(
+          agentRunId,
+          "VERIFICATION_LOG",
+          () ->
+              spool.addFile(
+                  agentRunId,
+                  id,
+                  ArtifactType.VERIFICATION_LOG,
+                  name,
+                  TEXT,
+                  log,
+                  Map.of(EXIT_CODE, shell.exit().exitCode(), "command", command)));
+    }
+    return new StageChecks.CommandRun(shell.exit().exitCode(), shell.timedOut(), null);
+  }
+
+  /** Cómo terminó un comando de una verificación. */
+  private record Shell(ProcessExit exit, boolean timedOut) {}
+
+  /**
+   * Ejecuta {@code command} con {@code sh -c} en el worktree, con el entorno de los comandos, la
+   * salida (stdout y stderr, en orden) en {@code log} y {@code timeout} como tiempo máximo.
+   */
+  private Shell shell(UUID id, String command, Workspace workspace, Path log, Duration timeout)
+      throws IOException, InterruptedException {
+    SupervisedProcess process =
+        supervisor.start(
+            List.of("sh", "-c", "exec 2>&1\n" + command),
+            workspace.path(),
+            providers.commandEnvironment(runnerEnv, null),
+            log,
+            line -> {});
+    verifications.put(id, process);
+    journal.processStarted(id, process.pid(), process.startedAt());
+    java.util.concurrent.atomic.AtomicBoolean timedOut =
+        new java.util.concurrent.atomic.AtomicBoolean();
+    ScheduledFuture<?> deadline =
+        timer.schedule(
+            () -> {
+              timedOut.set(true);
+              process.terminate(cancelGrace);
+            },
+            timeout.toMillis(),
+            TimeUnit.MILLISECONDS);
+    try {
+      return new Shell(process.awaitExit(cancelGrace), timedOut.get());
+    } finally {
+      deadline.cancel(false);
+      verifications.remove(id);
     }
   }
 

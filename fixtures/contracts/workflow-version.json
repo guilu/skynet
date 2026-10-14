@@ -4,7 +4,7 @@
   "key" : "revisar-y-corregir",
   "version" : 2,
   "status" : "VALIDATED",
-  "sourceYaml" : "id: revisar-y-corregir\nversion: 2\nname: Revisar y corregir\ndescription: Un agente revisa el cambio y otro corrige lo que encuentre.\n\ninputs:\n  foco:\n    type: string\n    required: false\n    default: seguridad\n    description: En qué fijarse.\n\nagents:\n  reviewer:\n    description: Revisor exigente.\n    prompt: |\n      Revisa {{workItem.key}} ({{workItem.title}}) poniendo el foco en {{inputs.foco}}.\n    tools: [Read, Grep, Glob]\n    permissionMode: dontAsk\n    model: claude-haiku-4-5\n    limits:\n      maxTurns: 30\n      maxBudgetUsd: 1.5\n      timeoutMinutes: 20\n\nstages:\n  - id: review\n    type: agent\n    agent: reviewer\n    outputSchema:\n      type: object\n      properties:\n        summary:\n          type: string\n  - id: fix\n    type: agent\n    prompt: \"Corrige lo que encontró la revisión: {{stages.review.output.summary}}\"\n    dependsOn: [review]\n  - id: verify\n    type: verification\n    dependsOn: [\"fix?\"]\n",
+  "sourceYaml" : "id: revisar-y-corregir\nversion: 2\nname: Revisar y corregir\ndescription: Un agente revisa el cambio y otro corrige lo que encuentre.\n\ninputs:\n  foco:\n    type: string\n    required: false\n    default: seguridad\n    description: En qué fijarse.\n\nagents:\n  reviewer:\n    description: Revisor exigente.\n    prompt: |\n      Revisa {{workItem.key}} ({{workItem.title}}) poniendo el foco en {{inputs.foco}}.\n    tools: [Read, Grep, Glob]\n    permissionMode: dontAsk\n    model: claude-haiku-4-5\n    limits:\n      maxTurns: 30\n      maxBudgetUsd: 1.5\n      timeoutMinutes: 20\n\nstages:\n  - id: review\n    type: agent\n    agent: reviewer\n    outputSchema:\n      type: object\n      properties:\n        summary:\n          type: string\n  - id: fix\n    type: agent\n    prompt: \"Corrige lo que encontró la revisión: {{stages.review.output.summary}}\"\n    dependsOn: [review]\n  - id: verify\n    type: verification\n    dependsOn: [\"fix?\"]\n    artifacts: [docs/review.md]\n    checks: [tests, scope, {command: npm run lint}]\n    scope: [\"src/**\", \"docs/**\"]\n    retry: {attempts: 2}\n",
   "revision" : 3,
   "createdAt" : "2026-10-05T09:02:00Z",
   "updatedAt" : "2026-10-05T09:03:00Z",
@@ -15,10 +15,10 @@
     "publishable" : false,
     "problems" : [ {
       "severity" : "UNSUPPORTED",
-      "path" : "stages.verify.type",
-      "line" : 40,
-      "column" : 11,
-      "message" : "El tipo `verification` todavía no se ejecuta: llega en W4"
+      "path" : "stages.verify.retry",
+      "line" : 45,
+      "column" : 5,
+      "message" : "`retry` todavía no se usa: llega en W6"
     } ]
   },
   "definition" : {
@@ -65,7 +65,8 @@
           }
         }
       },
-      "outputSchemaPath" : null
+      "outputSchemaPath" : null,
+      "checks" : [ ]
     }, {
       "id" : "fix",
       "name" : null,
@@ -82,7 +83,8 @@
       "children" : [ ],
       "condition" : null,
       "outputSchema" : null,
-      "outputSchemaPath" : null
+      "outputSchemaPath" : null,
+      "checks" : [ ]
     }, {
       "id" : "verify",
       "name" : null,
@@ -99,7 +101,24 @@
       "children" : [ ],
       "condition" : null,
       "outputSchema" : null,
-      "outputSchemaPath" : null
+      "outputSchemaPath" : null,
+      "checks" : [ {
+        "name" : "artifacts",
+        "command" : null,
+        "paths" : [ "docs/review.md" ]
+      }, {
+        "name" : "tests",
+        "command" : null,
+        "paths" : [ ]
+      }, {
+        "name" : "scope",
+        "command" : null,
+        "paths" : [ "src/**", "docs/**" ]
+      }, {
+        "name" : "command",
+        "command" : "npm run lint",
+        "paths" : [ ]
+      } ]
     } ]
   }
 }

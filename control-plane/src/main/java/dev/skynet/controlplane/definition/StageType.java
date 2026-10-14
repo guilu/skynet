@@ -13,7 +13,7 @@ public enum StageType {
   COMMAND("command", null),
   PARALLEL("parallel", null),
   CONDITIONAL("conditional", null),
-  VERIFICATION("verification", "W4"),
+  VERIFICATION("verification", null),
   HUMAN_APPROVAL("human-approval", "W5"),
   GITHUB_PR("github-pr", "S2"),
   GITHUB_CHECK("github-check", "S2"),
@@ -37,15 +37,20 @@ public enum StageType {
 
   /** Si el motor ya ejecuta fases de este tipo. */
   public boolean executable() {
-    return this == AGENT || this == COMMAND || this == PARALLEL || this == CONDITIONAL;
+    return this == AGENT
+        || this == COMMAND
+        || this == PARALLEL
+        || this == CONDITIONAL
+        || this == VERIFICATION;
   }
 
   /**
    * Si la fase deja un worktree que las siguientes pueden continuar: el suyo en una {@code agent} o
-   * {@code command}, el que heredó (sin los cambios de sus hijos) en una {@code parallel}.
+   * {@code command}, el que heredó (sin los cambios de sus hijos) en una {@code parallel} y el que
+   * comprobó en una {@code verification}.
    */
   public boolean hasWorkspace() {
-    return this == AGENT || this == COMMAND || this == PARALLEL;
+    return this == AGENT || this == COMMAND || this == PARALLEL || this == VERIFICATION;
   }
 
   /** Hito en el que se podrá ejecutar, o {@code null} si todavía no está planificado. */

@@ -71,6 +71,7 @@ public class RunService {
   private final WorkflowDefinitions definitions;
   private final ObjectMapper json;
   private final ApplicationEventPublisher publisher;
+  private final Verifications verifications;
 
   RunService(
       WorkflowRunRepository workflowRuns,
@@ -86,7 +87,8 @@ public class RunService {
       AgentQueue agentQueue,
       WorkflowDefinitions definitions,
       ObjectMapper json,
-      ApplicationEventPublisher publisher) {
+      ApplicationEventPublisher publisher,
+      Verifications verifications) {
     this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
     this.agentRuns = agentRuns;
@@ -101,6 +103,7 @@ public class RunService {
     this.definitions = definitions;
     this.json = json;
     this.publisher = publisher;
+    this.verifications = verifications;
   }
 
   /**
@@ -452,8 +455,16 @@ public class RunService {
     }
   }
 
-  /** Un comando no tiene sesión que continuar, y reintentar una fase llega con W6. */
+  /**
+   * Un comando o una fase {@code verification} no tienen sesión que continuar, y reintentar una
+   * fase llega con W6.
+   */
   private static void requireAgent(AgentRun agent) {
+    if (agent.isVerification()) {
+      throw new ConflictException(
+          "Es una fase verification, no un agente: no tiene conversación que continuar ni se"
+              + " reintenta por separado");
+    }
     if (agent.isCommand()) {
       throw new ConflictException(
           "Es un comando, no un agente: no tiene conversación que continuar ni se reintenta"
@@ -586,12 +597,16 @@ public class RunService {
     WorkflowRun run = workflowRuns.findById(stage.getWorkflowRunId()).orElseThrow();
     Instant now = time.now();
 
-    if (agent.getStatus() == AgentObservableStatus.QUEUED) {
+    boolean verifying = agent.isVerification() && !agent.getStatus().isTerminal();
+    if (agent.getStatus() == AgentObservableStatus.QUEUED || verifying) {
+      // Una fase verification no tiene proceso en el runner: se cancela en el acto.
       agent =
           transitions.agent(
               agent, AgentObservableStatus.CANCELLED, run.getId(), "cancelled-by-user", now);
       transitions.finishStage(stage, now);
-      publisher.publishEvent(new AgentRunWithdrawn(agent.getId()));
+      if (!verifying) {
+        publisher.publishEvent(new AgentRunWithdrawn(agent.getId()));
+      }
       publisher.publishEvent(new WorkflowRunChanged(run.getId()));
       return agent;
     }
@@ -650,6 +665,10 @@ public class RunService {
         transitions.agent(
             agent, AgentObservableStatus.CANCELLED, stage.getWorkflowRunId(), reason, now);
         publisher.publishEvent(new AgentRunWithdrawn(agent.getId()));
+      } else if (agent.isVerification() && !agent.getStatus().isTerminal()) {
+        // Una fase verification no tiene proceso en el runner: se cancela en el acto.
+        transitions.agent(
+            agent, AgentObservableStatus.CANCELLED, stage.getWorkflowRunId(), reason, now);
       } else if (!agent.getStatus().isTerminal()) {
         running = true;
         if (agent.requestCancel(now)) {
@@ -668,10 +687,13 @@ public class RunService {
     if (running) {
       return false;
     }
-    // Si un hijo de una fase parallel ya había fallado, la fase falla; si no, se cancela.
+    // Si un hijo de una fase parallel ya había fallado (o no pasó su verificación), la fase falla;
+    // si no, se cancela.
     List<AgentRun> agents = agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
     if (!agents.isEmpty() && RunTransitions.outcome(agents) == AgentObservableStatus.FAILED) {
       transitions.finishStage(stage, now);
+    } else if (verifications.stageFailed(stage.getId())) {
+      transitions.advanceStage(stage, StageStatus.FAILED, "verification-failed", now);
     } else {
       transitions.advanceStage(stage, StageStatus.CANCELLED, reason, now);
     }

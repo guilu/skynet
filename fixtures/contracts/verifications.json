@@ -16,5 +16,33 @@
   "createdAt" : "2026-10-05T09:00:43Z",
   "startedAt" : "2026-10-05T09:00:44Z",
   "finishedAt" : "2026-10-05T09:00:58Z",
+  "stageRunId" : null,
+  "checks" : [ ],
+  "live" : false
+}, {
+  "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a20",
+  "agentRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a06",
+  "trigger" : "STAGE",
+  "status" : "FAILED",
+  "command" : null,
+  "exitCode" : null,
+  "signal" : null,
+  "error" : null,
+  "tests" : null,
+  "createdAt" : "2026-10-05T09:00:43Z",
+  "startedAt" : "2026-10-05T09:00:44Z",
+  "finishedAt" : "2026-10-05T09:00:50Z",
+  "stageRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a05",
+  "checks" : [ {
+    "name" : "artifacts",
+    "target" : "docs/spec.md",
+    "passed" : false,
+    "reason" : "`docs/spec.md` no existe"
+  }, {
+    "name" : "diff",
+    "target" : null,
+    "passed" : true,
+    "reason" : null
+  } ],
   "live" : false
 } ]

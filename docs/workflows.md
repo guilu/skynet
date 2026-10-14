@@ -59,7 +59,7 @@ stages:
 - Al lanzar, lo que pide un agente se recorta a la política del repositorio: solo las herramientas que el repositorio permite (`Bash(git:*)` cabe en `Bash`, al revés no), su modo de permisos solo si no es más permisivo (`plan` < `default`/`dontAsk` < `acceptEdits`) y sus límites rebajados a los del repositorio. Lo que el agente no fija sale de la política y, los límites, de los del lanzamiento.
 
 **`stages[]`:**
-- `id` (obligatorio, único) y `type` (obligatorio): `agent`, `command`, `parallel` o `conditional` (los demás tipos aún no se ejecutan, ver abajo).
+- `id` (obligatorio, único) y `type` (obligatorio): `agent`, `command`, `parallel`, `conditional` o `verification` (los demás tipos aún no se ejecutan, ver abajo).
 - `agent`: un agente de `agents`. Sin él, la fase usa la política del repositorio.
 - `prompt`: el de la fase; si falta, el del agente. Uno de los dos tiene que existir.
 - `dependsOn`: fases que tienen que terminar antes. Con `?` al final (`plan?`) es opcional: también vale si esa fase se omite. Entre corchetes va entre comillas (`dependsOn: ["plan?"]`), porque YAML lee `?` como otra cosa.
@@ -68,6 +68,7 @@ stages:
 - `command`: solo en las fases `type: command`, y obligatorio en ellas. Ver abajo.
 - `children`: solo en las fases `type: parallel`, y obligatorio en ellas. Ver abajo.
 - `condition`: la fase solo se ejecuta si es verdadera; si es falsa, se omite. Ver «Condiciones».
+- `artifacts`, `checks` y `scope`: lo que Skynet comprueba en el worktree de la fase antes de darla por buena. Ver «Verificación de una fase».
 - `outputSchema`: solo en las fases `type: agent`. La salida estructurada que devuelve la fase, y manda sobre el `output` de su agente, así que un mismo agente sirve en fases con salidas distintas. Es un JSON Schema en línea, como `output`, o la ruta de un fichero del repositorio (`outputSchema: schemas/spec.json`). Ver «Salida de una fase en un fichero».
 
 **Fases `command`:** ejecutan un comando de shell en lugar de un agente, p. ej. los tests después de implementar:
@@ -181,13 +182,51 @@ stages:
 - Tiene que ser JSON, el schema de un objeto (`"type": "object"`) con sus campos en `properties`. Si no existe o no lo es, la invocación falla con el motivo, p. ej. «No existe `schemas/spec.json` en el worktree».
 - Al publicar no se conocen sus campos (el repositorio está en el runner): las condiciones y los prompts que los leen no se comprueban hasta ejecutar.
 
+**Verificación de una fase.** Lo que dice un agente al terminar es lo que *declara*; lo que Skynet comprueba en su worktree es lo que cuenta. Una fase `agent`, `command` o `parallel` puede pedir comprobaciones:
+
+```yaml
+  - id: spec
+    type: agent
+    agent: analista
+    artifacts: [docs/spec.md]           # tienen que existir en el worktree
+    checks: [diff, commit, scope, tests, {command: npm run lint}]
+    scope: ["docs/**", "openspec/**"]   # lo que se puede cambiar
+```
+
+- `artifacts`: rutas o globs del repositorio (`docs/*.md`, `openspec/**/*.md`). Cada uno tiene que encontrar al menos un fichero; si no, «`docs/spec.md` no existe».
+- `checks`, del catálogo cerrado:
+  - `tests`: el comando de validación del repositorio termina con código 0 y sin tests fallidos. Sin comando configurado, no pasa.
+  - `diff`: hay cambios respecto al inicio de la fase (confirmados o no).
+  - `commit`: hay commits nuevos desde el inicio de la fase y nada sin confirmar.
+  - `scope`: todo lo que cambió está dentro de la lista `scope` (obligatoria con este check; una `scope` sin el check es un aviso).
+  - `{command: <cmd>}`: el comando termina con código 0, con `sh -c` en el worktree y el tiempo máximo de las verificaciones. Sin variables `{{...}}`, como las fases `command`. Su salida queda como artefacto (`check-1.log`).
+- Las rutas no pueden salir del repositorio (ni `/` al principio ni `..`).
+- **Cuándo:** cuando el agente termina bien, la fase **sigue en curso** («Verificando») mientras el runner comprueba su worktree; solo si pasan todas termina bien y arranca la siguiente. Si alguna no pasa, la fase falla con el motivo de cada una y se aplica el fail-fast. Corregirla llega en W5/W6.
+- «El inicio de la fase» es el commit con el que su agente encontró el worktree.
+- En una fase `parallel`, cada hijo se comprueba en su propio worktree; si uno no pasa, la fase falla.
+- Una fase con comprobaciones no lleva además la verificación automática del repositorio (M5): con `tests` ya la incluye; sin él, en una fase `agent` o `parallel` el comando del repositorio se ejecuta igual pero solo informa.
+- Cada comprobación deja `stage.verification.started` y `stage.verification.completed` (con el resultado de cada check), y el resultado es una verificación de la invocación con origen `STAGE`.
+
+**Fases `verification`.** No ejecutan nada: comprueban el worktree que heredan de la fase de la que dependen, p. ej. pasar los tests después de un agente sin darle a este las comprobaciones:
+
+```yaml
+  - id: verify
+    type: verification
+    dependsOn: [implement]
+    checks: [tests, commit]
+```
+
+- Necesitan `artifacts` o `checks`, y una dependencia con worktree (`agent`, `command` o `parallel`); no admiten `agent`, `prompt`, `command`, `children`, `outputSchema` ni `workspace: isolated-worktree`.
+- `diff`, `commit` y `scope` miden desde el commit con el que se creó el worktree.
+- En la ejecución, su única invocación tiene proveedor `verification`: no arranca ningún proceso, termina bien si pasan las comprobaciones y falla con los motivos si no. No se continúa ni se reintenta por separado.
+- La fase siguiente continúa el mismo worktree.
+
 ## Lo que aún no se ejecuta
 
 El YAML admite ya todo §11 para poder escribir los workflows de la especificación, pero solo se publica un workflow que el motor sabe ejecutar. Lo demás sale como problema `UNSUPPORTED` con el hito en el que llega:
 
 | Qué | Hito |
 |---|---|
-| Fase `verification` y `artifacts` | W4 |
 | Fase `human-approval` | W5 |
 | `retry` y `timeout` | W6 |
 | Fases `github-pr`, `github-check`, `github-merge` y `merge` | S2 |
@@ -213,7 +252,7 @@ Una ejecución se lanza sobre un trabajo y un repositorio con una versión publi
 La ejecución nace `RUNNING` con todas sus fases en `PENDING` (`stage.pending`, con sus dependencias) y el **motor** la hace avanzar:
 
 - Una fase pasa a `READY` (`stage.ready`) cuando todas sus dependencias han terminado bien; una opcional (`plan?`) también vale si se omitió. Si se omitió una que no es opcional, la fase también se omite (`stage.skipped`).
-- Una fase lista se arranca: se renderiza su prompt, se calcula lo que se le permite a su agente y se pone en cola. Varias fases listas a la vez se ejecutan en paralelo.
+- Una fase lista se arranca: se renderiza su prompt, se calcula lo que se le permite a su agente y se pone en cola. Varias fases listas a la vez se ejecutan en paralelo. Una fase con comprobaciones no termina hasta que pasan (ver «Verificación de una fase»).
 - Con `workspace: inherit`, la fase continúa el worktree de `workspaceFrom` o, si no, el de su única dependencia con worktree, siempre que haya terminado bien: sesión nueva, mismos ficheros, mismo runner. Si en ese worktree hay algo en curso (la verificación automática del agente anterior), la fase espera en `READY` y arranca cuando termina.
 - Si una fase no puede arrancar (el repositorio o el trabajo se archivaron, el worktree se eliminó, el prompt queda vacío) falla con `stage.start.failed` y el motivo.
 - **Fail-fast:** si una fase (o un hijo de una fase `parallel`) falla o se cancela, las que no han empezado se cancelan y a los agentes en marcha se les ordena terminar; la ejecución termina `FAILED` (o `CANCELLED`) cuando todas han acabado. Si todas terminan bien u omitidas, `SUCCEEDED`.

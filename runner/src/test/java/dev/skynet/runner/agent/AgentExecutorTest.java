@@ -12,6 +12,7 @@ import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerCommandType;
 import dev.skynet.protocol.runner.StartAgent;
+import dev.skynet.protocol.runner.VerificationCheck;
 import dev.skynet.protocol.runner.WorkspaceRef;
 import dev.skynet.runner.TestAgents;
 import dev.skynet.runner.TestRepos;
@@ -888,6 +889,64 @@ class AgentExecutorTest {
 
     executor.cancel(running);
     awaitExit(running);
+  }
+
+  @Test
+  void aStageVerificationRunsItsChecksWithoutTheRepositoryCommand() throws Exception {
+    UUID finished = UUID.randomUUID();
+    executor("01-simple-text").start(TestAgents.start(finished, repo.toString(), null));
+    awaitExit(finished);
+    Map<String, Object> ready = eventsOf(finished).getFirst().payload();
+    Path worktree = Path.of((String) ready.get("path"));
+    UUID agent = UUID.randomUUID();
+    RunnerCommand verify =
+        RunnerCommand.verify(
+            UUID.randomUUID(),
+            agent,
+            Instant.now(),
+            new RunVerification(
+                UUID.randomUUID(),
+                worktree.toString(),
+                null,
+                List.of(),
+                Duration.ofSeconds(30),
+                List.of(
+                    VerificationCheck.withPaths("artifacts", List.of("calc.py")),
+                    VerificationCheck.named("diff"),
+                    VerificationCheck.command("echo comprobado; test -f calc.py")),
+                (String) ready.get("baseCommit")));
+
+    executor.verify(verify);
+    NormalizedEvent completed = awaitVerification(agent);
+
+    assertThat(eventsOf(agent).getFirst().payload())
+        .containsEntry("checks", List.of("artifacts", "diff", "command"))
+        .doesNotContainKey("command");
+    assertThat(completed.payload())
+        .containsEntry(
+            "checks",
+            List.of(
+                Map.of("name", "artifacts", "target", "calc.py", "passed", true),
+                Map.of(
+                    "name",
+                    "diff",
+                    "passed",
+                    false,
+                    "reason",
+                    "No hay cambios respecto al inicio de la fase"),
+                Map.of(
+                    "name",
+                    "command",
+                    "target",
+                    "echo comprobado; test -f calc.py",
+                    "passed",
+                    true)))
+        .doesNotContainKeys("error", "exitCode");
+    Map<ArtifactType, Journal.PendingArtifact> artifacts = artifactsOf(agent);
+    assertThat(artifacts).containsOnlyKeys(ArtifactType.VERIFICATION_LOG);
+    assertThat(artifacts.get(ArtifactType.VERIFICATION_LOG).upload().name())
+        .isEqualTo("check-1.log");
+    assertThat(artifacts.get(ArtifactType.VERIFICATION_LOG).file()).hasContent("comprobado");
   }
 
   /** Worktree de una invocación ya terminada. */
