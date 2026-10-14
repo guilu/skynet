@@ -1,7 +1,12 @@
 package dev.skynet.controlplane.definition;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Un workflow ya leído del YAML. Solo existe si el documento tiene la forma básica (una clave y
@@ -33,5 +38,46 @@ public record WorkflowDefinition(
 
   public Optional<StageDefinition> stage(String id) {
     return stages.stream().filter(s -> s.id().equals(id)).findFirst();
+  }
+
+  private static final Pattern VARIABLE = Pattern.compile("\\{\\{\\s*(stages\\.[^{}\\s]+)\\s*}}");
+
+  /**
+   * Los datos de otras fases que lee el prompt de la fase {@code id} (o los de sus hijos), sin
+   * {@code stages.}: {@code spec.output.summary}, {@code tests.exitCode}. En el orden en que
+   * aparecen y sin repetir.
+   */
+  public List<String> reads(String id) {
+    StageDefinition stage = stage(id).orElse(null);
+    if (stage == null) {
+      return List.of();
+    }
+    List<String> prompts = new ArrayList<>();
+    if (stage.children().isEmpty()) {
+      prompts.add(promptOf(stage.prompt(), stage.agent()));
+    } else {
+      stage.children().forEach(c -> prompts.add(promptOf(c.prompt(), c.agent())));
+    }
+    Set<String> reads = new LinkedHashSet<>();
+    for (String prompt : prompts) {
+      if (prompt == null) {
+        continue;
+      }
+      Matcher matcher = VARIABLE.matcher(prompt);
+      while (matcher.find()) {
+        String variable = matcher.group(1);
+        if (Condition.promptPath(variable) != null) {
+          reads.add(variable.substring("stages.".length()));
+        }
+      }
+    }
+    return List.copyOf(reads);
+  }
+
+  private String promptOf(String prompt, String agent) {
+    if (prompt != null || agent == null) {
+      return prompt;
+    }
+    return agent(agent).map(AgentDefinition::prompt).orElse(null);
   }
 }

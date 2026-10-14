@@ -197,7 +197,13 @@ function VersionPanel({
   const dirty = text !== saved.sourceYaml
   const isDraft = saved.status !== 'PUBLISHED'
   const canPublish = editable && !dirty && saved.validation.publishable
-  const commands = (saved.definition?.stages ?? []).filter((s) => s.type === 'command')
+  const stages = saved.definition?.stages ?? []
+  // Los comandos de las fases `command` y de sus `checks`, con la fase que los ejecuta.
+  const commands = stages.flatMap((s) => [
+    ...(s.type === 'command' && s.command ? [{ stage: s.id, command: s.command }] : []),
+    ...s.checks.filter((c) => c.command).map((c) => ({ stage: s.id, command: c.command! })),
+  ])
+  const testing = stages.filter((s) => s.checks.some((c) => c.name === 'tests')).map((s) => s.id)
   const publishHint = !isDraft
     ? null
     : dirty
@@ -270,13 +276,26 @@ function VersionPanel({
                 worktree, con el entorno que el repositorio permite a sus agentes:
               </p>
               <ul className="definition-list">
-                {commands.map((s) => (
-                  <li key={s.id}>
-                    <code>{s.id}</code> <code>{s.command}</code>
+                {commands.map((c) => (
+                  <li key={`${c.stage}.${c.command}`}>
+                    <code>{c.stage}</code> <code>{c.command}</code>
                   </li>
                 ))}
               </ul>
             </section>
+          )}
+          {testing.length > 0 && (
+            <p>
+              {testing.length === 1 ? 'La fase' : 'Las fases'}{' '}
+              {testing.map((id, i) => (
+                <span key={id}>
+                  {i > 0 && ', '}
+                  <code>{id}</code>
+                </span>
+              ))}{' '}
+              {testing.length === 1 ? 'pasa' : 'pasan'} el comando de verificación del repositorio,
+              que tiene que estar configurado.
+            </p>
           )}
           {saved.validation.problems.length > 0 && (
             <>

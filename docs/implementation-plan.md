@@ -530,6 +530,14 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito W4 (resultado estructurado), planificado el 2026-10-13:** W4-A salida de fase y datos entre fases, W4-B verificación de fase (`artifacts`, `checks`) y nodo `verification`, W4-C verificación en la web, plantilla «Especificar, planificar e implementar» y E2E.
 
+**Implementado (W4-C), verificación en la web y E2E:**
+
+- La vista de la ejecución lleva, en cada fase, sus `checks`, los datos de otras fases que lee su prompt (`reads`, p. ej. `spec.output.summary`) y la última verificación de fase de cada agente (`verifications`). Los eventos `stage.verification.*` hacen que la web relea la ejecución.
+- Progreso: la fase dice «Verificando» mientras se comprueba y, si falla, «No pasó …» con el motivo; al abrirla, la lista de comprobaciones con ✓/✗/… y su motivo (en una `parallel`, la de todos los hijos) y «Recibe …». La pestaña **Verificación** enseña también la salida estructurada que declaró el agente.
+- Resumen del workflow con «Comprueba …» en cada fase; el aviso de publicar lista también los comandos de `checks` y las fases con `tests`.
+- Plantilla «Especificar, planificar e implementar» (`spec` con `outputSchema` y `artifacts: [openspec/proposal.md]`, `plan` con `{{stages.spec.output.summary}}`, `implement` con `checks: [tests, diff]`). E2E de aceptación (`web/e2e/spec.e2e.ts`): sin la propuesta, `spec` falla con «`openspec/proposal.md` no existe» y `plan` no arranca; con ella, `plan` recibe el resumen y la ejecución termina «Completada»; axe en la plantilla, la fase fallida y la pestaña Verificación.
+- **Hito W4 terminado.**
+
 **Implementado (W4-B), verificación de fase y nodo `verification`:**
 
 - YAML: `artifacts` (globs), `checks` del catálogo cerrado (`tests`, `diff`, `commit`, `scope`, `{command: <cmd>}`) y `scope` (globs) en las fases `agent`, `command`, `parallel` y `verification`. Se guardan como `StageDefinition.checks` (`VerificationCheck` en `protocol`), con los artefactos primero. `type: verification` deja de ser `UNSUPPORTED`: necesita qué comprobar y una dependencia con worktree.

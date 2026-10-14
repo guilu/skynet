@@ -3138,6 +3138,29 @@
     margin: calc(-1 * var(--space-1)) 0 var(--space-2);
   }
 
+  .stage-checks {
+    display: grid;
+    gap: 2px;
+    margin: 0 0 var(--space-2);
+    padding: 0;
+    list-style: none;
+  }
+
+  .stage-check-mark {
+    display: inline-block;
+    width: 1.2em;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .stage-check.passed .stage-check-mark {
+    color: var(--ok-ink);
+  }
+
+  .stage-check.failed .stage-check-mark {
+    color: var(--bad-ink);
+  }
+
   .step-agents {
     display: flex;
     flex-wrap: wrap;

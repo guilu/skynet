@@ -8,13 +8,15 @@ import { StatusBadge } from '../StatusBadge'
 import { agentOutcome } from './agentEvents'
 import { artifactOf, type TestReport } from './artifacts'
 import { useNow } from '../../useNow'
+import { JsonView } from './JsonView'
 import { LongText } from './LongText'
 import { Button } from '../ui/Button'
 import { LinesSkeleton } from '../ui/Skeleton'
 
 /**
- * Lo que declara el agente frente a lo que comprobó Skynet al ejecutar el comando de verificación
- * del repositorio en su worktree (ADR-0001 criterio 8).
+ * Lo que declara el agente (su respuesta y su salida estructurada) frente a lo que comprobó Skynet
+ * en su worktree: el comando de verificación del repositorio y, en una fase con comprobaciones,
+ * cada una con su motivo (ADR-0001 criterio 8).
  */
 export function VerificationTab({ agent, events }: { agent: AgentRun; events: StoredEvent[] }) {
   const queryClient = useQueryClient()
@@ -47,6 +49,12 @@ export function VerificationTab({ agent, events }: { agent: AgentRun; events: St
             <LongText text={result} />
           ) : (
             <p className="muted small">Sin respuesta final.</p>
+          )}
+          {agent.structuredOutput != null && (
+            <>
+              <h4>Salida declarada</h4>
+              <JsonView value={agent.structuredOutput} label="Salida declarada por el agente" />
+            </>
           )}
         </section>
         <section className="verify-card" aria-labelledby="verified-title">

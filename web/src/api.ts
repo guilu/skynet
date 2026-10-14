@@ -195,11 +195,17 @@ export interface StageRun {
   command: string | null
   /** Condición que decide si se ejecuta; null: siempre. */
   condition: string | null
+  /** Lo que Skynet comprueba en su worktree antes de darla por buena. */
+  checks: VerificationCheck[]
+  /** Datos de otras fases que lee su prompt, p. ej. `spec.output.summary`. */
+  reads: string[]
   status: StageStatus
   attempt: number
   startedAt: string | null
   finishedAt: string | null
   agents: AgentRun[]
+  /** La última verificación de fase de cada agente; con una en curso, la fase está «Verificando». */
+  verifications: VerificationResult[]
 }
 
 export interface RunTotals {

@@ -206,6 +206,8 @@ stages:
 - En una fase `parallel`, cada hijo se comprueba en su propio worktree; si uno no pasa, la fase falla.
 - Una fase con comprobaciones no lleva además la verificación automática del repositorio (M5): con `tests` ya la incluye; sin él, en una fase `agent` o `parallel` el comando del repositorio se ejecuta igual pero solo informa.
 - Cada comprobación deja `stage.verification.started` y `stage.verification.completed` (con el resultado de cada check), y el resultado es una verificación de la invocación con origen `STAGE`.
+- **En la web:** en el progreso de la ejecución, la fase dice «Verificando» mientras se comprueba y, si falla, qué no pasó («No pasó artifacts: `openspec/proposal.md` no existe»). Al abrirla se ve cada comprobación con ✓, ✗ y su motivo, y los datos de otras fases que lee su prompt («Recibe spec.output.summary»). La pestaña **Verificación** del agente pone lo comprobado junto a lo que declaró (su respuesta y su salida estructurada). El resumen del workflow enseña qué comprueba cada fase y, al publicar, se avisa de los comandos de `checks` y de las fases que pasan el comando de verificación del repositorio.
+- La plantilla **Especificar, planificar e implementar** es un ejemplo completo: `spec` deja `openspec/proposal.md` y devuelve un resumen, `plan` lo recibe en su prompt e `implement` solo termina bien con `checks: [tests, diff]`.
 
 **Fases `verification`.** No ejecutan nada: comprueban el worktree que heredan de la fase de la que dependen, p. ej. pasar los tests después de un agente sin darle a este las comprobaciones:
 

@@ -892,6 +892,19 @@ class DefinitionParserTest {
     StageDefinition externo = parsed.definition().stage("externo").orElseThrow();
     assertThat(externo.outputSchemaPath()).isEqualTo("schemas/externo.json");
     assertThat(externo.outputSchemaJson()).isEqualTo("{\"$ref\":\"schemas/externo.json\"}");
+
+    // Lo que lee cada prompt de otras fases, también el de su agente.
+    WorkflowDefinition definition = parsed.definition();
+    assertThat(definition.reads("plan")).containsExactly("spec.output.summary");
+    assertThat(definition.reads("resumen"))
+        .containsExactly(
+            "spec.output.risks",
+            "tests.status",
+            "tests.exitCode",
+            "review.revisor.output.hasBlockingFindings",
+            "externo.output.cualquiera");
+    assertThat(definition.reads("spec")).isEmpty();
+    assertThat(definition.reads("no-existe")).isEmpty();
   }
 
   @Test

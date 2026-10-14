@@ -110,6 +110,57 @@ const MULTI_PROVIDER_REVIEW = PARALLEL_REVIEW.replace(
   .replace(/( {2}seguridad:\n)/, '$1    provider: gemini\n')
   .replaceAll('    tools: [Read, Grep, Glob]\n    permissionMode: plan', '    permissionMode: plan')
 
+/**
+ * El tramo de especificación de §20 sin aprobación humana: la especificación deja su propuesta en
+ * el repositorio y la resume, el plan la recibe en su prompt y la implementación solo termina bien
+ * si pasan los tests y hay cambios. Lo comprueba Skynet en el worktree, no lo que diga el agente.
+ */
+const SPEC_PLAN_IMPLEMENT = `id: especificar-planificar-implementar
+name: Especificar, planificar e implementar
+description: Especifica el trabajo en openspec/proposal.md, planifica a partir del resumen e implementa con los tests en verde.
+
+agents:
+  analista:
+    prompt: |
+      Especifica {{workItem.key}}: {{workItem.title}}.
+
+      {{workItem.description}}
+
+      Escribe la propuesta en openspec/proposal.md (qué cambia, por qué y cómo se comprueba) y confírmala con un commit.
+      Devuelve un resumen de una o dos frases y los riesgos que veas.
+    permissionMode: acceptEdits
+  desarrollador:
+    prompt: Implementa {{workItem.key}} siguiendo openspec/tasks.md y confirma los cambios.
+    permissionMode: acceptEdits
+
+stages:
+  - id: spec
+    type: agent
+    agent: analista
+    outputSchema:
+      type: object
+      properties:
+        summary: {type: string}
+        risks: {type: array}
+    artifacts: [openspec/proposal.md]
+  - id: plan
+    type: agent
+    agent: desarrollador
+    dependsOn: [spec]
+    prompt: |
+      Planifica {{workItem.key}} a partir de su propuesta (openspec/proposal.md):
+      {{stages.spec.output.summary}}
+
+      Riesgos: {{stages.spec.output.risks}}
+
+      Escribe las tareas en openspec/tasks.md y confírmalas con un commit. No implementes nada todavía.
+  - id: implement
+    type: agent
+    agent: desarrollador
+    dependsOn: [plan]
+    checks: [tests, diff]
+`
+
 export const TEMPLATES: WorkflowTemplate[] = [
   {
     id: 'basico',
@@ -130,5 +181,12 @@ export const TEMPLATES: WorkflowTemplate[] = [
     description:
       'La revisión en paralelo con otros modelos: Codex revisa la calidad y Gemini la seguridad; el resto lo hace Claude Code.',
     yaml: MULTI_PROVIDER_REVIEW,
+  },
+  {
+    id: 'especificar-planificar-implementar',
+    name: 'Especificar, planificar e implementar',
+    description:
+      'Especifica en openspec/proposal.md, planifica a partir del resumen e implementa; Skynet comprueba que exista la propuesta y que pasen los tests.',
+    yaml: SPEC_PLAN_IMPLEMENT,
   },
 ]

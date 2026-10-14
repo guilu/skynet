@@ -32,6 +32,16 @@
     "type" : "agent",
     "command" : null,
     "condition" : null,
+    "checks" : [ {
+      "name" : "artifacts",
+      "command" : null,
+      "paths" : [ "docs/spec.md" ]
+    }, {
+      "name" : "diff",
+      "command" : null,
+      "paths" : [ ]
+    } ],
+    "reads" : [ "spec.output.summary" ],
     "status" : "SUCCEEDED",
     "attempt" : 1,
     "startedAt" : "2026-10-05T09:00:02Z",
@@ -76,6 +86,33 @@
       },
       "childKey" : null,
       "structuredOutput" : null
+    } ],
+    "verifications" : [ {
+      "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a20",
+      "agentRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a06",
+      "trigger" : "STAGE",
+      "status" : "PASSED",
+      "command" : null,
+      "exitCode" : null,
+      "signal" : null,
+      "error" : null,
+      "tests" : null,
+      "createdAt" : "2026-10-05T09:00:40Z",
+      "startedAt" : "2026-10-05T09:00:40Z",
+      "finishedAt" : "2026-10-05T09:00:42Z",
+      "stageRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a05",
+      "checks" : [ {
+        "name" : "artifacts",
+        "target" : "docs/spec.md",
+        "passed" : true,
+        "reason" : null
+      }, {
+        "name" : "diff",
+        "target" : null,
+        "passed" : true,
+        "reason" : null
+      } ],
+      "live" : false
     } ]
   } ]
 }
