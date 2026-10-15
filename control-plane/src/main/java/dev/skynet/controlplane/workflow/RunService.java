@@ -1169,6 +1169,8 @@ public class RunService {
     workItems
         .getAll(runs.stream().map(WorkflowRun::getWorkItemId).distinct().toList())
         .forEach(w -> items.put(w.getId(), w));
+    Map<UUID, List<VerificationResult>> stageChecks =
+        verifications.latestOfStages(stages.stream().map(StageRun::getId).toList());
     Map<UUID, PublishedDefinition> published = new HashMap<>();
     runs.stream()
         .map(WorkflowRun::getDefinitionId)
@@ -1192,15 +1194,14 @@ public class RunService {
                           s ->
                               StageRunView.of(
                                   s,
-                                  definition == null
-                                      ? null
-                                      : definition.definition().stage(s.getStageKey()).orElse(null),
+                                  definition == null ? null : definition.definition(),
                                   agents.stream()
                                       .filter(a -> a.getStageRunId().equals(s.getId()))
                                       .map(
                                           a ->
                                               AgentRunView.of(a, worktrees.get(a.getWorkspaceId())))
-                                      .toList()))
+                                      .toList(),
+                                  stageChecks.getOrDefault(s.getId(), List.of())))
                       .toList());
             })
         .toList();

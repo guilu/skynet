@@ -92,7 +92,7 @@ describe('Workflows', () => {
     expect(screen.getByRole('button', { name: 'Guardar' })).toBeDisabled()
     const summary = screen.getByRole('region', { name: 'Qué define' })
     expect(within(summary).getAllByRole('listitem')[2]).toHaveTextContent(
-      'verify verification · Depende de fix (opcional)',
+      'verify verification · Comprueba artifacts docs/review.md, tests, scope src/**, docs/**, command npm run lint · Depende de fix (opcional)',
     )
     expect(within(summary).getAllByRole('listitem')[0]).toHaveTextContent(
       'review agent · Agente: reviewer · Salida: summary',

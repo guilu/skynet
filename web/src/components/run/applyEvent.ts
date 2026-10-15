@@ -16,6 +16,9 @@ const STRUCTURAL = [
   'stage.skipped',
   'stage.start.failed',
   'agent.spawned',
+  // Las comprobaciones de una fase: su resultado solo lo da el backend.
+  'stage.verification.started',
+  'stage.verification.completed',
 ]
 const FINISHING = ['agent.result', 'agent.process.exited', 'workflow.status.changed']
 const WITH_USAGE = ['agent.message.received', 'agent.tool.started']

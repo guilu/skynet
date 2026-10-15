@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Run, StageRun, StageStatus } from '../../api'
-import { joinNames, stageNote } from './stageNotes'
+import type { Run, StageRun, StageStatus, VerificationResult } from '../../api'
+import { checkStates, joinNames, stageNote } from './stageNotes'
 
 function stage(
   stageKey: string,
@@ -23,6 +23,9 @@ function stage(
     startedAt: null,
     finishedAt: null,
     agents: Array.from({ length: agents }, () => ({}) as StageRun['agents'][number]),
+    checks: [],
+    reads: [],
+    verifications: [],
   }
 }
 
@@ -91,5 +94,52 @@ describe('stageNote', () => {
     const fix = stage('fix', 'SUCCEEDED', ['plan', 'tests'], 1)
     expect(stageNote(fix, run(fix))).toBe('Después de plan y tests')
     expect(stageNote(stage('solo', 'RUNNING', [], 1), run())).toBe('')
+  })
+
+  it('una fase con comprobaciones dice que verifica y, si falla, qué no pasó', () => {
+    const verification = (
+      live: boolean,
+      checks: VerificationResult['checks'],
+    ): VerificationResult =>
+      ({ live, status: live ? 'RUNNING' : 'FAILED', checks, error: null }) as VerificationResult
+    const spec: StageRun = {
+      ...stage('spec', 'RUNNING', [], 1),
+      checks: [
+        { name: 'artifacts', command: null, paths: ['docs/spec.md'] },
+        { name: 'diff', command: null, paths: [] },
+      ],
+    }
+    expect(stageNote(spec, run(spec))).toBe('')
+    expect(checkStates(spec).map((c) => c.state)).toEqual(['waiting', 'waiting'])
+
+    const verifying = { ...spec, verifications: [verification(true, [])] }
+    expect(checkStates(verifying).map((c) => c.state)).toEqual(['checking', 'checking'])
+    expect(stageNote(verifying, run(verifying))).toBe('Verificando: artifacts y diff')
+
+    const failed: StageRun = {
+      ...spec,
+      status: 'FAILED',
+      verifications: [
+        verification(false, [
+          {
+            name: 'artifacts',
+            target: 'docs/spec.md',
+            passed: false,
+            reason: '`docs/spec.md` no existe',
+          },
+          { name: 'diff', target: null, passed: true, reason: null },
+        ]),
+      ],
+    }
+    expect(stageNote(failed, run(failed))).toBe('No pasó artifacts: `docs/spec.md` no existe')
+    expect(checkStates(failed)).toEqual([
+      {
+        name: 'artifacts',
+        target: 'docs/spec.md',
+        state: 'failed',
+        reasons: ['`docs/spec.md` no existe'],
+      },
+      { name: 'diff', target: null, state: 'passed', reasons: [] },
+    ])
   })
 })

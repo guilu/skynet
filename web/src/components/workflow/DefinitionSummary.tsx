@@ -1,8 +1,14 @@
-import type { WorkflowModel } from '../../api'
+import type { VerificationCheck, WorkflowModel } from '../../api'
 import { providerName } from '../../format'
 
 const WORKSPACE = { INHERIT: 'Continúa el de su dependencia', ISOLATED: 'Uno nuevo' } as const
 const WITH_WORKSPACE = ['agent', 'command', 'parallel']
+
+/** Un check en una línea: `artifacts docs/spec.md`, `command npm run lint`, `diff`. */
+function checkText(check: VerificationCheck): string {
+  const target = check.command ?? check.paths.join(', ')
+  return target ? `${check.name} ${target}` : check.name
+}
 
 function workspaceLabel(stage: WorkflowModel['stages'][number]): string {
   if (!WITH_WORKSPACE.includes(stage.type)) return '—'
@@ -51,6 +57,17 @@ export function DefinitionSummary({ definition }: { definition: WorkflowModel })
                   <>
                     {' · Salida: '}
                     <code>{s.outputSchemaPath}</code>
+                  </>
+                )}
+                {s.checks.length > 0 && (
+                  <>
+                    {' · Comprueba '}
+                    {s.checks.map((c, i) => (
+                      <span key={`${c.name}.${i}`}>
+                        {i > 0 && ', '}
+                        <code>{checkText(c)}</code>
+                      </span>
+                    ))}
                   </>
                 )}
                 {s.condition && (

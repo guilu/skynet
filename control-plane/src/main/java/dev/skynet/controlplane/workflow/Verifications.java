@@ -85,6 +85,31 @@ class Verifications {
     return latest;
   }
 
+  /**
+   * La última verificación de fase de cada agente de {@code stageRunIds}, por fase y en el orden en
+   * que se crearon sus agentes.
+   */
+  Map<UUID, List<VerificationResult>> latestOfStages(List<UUID> stageRunIds) {
+    if (stageRunIds.isEmpty()) {
+      return Map.of();
+    }
+    Map<UUID, Map<UUID, VerificationResult>> latest = new LinkedHashMap<>();
+    jdbc.sql(
+            "SELECT * FROM verification_run WHERE stage_run_id IN (:ids)"
+                + " ORDER BY created_at ASC, id ASC")
+        .param("ids", stageRunIds)
+        .query(this::result)
+        .list()
+        .forEach(
+            v ->
+                latest
+                    .computeIfAbsent(v.stageRunId(), k -> new LinkedHashMap<>())
+                    .put(v.agentRunId(), v));
+    Map<UUID, List<VerificationResult>> byStage = new LinkedHashMap<>();
+    latest.forEach((stage, results) -> byStage.put(stage, List.copyOf(results.values())));
+    return byStage;
+  }
+
   /** Si alguna verificación de {@code stageRunId} ha terminado sin pasar. */
   boolean stageFailed(UUID stageRunId) {
     return jdbc.sql(

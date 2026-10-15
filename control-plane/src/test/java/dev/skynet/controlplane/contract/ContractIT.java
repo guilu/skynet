@@ -36,6 +36,7 @@ import dev.skynet.protocol.AgentProviderKind.Capability;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
 import dev.skynet.protocol.runner.ProviderInfo;
+import dev.skynet.protocol.runner.VerificationCheck;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -284,11 +285,34 @@ class ContractIT extends IntegrationTest {
               "agent",
               null,
               null,
+              List.of(
+                  VerificationCheck.withPaths("artifacts", List.of("docs/spec.md")),
+                  VerificationCheck.named("diff")),
+              List.of("spec.output.summary"),
               StageStatus.SUCCEEDED,
               1,
               at(2),
               at(42),
-              List.of(agent)),
+              List.of(agent),
+              List.of(
+                  new VerificationResult(
+                      STAGE_VERIFICATION,
+                      AGENT,
+                      "STAGE",
+                      "PASSED",
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      at(40),
+                      at(40),
+                      at(42),
+                      STAGE,
+                      List.of(
+                          new VerificationResult.CheckResult(
+                              "artifacts", "docs/spec.md", true, null),
+                          new VerificationResult.CheckResult("diff", null, true, null))))),
           agent);
     }
 
@@ -308,11 +332,14 @@ class ContractIT extends IntegrationTest {
               "agent",
               null,
               null,
+              List.of(),
+              List.of(),
               StageStatus.RUNNING,
               1,
               at(2),
               null,
-              List.of(agent)),
+              List.of(agent),
+              List.of()),
           agent);
     }
 

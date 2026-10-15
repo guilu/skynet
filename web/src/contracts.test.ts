@@ -130,6 +130,9 @@ const STAGE_RUN: Keys<StageRun> = {
   startedAt: true,
   finishedAt: true,
   agents: true,
+  checks: true,
+  reads: true,
+  verifications: true,
 }
 const RUN_TOTALS: Keys<RunTotals> = {
   inputTokens: true,
@@ -399,6 +402,11 @@ function expectRun(run: Run) {
   for (const stage of run.stages) {
     expectShape(stage, STAGE_RUN)
     stage.agents.forEach(expectAgent)
+    stage.checks.forEach((c) => expectShape(c, VERIFICATION_CHECK))
+    stage.verifications.forEach((v) => {
+      expectShape(v, VERIFICATION)
+      v.checks.forEach((c) => expectShape(c, CHECK_RESULT))
+    })
   }
 }
 

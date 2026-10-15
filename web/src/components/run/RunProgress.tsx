@@ -7,7 +7,7 @@ import { cn } from '../../lib/cn'
 import { StatusBadge } from '../StatusBadge'
 import { outputSummary } from './agentOutput'
 import { spanDuration, type Span } from './runSpans'
-import { stageNote } from './stageNotes'
+import { checkStates, isVerifying, stageNote, type CheckState } from './stageNotes'
 
 const ORIGIN: Record<Exclude<AgentRun['kind'], 'START'>, string> = {
   RESUME: 'reanudación del',
@@ -90,7 +90,8 @@ export function RunProgress({
                   </span>
                   <strong>{stage.name ?? stage.stageKey}</strong>
                   <small>
-                    {running?.currentTool ??
+                    {(isVerifying(stage) ? 'Verificando' : null) ??
+                      running?.currentTool ??
                       (span && span.start != null && stage.status !== 'SKIPPED'
                         ? formatDuration(spanDuration(span, now))
                         : statusLabel(stage.status))}
@@ -120,6 +121,18 @@ export function RunProgress({
             {stageNote(open, run) && (
               <p className="step-detail-note muted small">{stageNote(open, run)}</p>
             )}
+            {open.reads.length > 0 && (
+              <p className="muted small">
+                Recibe{' '}
+                {open.reads.map((r, i) => (
+                  <span key={r}>
+                    {i > 0 && ', '}
+                    <code>{r}</code>
+                  </span>
+                ))}
+              </p>
+            )}
+            {open.checks.length > 0 && <StageChecks checks={checkStates(open)} />}
             {open.agents.length === 0 ? (
               <p className="muted small">
                 {open.type === 'conditional'
@@ -175,6 +188,44 @@ export function RunProgress({
         <p className="muted small">Esta ejecución aún no tiene agentes.</p>
       )}
     </section>
+  )
+}
+
+const CHECK_MARK: Record<CheckState['state'], string> = {
+  waiting: '·',
+  checking: '…',
+  passed: '✓',
+  failed: '✗',
+}
+
+const CHECK_LABEL: Record<CheckState['state'], string> = {
+  waiting: 'sin comprobar',
+  checking: 'comprobando',
+  passed: 'pasa',
+  failed: 'no pasa',
+}
+
+/** Lo que Skynet comprueba en el worktree de la fase, con el resultado de cada comprobación. */
+function StageChecks({ checks }: { checks: CheckState[] }) {
+  return (
+    <ul className="stage-checks small" aria-label="Comprobaciones de la fase">
+      {checks.map((c, i) => (
+        <li key={`${c.name}.${i}`} className={cn('stage-check', c.state)}>
+          <span className="stage-check-mark" aria-hidden="true">
+            {CHECK_MARK[c.state]}
+          </span>{' '}
+          <strong>{c.name}</strong>
+          {c.target && (
+            <>
+              {' '}
+              <code>{c.target}</code>
+            </>
+          )}
+          <span className="visually-hidden">: {CHECK_LABEL[c.state]}</span>
+          {c.reasons.length > 0 && <span className="muted"> · {c.reasons.join('; ')}</span>}
+        </li>
+      ))}
+    </ul>
   )
 }
 

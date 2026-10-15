@@ -735,8 +735,17 @@ class WorkflowEngineIT extends IntegrationTest {
     assertThat(request.path("checks").get(0).path("paths").get(0).asString())
         .isEqualTo("docs/spec.md");
 
+    // La vista de la ejecución lleva las comprobaciones de la fase y su verificación en curso.
+    JsonNode specView = get("/api/workflow-runs/" + runId).path("stages").get(0);
+    assertThat(specView.path("checks")).hasSize(2);
+    assertThat(specView.path("verifications").get(0).path("live").asBoolean()).isTrue();
+
     verified(runner, verify, true);
     assertThat(stageStatuses(runId)).containsEntry("spec", "SUCCEEDED");
+    specView = get("/api/workflow-runs/" + runId).path("stages").get(0);
+    assertThat(specView.path("verifications").get(0).path("status").asString()).isEqualTo("PASSED");
+    assertThat(specView.path("verifications").get(0).path("checks").get(1).path("name").asString())
+        .isEqualTo("diff");
     JsonNode plan = runner.claim().getFirst();
     assertThat(plan.path("start").path("prompt").asString()).isEqualTo("Planifica");
     assertThat(plan.path("start").path("workspace").path("path").asString())
