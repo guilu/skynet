@@ -240,13 +240,19 @@ stages:
 ```
 
 - `action` (obligatoria) es lo que se pide aprobar. Admite las variables de un prompt, incluidas `{{stages…}}`, con las mismas comprobaciones al publicar.
-- `revise` es la fase `agent` (anterior a la puerta) cuyo agente recibirá el comentario al pedir cambios (W5-B). Sin `revise` ni una única dependencia `agent`, pedir cambios no se ofrece.
+- `revise` es la fase `agent` (anterior a la puerta) cuyo agente recibe el comentario al pedir cambios. Sin `revise` ni una única dependencia `agent`, pedir cambios responde 409.
 - No admite `agent`, `prompt`, `command`, `children`, `outputSchema` ni comprobaciones. Admite `condition`.
 - El worktree pasa sin tocarlo: la fase que depende de la puerta continúa el de la dependencia de la puerta, con las reglas de siempre (`workspaceFrom` si hay varias).
 - Al arrancar, la fase pasa a `WAITING_FOR_APPROVAL` y deja una **petición** con la acción ya resuelta, el riesgo y una foto de la evidencia: de dónde viene (proyecto, trabajo, ejecución, workflow y fase), lo que dejaron sus dependencias (salida estructurada, comprobaciones, cambios del worktree y artefactos de cada agente), el coste de la ejecución hasta ahora, lo que se permitirá a las fases que desbloquea y qué pasa con cada decisión. Mientras espera no ocupa ningún worker, y un reinicio del control plane no la toca.
-- **Aprobar** cierra la puerta bien y arrancan las que dependen de ella. **Rechazar** (con un comentario obligatorio, el motivo) la hace fallar y se aplica el fail-fast. **Comentar** solo añade el comentario. **Pedir cambios** llega en W5-B. Cancelar la ejecución cancela la petición.
+- **Aprobar** cierra la puerta bien y arrancan las que dependen de ella. **Rechazar** (con un comentario obligatorio, el motivo) la hace fallar y se aplica el fail-fast. **Comentar** solo añade el comentario. Cancelar la ejecución cancela la petición.
+- **Pedir cambios** (con un comentario obligatorio, qué cambiar) cierra la petición como `CHANGES_REQUESTED` y manda el comentario al agente de `revise`: reanuda su sesión (`--resume`) en su worktree y su runner, como una invocación más de esa fase en la misma ejecución. Mientras corrige, la puerta está «Corrigiendo» (`RUNNING`) y la fase `revise` sigue terminada bien.
+  - Si la fase `revise` tiene `artifacts` o `checks`, se comprueban otra vez tras la corrección, desde el mismo commit que la primera vez.
+  - Si la corrección termina bien (y pasa las comprobaciones), la puerta vuelve a preguntar: una petición nueva, con una ronda más, la acción resuelta con lo corregido y la evidencia nueva, que lleva en `changesRequested` lo que se pidió en la ronda anterior.
+  - Si la corrección falla o no pasa las comprobaciones, la puerta falla con el motivo (`approval.correction.failed`) y se aplica el fail-fast; si se cancela, la puerta se cancela.
+  - Lo que leen después la puerta y las fases siguientes (`{{stages.plan.output…}}`, el worktree) es lo de la última corrección. No hay límite de rondas.
+  - Si no se puede continuar la sesión (el proveedor no lo permite, el worktree se eliminó, hay otra invocación en él), responde 409 y la petición sigue pendiente.
 - Una petición pendiente solo se decide una vez: una segunda decisión (o una a la vez que otra) responde 409. Las decisiones y comentarios se guardan con quién y cuándo, y no se modifican ni se borran (salvo al eliminar la ejecución).
-- Eventos: `approval.requested`, `approval.granted`, `approval.rejected`, `approval.commented` y `approval.cancelled`.
+- Eventos: `approval.requested`, `approval.granted`, `approval.rejected`, `approval.changes_requested`, `approval.correction.failed`, `approval.commented` y `approval.cancelled`.
 
 ## Lo que aún no se ejecuta
 

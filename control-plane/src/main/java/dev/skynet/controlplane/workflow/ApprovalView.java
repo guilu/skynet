@@ -9,7 +9,9 @@ import java.util.UUID;
  * Una petición de aprobación con lo que se enseña al decidir (ADR-0001 §3.7).
  *
  * @param evidence la foto que se tomó al crear la petición: {@code origin}, {@code revise}, {@code
- *     dependencies}, {@code costUsd}, {@code grants} y {@code consequences}
+ *     dependencies}, {@code costUsd}, {@code grants}, {@code consequences} y, desde la segunda
+ *     ronda, {@code changesRequested} (los cambios que se pidieron en la anterior)
+ * @param correctionAgentRunId con {@code CHANGES_REQUESTED}, la invocación que corrige
  * @param decisions las decisiones y comentarios, del más antiguo al más reciente
  */
 public record ApprovalView(
@@ -23,6 +25,7 @@ public record ApprovalView(
     String status,
     Instant createdAt,
     Instant decidedAt,
+    UUID correctionAgentRunId,
     Map<String, Object> evidence,
     List<Decision> decisions) {
 

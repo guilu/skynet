@@ -15,6 +15,7 @@ import dev.skynet.controlplane.shared.ConflictException;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.controlplane.workitem.WorkItem;
 import dev.skynet.controlplane.workitem.WorkItemService;
+import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
 import dev.skynet.protocol.runner.AgentLimits;
@@ -240,13 +241,7 @@ public class RunSteps {
       workItems.requireActive(workItem);
       projects.requireActive(repository);
       if (stageDefinition.type() == StageType.HUMAN_APPROVAL) {
-        String action =
-            new PromptRenderer(
-                    workItem,
-                    projects.get(workItem.getProjectId()),
-                    inputsOf(run),
-                    new ConditionData(run, definition)::value)
-                .render(stageDefinition.approval().action());
+        String action = approvalAction(run, stageDefinition, definition, workItem);
         approvals.request(run, stage, published, action, workItem, repository, now);
         return StartOutcome.STARTED;
       }
@@ -324,6 +319,95 @@ public class RunSteps {
       fail(stage, e.getMessage(), now);
       return StartOutcome.FAILED;
     }
+  }
+
+  /**
+   * Cierra las correcciones que han terminado (W5-B): una puerta «Corrigiendo» vuelve a preguntar,
+   * con una ronda más y la evidencia nueva, si la invocación que corrige terminó bien y, si la fase
+   * {@code revise} tiene comprobaciones, las pasó otra vez. Si la corrección falló o no pasó las
+   * comprobaciones, la puerta falla; si se canceló, se cancela. Mientras sigue en curso no hace
+   * nada. Devuelve si alguna puerta ha cambiado.
+   */
+  public boolean settleCorrections(UUID runId, PublishedDefinition published) {
+    boolean changed = false;
+    WorkflowDefinition definition = published.definition();
+    for (StageRun gate : latestStages(runId).values()) {
+      StageDefinition gateDefinition = definition.stage(gate.getStageKey()).orElse(null);
+      if (gateDefinition == null
+          || gateDefinition.type() != StageType.HUMAN_APPROVAL
+          || gate.getStatus() != StageStatus.RUNNING) {
+        continue;
+      }
+      Approvals.Correction correction = approvals.correction(gate.getId()).orElse(null);
+      AgentRun agent =
+          correction == null ? null : agentRuns.findById(correction.agentRunId()).orElse(null);
+      if (agent == null || !agent.getStatus().isTerminal()) {
+        continue;
+      }
+      Instant now = time.now();
+      if (agent.getStatus() == AgentObservableStatus.CANCELLED) {
+        approvals.correctionFailed(gate, correction, true, "La corrección se canceló", now);
+        changed = true;
+        continue;
+      }
+      if (agent.getStatus() != AgentObservableStatus.COMPLETED) {
+        approvals.correctionFailed(
+            gate,
+            correction,
+            false,
+            agent.getError() == null ? "La corrección no terminó bien" : agent.getError(),
+            now);
+        changed = true;
+        continue;
+      }
+      boolean verified =
+          definition.stage(correction.stageKey()).map(StageDefinition::verified).orElse(false)
+              && agent.getWorkspaceId() != null;
+      if (verified) {
+        VerificationResult result =
+            verifications.latestOfStage(agent.getStageRunId()).get(agent.getId());
+        if (result == null || result.isLive()) {
+          continue;
+        }
+        if (!Verifications.PASSED.equals(result.status())) {
+          approvals.correctionFailed(
+              gate,
+              correction,
+              false,
+              "Las comprobaciones de "
+                  + correction.stageKey()
+                  + " no pasaron tras la corrección: "
+                  + StageVerifications.reason(result),
+              now);
+          changed = true;
+          continue;
+        }
+      }
+      WorkflowRun run = workflowRuns.findById(runId).orElseThrow();
+      WorkItem workItem = workItems.get(run.getWorkItemId());
+      CodeRepository repository = projects.getRepository(repositoryOf(run));
+      approvals.request(
+          run,
+          gate,
+          published,
+          approvalAction(run, gateDefinition, definition, workItem),
+          workItem,
+          repository,
+          now);
+      changed = true;
+    }
+    return changed;
+  }
+
+  /** La acción de una puerta con sus variables resueltas: lo que se pide aprobar ahora. */
+  private String approvalAction(
+      WorkflowRun run, StageDefinition gate, WorkflowDefinition definition, WorkItem workItem) {
+    return new PromptRenderer(
+            workItem,
+            projects.get(workItem.getProjectId()),
+            inputsOf(run),
+            new ConditionData(run, definition)::value)
+        .render(gate.approval().action());
   }
 
   /**

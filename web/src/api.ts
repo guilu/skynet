@@ -238,6 +238,8 @@ export interface ApprovalSummary {
   status: ApprovalStatus
   createdAt: string
   decidedAt: string | null
+  /** Con `CHANGES_REQUESTED`, la invocación que corrige en la fase `revise`. */
+  correctionAgentRunId: string | null
   origin: ApprovalOrigin
 }
 
@@ -280,6 +282,15 @@ export interface ApprovalEvidence {
   /** Lo que se permitirá a las fases que desbloquea la aprobación. */
   grants: StagePolicy[]
   consequences: { approve: string; reject: string; requestChanges: string | null }
+  /** Desde la segunda ronda, los cambios que se pidieron en la anterior; null en la primera. */
+  changesRequested: {
+    approvalId: string
+    round: number
+    comment: string
+    actor: string
+    createdAt: string
+    correctionAgentRunId: string
+  } | null
 }
 
 /** Una decisión o un comentario, que no se reescribe. */

@@ -352,6 +352,7 @@ class ContractIT extends IntegrationTest {
           "PENDING",
           at(50),
           null,
+          null,
           approvalOrigin());
     }
 
@@ -399,6 +400,7 @@ class ContractIT extends IntegrationTest {
       evidence.put("costUsd", new BigDecimal("0.4210"));
       evidence.put("grants", Samples.effectivePolicy().subList(0, 1));
       evidence.put("consequences", consequences);
+      evidence.put("changesRequested", null);
       return new ApprovalView(
           APPROVAL,
           RUN,
@@ -409,6 +411,7 @@ class ContractIT extends IntegrationTest {
           "HIGH",
           "PENDING",
           at(50),
+          null,
           null,
           evidence,
           List.of(

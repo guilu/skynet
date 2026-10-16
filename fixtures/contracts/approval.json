@@ -9,6 +9,7 @@
   "status" : "PENDING",
   "createdAt" : "2026-10-05T09:00:50Z",
   "decidedAt" : null,
+  "correctionAgentRunId" : null,
   "evidence" : {
     "origin" : {
       "project" : {
@@ -100,7 +101,8 @@
       "approve" : "Pueden arrancar: implement.",
       "reject" : "La ejecución falla y se cancelan implement.",
       "requestChanges" : "plan recibe tu comentario y la puerta vuelve a preguntar con lo corregido."
-    }
+    },
+    "changesRequested" : null
   },
   "decisions" : [ {
     "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a11",
