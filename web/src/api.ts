@@ -206,6 +206,95 @@ export interface StageRun {
   agents: AgentRun[]
   /** La última verificación de fase de cada agente; con una en curso, la fase está «Verificando». */
   verifications: VerificationResult[]
+  /** La última petición de una fase `human-approval`; null si no ha preguntado todavía. */
+  approval: ApprovalSummary | null
+}
+
+export type ApprovalRisk = 'LOW' | 'MEDIUM' | 'HIGH'
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'CANCELLED'
+export type ApprovalAction = 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'COMMENT'
+
+/** De dónde viene una puerta de aprobación. */
+export interface ApprovalOrigin {
+  project: { id: string; key: string; name: string }
+  workItem: { id: string; key: string; title: string }
+  repository: { id: string; name: string }
+  run: { id: string }
+  workflow: { key: string; version: number; name: string | null }
+  stage: { key: string; name: string | null }
+}
+
+/** Una petición de aprobación, sin su evidencia. */
+export interface ApprovalSummary {
+  id: string
+  workflowRunId: string
+  stageRunId: string
+  stageKey: string
+  /** 1 la primera vez; una más cada vez que la puerta vuelve a preguntar. */
+  round: number
+  /** La acción que se pide aprobar, con sus variables resueltas. */
+  action: string
+  risk: ApprovalRisk
+  status: ApprovalStatus
+  createdAt: string
+  decidedAt: string | null
+  origin: ApprovalOrigin
+}
+
+/** Lo que dejó un agente de una fase de la que depende la puerta. */
+export interface ApprovalEvidenceAgent {
+  agentRunId: string
+  childKey: string | null
+  status: AgentStatus
+  provider: string | null
+  costUsd: number | null
+  structuredOutput: unknown
+  checks: CheckResult[]
+  /** Resumen de `GIT_CHANGES`: rama, commits, ficheros y líneas; null si no lo hay. */
+  changes: {
+    branch: string
+    baseCommit: string
+    headCommit: string
+    commits: number
+    files: number
+    insertions: number
+    deletions: number
+    uncommittedFiles: number
+  } | null
+  artifacts: { id: string; type: string; name: string }[]
+}
+
+/** La foto que se tomó al crear la petición. */
+export interface ApprovalEvidence {
+  origin: ApprovalOrigin
+  /** La fase cuyo agente corrige al pedir cambios; null si no hay a quién. */
+  revise: { stageKey: string; agentRunId: string | null } | null
+  dependencies: {
+    stageKey: string
+    name: string | null
+    type: string
+    status: StageStatus
+    agents: ApprovalEvidenceAgent[]
+  }[]
+  costUsd: number
+  /** Lo que se permitirá a las fases que desbloquea la aprobación. */
+  grants: StagePolicy[]
+  consequences: { approve: string; reject: string; requestChanges: string | null }
+}
+
+/** Una decisión o un comentario, que no se reescribe. */
+export interface ApprovalDecision {
+  id: string
+  action: ApprovalAction | 'CANCEL'
+  comment: string | null
+  /** El usuario de la web, o `skynet` si se canceló con su ejecución. */
+  actor: string
+  createdAt: string
+}
+
+export interface ApprovalView extends Omit<ApprovalSummary, 'origin'> {
+  evidence: ApprovalEvidence
+  decisions: ApprovalDecision[]
 }
 
 export interface RunTotals {
@@ -466,6 +555,8 @@ export interface StageDefinition {
   outputSchemaPath: string | null
   /** Lo que Skynet comprueba en su worktree antes de darla por buena (`artifacts`, `checks`, `scope`). */
   checks: VerificationCheck[]
+  /** Lo que pide una fase `human-approval`; null en las demás. */
+  approval: { action: string; risk: ApprovalRisk; revise: string | null } | null
 }
 
 /** Una comprobación de fase: `artifacts`, `tests`, `diff`, `commit`, `scope` o `command`. */
@@ -875,6 +966,20 @@ export const api = {
   artifacts: (agentId: string) =>
     request<ArtifactSummary[]>('GET', `/api/agent-runs/${agentId}/artifacts`),
   artifactChunk,
+  /** Peticiones de aprobación, primero las pendientes; `status` admite varios. */
+  approvals: (
+    query: { status?: ApprovalStatus[]; projectId?: string; risk?: ApprovalRisk } = {},
+  ) => {
+    const params = new URLSearchParams()
+    if (query.status?.length) params.set('status', query.status.join(','))
+    if (query.projectId) params.set('projectId', query.projectId)
+    if (query.risk) params.set('risk', query.risk)
+    return request<ApprovalSummary[]>('GET', `/api/approvals?${params}`)
+  },
+  approval: (id: string) => request<ApprovalView>('GET', `/api/approvals/${id}`),
+  /** Aprueba, rechaza, pide cambios o comenta. */
+  decideApproval: (id: string, action: ApprovalAction, comment?: string) =>
+    request<ApprovalView>('POST', `/api/approvals/${id}/decisions`, { action, comment }),
   /** Verificaciones del agente, la más reciente primero. */
   verifications: (agentId: string) =>
     request<VerificationResult[]>('GET', `/api/agent-runs/${agentId}/verifications`),

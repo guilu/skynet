@@ -26,6 +26,7 @@ function stage(
     checks: [],
     reads: [],
     verifications: [],
+    approval: null,
   }
 }
 

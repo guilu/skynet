@@ -80,7 +80,8 @@
         "childKey" : null,
         "structuredOutput" : null
       } ],
-      "verifications" : [ ]
+      "verifications" : [ ],
+      "approval" : null
     } ]
   } ],
   "activeRunsTotal" : 1,

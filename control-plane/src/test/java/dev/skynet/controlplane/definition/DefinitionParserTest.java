@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.skynet.controlplane.definition.DefinitionParser.Expectations;
 import dev.skynet.controlplane.definition.DefinitionParser.Parsed;
 import dev.skynet.controlplane.definition.Problem.Severity;
+import dev.skynet.controlplane.definition.StageDefinition.Approval;
 import dev.skynet.controlplane.definition.StageDefinition.ChildDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.Dependency;
+import dev.skynet.controlplane.definition.StageDefinition.Risk;
 import dev.skynet.protocol.runner.VerificationCheck;
 import java.math.BigDecimal;
 import java.util.List;
@@ -85,6 +87,7 @@ class DefinitionParserTest {
         - id: approval
           type: human-approval
           dependsOn: [plan]
+          action: Aprobar el plan de {{workItem.key}}
 
         - id: implementation
           type: agent
@@ -143,7 +146,6 @@ class DefinitionParserTest {
     assertThat(parsed.validation().publishable()).isFalse();
     assertThat(messages(parsed, Severity.UNSUPPORTED))
         .contains(
-            "El tipo `human-approval` todavía no se ejecuta: llega en W5",
             "El tipo `github-pr` todavía no se ejecuta: llega en S2",
             "`promptTemplate` todavía no se usa: llega en S3",
             "`retry` todavía no se usa: llega en W6");
@@ -1160,6 +1162,114 @@ class DefinitionParserTest {
                 + " isolated-worktree`",
             "Una fase `verification` comprueba el worktree de la fase de la que depende: ponla"
                 + " en `dependsOn` detrás de una fase `agent`, `command` o `parallel`");
+  }
+
+  @Test
+  void anApprovalGateNamesItsActionRiskAndTheStageThatRevises() {
+    Parsed parsed =
+        parse(
+            """
+            id: puertas
+            stages:
+              - id: spec
+                type: agent
+                prompt: Especifica
+                outputSchema:
+                  type: object
+                  properties:
+                    summary:
+                      type: string
+              - id: plan
+                type: agent
+                prompt: Planifica
+                dependsOn: [spec]
+              - id: aprobar-plan
+                type: human-approval
+                dependsOn: [plan]
+                action: "Aprobar el plan de {{workItem.key}}: {{stages.spec.output.summary}}"
+                risk: high
+              - id: aprobar-spec
+                type: human-approval
+                dependsOn: [plan]
+                action: Aprobar la especificación
+                revise: spec
+              - id: implement
+                type: agent
+                prompt: Implementa
+                dependsOn: [aprobar-plan, aprobar-spec]
+                workspaceFrom: aprobar-plan
+            """);
+    assertThat(parsed.validation().problems()).isEmpty();
+    assertThat(parsed.validation().publishable()).isTrue();
+    WorkflowDefinition definition = parsed.definition();
+    StageDefinition gate = definition.stage("aprobar-plan").orElseThrow();
+    assertThat(gate.approval())
+        .isEqualTo(
+            new Approval(
+                "Aprobar el plan de {{workItem.key}}: {{stages.spec.output.summary}}",
+                Risk.HIGH,
+                null));
+    assertThat(definition.revise("aprobar-plan")).isEqualTo("plan");
+    assertThat(definition.revise("aprobar-spec")).isEqualTo("spec");
+    assertThat(definition.stage("aprobar-spec").orElseThrow().approval().risk())
+        .isEqualTo(Risk.MEDIUM);
+    assertThat(definition.reads("aprobar-plan")).containsExactly("spec.output.summary");
+    assertThat(definition.dependents("plan")).containsExactly("aprobar-plan", "aprobar-spec");
+  }
+
+  @Test
+  void anApprovalGateOnlyWaitsForADecision() {
+    Parsed parsed =
+        parse(
+            """
+            id: puertas-mal
+            stages:
+              - id: build
+                type: command
+                command: make
+              - id: plan
+                type: agent
+                prompt: Planifica
+              - id: sin-accion
+                type: human-approval
+                dependsOn: [plan]
+              - id: hace-cosas
+                type: human-approval
+                dependsOn: [plan]
+                action: Aprobar
+                prompt: Revisa
+                risk: altisimo
+              - id: corrige-comando
+                type: human-approval
+                dependsOn: [build]
+                action: Aprobar
+                revise: build
+              - id: corrige-despues
+                type: human-approval
+                dependsOn: [plan]
+                action: "Aprobar {{stages.plan.output.nada}}"
+                revise: tarde
+              - id: tarde
+                type: agent
+                prompt: Después
+                action: Aprobar
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .containsExactlyInAnyOrder(
+            "A esta fase le falta `action`, lo que se pide aprobar, p. ej. `action: Aprobar el"
+                + " plan de {{workItem.key}}`",
+            "Una fase `human-approval` no ejecuta nada, espera a que alguien decida: quita"
+                + " `prompt`",
+            "`risk: altisimo` no se conoce. Admite: low, medium, high",
+            "`build` es una fase `command`: al pedir cambios, el comentario se manda al agente de"
+                + " una fase `agent`",
+            "`tarde` no va antes de esta puerta: `revise` tiene que ser una fase de la que"
+                + " depende",
+            "`action` solo vale en fases `type: human-approval`; esta es `agent`",
+            messages(parsed, Severity.ERROR).stream()
+                .filter(m -> m.startsWith("`{{stages.plan.output.nada}}`"))
+                .findFirst()
+                .orElse("falta el error de la variable"));
   }
 
   @Test

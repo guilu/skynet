@@ -72,6 +72,7 @@ public class RunService {
   private final ObjectMapper json;
   private final ApplicationEventPublisher publisher;
   private final Verifications verifications;
+  private final Approvals approvals;
 
   RunService(
       WorkflowRunRepository workflowRuns,
@@ -88,7 +89,8 @@ public class RunService {
       WorkflowDefinitions definitions,
       ObjectMapper json,
       ApplicationEventPublisher publisher,
-      Verifications verifications) {
+      Verifications verifications,
+      Approvals approvals) {
     this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
     this.agentRuns = agentRuns;
@@ -104,6 +106,7 @@ public class RunService {
     this.json = json;
     this.publisher = publisher;
     this.verifications = verifications;
+    this.approvals = approvals;
   }
 
   /**
@@ -239,8 +242,14 @@ public class RunService {
   public List<StagePolicy> effectivePolicies(UUID definitionId, UUID repositoryId) {
     WorkflowDefinition definition = definitions.launchable(definitionId).definition();
     AgentPolicy policy = projects.agentPolicy(projects.getRepository(repositoryId));
+    return stagePolicies(policy, definition, definition.stages());
+  }
+
+  /** Lo que se permite a cada una de {@code stages} con la política {@code policy}. */
+  static List<StagePolicy> stagePolicies(
+      AgentPolicy policy, WorkflowDefinition definition, List<StageDefinition> stages) {
     List<StagePolicy> policies = new ArrayList<>();
-    for (StageDefinition stage : definition.stages()) {
+    for (StageDefinition stage : stages) {
       if (stage.type() == StageType.PARALLEL) {
         for (ChildDefinition child : stage.children()) {
           policies.add(
@@ -695,6 +704,7 @@ public class RunService {
     } else if (verifications.stageFailed(stage.getId())) {
       transitions.advanceStage(stage, StageStatus.FAILED, "verification-failed", now);
     } else {
+      approvals.cancelPending(stage, reason, now);
       transitions.advanceStage(stage, StageStatus.CANCELLED, reason, now);
     }
     return true;
@@ -1171,6 +1181,8 @@ public class RunService {
         .forEach(w -> items.put(w.getId(), w));
     Map<UUID, List<VerificationResult>> stageChecks =
         verifications.latestOfStages(stages.stream().map(StageRun::getId).toList());
+    Map<UUID, ApprovalSummary> stageApprovals =
+        approvals.latestOfStages(stages.stream().map(StageRun::getId).toList());
     Map<UUID, PublishedDefinition> published = new HashMap<>();
     runs.stream()
         .map(WorkflowRun::getDefinitionId)
@@ -1201,7 +1213,8 @@ public class RunService {
                                           a ->
                                               AgentRunView.of(a, worktrees.get(a.getWorkspaceId())))
                                       .toList(),
-                                  stageChecks.getOrDefault(s.getId(), List.of())))
+                                  stageChecks.getOrDefault(s.getId(), List.of()),
+                                  stageApprovals.get(s.getId())))
                       .toList());
             })
         .toList();
