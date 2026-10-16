@@ -27,6 +27,7 @@ import tools.jackson.databind.json.JsonMapper;
  *     lee del worktree al arrancar; {@code null} si no tiene
  * @param checks lo que Skynet comprueba en su worktree antes de darla por buena ({@code artifacts},
  *     {@code checks} y {@code scope} del YAML), en el orden en que se ejecuta; vacío si nada
+ * @param approval lo que pide una fase {@code human-approval}; {@code null} en las demás
  */
 public record StageDefinition(
     String id,
@@ -42,12 +43,47 @@ public record StageDefinition(
     String condition,
     Map<String, Object> outputSchema,
     String outputSchemaPath,
-    List<VerificationCheck> checks) {
+    List<VerificationCheck> checks,
+    Approval approval) {
 
   public StageDefinition {
     dependsOn = List.copyOf(dependsOn);
     children = children == null ? List.of() : List.copyOf(children);
     checks = checks == null ? List.of() : List.copyOf(checks);
+  }
+
+  /** Una fase que no es una puerta de aprobación. */
+  public StageDefinition(
+      String id,
+      String name,
+      StageType type,
+      String agent,
+      String prompt,
+      List<Dependency> dependsOn,
+      WorkspaceMode workspace,
+      String workspaceFrom,
+      String command,
+      List<ChildDefinition> children,
+      String condition,
+      Map<String, Object> outputSchema,
+      String outputSchemaPath,
+      List<VerificationCheck> checks) {
+    this(
+        id,
+        name,
+        type,
+        agent,
+        prompt,
+        dependsOn,
+        workspace,
+        workspaceFrom,
+        command,
+        children,
+        condition,
+        outputSchema,
+        outputSchemaPath,
+        checks,
+        null);
   }
 
   /** Una fase sin comprobaciones. */
@@ -163,6 +199,32 @@ public record StageDefinition(
   /** El hijo {@code id}, si la fase lo tiene. */
   public Optional<ChildDefinition> child(String id) {
     return children.stream().filter(c -> c.id().equals(id)).findFirst();
+  }
+
+  /**
+   * Lo que pide una fase {@code human-approval} (W5).
+   *
+   * @param action la acción que se aprueba, con las variables de un prompt
+   * @param risk el riesgo de aprobarla
+   * @param revise fase cuyo agente corrige al pedir cambios, o {@code null} si no hay a quién
+   */
+  public record Approval(String action, Risk risk, String revise) {}
+
+  /** Riesgo de una aprobación ({@code risk} en el YAML). */
+  public enum Risk {
+    LOW("low"),
+    MEDIUM("medium"),
+    HIGH("high");
+
+    private final String yaml;
+
+    Risk(String yaml) {
+      this.yaml = yaml;
+    }
+
+    public String yaml() {
+      return yaml;
+    }
   }
 
   /**

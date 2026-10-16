@@ -3,6 +3,8 @@
 // añade, quita o renombra un campo, este test falla hasta que se actualicen los tipos.
 import { describe, expect, it } from 'vitest'
 import agentRunDetail from '../../fixtures/contracts/agent-run-detail.json'
+import approval from '../../fixtures/contracts/approval.json'
+import approvals from '../../fixtures/contracts/approvals.json'
 import artifacts from '../../fixtures/contracts/artifacts.json'
 import conversation from '../../fixtures/contracts/conversation.json'
 import dashboardMetrics from '../../fixtures/contracts/dashboard-metrics.json'
@@ -20,6 +22,12 @@ import workflow from '../../fixtures/contracts/workflow.json'
 import workflows from '../../fixtures/contracts/workflows.json'
 import type {
   AgentDefinition,
+  ApprovalDecision,
+  ApprovalEvidence,
+  ApprovalEvidenceAgent,
+  ApprovalOrigin,
+  ApprovalSummary,
+  ApprovalView,
   CheckResult,
   AgentRun,
   AgentRunDetail,
@@ -133,6 +141,7 @@ const STAGE_RUN: Keys<StageRun> = {
   checks: true,
   reads: true,
   verifications: true,
+  approval: true,
 }
 const RUN_TOTALS: Keys<RunTotals> = {
   inputTokens: true,
@@ -290,6 +299,67 @@ const VERIFICATION: Keys<VerificationResult> = {
   stageRunId: true,
   checks: true,
 }
+const APPROVAL_SUMMARY: Keys<ApprovalSummary> = {
+  id: true,
+  workflowRunId: true,
+  stageRunId: true,
+  stageKey: true,
+  round: true,
+  action: true,
+  risk: true,
+  status: true,
+  createdAt: true,
+  decidedAt: true,
+  origin: true,
+}
+const APPROVAL_VIEW: Keys<ApprovalView> = {
+  id: true,
+  workflowRunId: true,
+  stageRunId: true,
+  stageKey: true,
+  round: true,
+  action: true,
+  risk: true,
+  status: true,
+  createdAt: true,
+  decidedAt: true,
+  evidence: true,
+  decisions: true,
+}
+const APPROVAL_ORIGIN: Keys<ApprovalOrigin> = {
+  project: true,
+  workItem: true,
+  repository: true,
+  run: true,
+  workflow: true,
+  stage: true,
+}
+const APPROVAL_EVIDENCE: Keys<ApprovalEvidence> = {
+  origin: true,
+  revise: true,
+  dependencies: true,
+  costUsd: true,
+  grants: true,
+  consequences: true,
+}
+const APPROVAL_AGENT: Keys<ApprovalEvidenceAgent> = {
+  agentRunId: true,
+  childKey: true,
+  status: true,
+  provider: true,
+  costUsd: true,
+  structuredOutput: true,
+  checks: true,
+  changes: true,
+  artifacts: true,
+}
+const APPROVAL_DECISION: Keys<ApprovalDecision> = {
+  id: true,
+  action: true,
+  comment: true,
+  actor: true,
+  createdAt: true,
+}
 const CHECK_RESULT: Keys<CheckResult> = { name: true, target: true, passed: true, reason: true }
 const TEST_TOTALS: Keys<TestTotals> = { total: true, failed: true, errors: true, skipped: true }
 
@@ -378,6 +448,7 @@ const STAGE_DEFINITION: Keys<StageDefinition> = {
   outputSchema: true,
   outputSchemaPath: true,
   checks: true,
+  approval: true,
 }
 const VERIFICATION_CHECK: Keys<VerificationCheck> = { name: true, command: true, paths: true }
 
@@ -511,5 +582,25 @@ describe('contratos con el backend', () => {
       v.checks.forEach((c) => expectShape(c, CHECK_RESULT))
     })
     expect(verifications.map((v) => v.trigger)).toEqual(['AUTO', 'STAGE'])
+  })
+
+  it('aprobaciones', () => {
+    ;(approvals as ApprovalSummary[]).forEach((a) => {
+      expectShape(a, APPROVAL_SUMMARY)
+      expectShape(a.origin, APPROVAL_ORIGIN)
+    })
+    const view = approval as ApprovalView
+    expectShape(view, APPROVAL_VIEW)
+    expectShape(view.evidence, APPROVAL_EVIDENCE)
+    expectShape(view.evidence.origin, APPROVAL_ORIGIN)
+    view.evidence.dependencies.forEach((d) =>
+      d.agents.forEach((a) => {
+        expectShape(a, APPROVAL_AGENT)
+        a.checks.forEach((c) => expectShape(c, CHECK_RESULT))
+      }),
+    )
+    view.evidence.grants.forEach((p) => expectShape(p, STAGE_POLICY))
+    view.decisions.forEach((d) => expectShape(d, APPROVAL_DECISION))
+    expect(view.evidence.consequences.requestChanges).not.toBeNull()
   })
 })

@@ -19,6 +19,8 @@ import dev.skynet.controlplane.support.IntegrationTest;
 import dev.skynet.controlplane.workflow.AgentRunDetail;
 import dev.skynet.controlplane.workflow.AgentRunKind;
 import dev.skynet.controlplane.workflow.AgentRunView;
+import dev.skynet.controlplane.workflow.ApprovalSummary;
+import dev.skynet.controlplane.workflow.ApprovalView;
 import dev.skynet.controlplane.workflow.ConversationView;
 import dev.skynet.controlplane.workflow.PromptView;
 import dev.skynet.controlplane.workflow.RunMetrics;
@@ -91,7 +93,9 @@ class ContractIT extends IntegrationTest {
         Arguments.of("artifacts", Samples.artifacts()),
         Arguments.of("verifications", Samples.verifications()),
         Arguments.of("effective-policy", Samples.effectivePolicy()),
-        Arguments.of("providers", Samples.providers()));
+        Arguments.of("providers", Samples.providers()),
+        Arguments.of("approvals", List.of(Samples.pendingApproval())),
+        Arguments.of("approval", Samples.approval()));
   }
 
   @ParameterizedTest(name = "{0}")
@@ -127,6 +131,10 @@ class ContractIT extends IntegrationTest {
     static final UUID RESUMED_RUN = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0c");
     static final UUID RESUMED_STAGE = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0d");
     static final UUID RESUMED_AGENT = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0e");
+    static final UUID APPROVAL = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0f");
+    static final UUID GATE = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a10");
+    static final UUID DECISION = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a11");
+    static final UUID CHANGES = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a12");
     static final String SESSION = "e1e75e9c-2b3a-4287-ae55-186ae1babc98";
 
     static final Instant T0 = Instant.parse("2026-10-05T09:00:00Z");
@@ -312,8 +320,100 @@ class ContractIT extends IntegrationTest {
                       List.of(
                           new VerificationResult.CheckResult(
                               "artifacts", "docs/spec.md", true, null),
-                          new VerificationResult.CheckResult("diff", null, true, null))))),
+                          new VerificationResult.CheckResult("diff", null, true, null)))),
+              null),
           agent);
+    }
+
+    static Map<String, Object> approvalOrigin() {
+      Map<String, Object> origin = new LinkedHashMap<>();
+      origin.put("project", Map.of("id", PROJECT, "key", "TKM", "name", "Tokenmeter"));
+      origin.put(
+          "workItem",
+          Map.of("id", WORK_ITEM, "key", "TKM-1", "title", "Add model pricing importer"));
+      origin.put("repository", Map.of("id", REPOSITORY, "name", "tokenmeter"));
+      origin.put("run", Map.of("id", RUN));
+      origin.put(
+          "workflow",
+          Map.of("key", "especificar-planificar-implementar", "version", 1, "name", "SDD"));
+      origin.put("stage", Map.of("key", "aprobar-plan", "name", "Aprobar el plan"));
+      return origin;
+    }
+
+    static ApprovalSummary pendingApproval() {
+      return new ApprovalSummary(
+          APPROVAL,
+          RUN,
+          GATE,
+          "aprobar-plan",
+          1,
+          "Aprobar el plan de TKM-1",
+          "HIGH",
+          "PENDING",
+          at(50),
+          null,
+          approvalOrigin());
+    }
+
+    static ApprovalView approval() {
+      Map<String, Object> changes = new LinkedHashMap<>();
+      changes.put("branch", "skynet/tkm-1-plan");
+      changes.put("baseCommit", "4f2a9c1");
+      changes.put("headCommit", "9b1e7d3");
+      changes.put("commits", 1);
+      changes.put("files", 2);
+      changes.put("insertions", 48);
+      changes.put("deletions", 3);
+      changes.put("uncommittedFiles", 0);
+      Map<String, Object> agent = new LinkedHashMap<>();
+      agent.put("agentRunId", AGENT);
+      agent.put("childKey", null);
+      agent.put("status", AgentObservableStatus.COMPLETED);
+      agent.put("provider", "claude-code");
+      agent.put("costUsd", new BigDecimal("0.4210"));
+      agent.put("structuredOutput", Map.of("summary", "Importar los precios desde un CSV"));
+      agent.put(
+          "checks",
+          List.of(
+              new VerificationResult.CheckResult("artifacts", "openspec/tasks.md", true, null)));
+      agent.put("changes", changes);
+      agent.put(
+          "artifacts",
+          List.of(Map.of("id", CHANGES, "type", "GIT_CHANGES", "name", "changes.json")));
+      Map<String, Object> dependency = new LinkedHashMap<>();
+      dependency.put("stageKey", "plan");
+      dependency.put("name", null);
+      dependency.put("type", "agent");
+      dependency.put("status", StageStatus.SUCCEEDED);
+      dependency.put("agents", List.of(agent));
+      Map<String, Object> consequences = new LinkedHashMap<>();
+      consequences.put("approve", "Pueden arrancar: implement.");
+      consequences.put("reject", "La ejecución falla y se cancelan implement.");
+      consequences.put(
+          "requestChanges",
+          "plan recibe tu comentario y la puerta vuelve a preguntar con lo corregido.");
+      Map<String, Object> evidence = new LinkedHashMap<>();
+      evidence.put("origin", approvalOrigin());
+      evidence.put("revise", Map.of("stageKey", "plan", "agentRunId", AGENT));
+      evidence.put("dependencies", List.of(dependency));
+      evidence.put("costUsd", new BigDecimal("0.4210"));
+      evidence.put("grants", Samples.effectivePolicy().subList(0, 1));
+      evidence.put("consequences", consequences);
+      return new ApprovalView(
+          APPROVAL,
+          RUN,
+          GATE,
+          "aprobar-plan",
+          1,
+          "Aprobar el plan de TKM-1",
+          "HIGH",
+          "PENDING",
+          at(50),
+          null,
+          evidence,
+          List.of(
+              new ApprovalView.Decision(
+                  DECISION, "COMMENT", "¿Cubre los precios en euros?", "admin", at(60))));
     }
 
     static RunView runningRun() {
@@ -339,7 +439,8 @@ class ContractIT extends IntegrationTest {
               at(2),
               null,
               List.of(agent),
-              List.of()),
+              List.of(),
+              null),
           agent);
     }
 

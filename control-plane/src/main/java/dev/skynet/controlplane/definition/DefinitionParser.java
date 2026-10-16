@@ -1,8 +1,10 @@
 package dev.skynet.controlplane.definition;
 
 import dev.skynet.controlplane.definition.Problem.Severity;
+import dev.skynet.controlplane.definition.StageDefinition.Approval;
 import dev.skynet.controlplane.definition.StageDefinition.ChildDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.Dependency;
+import dev.skynet.controlplane.definition.StageDefinition.Risk;
 import dev.skynet.controlplane.definition.StageDefinition.WorkspaceMode;
 import dev.skynet.controlplane.project.AgentPolicy;
 import dev.skynet.protocol.AgentProviderKind;
@@ -79,7 +81,10 @@ public final class DefinitionParser {
           "outputSchema",
           "artifacts",
           "checks",
-          "scope");
+          "scope",
+          "action",
+          "risk",
+          "revise");
   static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt");
 
   /** Claves de §11 que llegan con hitos posteriores, con el hito que las ejecuta. */
@@ -867,6 +872,7 @@ public final class DefinitionParser {
       List<ChildAt> children = children(fields, type, node, path);
       String condition = condition(fields, type, node, path);
       List<VerificationCheck> checks = verification(fields, type, node, path);
+      Approval approval = approval(fields, type, node, path);
       Entry schemaEntry = fields.get("outputSchema");
       Map<String, Object> outputSchema = null;
       String outputSchemaPath = null;
@@ -900,7 +906,8 @@ public final class DefinitionParser {
               condition,
               outputSchema,
               outputSchemaPath,
-              checks);
+              checks,
+              approval);
       return new StageAt(stage, path, node, fields, dependencyNodes, children);
     }
 
@@ -1156,6 +1163,78 @@ public final class DefinitionParser {
     }
 
     /**
+     * Lo que pide una fase {@code human-approval}: la acción ({@code action}, obligatoria), el
+     * riesgo ({@code risk}, por defecto {@code medium}) y la fase que corrige al pedir cambios
+     * ({@code revise}, que se comprueba con las demás fases). Una puerta no hace trabajo: no lleva
+     * agente ni prompt. En las demás fases, esas claves no valen.
+     */
+    private Approval approval(Map<String, Entry> fields, StageType type, Node node, String path) {
+      List<String> keys = List.of("action", "risk", "revise");
+      if (type != StageType.HUMAN_APPROVAL) {
+        for (String key : keys) {
+          Entry used = fields.get(key);
+          if (used != null && type.executable()) {
+            error(
+                used.key(),
+                path + "." + key,
+                "`"
+                    + key
+                    + "` solo vale en fases `type: human-approval`; esta es `"
+                    + type.yaml()
+                    + "`");
+          }
+        }
+        return null;
+      }
+      for (String key : List.of("agent", "prompt")) {
+        Entry used = fields.get(key);
+        if (used != null) {
+          error(
+              used.key(),
+              path + "." + key,
+              "Una fase `human-approval` no ejecuta nada, espera a que alguien decida: quita `"
+                  + key
+                  + "`");
+        }
+      }
+      String action = text(fields.get("action"), path + ".action");
+      if (fields.get("action") == null) {
+        error(
+            node,
+            path + ".action",
+            "A esta fase le falta `action`, lo que se pide aprobar, p. ej. `action: Aprobar el"
+                + " plan de {{workItem.key}}`");
+      } else if (action != null && action.isBlank()) {
+        error(fields.get("action").value(), path + ".action", "La acción está vacía");
+      }
+      Risk risk = Risk.MEDIUM;
+      Entry riskEntry = fields.get("risk");
+      if (riskEntry != null) {
+        String value = text(riskEntry, path + ".risk");
+        List<String> names = Arrays.stream(Risk.values()).map(Risk::yaml).toList();
+        Risk known =
+            Arrays.stream(Risk.values())
+                .filter(r -> r.yaml().equals(value))
+                .findFirst()
+                .orElse(null);
+        if (value != null && known == null) {
+          error(
+              riskEntry.value(),
+              path + ".risk",
+              "`risk: "
+                  + value
+                  + "` no se conoce"
+                  + suggestion(value, names)
+                  + ". Admite: "
+                  + String.join(", ", names));
+        } else if (known != null) {
+          risk = known;
+        }
+      }
+      return new Approval(action, risk, text(fields.get("revise"), path + ".revise"));
+    }
+
+    /**
      * Los hijos de una fase {@code parallel}: obligatorios, cada uno con su agente, y sin agente,
      * prompt ni comando propios en la fase. En las demás fases, {@code children} no vale.
      */
@@ -1377,6 +1456,11 @@ public final class DefinitionParser {
           checkWorkspace(at, byId);
           continue;
         }
+        if (stage.type() == StageType.HUMAN_APPROVAL) {
+          checkApproval(at, byId, inputNames, scope);
+          checkWorkspace(at, byId);
+          continue;
+        }
         if (stage.type() == StageType.PARALLEL) {
           for (ChildAt child : at.children()) {
             String name = child.child().agent();
@@ -1478,6 +1562,50 @@ public final class DefinitionParser {
         if (at.stage().condition() != null && at.stage().type().executable()) {
           checkCondition(at, byId, agentsByName, inputs);
         }
+      }
+    }
+
+    /**
+     * Comprueba una puerta de aprobación: las variables de su acción, como las de un prompt de la
+     * fase, y que {@code revise} sea una fase {@code agent} de la que depende (directa o
+     * indirectamente).
+     */
+    private void checkApproval(
+        StageAt at, Map<String, StageAt> byId, Set<String> inputNames, Stages scope) {
+      StageDefinition stage = at.stage();
+      Entry action = at.fields().get("action");
+      if (action != null) {
+        checkVariables(
+            action.value(), at.path() + ".action", inputNames, scope, List.of(stage.id()));
+      }
+      Entry reviseEntry = at.fields().get("revise");
+      String revise = stage.approval().revise();
+      if (reviseEntry == null || revise == null) {
+        return;
+      }
+      String path = at.path() + ".revise";
+      StageAt target = byId.get(revise);
+      if (target == null) {
+        error(
+            reviseEntry.value(),
+            path,
+            "No hay ninguna fase `" + revise + "`" + suggestion(revise, byId.keySet()));
+      } else if (!ancestors(stage.id(), byId).contains(revise)) {
+        error(
+            reviseEntry.value(),
+            path,
+            "`"
+                + revise
+                + "` no va antes de esta puerta: `revise` tiene que ser una fase de la que depende");
+      } else if (target.stage().type() != StageType.AGENT) {
+        error(
+            reviseEntry.value(),
+            path,
+            "`"
+                + revise
+                + "` es una fase `"
+                + target.stage().type().yaml()
+                + "`: al pedir cambios, el comentario se manda al agente de una fase `agent`");
       }
     }
 

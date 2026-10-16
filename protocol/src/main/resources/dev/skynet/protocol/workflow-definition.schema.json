@@ -128,7 +128,7 @@
         "name": { "description": "Nombre para mostrar.", "type": "string", "minLength": 1 },
         "description": { "description": "Qué hace la fase.", "type": "string", "minLength": 1 },
         "type": {
-          "description": "Tipo de fase. Por ahora el motor ejecuta agent, command, parallel, conditional y verification (comprueba el worktree que hereda sin ejecutar nada).",
+          "description": "Tipo de fase. Por ahora el motor ejecuta agent, command, parallel, conditional, verification (comprueba el worktree que hereda sin ejecutar nada) y human-approval (espera a que alguien apruebe o rechace).",
           "enum": [
             "agent",
             "command",
@@ -209,6 +209,20 @@
           "type": "array",
           "minItems": 1,
           "items": { "type": "string", "minLength": 1 }
+        },
+        "action": {
+          "description": "Solo en fases human-approval: lo que se pide aprobar, p. ej. «Aprobar el plan de {{workItem.key}}». Admite las variables de un prompt.",
+          "type": "string",
+          "minLength": 1
+        },
+        "risk": {
+          "description": "Solo en fases human-approval: el riesgo de aprobar. Por defecto medium.",
+          "enum": ["low", "medium", "high"]
+        },
+        "revise": {
+          "description": "Solo en fases human-approval: la fase agent cuyo agente recibe el comentario al pedir cambios. Por defecto, su única dependencia agent.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
         },
         "retry": { "description": "Llega en W6.", "type": "object" },
         "timeout": { "description": "Llega en W6." },

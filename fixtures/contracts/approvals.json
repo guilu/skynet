@@ -1,0 +1,40 @@
+[ {
+  "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0f",
+  "workflowRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04",
+  "stageRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a10",
+  "stageKey" : "aprobar-plan",
+  "round" : 1,
+  "action" : "Aprobar el plan de TKM-1",
+  "risk" : "HIGH",
+  "status" : "PENDING",
+  "createdAt" : "2026-10-05T09:00:50Z",
+  "decidedAt" : null,
+  "origin" : {
+    "project" : {
+      "key" : "TKM",
+      "name" : "Tokenmeter",
+      "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a01"
+    },
+    "workItem" : {
+      "key" : "TKM-1",
+      "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a02",
+      "title" : "Add model pricing importer"
+    },
+    "repository" : {
+      "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a03",
+      "name" : "tokenmeter"
+    },
+    "run" : {
+      "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04"
+    },
+    "workflow" : {
+      "key" : "especificar-planificar-implementar",
+      "name" : "SDD",
+      "version" : 1
+    },
+    "stage" : {
+      "key" : "aprobar-plan",
+      "name" : "Aprobar el plan"
+    }
+  }
+} ]

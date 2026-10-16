@@ -1,0 +1,112 @@
+{
+  "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0f",
+  "workflowRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04",
+  "stageRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a10",
+  "stageKey" : "aprobar-plan",
+  "round" : 1,
+  "action" : "Aprobar el plan de TKM-1",
+  "risk" : "HIGH",
+  "status" : "PENDING",
+  "createdAt" : "2026-10-05T09:00:50Z",
+  "decidedAt" : null,
+  "evidence" : {
+    "origin" : {
+      "project" : {
+        "key" : "TKM",
+        "name" : "Tokenmeter",
+        "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a01"
+      },
+      "workItem" : {
+        "key" : "TKM-1",
+        "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a02",
+        "title" : "Add model pricing importer"
+      },
+      "repository" : {
+        "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a03",
+        "name" : "tokenmeter"
+      },
+      "run" : {
+        "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04"
+      },
+      "workflow" : {
+        "key" : "especificar-planificar-implementar",
+        "name" : "SDD",
+        "version" : 1
+      },
+      "stage" : {
+        "key" : "aprobar-plan",
+        "name" : "Aprobar el plan"
+      }
+    },
+    "revise" : {
+      "agentRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a06",
+      "stageKey" : "plan"
+    },
+    "dependencies" : [ {
+      "stageKey" : "plan",
+      "name" : null,
+      "type" : "agent",
+      "status" : "SUCCEEDED",
+      "agents" : [ {
+        "agentRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a06",
+        "childKey" : null,
+        "status" : "COMPLETED",
+        "provider" : "claude-code",
+        "costUsd" : 0.4210,
+        "structuredOutput" : {
+          "summary" : "Importar los precios desde un CSV"
+        },
+        "checks" : [ {
+          "name" : "artifacts",
+          "target" : "openspec/tasks.md",
+          "passed" : true,
+          "reason" : null
+        } ],
+        "changes" : {
+          "branch" : "skynet/tkm-1-plan",
+          "baseCommit" : "4f2a9c1",
+          "headCommit" : "9b1e7d3",
+          "commits" : 1,
+          "files" : 2,
+          "insertions" : 48,
+          "deletions" : 3,
+          "uncommittedFiles" : 0
+        },
+        "artifacts" : [ {
+          "name" : "changes.json",
+          "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a12",
+          "type" : "GIT_CHANGES"
+        } ]
+      } ]
+    } ],
+    "costUsd" : 0.4210,
+    "grants" : [ {
+      "stage" : "review",
+      "name" : "Revisión",
+      "type" : "agent",
+      "agent" : "reviewer",
+      "allowedTools" : [ "Read", "Grep" ],
+      "permissionMode" : "plan",
+      "environment" : null,
+      "maxTurns" : 10,
+      "maxBudgetUsd" : 2.50,
+      "timeoutMinutes" : null,
+      "model" : "claude-haiku-4-5",
+      "command" : null,
+      "provider" : "claude-code",
+      "unsupported" : [ ]
+    } ],
+    "consequences" : {
+      "approve" : "Pueden arrancar: implement.",
+      "reject" : "La ejecución falla y se cancelan implement.",
+      "requestChanges" : "plan recibe tu comentario y la puerta vuelve a preguntar con lo corregido."
+    }
+  },
+  "decisions" : [ {
+    "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a11",
+    "action" : "COMMENT",
+    "comment" : "¿Cubre los precios en euros?",
+    "actor" : "admin",
+    "createdAt" : "2026-10-05T09:01:00Z"
+  } ]
+}

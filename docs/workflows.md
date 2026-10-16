@@ -59,7 +59,7 @@ stages:
 - Al lanzar, lo que pide un agente se recorta a la política del repositorio: solo las herramientas que el repositorio permite (`Bash(git:*)` cabe en `Bash`, al revés no), su modo de permisos solo si no es más permisivo (`plan` < `default`/`dontAsk` < `acceptEdits`) y sus límites rebajados a los del repositorio. Lo que el agente no fija sale de la política y, los límites, de los del lanzamiento.
 
 **`stages[]`:**
-- `id` (obligatorio, único) y `type` (obligatorio): `agent`, `command`, `parallel`, `conditional` o `verification` (los demás tipos aún no se ejecutan, ver abajo).
+- `id` (obligatorio, único) y `type` (obligatorio): `agent`, `command`, `parallel`, `conditional`, `verification` o `human-approval` (los demás tipos aún no se ejecutan, ver abajo).
 - `agent`: un agente de `agents`. Sin él, la fase usa la política del repositorio.
 - `prompt`: el de la fase; si falta, el del agente. Uno de los dos tiene que existir.
 - `dependsOn`: fases que tienen que terminar antes. Con `?` al final (`plan?`) es opcional: también vale si esa fase se omite. Entre corchetes va entre comillas (`dependsOn: ["plan?"]`), porque YAML lee `?` como otra cosa.
@@ -69,6 +69,7 @@ stages:
 - `children`: solo en las fases `type: parallel`, y obligatorio en ellas. Ver abajo.
 - `condition`: la fase solo se ejecuta si es verdadera; si es falsa, se omite. Ver «Condiciones».
 - `artifacts`, `checks` y `scope`: lo que Skynet comprueba en el worktree de la fase antes de darla por buena. Ver «Verificación de una fase».
+- `action`, `risk` y `revise`: solo en las fases `type: human-approval`. Ver «Puertas de aprobación».
 - `outputSchema`: solo en las fases `type: agent`. La salida estructurada que devuelve la fase, y manda sobre el `output` de su agente, así que un mismo agente sirve en fases con salidas distintas. Es un JSON Schema en línea, como `output`, o la ruta de un fichero del repositorio (`outputSchema: schemas/spec.json`). Ver «Salida de una fase en un fichero».
 
 **Fases `command`:** ejecutan un comando de shell en lugar de un agente, p. ej. los tests después de implementar:
@@ -223,13 +224,36 @@ stages:
 - En la ejecución, su única invocación tiene proveedor `verification`: no arranca ningún proceso, termina bien si pasan las comprobaciones y falla con los motivos si no. No se continúa ni se reintenta por separado.
 - La fase siguiente continúa el mismo worktree.
 
+**Puertas de aprobación.** Una fase `type: human-approval` para la ejecución hasta que alguien decide, p. ej. aprobar el plan antes de implementar:
+
+```yaml
+  - id: aprobar-plan
+    type: human-approval
+    dependsOn: [plan]
+    action: "Aprobar el plan de {{workItem.key}}: {{stages.plan.output.summary}}"
+    risk: high          # low, medium (por defecto) o high
+    revise: plan        # opcional: por defecto, su única dependencia `agent`
+  - id: implement
+    type: agent
+    prompt: Implementa el plan
+    dependsOn: [aprobar-plan]   # continúa el worktree de plan
+```
+
+- `action` (obligatoria) es lo que se pide aprobar. Admite las variables de un prompt, incluidas `{{stages…}}`, con las mismas comprobaciones al publicar.
+- `revise` es la fase `agent` (anterior a la puerta) cuyo agente recibirá el comentario al pedir cambios (W5-B). Sin `revise` ni una única dependencia `agent`, pedir cambios no se ofrece.
+- No admite `agent`, `prompt`, `command`, `children`, `outputSchema` ni comprobaciones. Admite `condition`.
+- El worktree pasa sin tocarlo: la fase que depende de la puerta continúa el de la dependencia de la puerta, con las reglas de siempre (`workspaceFrom` si hay varias).
+- Al arrancar, la fase pasa a `WAITING_FOR_APPROVAL` y deja una **petición** con la acción ya resuelta, el riesgo y una foto de la evidencia: de dónde viene (proyecto, trabajo, ejecución, workflow y fase), lo que dejaron sus dependencias (salida estructurada, comprobaciones, cambios del worktree y artefactos de cada agente), el coste de la ejecución hasta ahora, lo que se permitirá a las fases que desbloquea y qué pasa con cada decisión. Mientras espera no ocupa ningún worker, y un reinicio del control plane no la toca.
+- **Aprobar** cierra la puerta bien y arrancan las que dependen de ella. **Rechazar** (con un comentario obligatorio, el motivo) la hace fallar y se aplica el fail-fast. **Comentar** solo añade el comentario. **Pedir cambios** llega en W5-B. Cancelar la ejecución cancela la petición.
+- Una petición pendiente solo se decide una vez: una segunda decisión (o una a la vez que otra) responde 409. Las decisiones y comentarios se guardan con quién y cuándo, y no se modifican ni se borran (salvo al eliminar la ejecución).
+- Eventos: `approval.requested`, `approval.granted`, `approval.rejected`, `approval.commented` y `approval.cancelled`.
+
 ## Lo que aún no se ejecuta
 
 El YAML admite ya todo §11 para poder escribir los workflows de la especificación, pero solo se publica un workflow que el motor sabe ejecutar. Lo demás sale como problema `UNSUPPORTED` con el hito en el que llega:
 
 | Qué | Hito |
 |---|---|
-| Fase `human-approval` | W5 |
 | `retry` y `timeout` | W6 |
 | Fases `github-pr`, `github-check`, `github-merge` y `merge` | S2 |
 | `promptTemplate` | S3 |
@@ -299,5 +323,8 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `POST` | `/api/work-items/{id}/runs` | Lanza una versión publicada (`definitionId`, `inputs`; ver arriba) |
 | `GET` | `/api/workflow-versions/{id}/effective-policy?repositoryId=` | Lo que se permitirá al agente de cada fase en ese repositorio (los límites que no fija el agente, `null`, salen del lanzamiento) |
 | `POST` | `/api/workflow-runs/{id}/cancel` | Cancela una ejecución y sus agentes |
+| `GET` | `/api/approvals?status=&projectId=&risk=` | Las peticiones de aprobación: primero las pendientes (las de más riesgo y las más antiguas), luego las decididas. `status` admite varios separados por comas (`PENDING`, `APPROVED`, `REJECTED`, `CHANGES_REQUESTED`, `CANCELLED`) |
+| `GET` | `/api/approvals/{id}` | Una petición con su evidencia y sus decisiones |
+| `POST` | `/api/approvals/{id}/decisions` | Decide (`{action: APPROVE \| REJECT \| REQUEST_CHANGES \| COMMENT, comment}`) |
 
 Cada problema lleva `severity` (`ERROR`, `UNSUPPORTED` o `WARNING`), `path` (p. ej. `stages.fix.dependsOn[0]`), `line`, `column` y `message`.

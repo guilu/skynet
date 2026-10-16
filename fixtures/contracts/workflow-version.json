@@ -66,7 +66,8 @@
         }
       },
       "outputSchemaPath" : null,
-      "checks" : [ ]
+      "checks" : [ ],
+      "approval" : null
     }, {
       "id" : "fix",
       "name" : null,
@@ -84,7 +85,8 @@
       "condition" : null,
       "outputSchema" : null,
       "outputSchemaPath" : null,
-      "checks" : [ ]
+      "checks" : [ ],
+      "approval" : null
     }, {
       "id" : "verify",
       "name" : null,
@@ -118,7 +120,8 @@
         "name" : "command",
         "command" : "npm run lint",
         "paths" : [ ]
-      } ]
+      } ],
+      "approval" : null
     } ]
   }
 }

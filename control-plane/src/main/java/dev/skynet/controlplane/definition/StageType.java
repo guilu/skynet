@@ -14,7 +14,7 @@ public enum StageType {
   PARALLEL("parallel", null),
   CONDITIONAL("conditional", null),
   VERIFICATION("verification", null),
-  HUMAN_APPROVAL("human-approval", "W5"),
+  HUMAN_APPROVAL("human-approval", null),
   GITHUB_PR("github-pr", "S2"),
   GITHUB_CHECK("github-check", "S2"),
   GITHUB_MERGE("github-merge", "S2"),
@@ -41,16 +41,22 @@ public enum StageType {
         || this == COMMAND
         || this == PARALLEL
         || this == CONDITIONAL
-        || this == VERIFICATION;
+        || this == VERIFICATION
+        || this == HUMAN_APPROVAL;
   }
 
   /**
    * Si la fase deja un worktree que las siguientes pueden continuar: el suyo en una {@code agent} o
    * {@code command}, el que heredó (sin los cambios de sus hijos) en una {@code parallel} y el que
-   * comprobó en una {@code verification}.
+   * comprobó en una {@code verification} y el que se aprueba en una {@code human-approval}, que lo
+   * pasa sin tocarlo.
    */
   public boolean hasWorkspace() {
-    return this == AGENT || this == COMMAND || this == PARALLEL || this == VERIFICATION;
+    return this == AGENT
+        || this == COMMAND
+        || this == PARALLEL
+        || this == VERIFICATION
+        || this == HUMAN_APPROVAL;
   }
 
   /** Hito en el que se podrá ejecutar, o {@code null} si todavía no está planificado. */

@@ -530,6 +530,16 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito W4 (resultado estructurado), planificado el 2026-10-13:** W4-A salida de fase y datos entre fases, W4-B verificación de fase (`artifacts`, `checks`) y nodo `verification`, W4-C verificación en la web, plantilla «Especificar, planificar e implementar» y E2E.
 
+**Hito W5 (human-in-the-loop), planificado el 2026-10-16:** W5-A puertas de aprobación en el motor, W5-B pedir cambios, W5-C centro de aprobaciones y E2E.
+
+**Implementado (W5-A), puertas de aprobación en el motor:**
+
+- YAML: `type: human-approval` deja de ser `UNSUPPORTED`, con `action` (obligatoria, con las variables de un prompt), `risk` (`low`, `medium` o `high`) y `revise` (la fase `agent` que corregirá al pedir cambios; por defecto, su única dependencia `agent`). Se guardan en `StageDefinition.approval`. La puerta pasa el worktree de su dependencia sin tocarlo (`hasWorkspace`).
+- Migración `V19`: `approval_request` (una por ronda: acción ya resuelta, riesgo, la foto de la evidencia en `jsonb` y su estado) y `approval_decision` (append-only: acción, comentario, quién y cuándo). Triggers: una decisión no se modifica ni se borra y una petición solo cambia una vez de `PENDING` a su estado final, salvo en una purga.
+- Motor: al arrancar, la puerta pasa a `WAITING_FOR_APPROVAL` y `Approvals` crea la petición. Aprobar la cierra `SUCCEEDED` («approval-granted») y despierta al motor; rechazar, `FAILED` («approval-rejected») con fail-fast; comentar no cambia nada. La decisión bloquea la fila de la ejecución, así que no se cruza con el motor ni con otra decisión (la segunda da 409). Cancelar la fase cancela su petición, firmada por `skynet`. Pedir cambios responde 409 hasta W5-B.
+- API `/api/approvals` (lista con filtros, detalle con evidencia y decisiones, y decisiones), y la vista de la ejecución lleva en cada puerta su última petición (`approval`). Eventos `approval.requested`, `approval.granted`, `approval.rejected`, `approval.commented` y `approval.cancelled`.
+- Contratos nuevos `approvals` y `approval`; tipos en `web/src/api.ts` para la web de W5-C.
+
 **Implementado (W4-C), verificación en la web y E2E:**
 
 - La vista de la ejecución lleva, en cada fase, sus `checks`, los datos de otras fases que lee su prompt (`reads`, p. ej. `spec.output.summary`) y la última verificación de fase de cada agente (`verifications`). Los eventos `stage.verification.*` hacen que la web relea la ejecución.

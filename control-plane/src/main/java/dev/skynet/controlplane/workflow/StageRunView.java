@@ -23,6 +23,8 @@ import java.util.UUID;
  *     spec.output.summary})
  * @param verifications la última verificación de fase de cada uno de sus agentes; con una en curso,
  *     la fase está «Verificando»
+ * @param approval la última petición de aprobación de una fase {@code human-approval}, o {@code
+ *     null} si no ha preguntado todavía (o no es una puerta)
  */
 public record StageRunView(
     UUID id,
@@ -40,7 +42,8 @@ public record StageRunView(
     Instant startedAt,
     Instant finishedAt,
     List<AgentRunView> agents,
-    List<VerificationResult> verifications) {
+    List<VerificationResult> verifications,
+    ApprovalSummary approval) {
 
   /**
    * @param workflow el workflow de la ejecución, o {@code null} si la versión ya no se puede leer
@@ -49,7 +52,8 @@ public record StageRunView(
       StageRun s,
       WorkflowDefinition workflow,
       List<AgentRunView> agents,
-      List<VerificationResult> verifications) {
+      List<VerificationResult> verifications,
+      ApprovalSummary approval) {
     StageDefinition definition =
         workflow == null ? null : workflow.stage(s.getStageKey()).orElse(null);
     return new StageRunView(
@@ -68,6 +72,7 @@ public record StageRunView(
         s.getStartedAt(),
         s.getFinishedAt(),
         agents,
-        verifications);
+        verifications,
+        approval);
   }
 }

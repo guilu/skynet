@@ -88,6 +88,7 @@ public class RunSteps {
   private final VerificationProperties verification;
   private final Verifications verifications;
   private final StageVerifications stageVerifications;
+  private final Approvals approvals;
   private final TimeSource time;
 
   RunSteps(
@@ -105,6 +106,7 @@ public class RunSteps {
       VerificationProperties verification,
       Verifications verifications,
       StageVerifications stageVerifications,
+      Approvals approvals,
       TimeSource time) {
     this.runs = runs;
     this.workflowRuns = workflowRuns;
@@ -120,6 +122,7 @@ public class RunSteps {
     this.verification = verification;
     this.verifications = verifications;
     this.stageVerifications = stageVerifications;
+    this.approvals = approvals;
     this.time = time;
   }
 
@@ -202,8 +205,9 @@ public class RunSteps {
    * se pone en cola igual, como una invocación que el runner ejecuta con {@code sh -c}, con el
    * entorno del repositorio y el tiempo máximo de las verificaciones. Una fase {@code parallel}
    * pone en cola un agente por hijo, cada uno en un worktree nuevo: una copia del heredado si lo
-   * hay. Si no se puede (el repositorio o el trabajo se archivaron, el worktree se eliminó, no hay
-   * prompt), la fase falla con el motivo.
+   * hay. Una fase {@code human-approval} pasa a esperar con su petición de aprobación. Si no se
+   * puede (el repositorio o el trabajo se archivaron, el worktree se eliminó, no hay prompt), la
+   * fase falla con el motivo.
    */
   public StartOutcome start(UUID runId, String stageKey, PublishedDefinition published) {
     Instant now = time.now();
@@ -235,6 +239,17 @@ public class RunSteps {
       CodeRepository repository = projects.getRepository(repositoryOf(run));
       workItems.requireActive(workItem);
       projects.requireActive(repository);
+      if (stageDefinition.type() == StageType.HUMAN_APPROVAL) {
+        String action =
+            new PromptRenderer(
+                    workItem,
+                    projects.get(workItem.getProjectId()),
+                    inputsOf(run),
+                    new ConditionData(run, definition)::value)
+                .render(stageDefinition.approval().action());
+        approvals.request(run, stage, published, action, workItem, repository, now);
+        return StartOutcome.STARTED;
+      }
       WorkspaceView source = sourceWorkspace(runId, stageDefinition, definition);
       if (source != null) {
         workspaces.lock(source.id());
@@ -523,14 +538,16 @@ public class RunSteps {
 
   /**
    * Worktree que deja {@code source}: el del último agente de una fase, el de un hijo ({@code
-   * <fase>.<hijo>}) o, en una fase {@code parallel}, el que heredó (sus hijos trabajan en copias);
-   * {@code null} si la {@code parallel} no heredó ninguno.
+   * <fase>.<hijo>}) o, en una fase {@code parallel} o {@code human-approval}, el que heredó (los
+   * hijos trabajan en copias; una puerta no lo toca); {@code null} si no heredó ninguno.
    */
   private WorkspaceView worktreeOf(UUID runId, String source, WorkflowDefinition definition) {
     String stageKey = stageOf(source);
     String child = stageKey.equals(source) ? null : source.substring(stageKey.length() + 1);
     StageDefinition stageDefinition = definition.stage(stageKey).orElseThrow();
-    if (child == null && stageDefinition.type() == StageType.PARALLEL) {
+    if (child == null
+        && (stageDefinition.type() == StageType.PARALLEL
+            || stageDefinition.type() == StageType.HUMAN_APPROVAL)) {
       String inherited = worktreeSource(stageDefinition, definition, latestStages(runId));
       return inherited == null ? null : worktreeOf(runId, inherited, definition);
     }
