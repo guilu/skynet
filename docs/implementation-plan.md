@@ -532,6 +532,13 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito W5 (human-in-the-loop), planificado el 2026-10-16:** W5-A puertas de aprobación en el motor, W5-B pedir cambios, W5-C centro de aprobaciones y E2E.
 
+**Implementado (W5-B), pedir cambios:**
+
+- `REQUEST_CHANGES` (con comentario obligatorio) pone en cola, en la fase `revise` de la evidencia y en la misma ejecución, una invocación `RESUME` de la sesión de su último agente con el comentario (`RunService.queueCorrection`, con las mismas comprobaciones que enviar un mensaje). La petición se cierra `CHANGES_REQUESTED` con la invocación en `correction_agent_run_id` (migración `V20`) y la puerta pasa a `RUNNING` («changes-requested»). Sin `revise`, o si no se puede reanudar, 409 y la petición sigue pendiente.
+- El motor cierra las correcciones antes de planificar (`RunSteps.settleCorrections`): con la corrección terminada bien, y su verificación de fase pasada si `revise` tiene comprobaciones, la puerta vuelve a preguntar con otra ronda y evidencia nueva (`changesRequested` lleva lo que se pidió); si falla o no pasa, la puerta falla («correction-failed», `approval.correction.failed`); si se cancela, se cancela. Es determinista: un reinicio o una evaluación repetida no duplican nada.
+- Como la corrección es un agente más de la fase `revise`, la salida estructurada, el worktree y la evidencia que leen después son los suyos. `StageVerifications` comprueba también los agentes nuevos de una fase ya terminada y registra su `stage.verification.completed`.
+- Cancelar la puerta mientras corrige cancela la corrección. La API lleva `correctionAgentRunId` en cada petición.
+
 **Implementado (W5-A), puertas de aprobación en el motor:**
 
 - YAML: `type: human-approval` deja de ser `UNSUPPORTED`, con `action` (obligatoria, con las variables de un prompt), `risk` (`low`, `medium` o `high`) y `revise` (la fase `agent` que corregirá al pedir cambios; por defecto, su única dependencia `agent`). Se guardan en `StageDefinition.approval`. La puerta pasa el worktree de su dependencia sin tocarlo (`hasWorkspace`).

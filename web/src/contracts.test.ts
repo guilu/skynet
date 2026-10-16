@@ -310,6 +310,7 @@ const APPROVAL_SUMMARY: Keys<ApprovalSummary> = {
   status: true,
   createdAt: true,
   decidedAt: true,
+  correctionAgentRunId: true,
   origin: true,
 }
 const APPROVAL_VIEW: Keys<ApprovalView> = {
@@ -323,6 +324,7 @@ const APPROVAL_VIEW: Keys<ApprovalView> = {
   status: true,
   createdAt: true,
   decidedAt: true,
+  correctionAgentRunId: true,
   evidence: true,
   decisions: true,
 }
@@ -341,6 +343,7 @@ const APPROVAL_EVIDENCE: Keys<ApprovalEvidence> = {
   costUsd: true,
   grants: true,
   consequences: true,
+  changesRequested: true,
 }
 const APPROVAL_AGENT: Keys<ApprovalEvidenceAgent> = {
   agentRunId: true,

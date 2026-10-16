@@ -77,6 +77,10 @@ class RunEvaluator {
       }
       RunState state = locked.get();
       PublishedDefinition published = definitions.published(state.definitionId());
+      if (steps.settleCorrections(runId, published)) {
+        // Una puerta ha vuelto a preguntar o ha terminado: se planifica con su estado nuevo.
+        continue;
+      }
       List<Step> plan = Planner.plan(published.definition(), state.stages());
       boolean progressed = false;
       boolean deferred = false;

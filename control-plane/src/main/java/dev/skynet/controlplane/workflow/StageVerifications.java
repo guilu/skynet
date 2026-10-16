@@ -64,11 +64,12 @@ class StageVerifications {
     StageDefinition definition = definitionOf(stage);
     if (agent.getStatus() == AgentObservableStatus.COMPLETED) {
       WorkspaceView workspace = workspaces.find(agent.getWorkspaceId()).orElse(null);
-      // Si otro hijo ya no pasó, la fase va a fallar: no hace falta comprobar este.
+      // Si otro hijo ya no pasó, la fase va a fallar: no hace falta comprobar este. Una fase ya
+      // terminada solo tiene agentes nuevos si una puerta le pidió cambios (W5-B): se comprueban.
       if (definition != null
           && definition.verified()
           && workspace != null
-          && !verifications.stageFailed(stage.getId())) {
+          && (stage.getStatus().isTerminal() || !verifications.stageFailed(stage.getId()))) {
         queue(agent, workspace, stage, definition, agent.getBaseCommit(), now);
       } else {
         verificationService.afterCompletion(agent, now);
@@ -115,7 +116,8 @@ class StageVerifications {
 
   /**
    * Ha terminado una verificación de fase: lo registra en la fase y la cierra si ya puede. En una
-   * fase {@code verification}, su invocación termina con el resultado.
+   * fase {@code verification}, su invocación termina con el resultado. En una fase que ya terminó
+   * bien es la de una corrección (W5-B): se registra y la puerta que la pidió decide.
    */
   void completed(UUID verificationRunId, Instant now) {
     VerificationResult result = verifications.find(verificationRunId).orElseThrow();
@@ -124,7 +126,7 @@ class StageVerifications {
     }
     StageRun stage = stageRuns.findById(result.stageRunId()).orElseThrow();
     AgentRun agent = agentRuns.findById(result.agentRunId()).orElseThrow();
-    if (stage.getStatus().isTerminal()) {
+    if (stage.getStatus().isTerminal() && stage.getStatus() != StageStatus.SUCCEEDED) {
       return;
     }
     Map<String, Object> payload = new LinkedHashMap<>();

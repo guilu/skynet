@@ -136,17 +136,18 @@ class PurgeService {
     update("DELETE FROM event WHERE workflow_run_id IN (:ids)", scope.runs());
     update("DELETE FROM event WHERE aggregate_id IN (:ids)", aggregates);
 
+    // Antes que los agentes: una petición guarda la invocación que la corrigió (W5-B).
+    update(
+        "DELETE FROM approval_decision WHERE approval_request_id IN"
+            + " (SELECT id FROM approval_request WHERE workflow_run_id IN (:ids))",
+        scope.runs());
+    update("DELETE FROM approval_request WHERE workflow_run_id IN (:ids)", scope.runs());
     update("DELETE FROM prompt WHERE agent_run_id IN (:ids)", agents);
     update("DELETE FROM artifact WHERE agent_run_id IN (:ids)", agents);
     update("DELETE FROM verification_run WHERE agent_run_id IN (:ids)", agents);
     update("DELETE FROM runner_command WHERE agent_run_id IN (:ids)", agents);
     update("DELETE FROM agent_run WHERE id IN (:ids)", agents);
     update("DELETE FROM workspace WHERE id IN (:ids)", workspaces);
-    update(
-        "DELETE FROM approval_decision WHERE approval_request_id IN"
-            + " (SELECT id FROM approval_request WHERE workflow_run_id IN (:ids))",
-        scope.runs());
-    update("DELETE FROM approval_request WHERE workflow_run_id IN (:ids)", scope.runs());
     update("DELETE FROM stage_run WHERE workflow_run_id IN (:ids)", scope.runs());
     update("DELETE FROM workflow_run WHERE id IN (:ids)", scope.runs());
     update("DELETE FROM work_item WHERE id IN (:ids)", scope.workItems());

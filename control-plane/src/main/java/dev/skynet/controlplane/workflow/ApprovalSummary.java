@@ -12,6 +12,8 @@ import java.util.UUID;
  * @param risk {@code LOW}, {@code MEDIUM} o {@code HIGH}
  * @param status {@code PENDING}, {@code APPROVED}, {@code REJECTED}, {@code CHANGES_REQUESTED} o
  *     {@code CANCELLED}
+ * @param correctionAgentRunId con {@code CHANGES_REQUESTED}, la invocación que corrige en la fase
+ *     {@code revise}
  * @param origin proyecto, trabajo, ejecución, workflow y fase de la puerta, como en la evidencia
  */
 public record ApprovalSummary(
@@ -25,4 +27,5 @@ public record ApprovalSummary(
     String status,
     Instant createdAt,
     Instant decidedAt,
+    UUID correctionAgentRunId,
     Map<String, Object> origin) {}

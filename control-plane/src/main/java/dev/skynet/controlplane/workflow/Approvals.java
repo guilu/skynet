@@ -25,8 +25,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -46,9 +48,18 @@ public class Approvals {
   static final String APPROVED = "APPROVED";
   static final String REJECTED = "REJECTED";
   static final String CANCELLED = "CANCELLED";
+  static final String CHANGES_REQUESTED = "CHANGES_REQUESTED";
 
   /** Quién firma la cancelación de una petición cuando se cancela su fase. */
   static final String SYSTEM_ACTOR = "skynet";
+
+  /**
+   * La corrección en curso de una puerta que pidió cambios (W5-B).
+   *
+   * @param approvalId la petición que se cerró pidiendo cambios
+   * @param agentRunId la invocación que corrige, en la fase {@code revise}
+   */
+  record Correction(UUID approvalId, int round, String stageKey, UUID agentRunId) {}
 
   /** Lo que se puede hacer con una petición. */
   public enum Action {
@@ -63,39 +74,46 @@ public class Approvals {
 
   private final JdbcClient jdbc;
   private final ObjectMapper json;
+  private final WorkflowRunRepository workflowRuns;
   private final StageRunRepository stageRuns;
   private final AgentRunRepository agentRuns;
   private final RunTransitions transitions;
   private final Verifications verifications;
   private final ProjectService projects;
   private final ApplicationEventPublisher publisher;
+  private final ObjectProvider<RunService> runs;
   private final TimeSource time;
 
   Approvals(
       JdbcClient jdbc,
       ObjectMapper json,
+      WorkflowRunRepository workflowRuns,
       StageRunRepository stageRuns,
       AgentRunRepository agentRuns,
       RunTransitions transitions,
       Verifications verifications,
       ProjectService projects,
       ApplicationEventPublisher publisher,
+      ObjectProvider<RunService> runs,
       TimeSource time) {
     this.jdbc = jdbc;
     this.json = json;
+    this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
     this.agentRuns = agentRuns;
     this.transitions = transitions;
     this.verifications = verifications;
     this.projects = projects;
     this.publisher = publisher;
+    this.runs = runs;
     this.time = time;
   }
 
   /**
    * La puerta {@code stage} empieza a esperar: pasa a {@code WAITING_FOR_APPROVAL} y deja una
    * petición con la acción ya resuelta ({@code action}) y la foto de lo que hay que enseñar al
-   * decidir. La llama el motor, dentro de su transacción.
+   * decidir. También vuelve a preguntar, con una ronda más, cuando termina bien la corrección que
+   * se pidió ({@code RUNNING}). La llama el motor, dentro de su transacción.
    */
   void request(
       WorkflowRun run,
@@ -120,6 +138,8 @@ public class Approvals {
     Map<String, Object> evidence =
         evidence(
             run, stage, published, workItem, repository, projects.get(workItem.getProjectId()));
+    evidence.put(
+        "changesRequested", round == 1 ? null : changesRequested(stage.getId(), round - 1));
     UUID id = UUID.randomUUID();
     jdbc.sql(
             "INSERT INTO approval_request (id, workflow_run_id, stage_run_id, round, action, risk,"
@@ -147,7 +167,10 @@ public class Approvals {
   /**
    * Decide sobre la petición {@code id} o la comenta. Aprobar cierra la puerta bien y deja arrancar
    * a sus dependientes; rechazar la hace fallar (con el comentario, obligatorio, como motivo) y se
-   * aplica el fail-fast. Comentar no cambia nada más. Una petición ya decidida responde 409.
+   * aplica el fail-fast. Pedir cambios manda el comentario a la fase {@code revise}, que lo corrige
+   * en su sesión mientras la puerta queda «Corrigiendo» ({@code RUNNING}); al terminar, el motor
+   * vuelve a preguntar ({@link RunSteps#settleCorrections}). Comentar no cambia nada más. Una
+   * petición ya decidida responde 409.
    */
   @Transactional
   public ApprovalView decide(UUID id, Action action, String comment, String actor) {
@@ -186,10 +209,12 @@ public class Approvals {
       throw new ConflictException(
           "La aprobación ya está decidida (" + request.status().toLowerCase(Locale.ROOT) + ")");
     }
-    if (action == Action.REQUEST_CHANGES) {
-      throw new ConflictException("Pedir cambios todavía no se puede: llega en W5-B");
-    }
     StageRun stage = stageRuns.findById(request.stageRunId()).orElseThrow();
+    if (action == Action.REQUEST_CHANGES) {
+      requestChanges(request, stage, text, actor, now);
+      publisher.publishEvent(new WorkflowRunChanged(runId));
+      return view(id);
+    }
     String status = action == Action.APPROVE ? APPROVED : REJECTED;
     close(id, status, now);
     record(id, action.name(), text, actor, now);
@@ -202,6 +227,149 @@ public class Approvals {
     }
     publisher.publishEvent(new WorkflowRunChanged(runId));
     return view(id);
+  }
+
+  /**
+   * Cierra la petición pidiendo cambios: pone en cola la corrección en la fase {@code revise} de la
+   * evidencia y la puerta pasa a {@code RUNNING}. Si no se puede continuar esa sesión (el proveedor
+   * no lo permite, su worktree se eliminó), responde 409 y la petición sigue pendiente.
+   */
+  private void requestChanges(
+      ApprovalSummary request, StageRun stage, String comment, String actor, Instant now) {
+    String reviseKey = reviseKey(request.id());
+    if (reviseKey == null) {
+      throw new ConflictException(
+          "Esta puerta no tiene a quién pedir cambios: indica en `revise` la fase de agente que"
+              + " corrige");
+    }
+    StageRun revise = latestStages(request.workflowRunId()).get(reviseKey);
+    if (revise == null || revise.getStatus() != StageStatus.SUCCEEDED) {
+      throw new ConflictException(
+          "La fase " + reviseKey + " no ha terminado bien: no se le pueden pedir cambios");
+    }
+    WorkflowRun run = workflowRuns.findById(request.workflowRunId()).orElseThrow();
+    AgentRun correction =
+        runs.getObject().queueCorrection(run, revise, correctionPrompt(request, comment), now);
+    jdbc.sql(
+            "UPDATE approval_request SET status = ?, decided_at = ?, correction_agent_run_id = ?"
+                + " WHERE id = ? AND status = ?")
+        .params(CHANGES_REQUESTED, Timestamp.from(now), correction.getId(), request.id(), PENDING)
+        .update();
+    record(request.id(), Action.REQUEST_CHANGES.name(), comment, actor, now);
+    transitions.advanceStage(stage, StageStatus.RUNNING, "changes-requested", now);
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("approvalId", request.id());
+    payload.put("stageKey", request.stageKey());
+    payload.put("round", request.round());
+    payload.put("actor", actor);
+    payload.put("comment", comment);
+    payload.put("reviseStageKey", reviseKey);
+    payload.put("correctionAgentRunId", correction.getId());
+    transitions.append(
+        "approval_request",
+        request.id(),
+        "approval.changes_requested",
+        request.workflowRunId(),
+        payload,
+        now);
+  }
+
+  /** Lo que recibe el agente que corrige: qué se revisaba y el comentario. */
+  private static String correctionPrompt(ApprovalSummary request, String comment) {
+    return "Al revisar «"
+        + request.action()
+        + "» han pedido estos cambios. Aplícalos y, si tu tarea pide una salida estructurada,"
+        + " devuélvela completa de nuevo.\n\n"
+        + comment;
+  }
+
+  /** La fase {@code revise} de la petición, tal como quedó en su evidencia. */
+  private String reviseKey(UUID requestId) {
+    return jdbc.sql("SELECT evidence -> 'revise' ->> 'stageKey' FROM approval_request WHERE id = ?")
+        .param(requestId)
+        .query(String.class)
+        .optional()
+        .orElse(null);
+  }
+
+  /**
+   * La corrección de la puerta {@code stageRunId}, si su última petición se cerró pidiendo cambios.
+   */
+  Optional<Correction> correction(UUID stageRunId) {
+    return jdbc.sql(
+            "SELECT id, round, correction_agent_run_id,"
+                + " evidence -> 'revise' ->> 'stageKey' AS revise, status"
+                + " FROM approval_request WHERE stage_run_id = ? ORDER BY round DESC LIMIT 1")
+        .param(stageRunId)
+        .query(
+            (rs, row) ->
+                Map.entry(
+                    rs.getString("status"),
+                    new Correction(
+                        rs.getObject("id", UUID.class),
+                        rs.getInt("round"),
+                        rs.getString("revise"),
+                        rs.getObject("correction_agent_run_id", UUID.class))))
+        .optional()
+        .filter(e -> CHANGES_REQUESTED.equals(e.getKey()))
+        .map(Map.Entry::getValue);
+  }
+
+  /**
+   * La corrección no ha terminado bien: la puerta falla ({@code correction-failed}) o se cancela
+   * ({@code correction-cancelled}) con el motivo en {@code approval.correction.failed}.
+   */
+  void correctionFailed(
+      StageRun stage, Correction correction, boolean cancelled, String error, Instant now) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("approvalId", correction.approvalId());
+    payload.put("stageKey", stage.getStageKey());
+    payload.put("round", correction.round());
+    payload.put("reviseStageKey", correction.stageKey());
+    payload.put("correctionAgentRunId", correction.agentRunId());
+    payload.put("cancelled", cancelled);
+    if (error != null) {
+      payload.put("error", error);
+    }
+    transitions.append(
+        "approval_request",
+        correction.approvalId(),
+        "approval.correction.failed",
+        stage.getWorkflowRunId(),
+        payload,
+        now);
+    transitions.advanceStage(
+        stage,
+        cancelled ? StageStatus.CANCELLED : StageStatus.FAILED,
+        cancelled ? "correction-cancelled" : "correction-failed",
+        now);
+  }
+
+  /** Los cambios que se pidieron en la ronda {@code round}: quién, cuándo y qué. */
+  private Map<String, Object> changesRequested(UUID stageRunId, int round) {
+    return jdbc.sql(
+            "SELECT a.id, d.comment, d.actor, d.created_at, a.correction_agent_run_id"
+                + " FROM approval_request a JOIN approval_decision d"
+                + " ON d.approval_request_id = a.id AND d.action = 'REQUEST_CHANGES'"
+                + " WHERE a.stage_run_id = ? AND a.round = ?")
+        .params(stageRunId, round)
+        .query(
+            (rs, row) ->
+                map(
+                    "approvalId",
+                    rs.getObject("id", UUID.class),
+                    "round",
+                    round,
+                    "comment",
+                    rs.getString("comment"),
+                    "actor",
+                    rs.getString("actor"),
+                    "createdAt",
+                    rs.getTimestamp("created_at").toInstant().toString(),
+                    "correctionAgentRunId",
+                    rs.getObject("correction_agent_run_id", UUID.class)))
+        .optional()
+        .orElse(null);
   }
 
   /**
@@ -285,6 +453,7 @@ public class Approvals {
         summary.status(),
         summary.createdAt(),
         summary.decidedAt(),
+        summary.correctionAgentRunId(),
         json.readValue(evidence, new TypeReference<LinkedHashMap<String, Object>>() {}),
         decisions);
   }
@@ -332,6 +501,7 @@ public class Approvals {
         rs.getString("status"),
         rs.getTimestamp("created_at").toInstant(),
         decided == null ? null : decided.toInstant(),
+        rs.getObject("correction_agent_run_id", UUID.class),
         origin);
   }
 

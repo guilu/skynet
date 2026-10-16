@@ -408,6 +408,52 @@ public class RunService {
 
   private WorkflowRun continueSession(UUID agentRunId, String text, boolean fork) {
     AgentRun requested = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
+    Invocation invocation = continuation(requested, text, fork);
+    AgentRun parent = invocation.parent();
+    return spawn(workItemOf(parent), projects.getRepository(parent.getRepositoryId()), invocation);
+  }
+
+  /**
+   * Pide cambios a la fase {@code revise} desde una puerta (W5-B): reanuda la sesión de su último
+   * agente con {@code text}, en su worktree y su runner, como una invocación más de esa fase en la
+   * misma ejecución. La fase sigue terminada; la invocación nueva es la que leen después la puerta
+   * y las fases siguientes. Si las comprobaciones de la fase se repiten, se miden desde el mismo
+   * commit que las primeras.
+   */
+  AgentRun queueCorrection(WorkflowRun run, StageRun revise, String text, Instant now) {
+    AgentRun last =
+        agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(revise.getId())).stream()
+            .reduce((first, second) -> second)
+            .orElseThrow(
+                () ->
+                    new ConflictException(
+                        "La fase "
+                            + revise.getStageKey()
+                            + " no tiene un agente al que pedir cambios"));
+    Invocation invocation = continuation(last, text, false);
+    AgentRun parent = invocation.parent();
+    CodeRepository repository = projects.getRepository(parent.getRepositoryId());
+    WorkItem workItem = workItems.get(run.getWorkItemId());
+    workItems.requireActive(workItem);
+    projects.requireActive(repository);
+    AgentRun agent = agentQueue.queue(run, revise, workItem, repository, invocation, null, now);
+    String base =
+        parent.getBaseCommit() != null
+            ? parent.getBaseCommit()
+            : workspaces.find(invocation.workspaceId()).map(WorkspaceView::baseCommit).orElse(null);
+    if (base != null) {
+      agent.recordBaseCommit(base);
+      agent = agentRuns.save(agent);
+    }
+    return agent;
+  }
+
+  /**
+   * La invocación que continúa la sesión de {@code requested} (o la bifurca) con {@code text}, si
+   * se puede: el proveedor lo permite, la sesión arrancó y su worktree sigue y está libre.
+   */
+  private Invocation continuation(AgentRun requested, String text, boolean fork) {
+    UUID agentRunId = requested.getId();
     requireAgent(requested);
     requireCapability(requested, fork ? Capability.FORK : Capability.RESUME);
     WorkspaceView workspace =
@@ -436,20 +482,16 @@ public class RunService {
     }
     UUID sessionId = fork ? UUID.randomUUID() : UUID.fromString(parent.getProviderSessionId());
     CodeRepository repository = projects.getRepository(parent.getRepositoryId());
-    return spawn(
-        workItemOf(parent),
-        repository,
-        new Invocation(
-            fork ? AgentRunKind.FORK : AgentRunKind.RESUME,
-            parent,
-            sessionId,
-            text,
-            inheritedPolicy(parent, repository),
-            fork ? null : workspace.id(),
-            new ResumeFrom(
-                parent.getProviderSessionId(), fork, workspace.path(), workspace.branch()),
-            null,
-            parent.getRunnerId()));
+    return new Invocation(
+        fork ? AgentRunKind.FORK : AgentRunKind.RESUME,
+        parent,
+        sessionId,
+        text,
+        inheritedPolicy(parent, repository),
+        fork ? null : workspace.id(),
+        new ResumeFrom(parent.getProviderSessionId(), fork, workspace.path(), workspace.branch()),
+        null,
+        parent.getRunnerId());
   }
 
   /** El proveedor del agente tiene que permitir continuar (o bifurcar) su sesión. */
@@ -669,7 +711,14 @@ public class RunService {
       return false;
     }
     boolean running = false;
-    for (AgentRun agent : agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()))) {
+    List<AgentRun> own = agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
+    List<AgentRun> toCancel = new ArrayList<>(own);
+    // Una puerta que corrige espera a la corrección, que vive en la fase `revise` (W5-B).
+    approvals
+        .correction(stage.getId())
+        .flatMap(c -> agentRuns.findById(c.agentRunId()))
+        .ifPresent(toCancel::add);
+    for (AgentRun agent : toCancel) {
       if (agent.getStatus() == AgentObservableStatus.QUEUED) {
         transitions.agent(
             agent, AgentObservableStatus.CANCELLED, stage.getWorkflowRunId(), reason, now);

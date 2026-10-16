@@ -9,6 +9,7 @@
   "status" : "PENDING",
   "createdAt" : "2026-10-05T09:00:50Z",
   "decidedAt" : null,
+  "correctionAgentRunId" : null,
   "origin" : {
     "project" : {
       "key" : "TKM",

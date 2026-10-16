@@ -342,12 +342,32 @@ class WorkflowEngineIT extends IntegrationTest {
           risk: high
         - id: implement
           type: agent
-          prompt: Implementa
+          prompt: "Implementa: {{stages.plan.output.summary}}"
           dependsOn: [aprobar-plan]
         - id: tests
           type: command
           command: make test
           dependsOn: [implement]
+      """;
+
+  /** Una puerta tras una fase con comprobaciones, que se repiten al corregir. */
+  static final String VERIFIED_GATE =
+      """
+      id: puerta-verificada
+      version: 1
+      stages:
+        - id: spec
+          type: agent
+          prompt: Especifica
+          artifacts: [docs/spec.md]
+        - id: aprobar-spec
+          type: human-approval
+          dependsOn: [spec]
+          action: Aprobar la especificación
+        - id: plan
+          type: agent
+          prompt: Planifica
+          dependsOn: [aprobar-spec]
       """;
 
   private String projectId;
@@ -1345,8 +1365,6 @@ class WorkflowEngineIT extends IntegrationTest {
         () -> post(decisions, Map.of("action", "REJECT")),
         "Para rechazar hace falta un comentario");
     assertBadRequest(() -> post(decisions, Map.of("action", "MERGE")), "Acción desconocida");
-    assertConflict(
-        () -> post(decisions, Map.of("action", "REQUEST_CHANGES", "comment", "Más tests")));
 
     JsonNode rejected = post(decisions, Map.of("action", "REJECT", "comment", "No es lo que pedí"));
 
@@ -1380,6 +1398,229 @@ class WorkflowEngineIT extends IntegrationTest {
     assertThat(eventTypes(runId)).contains("approval.cancelled");
     assertConflict(
         () -> post("/api/approvals/" + approvalId + "/decisions", Map.of("action", "APPROVE")));
+  }
+
+  @Test
+  void requestingChangesResumesThePlanSessionAndTheGateAsksAgainWithTheCorrection() {
+    String definitionId = publish(GATE);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    JsonNode plan = runner.claim().getFirst();
+    String session = UUID.randomUUID().toString();
+    complete(runner, plan, "/w/eng/plan", Map.of("summary", "Hacer X"), session);
+    String first = get("/api/approvals?status=PENDING").get(0).path("id").asString();
+    String decisions = "/api/approvals/" + first + "/decisions";
+
+    assertBadRequest(
+        () -> post(decisions, Map.of("action", "REQUEST_CHANGES")),
+        "Para pedir cambios hace falta un comentario");
+    JsonNode requested =
+        post(decisions, Map.of("action", "REQUEST_CHANGES", "comment", "Añade los tests de X"));
+
+    // La puerta queda «Corrigiendo» y plan reanuda su sesión con el comentario, en su worktree.
+    assertThat(requested.path("status").asString()).isEqualTo("CHANGES_REQUESTED");
+    assertThat(requested.path("decisions").get(0).path("action").asString())
+        .isEqualTo("REQUEST_CHANGES");
+    assertThat(stageStatuses(runId))
+        .containsEntry("plan", "SUCCEEDED")
+        .containsEntry("aprobar-plan", "RUNNING")
+        .containsEntry("implement", "PENDING");
+    assertConflict(() -> post(decisions, Map.of("action", "APPROVE")));
+    JsonNode correction = runner.claim().getFirst();
+    assertThat(correction.path("agentRunId").asString())
+        .isEqualTo(requested.path("correctionAgentRunId").asString());
+    JsonNode start = correction.path("start");
+    assertThat(start.path("workflowRunId").asString()).isEqualTo(runId);
+    assertThat(start.path("resume").path("sessionId").asString()).isEqualTo(session);
+    assertThat(start.path("resume").path("fork").asBoolean()).isFalse();
+    assertThat(start.path("resume").path("workspacePath").asString()).isEqualTo("/w/eng/plan");
+    assertThat(start.path("prompt").asString())
+        .contains("Aprobar el plan de ENG-1: Hacer X")
+        .endsWith("Añade los tests de X");
+    assertThat(start.path("outputSchema").asString()).contains("summary");
+    assertThat(agentsOf(runId, "plan")).isEqualTo(2);
+    assertThat(get("/api/approvals?status=PENDING")).isEmpty();
+
+    complete(runner, correction, "/w/eng/plan", Map.of("summary", "Hacer X con tests"), session);
+
+    // Segunda ronda, con lo corregido y lo que se pidió.
+    assertThat(stageStatuses(runId)).containsEntry("aprobar-plan", "WAITING_FOR_APPROVAL");
+    JsonNode pending = get("/api/approvals?status=PENDING");
+    assertThat(pending).hasSize(1);
+    String second = pending.get(0).path("id").asString();
+    assertThat(second).isNotEqualTo(first);
+    assertThat(pending.get(0).path("round").asInt()).isEqualTo(2);
+    assertThat(pending.get(0).path("action").asString())
+        .isEqualTo("Aprobar el plan de ENG-1: Hacer X con tests");
+    JsonNode evidence = get("/api/approvals/" + second).path("evidence");
+    JsonNode planAgent = evidence.path("dependencies").get(0).path("agents").get(0);
+    assertThat(planAgent.path("agentRunId").asString())
+        .isEqualTo(correction.path("agentRunId").asString());
+    assertThat(planAgent.path("structuredOutput").path("summary").asString())
+        .isEqualTo("Hacer X con tests");
+    assertThat(evidence.path("revise").path("agentRunId").asString())
+        .isEqualTo(correction.path("agentRunId").asString());
+    assertThat(evidence.path("changesRequested").path("comment").asString())
+        .isEqualTo("Añade los tests de X");
+    assertThat(evidence.path("changesRequested").path("round").asInt()).isOne();
+    assertThat(
+            get("/api/workflow-runs/" + runId)
+                .path("stages")
+                .get(1)
+                .path("approval")
+                .path("round")
+                .asInt())
+        .isEqualTo(2);
+    assertThat(get("/api/approvals/" + first).path("status").asString())
+        .isEqualTo("CHANGES_REQUESTED");
+
+    // Al aprobar, implement lee la salida corregida y sigue en el mismo worktree.
+    post("/api/approvals/" + second + "/decisions", Map.of("action", "APPROVE"));
+    JsonNode implement = runner.claim().getFirst();
+    assertThat(implement.path("start").path("prompt").asString())
+        .isEqualTo("Implementa: Hacer X con tests");
+    assertThat(implement.path("start").path("workspace").path("path").asString())
+        .isEqualTo("/w/eng/plan");
+    assertThat(eventTypes(runId))
+        .containsSubsequence(
+            "approval.requested",
+            "approval.changes_requested",
+            "approval.requested",
+            "approval.granted");
+  }
+
+  @Test
+  void aCorrectionThatFailsFailsTheGateWithItsReason() {
+    String definitionId = publish(GATE);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/plan", Map.of("summary", "Hacer X"));
+    String approvalId = get("/api/approvals?status=PENDING").get(0).path("id").asString();
+    post(
+        "/api/approvals/" + approvalId + "/decisions",
+        Map.of("action", "REQUEST_CHANGES", "comment", "Otra cosa"));
+    JsonNode correction = runner.claim().getFirst();
+
+    Events events = new Events(UUID.fromString(correction.path("agentRunId").asString()));
+    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", "c"));
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 1));
+    runner.send(events);
+
+    assertThat(stageStatuses(runId))
+        .containsEntry("plan", "SUCCEEDED")
+        .containsEntry("aprobar-plan", "FAILED")
+        .containsEntry("implement", "CANCELLED");
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("FAILED");
+    assertThat(eventTypes(runId)).contains("approval.correction.failed");
+    assertThat(get("/api/approvals?status=PENDING")).isEmpty();
+  }
+
+  @Test
+  void aCorrectionRepeatsTheChecksOfItsStageAndFailsTheGateIfTheyDoNotPass() {
+    String definitionId = publish(VERIFIED_GATE);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/spec");
+    verified(runner, runner.claim().getFirst(), true);
+    String approvalId = get("/api/approvals?status=PENDING").get(0).path("id").asString();
+    post(
+        "/api/approvals/" + approvalId + "/decisions",
+        Map.of("action", "REQUEST_CHANGES", "comment", "Falta el apartado de riesgos"));
+    complete(runner, runner.claim().getFirst(), "/w/eng/spec");
+
+    // La puerta sigue corrigiendo mientras se comprueba otra vez el worktree, desde el mismo
+    // commit.
+    assertThat(stageStatuses(runId)).containsEntry("aprobar-spec", "RUNNING");
+    JsonNode verify = runner.claim().getFirst();
+    assertThat(verify.path("type").asString()).isEqualTo("VERIFY");
+    assertThat(verify.path("verify").path("baseCommit").asString()).isEqualTo("abc");
+    verified(runner, verify, false);
+
+    assertThat(stageStatuses(runId))
+        .containsEntry("spec", "SUCCEEDED")
+        .containsEntry("aprobar-spec", "FAILED")
+        .containsEntry("plan", "CANCELLED");
+    assertThat(eventTypes(runId))
+        .containsSubsequence("stage.verification.completed", "approval.correction.failed");
+  }
+
+  @Test
+  void aCorrectionThatPassesItsChecksAsksAgain() {
+    String definitionId = publish(VERIFIED_GATE);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/spec");
+    verified(runner, runner.claim().getFirst(), true);
+    String approvalId = get("/api/approvals?status=PENDING").get(0).path("id").asString();
+    post(
+        "/api/approvals/" + approvalId + "/decisions",
+        Map.of("action", "REQUEST_CHANGES", "comment", "Falta el apartado de riesgos"));
+    complete(runner, runner.claim().getFirst(), "/w/eng/spec");
+    verified(runner, runner.claim().getFirst(), true);
+
+    assertThat(stageStatuses(runId)).containsEntry("aprobar-spec", "WAITING_FOR_APPROVAL");
+    assertThat(get("/api/approvals?status=PENDING").get(0).path("round").asInt()).isEqualTo(2);
+  }
+
+  @Test
+  void cancellingARunWhileCorrectingCancelsTheCorrectionAndTheGate() {
+    String definitionId = publish(GATE);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/plan", Map.of("summary", "Hacer X"));
+    String approvalId = get("/api/approvals?status=PENDING").get(0).path("id").asString();
+    JsonNode requested =
+        post(
+            "/api/approvals/" + approvalId + "/decisions",
+            Map.of("action", "REQUEST_CHANGES", "comment", "Otra cosa"));
+
+    post("/api/workflow-runs/" + runId + "/cancel", Map.of());
+
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("CANCELLED");
+    assertThat(stageStatuses(runId))
+        .containsEntry("plan", "SUCCEEDED")
+        .containsEntry("aprobar-plan", "CANCELLED");
+    String correction = requested.path("correctionAgentRunId").asString();
+    assertThat(
+            jdbc.sql("SELECT status FROM agent_run WHERE id = ?::uuid")
+                .param(correction)
+                .query(String.class)
+                .single())
+        .isEqualTo("CANCELLED");
+    assertThat(runner.claim()).isEmpty();
+  }
+
+  @Test
+  void aGateWithoutAnAgentToReviseCannotRequestChanges() {
+    String definitionId =
+        publish(
+            """
+            id: sin-revise
+            version: 1
+            stages:
+              - id: build
+                type: command
+                command: make
+              - id: aprobar
+                type: human-approval
+                dependsOn: [build]
+                action: Aprobar el build
+            """);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/build");
+    String approvalId = get("/api/approvals?status=PENDING").get(0).path("id").asString();
+    JsonNode evidence = get("/api/approvals/" + approvalId).path("evidence");
+    assertThat(evidence.path("revise").isNull()).isTrue();
+    assertThat(evidence.path("consequences").path("requestChanges").isNull()).isTrue();
+
+    assertConflict(
+        () ->
+            post(
+                "/api/approvals/" + approvalId + "/decisions",
+                Map.of("action", "REQUEST_CHANGES", "comment", "Otra cosa")));
+    assertThat(stageStatuses(runId)).containsEntry("aprobar", "WAITING_FOR_APPROVAL");
+    assertThat(get("/api/approvals/" + approvalId).path("status").asString()).isEqualTo("PENDING");
   }
 
   @Test
