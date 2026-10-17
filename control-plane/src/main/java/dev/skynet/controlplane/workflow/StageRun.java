@@ -20,6 +20,10 @@ public class StageRun {
   private final Instant createdAt;
   private Instant startedAt;
   private Instant finishedAt;
+
+  /** Un reintento no empieza antes de esta hora (la espera de {@code retry.delay}, W6). */
+  private Instant notBefore;
+
   @Version private Long version;
 
   @PersistenceCreator
@@ -47,6 +51,26 @@ public class StageRun {
   static StageRun create(UUID workflowRunId, String stageKey, Instant now) {
     return new StageRun(
         UUID.randomUUID(), workflowRunId, stageKey, StageStatus.PENDING, 1, now, null, null, null);
+  }
+
+  /**
+   * El intento siguiente de una fase que ha fallado: pendiente, sin empezar antes de {@code
+   * notBefore}.
+   */
+  static StageRun retry(StageRun failed, Instant notBefore, Instant now) {
+    StageRun next =
+        new StageRun(
+            UUID.randomUUID(),
+            failed.workflowRunId,
+            failed.stageKey,
+            StageStatus.PENDING,
+            failed.attempt + 1,
+            now,
+            null,
+            null,
+            null);
+    next.notBefore = notBefore;
+    return next;
   }
 
   /** Aplica la transición y devuelve el estado anterior. */
@@ -96,6 +120,10 @@ public class StageRun {
 
   public Instant getFinishedAt() {
     return finishedAt;
+  }
+
+  public Instant getNotBefore() {
+    return notBefore;
   }
 
   public Long getVersion() {

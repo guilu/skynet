@@ -1,4 +1,45 @@
-import type { Run, StageDependency, StageRun, VerificationCheck } from '../../api'
+import type { AgentFailure, Run, StageDependency, StageRun, VerificationCheck } from '../../api'
+
+/** Por qué falló un agente, para «Falló: …». */
+export const FAILURE_LABEL: Record<AgentFailure, string> = {
+  lost: 'el runner se cayó',
+  start: 'no llegó a arrancar',
+  error: 'terminó con error',
+  timeout: 'se acabó el tiempo',
+  budget: 'superó el presupuesto',
+  verification: 'no pasó las comprobaciones',
+}
+
+/** El último intento de cada fase, en el orden de las fases. */
+export function latestAttempts(run: Run): StageRun[] {
+  const latest = new Map<string, StageRun>()
+  for (const stage of run.stages) {
+    const seen = latest.get(stage.stageKey)
+    if (!seen || stage.attempt > seen.attempt) latest.set(stage.stageKey, stage)
+  }
+  return [...latest.values()]
+}
+
+/** Los intentos anteriores de la fase, del primero al último. */
+export function earlierAttempts(stage: StageRun, run: Run): StageRun[] {
+  return run.stages
+    .filter((s) => s.stageKey === stage.stageKey && s.attempt < stage.attempt)
+    .sort((a, b) => a.attempt - b.attempt)
+}
+
+/** «terminó con error», o null si ningún agente del intento dice por qué falló. */
+export function failureOf(stage: StageRun): string | null {
+  const failure = stage.agents.findLast((a) => a.failure)?.failure
+  return failure ? FAILURE_LABEL[failure] : null
+}
+
+/** «Reintenta a las 10:30:15 (intento 2 de 3)» mientras un reintento espera su hora. */
+function retryNote(stage: StageRun): string | null {
+  if (stage.status !== 'PENDING' || !stage.notBefore) return null
+  const at = new Date(stage.notBefore).toLocaleTimeString('es-ES')
+  const of = stage.retry ? ` de ${stage.retry.maxAttempts}` : ''
+  return `Reintenta a las ${at} (intento ${stage.attempt}${of})`
+}
 
 /** «a», «a y b», «a, b y c». */
 export function joinNames(names: string[]): string {
@@ -76,8 +117,11 @@ export function failedChecks(stage: StageRun): string[] {
  * se canceló sin llegar a arrancar, o detrás de cuáles va. Vacía si no hay nada que contar.
  */
 export function stageNote(stage: StageRun, run: Run): string {
-  const status = new Map(run.stages.map((s) => [s.stageKey, s.status]))
+  const stages = latestAttempts(run)
+  const status = new Map(stages.map((s) => [s.stageKey, s.status]))
   const deps = stage.dependsOn
+  const retrying = retryNote(stage)
+  if (retrying) return retrying
   if (isVerifying(stage)) return `Verificando: ${joinNames(stage.checks.map((c) => c.name))}`
   if (isCorrecting(stage)) return 'Corrigiendo con los cambios que se pidieron'
   if (stage.status === 'WAITING_FOR_APPROVAL')
@@ -86,6 +130,7 @@ export function stageNote(stage: StageRun, run: Run): string {
       : 'Espera una decisión'
   if (stage.status === 'FAILED' && failedChecks(stage).length > 0)
     return `No pasó ${failedChecks(stage).join('; ')}`
+  if (stage.status === 'FAILED' && failureOf(stage)) return `Falló: ${failureOf(stage)}`
   switch (stage.status) {
     case 'PENDING': {
       const waiting = deps.filter((d) => !satisfied(d, status.get(d.stage)))
@@ -103,7 +148,7 @@ export function stageNote(stage: StageRun, run: Run): string {
     case 'CANCELLED': {
       // Sin agentes, la canceló la ejecución: por el fallo de otra fase o a mano.
       if (stage.agents.length > 0) break
-      const failed = run.stages.filter((s) => s.status === 'FAILED').map((s) => s.stageKey)
+      const failed = stages.filter((s) => s.status === 'FAILED').map((s) => s.stageKey)
       if (failed.length > 0) return `No arrancó porque falló ${joinNames(failed)}`
       return 'No arrancó: se canceló la ejecución'
     }

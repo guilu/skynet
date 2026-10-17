@@ -78,6 +78,23 @@ class FakeClaudeTest {
   }
 
   @Test
+  void withFailOnceTheFirstRunFailsAndTheNextOneWorks(@TempDir Path dir) throws Exception {
+    Path marker = dir.resolve("falla-una-vez");
+    Map<String, String> env =
+        Map.of("FAKE_CLAUDE_FAIL_ONCE", marker.toString(), "FAKE_CLAUDE_DELAY_MS", "0");
+    String[] args = {"-p", "x", "--output-format", "stream-json"};
+
+    Result first = run(env, dir, args);
+    assertThat(first.exitCode).isEqualTo(1);
+    assertThat(first.lines).isEmpty();
+    assertThat(marker).isRegularFile();
+
+    Result second = run(env, dir, args);
+    assertThat(second.exitCode).isZero();
+    assertThat(second.lines).isNotEmpty();
+  }
+
+  @Test
   void withConfigDirStoresSessionsAndResumeNeedsThemInTheSameDirectory(@TempDir Path config)
       throws Exception {
     Map<String, String> env =

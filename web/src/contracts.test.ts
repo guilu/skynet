@@ -71,6 +71,7 @@ import type {
 type Keys<T> = Record<keyof T, true>
 
 const AGENT_RUN: Keys<AgentRun> = {
+  failure: true,
   id: true,
   stageRunId: true,
   parentAgentRunId: true,
@@ -125,6 +126,8 @@ const CONVERSATION_MESSAGE: Keys<ConversationMessage> = {
   text: true,
 }
 const STAGE_RUN: Keys<StageRun> = {
+  retry: true,
+  notBefore: true,
   id: true,
   stageKey: true,
   name: true,
@@ -437,6 +440,7 @@ const AGENT_DEFINITION: Keys<AgentDefinition> = {
   output: true,
 }
 const STAGE_DEFINITION: Keys<StageDefinition> = {
+  retry: true,
   id: true,
   name: true,
   type: true,

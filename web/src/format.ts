@@ -97,6 +97,10 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `Condición de ${p('stageKey')}: ${p('condition')} es ${
         payload.result ? 'verdadera' : 'falsa'
       }`
+    case 'stage.retry.scheduled':
+      return `Fase ${p('stageKey')}: se reintenta (intento ${p('attempt')} de ${p('maxAttempts')}) en ${formatDuration(
+        Number(payload.delaySeconds ?? 0) * 1000,
+      )}`
     case 'stage.start.failed':
       return `La fase ${p('stageKey')} no pudo arrancar: ${p('error')}`
     case 'agent.spawned':

@@ -15,6 +15,8 @@ const STRUCTURAL = [
   'stage.ready',
   'stage.skipped',
   'stage.start.failed',
+  // Un reintento crea el intento siguiente de la fase.
+  'stage.retry.scheduled',
   'agent.spawned',
   // Las comprobaciones de una fase: su resultado solo lo da el backend.
   'stage.verification.started',

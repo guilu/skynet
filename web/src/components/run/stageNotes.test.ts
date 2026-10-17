@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { Run, StageRun, StageStatus, VerificationResult } from '../../api'
-import { checkStates, isCorrecting, joinNames, stageNote } from './stageNotes'
+import {
+  checkStates,
+  earlierAttempts,
+  isCorrecting,
+  joinNames,
+  latestAttempts,
+  stageNote,
+} from './stageNotes'
 
 function stage(
   stageKey: string,
@@ -27,6 +34,8 @@ function stage(
     reads: [],
     verifications: [],
     approval: null,
+    retry: null,
+    notBefore: null,
   }
 }
 
@@ -70,6 +79,29 @@ describe('stageNote', () => {
     expect(stageNote(correcting, run(plan, correcting))).toBe(
       'Corrigiendo con los cambios que se pidieron',
     )
+  })
+
+  it('cada fase se ve con su último intento, y el reintento dice cuándo arranca', () => {
+    const failed = {
+      ...stage('implement', 'FAILED', [], 1),
+      agents: [{ id: 'a1', failure: 'error' } as StageRun['agents'][number]],
+    }
+    const retry = {
+      ...stage('implement', 'PENDING'),
+      id: 'implement-2',
+      attempt: 2,
+      notBefore: '2026-10-17T10:00:30Z',
+      retry: { maxAttempts: 3, on: ['error' as const], delaySeconds: 30 },
+    }
+    const review = stage('review', 'PENDING', ['implement'])
+    const all = run(failed, review, retry)
+    expect(latestAttempts(all).map((s) => s.id)).toEqual(['implement-2', 'review'])
+    expect(earlierAttempts(retry, all)).toEqual([failed])
+    const at = new Date('2026-10-17T10:00:30Z').toLocaleTimeString('es-ES')
+    expect(stageNote(retry, all)).toBe(`Reintenta a las ${at} (intento 2 de 3)`)
+    // La que depende espera al último intento, no al que falló.
+    expect(stageNote(review, all)).toBe('Espera a implement')
+    expect(stageNote(failed, run(failed, review))).toBe('Falló: terminó con error')
   })
 
   it('una opcional omitida no hace esperar', () => {

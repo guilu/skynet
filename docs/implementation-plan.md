@@ -532,6 +532,19 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito W5 (human-in-the-loop), planificado el 2026-10-16:** W5-A puertas de aprobación en el motor, W5-B pedir cambios, W5-C centro de aprobaciones y E2E.
 
+**Hito W6 (reintentos y cancelación), planificado el 2026-10-17:** W6-A reintentos automáticos, W6-B límites de tiempo y cancelación, W6-C «Reintentar fase», web y E2E.
+
+**Implementado (W6-A), reintentos automáticos:**
+
+- Por qué falló cada agente (`agent_run.failure`, migración `V21`): `lost`, `start`, `error`, `timeout`, `budget` o `verification` (`AgentFailure` en el protocolo). El runner la manda en `PROCESS_EXITED`; el control plane pone `lost` a las invocaciones perdidas y `verification` a las que no cumplen su salida o sus comprobaciones. Sale en la API (`failure`) y en `agent.status.changed`.
+- YAML: `retry: {maxAttempts, on, delay}` en las fases `agent` y `command` y en los hijos de una `parallel` (`StageDefinition.Retry`), con sugerencias para los fallos mal escritos. En otras fases es un error.
+- Motor: el `Planner` mira el último intento de cada fase. Una fase que falla con un fallo de `on` y con intentos por delante no aplica el fail-fast: `RunSteps.retry` crea el intento siguiente (`stage_run` con `attempt + 1`, `PENDING` y `not_before`, migración `V21`) y emite `stage.retry.scheduled`. El trabajo de la ejecución se reprograma para esa hora (`JobQueue.wakeAt`). Al arrancar, sus agentes son `RETRY` del agente del intento anterior, con sesión nueva.
+- Worktree: al arrancar cada agente, el runner guarda una foto del worktree en `refs/skynet/snapshots/<agente>` (`agent.workspace.ready` lleva `snapshot`); el reintento pide restaurarla (`restoreSnapshot`) antes de lanzar el agente.
+- `parallel`: se reintentan solo los hijos que fallaron; las salidas y los worktrees de los demás se buscan en todos los intentos.
+- Web: el progreso enseña el último intento de cada fase, «Reintenta a las … (intento N de M)», «Falló: …» y los intentos anteriores al abrir la fase; el resumen del workflow, «Reintenta: hasta N intentos…»; el timeline, `stage.retry.scheduled`.
+- fake-claude: `FAKE_CLAUDE_FAIL_ONCE=<fichero>` falla la primera vez (código 1) y funciona las siguientes.
+- Llegan en W6-C: «Reintentar fase» y el E2E de aceptación.
+
 **Implementado (W5-C), centro de aprobaciones y E2E:**
 
 - Menú **Aprobaciones** (`/approvals`) con el contador de pendientes, también en el cajón del móvil. La lista va primero con las pendientes (las de más riesgo y las más antiguas) y después el historial, con filtros de estado, riesgo y proyecto en la URL.

@@ -19,6 +19,8 @@ import tools.jackson.databind.json.JsonMapper;
  * @param childKey hijo de una fase {@code parallel} que ejecuta, o {@code null} en las demás
  * @param structuredOutput salida estructurada que devolvió (la que pide el {@code output} de su
  *     agente), o {@code null}
+ * @param failure por qué falló ({@code lost}, {@code error}…), o {@code null} si no ha fallado o no
+ *     se sabe (W6)
  */
 public record AgentRunView(
     UUID id,
@@ -50,7 +52,8 @@ public record AgentRunView(
     String currentTool,
     WorkspaceView workspace,
     String childKey,
-    JsonNode structuredOutput) {
+    JsonNode structuredOutput,
+    String failure) {
 
   static AgentRunView of(AgentRun a, WorkspaceView workspace) {
     return new AgentRunView(
@@ -85,6 +88,7 @@ public record AgentRunView(
         a.getChildKey(),
         a.getStructuredOutput() == null
             ? null
-            : JsonMapper.shared().readTree(a.getStructuredOutput()));
+            : JsonMapper.shared().readTree(a.getStructuredOutput()),
+        a.getFailure() == null ? null : a.getFailure().id());
   }
 }

@@ -78,6 +78,28 @@ record Invocation(
         workspace.runnerId());
   }
 
+  /**
+   * La misma invocación como reintento de {@code previous} (W6): con {@code restore}, el worktree
+   * en el que continúa vuelve antes a esa instantánea.
+   */
+  Invocation retrying(AgentRun previous, String restore) {
+    WorkspaceRef ref =
+        restore == null || workspace == null
+            ? workspace
+            : new WorkspaceRef(workspace.path(), workspace.branch(), false, restore);
+    return new Invocation(
+        previous == null ? kind : AgentRunKind.RETRY,
+        previous,
+        sessionId,
+        prompt,
+        policy,
+        workspaceId,
+        resume,
+        ref,
+        runnerId,
+        command);
+  }
+
   /** La misma invocación como fase {@code command}: el runner ejecuta {@code command}. */
   Invocation asCommand(String command) {
     return new Invocation(

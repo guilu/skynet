@@ -62,6 +62,82 @@ public class WorkspaceManager {
   }
 
   /**
+   * Worktree de una invocación anterior en el que arranca otra sesión (una fase que continúa el
+   * trabajo de la anterior), con una instantánea de cómo estaba ({@link #snapshot}). Con {@code
+   * restore}, antes vuelve a esa instantánea de un intento anterior ({@link #restore}).
+   */
+  public Workspace continued(Path path, String restore, UUID agentRunId)
+      throws IOException, InterruptedException {
+    Path worktree = owned(path);
+    if (restore != null) {
+      restore(worktree, restore);
+    }
+    Workspace workspace = existing(worktree);
+    return new Workspace(
+        workspace.path(),
+        workspace.branch(),
+        workspace.baseCommit(),
+        snapshot(worktree, agentRunId));
+  }
+
+  /**
+   * Guarda cómo está el worktree (lo confirmado, los cambios sin confirmar y los ficheros nuevos no
+   * ignorados) en un commit sin rama, hijo de {@code HEAD}, y lo protege del recolector de git con
+   * la referencia {@code refs/skynet/snapshots/<invocación>}. Devuelve su hash.
+   */
+  static String snapshot(Path worktree, UUID agentRunId) throws IOException, InterruptedException {
+    // Índice temporal dentro del directorio git del worktree, como en GitIndexer.
+    Path gitDir = Path.of(git(worktree, List.of("rev-parse", "--absolute-git-dir")).trim());
+    Path index = Files.createTempFile(gitDir, "skynet-snapshot", null);
+    try {
+      Map<String, String> env =
+          Map.of(
+              "GIT_INDEX_FILE", index.toString(),
+              "GIT_AUTHOR_NAME", "skynet",
+              "GIT_AUTHOR_EMAIL", "skynet@localhost",
+              "GIT_COMMITTER_NAME", "skynet",
+              "GIT_COMMITTER_EMAIL", "skynet@localhost");
+      Git.run(worktree, List.of("read-tree", "HEAD"), new byte[0], env);
+      Git.run(worktree, List.of("add", "-A"), new byte[0], env);
+      String tree = text(Git.run(worktree, List.of("write-tree"), new byte[0], env));
+      String commit =
+          text(
+              Git.run(
+                  worktree,
+                  List.of(
+                      "commit-tree",
+                      tree,
+                      "-p",
+                      "HEAD",
+                      "-m",
+                      "skynet: estado al empezar " + agentRunId),
+                  new byte[0],
+                  env));
+      git(worktree, List.of("update-ref", "refs/skynet/snapshots/" + agentRunId, commit));
+      return commit;
+    } finally {
+      Files.deleteIfExists(index);
+    }
+  }
+
+  /**
+   * Devuelve el worktree a una instantánea de {@link #snapshot}: {@code HEAD} al commit del que
+   * salió y los ficheros como estaban, con los cambios sin confirmar otra vez sin confirmar. Lo que
+   * hubiera de más (ficheros nuevos no ignorados) se borra; los ignorados se quedan.
+   */
+  static void restore(Path worktree, String snapshot) throws IOException, InterruptedException {
+    String parent = git(worktree, List.of("rev-parse", snapshot + "^")).trim();
+    git(worktree, List.of("reset", "--hard", "-q", parent));
+    git(worktree, List.of("clean", "-fdq"));
+    git(worktree, List.of("read-tree", "-u", "--reset", snapshot));
+    git(worktree, List.of("reset", "-q"));
+  }
+
+  private static String text(byte[] output) {
+    return new String(output, java.nio.charset.StandardCharsets.UTF_8).trim();
+  }
+
+  /**
    * Worktree nuevo para un fork: parte del {@code HEAD} del worktree {@code parent} en una rama
    * propia e incluye sus cambios sin confirmar (los de ficheros versionados y los ficheros nuevos
    * no ignorados), así el fork ve el código tal como lo dejó la sesión que bifurca.

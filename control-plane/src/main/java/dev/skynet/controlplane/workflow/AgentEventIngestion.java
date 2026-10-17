@@ -5,6 +5,7 @@ import dev.skynet.controlplane.event.EventStore;
 import dev.skynet.controlplane.shared.PayloadRedactor;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.protocol.AgentEventType;
+import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.StageStatus;
@@ -149,6 +150,7 @@ public class AgentEventIngestion {
         String path = string(p, "path");
         String branch = string(p, "branch");
         agent.recordBaseCommit(string(p, "baseCommit"));
+        agent.recordBaseSnapshot(string(p, "snapshot"));
         if (path != null && branch != null) {
           agent.useWorkspace(
               workspaces.register(
@@ -191,7 +193,11 @@ public class AgentEventIngestion {
       }
       case PROCESS_EXITED -> {
         AgentObservableStatus outcome =
-            agent.exited(integer(p.get("exitCode")), string(p, "signal"), string(p, "error"));
+            agent.exited(
+                integer(p.get("exitCode")),
+                string(p, "signal"),
+                string(p, "error"),
+                AgentFailure.fromId(string(p, "failure")).orElse(null));
         agent = transitions.advanceAgent(agent, outcome, runId, "process-exited", now);
         // Con comprobaciones, la fase sigue «Verificando» hasta que pasan (W4-B).
         stageVerifications.afterAgent(agent, stage, now);

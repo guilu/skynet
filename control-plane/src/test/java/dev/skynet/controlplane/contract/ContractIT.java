@@ -174,6 +174,7 @@ class ContractIT extends IntegrationTest {
           null,
           worktree(),
           null,
+          null,
           null);
     }
 
@@ -207,6 +208,7 @@ class ContractIT extends IntegrationTest {
           "agent.tool.started",
           "Read",
           worktree(),
+          null,
           null,
           null);
     }
@@ -254,6 +256,7 @@ class ContractIT extends IntegrationTest {
           "agent.process.exited",
           null,
           worktree(),
+          null,
           null,
           null);
     }
@@ -321,6 +324,8 @@ class ContractIT extends IntegrationTest {
                           new VerificationResult.CheckResult(
                               "artifacts", "docs/spec.md", true, null),
                           new VerificationResult.CheckResult("diff", null, true, null)))),
+              null,
+              null,
               null),
           agent);
     }
@@ -443,6 +448,8 @@ class ContractIT extends IntegrationTest {
               null,
               List.of(agent),
               List.of(),
+              null,
+              null,
               null),
           agent);
     }
@@ -713,13 +720,14 @@ class ContractIT extends IntegrationTest {
             type: agent
             prompt: "Corrige lo que encontró la revisión: {{stages.review.output.summary}}"
             dependsOn: [review]
+            retry: {maxAttempts: 2}
           - id: verify
             type: verification
             dependsOn: ["fix?"]
             artifacts: [docs/review.md]
             checks: [tests, scope, {command: npm run lint}]
             scope: ["src/**", "docs/**"]
-            retry: {attempts: 2}
+            timeout: 30m
         """;
 
     static VersionView reviewV1() {

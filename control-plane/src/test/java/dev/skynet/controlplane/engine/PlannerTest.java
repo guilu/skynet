@@ -8,17 +8,22 @@ import dev.skynet.controlplane.definition.WorkflowDefinition;
 import dev.skynet.controlplane.engine.Planner.Cancel;
 import dev.skynet.controlplane.engine.Planner.Finish;
 import dev.skynet.controlplane.engine.Planner.Ready;
+import dev.skynet.controlplane.engine.Planner.Retry;
 import dev.skynet.controlplane.engine.Planner.Skip;
 import dev.skynet.controlplane.engine.Planner.Start;
+import dev.skynet.controlplane.engine.Planner.Wake;
 import dev.skynet.controlplane.workflow.RunSteps.StageState;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /** Qué decide el motor según el estado de las fases. */
 class PlannerTest {
+
+  static final Instant NOW = Instant.parse("2026-10-17T10:00:00Z");
 
   /**
    * {@code plan} y {@code tests} en paralelo; {@code fix} depende de los dos, {@code plan}
@@ -50,7 +55,7 @@ class PlannerTest {
 
   @Test
   void stagesWithoutDependenciesStartTogether() {
-    var plan = Planner.plan(DAG, states("PENDING", "PENDING", "PENDING", "PENDING"));
+    var plan = Planner.plan(DAG, states("PENDING", "PENDING", "PENDING", "PENDING"), NOW);
 
     assertThat(plan)
         .containsExactly(
@@ -59,21 +64,21 @@ class PlannerTest {
 
   @Test
   void aStageWaitsForAllItsDependencies() {
-    var plan = Planner.plan(DAG, states("SUCCEEDED", "RUNNING", "PENDING", "PENDING"));
+    var plan = Planner.plan(DAG, states("SUCCEEDED", "RUNNING", "PENDING", "PENDING"), NOW);
 
     assertThat(plan).isEmpty();
   }
 
   @Test
   void aSkippedOptionalDependencyCountsAsDone() {
-    var plan = Planner.plan(DAG, states("SKIPPED", "SUCCEEDED", "PENDING", "PENDING"));
+    var plan = Planner.plan(DAG, states("SKIPPED", "SUCCEEDED", "PENDING", "PENDING"), NOW);
 
     assertThat(plan).containsExactly(new Ready("fix"), new Start("fix"));
   }
 
   @Test
   void aSkippedRequiredDependencySkipsItsDependentsInTheSamePass() {
-    var plan = Planner.plan(DAG, states("SUCCEEDED", "SKIPPED", "PENDING", "PENDING"));
+    var plan = Planner.plan(DAG, states("SUCCEEDED", "SKIPPED", "PENDING", "PENDING"), NOW);
 
     assertThat(plan)
         .containsExactly(
@@ -87,18 +92,18 @@ class PlannerTest {
     Map<String, StageState> stages = states("RUNNING", "READY", "PENDING", "PENDING");
     stages.put("tests", new StageState("tests", StageStatus.READY, true));
 
-    assertThat(Planner.plan(DAG, stages)).isEmpty();
+    assertThat(Planner.plan(DAG, stages, NOW)).isEmpty();
   }
 
   @Test
   void aFailedStageCancelsTheOthersAndThenFailsTheRun() {
-    assertThat(Planner.plan(DAG, states("FAILED", "RUNNING", "PENDING", "PENDING")))
+    assertThat(Planner.plan(DAG, states("FAILED", "RUNNING", "PENDING", "PENDING"), NOW))
         .containsExactly(
             new Cancel("tests", "stage-failed"),
             new Cancel("fix", "stage-failed"),
             new Cancel("review", "stage-failed"));
 
-    assertThat(Planner.plan(DAG, states("FAILED", "CANCELLED", "CANCELLED", "CANCELLED")))
+    assertThat(Planner.plan(DAG, states("FAILED", "CANCELLED", "CANCELLED", "CANCELLED"), NOW))
         .containsExactly(new Finish(WorkflowRunStatus.FAILED, "stage-failed"));
   }
 
@@ -108,7 +113,7 @@ class PlannerTest {
     // Un hijo de fix ha fallado y el otro sigue: fix sigue en curso, pero ya va a fallar.
     stages.put("fix", new StageState("fix", StageStatus.RUNNING, true, StageStatus.FAILED));
 
-    assertThat(Planner.plan(DAG, stages))
+    assertThat(Planner.plan(DAG, stages, NOW))
         .containsExactly(
             new Cancel("tests", "stage-failed"),
             new Cancel("fix", "stage-failed"),
@@ -116,14 +121,42 @@ class PlannerTest {
   }
 
   @Test
+  void aFailedStageThatRetriesSchedulesAnotherAttemptWhileTheOthersGoOn() {
+    Map<String, StageState> stages = states("SUCCEEDED", "RUNNING", "PENDING", "PENDING");
+    stages.put("plan", new StageState("plan", StageStatus.FAILED, true, null, true, null));
+
+    assertThat(Planner.plan(DAG, stages, NOW)).containsExactly(new Retry("plan"));
+  }
+
+  @Test
+  void aRetryWaitsForItsTimeAndThenStarts() {
+    Map<String, StageState> stages = states("PENDING", "SUCCEEDED", "PENDING", "PENDING");
+    Instant later = NOW.plusSeconds(30);
+    stages.put("plan", new StageState("plan", StageStatus.PENDING, false, null, false, later));
+
+    assertThat(Planner.plan(DAG, stages, NOW)).containsExactly(new Wake(later));
+    assertThat(Planner.plan(DAG, stages, later))
+        .containsExactly(new Ready("plan"), new Start("plan"));
+  }
+
+  @Test
+  void aPendingRetryDoesNotRunIfAnotherStageFailsForGood() {
+    Map<String, StageState> stages = states("FAILED", "FAILED", "CANCELLED", "CANCELLED");
+    stages.put("plan", new StageState("plan", StageStatus.FAILED, true, null, true, null));
+
+    assertThat(Planner.plan(DAG, stages, NOW))
+        .containsExactly(new Finish(WorkflowRunStatus.FAILED, "stage-failed"));
+  }
+
+  @Test
   void aCancelledStageCancelsTheRun() {
-    assertThat(Planner.plan(DAG, states("CANCELLED", "SUCCEEDED", "CANCELLED", "CANCELLED")))
+    assertThat(Planner.plan(DAG, states("CANCELLED", "SUCCEEDED", "CANCELLED", "CANCELLED"), NOW))
         .containsExactly(new Finish(WorkflowRunStatus.CANCELLED, "stage-cancelled"));
   }
 
   @Test
   void theRunSucceedsWhenEveryStageHasFinished() {
-    assertThat(Planner.plan(DAG, states("SUCCEEDED", "SUCCEEDED", "SUCCEEDED", "SUCCEEDED")))
+    assertThat(Planner.plan(DAG, states("SUCCEEDED", "SUCCEEDED", "SUCCEEDED", "SUCCEEDED"), NOW))
         .containsExactly(new Finish(WorkflowRunStatus.SUCCEEDED, "all-stages-finished"));
   }
 

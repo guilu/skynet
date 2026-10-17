@@ -1,6 +1,7 @@
 package dev.skynet.runner.agent;
 
 import dev.skynet.protocol.AgentEventType;
+import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.runner.ArtifactType;
 import dev.skynet.protocol.runner.CleanupWorkspace;
 import dev.skynet.protocol.runner.ResumeFrom;
@@ -54,6 +55,7 @@ import tools.jackson.databind.json.JsonMapper;
 public final class AgentExecutor implements AutoCloseable {
 
   private static final String ERROR = "error";
+  private static final String FAILURE = "failure";
 
   private static final Logger LOG = Logger.getLogger(AgentExecutor.class.getName());
   private static final ObjectMapper JSON = JsonMapper.builder().build();
@@ -216,6 +218,7 @@ public final class AgentExecutor implements AutoCloseable {
           finish(
               id,
               failure(
+                  AgentFailure.START,
                   "Este runner no tiene "
                       + ProviderRegistry.displayName(start.providerOrDefault())
                       + " disponible"));
@@ -230,7 +233,7 @@ public final class AgentExecutor implements AutoCloseable {
       Thread.currentThread().interrupt();
     } catch (RuntimeException e) {
       LOG.log(Level.SEVERE, e, () -> "Fallo inesperado en la invocación " + id);
-      finish(id, failure("Fallo interno del runner: " + e));
+      finish(id, failure(AgentFailure.ERROR, "Fallo interno del runner: " + e));
     } finally {
       executions.remove(id);
     }
@@ -242,7 +245,7 @@ public final class AgentExecutor implements AutoCloseable {
     try {
       return prepare(id, start, provider);
     } catch (IOException e) {
-      finish(id, failure("No se pudo preparar el worktree: " + e.getMessage()));
+      finish(id, failure(AgentFailure.START, "No se pudo preparar el worktree: " + e.getMessage()));
       return null;
     }
   }
@@ -252,7 +255,11 @@ public final class AgentExecutor implements AutoCloseable {
       UUID id, StartAgent start, AgentProvider provider, Execution execution, Workspace workspace)
       throws InterruptedException {
     if (busyWorkspaces.putIfAbsent(workspace.path(), id) != null) {
-      finish(id, failure("Ya hay otra invocación en curso en el worktree " + workspace.path()));
+      finish(
+          id,
+          failure(
+              AgentFailure.START,
+              "Ya hay otra invocación en curso en el worktree " + workspace.path()));
       return;
     }
     try {
@@ -275,7 +282,7 @@ public final class AgentExecutor implements AutoCloseable {
       Path path = Path.of(start.workspace().path());
       return start.workspace().copy()
           ? workspaces.fork(path, start.workflowRunId(), start.workItemKey(), id)
-          : workspaces.existing(path);
+          : workspaces.continued(path, start.workspace().restore(), id);
     }
     if (resume == null) {
       return workspaces.create(
@@ -309,6 +316,9 @@ public final class AgentExecutor implements AutoCloseable {
     ready.put("path", workspace.path().toString());
     ready.put("branch", workspace.branch());
     ready.put("baseCommit", workspace.baseCommit());
+    if (workspace.snapshot() != null) {
+      ready.put("snapshot", workspace.snapshot());
+    }
     emit(id, AgentEventType.WORKSPACE_READY, ready);
     if (start.command() != null) {
       runCommand(id, start, execution, workspace);
@@ -319,7 +329,9 @@ public final class AgentExecutor implements AutoCloseable {
       resolved =
           start.withOutputSchema(StructuredOutput.resolve(start.outputSchema(), workspace.path()));
     } catch (IllegalArgumentException | IOException e) {
-      finish(id, failure("Salida estructurada de la fase: " + e.getMessage()));
+      finish(
+          id,
+          failure(AgentFailure.VERIFICATION, "Salida estructurada de la fase: " + e.getMessage()));
       return;
     }
     launch(id, resolved, provider, execution, workspace);
@@ -360,7 +372,7 @@ public final class AgentExecutor implements AutoCloseable {
                         }
                       }));
     } catch (IOException e) {
-      finish(id, failure("No se pudo lanzar el agente: " + e.getMessage()));
+      finish(id, failure(AgentFailure.START, "No se pudo lanzar el agente: " + e.getMessage()));
       return;
     }
     if (process == null) {
@@ -394,9 +406,12 @@ public final class AgentExecutor implements AutoCloseable {
     }
     if (execution.stopping) {
       payload.put(ERROR, "El runner se detuvo durante la ejecución");
+      payload.put(FAILURE, AgentFailure.LOST.id());
     } else if (execution.timedOut && !execution.cancelled()) {
       payload.put(ERROR, "Se agotó el tiempo máximo (" + timeout + ")");
+      payload.put(FAILURE, AgentFailure.TIMEOUT.id());
     } else if (execution.overBudget && !execution.cancelled()) {
+      payload.put(FAILURE, AgentFailure.BUDGET.id());
       payload.put(
           ERROR,
           "Presupuesto agotado: el coste estimado ("
@@ -526,7 +541,7 @@ public final class AgentExecutor implements AutoCloseable {
                       log,
                       line -> {}));
     } catch (IOException e) {
-      finish(id, failure("No se pudo ejecutar el comando: " + e.getMessage()));
+      finish(id, failure(AgentFailure.START, "No se pudo ejecutar el comando: " + e.getMessage()));
       return;
     }
     if (process == null) {
@@ -597,8 +612,10 @@ public final class AgentExecutor implements AutoCloseable {
     }
     if (execution.stopping) {
       payload.put(ERROR, "El runner se detuvo durante la ejecución");
+      payload.put(FAILURE, AgentFailure.LOST.id());
     } else if (execution.timedOut && !execution.cancelled()) {
       payload.put(ERROR, "Se agotó el tiempo máximo (" + timeout + ")");
+      payload.put(FAILURE, AgentFailure.TIMEOUT.id());
     }
     finish(id, payload);
   }
@@ -899,6 +916,11 @@ public final class AgentExecutor implements AutoCloseable {
 
   private static Map<String, Object> failure(String error) {
     return Map.of(ERROR, error);
+  }
+
+  /** Fin sin proceso que sabe por qué falló: {@code failure} decide si la fase se reintenta. */
+  private static Map<String, Object> failure(AgentFailure kind, String error) {
+    return Map.of(ERROR, error, FAILURE, kind.id());
   }
 
   /** Termina todas las invocaciones en curso (al parar el runner) y espera su evento de fin. */
