@@ -10,7 +10,8 @@ import {
 /**
  * Motor de workflows (W2): se lanza desde la web un workflow con tres fases, dos en paralelo y una
  * que las une; la vista enseña desde el principio la que espera, se reinicia el control plane a
- * mitad y la ejecución termina «Completada» con un agente por fase, sin duplicados.
+ * mitad y la ejecución termina «Completada» con un agente por fase, sin duplicados. El grafo de la
+ * ejecución (W7-B) cambia en vivo, sin recargar, de «Espera» a completada.
  */
 
 // Sin el proxy cortable de run.e2e.ts: directamente a vite preview.
@@ -73,14 +74,25 @@ test('un workflow de tres fases termina igual aunque se reinicie el control plan
   })
 
   const tree = page.getByRole('navigation', { name: 'Fases y agentes' })
+  const graph = tree.getByRole('group', { name: 'Fases de la ejecución' })
   const runId = page.url().split('/runs/')[1].split('?')[0]
 
   await test.step('todas las fases desde el principio; la unión espera', async () => {
     await expect(page.getByRole('link', { name: 'Tres fases E2E' })).toBeVisible()
-    await expect(tree.locator('.path > li')).toHaveCount(3)
+    await expect(graph.locator('.graph-node')).toHaveCount(3)
+    // izquierda→union y derecha→union.
+    await expect(graph.locator('.react-flow__edge')).toHaveCount(2)
     await expect(
-      tree.locator('.step-note', { hasText: 'Espera a izquierda y derecha' }),
+      graph.locator('.graph-detail', { hasText: 'Espera a izquierda y derecha' }),
     ).toBeVisible()
+    await expect(graph.locator('.graph-state-now')).toHaveCount(2)
+    // La lista es el camino de siempre, y se recuerda.
+    await page.getByRole('button', { name: 'Lista', exact: true }).click()
+    await expect(tree.locator('.path > li')).toHaveCount(3)
+    await page.reload()
+    await expect(tree.locator('.path > li')).toHaveCount(3)
+    await page.getByRole('button', { name: 'Grafo', exact: true }).click()
+    await expect(graph.locator('.graph-node')).toHaveCount(3)
     // Las fases en paralelo ya trabajan: se ven sus herramientas en la cascada.
     await page.getByRole('tab', { name: 'Cascada' }).click()
     const waterfall = page.getByRole('tabpanel', { name: 'Cascada' })
@@ -105,10 +117,12 @@ test('un workflow de tres fases termina igual aunque se reinicie el control plan
     await expect(header.locator('.hero-top').getByText('Completada')).toBeVisible({
       timeout: 120_000,
     })
-    await expect(tree.locator('.step.done')).toHaveCount(3)
+    // La página no se ha recargado desde el reinicio: el grafo cambió por el stream.
+    await expect(graph.locator('.graph-state-done')).toHaveCount(3)
     await expect(
-      tree.locator('.step-note', { hasText: 'Después de izquierda y derecha' }),
+      graph.locator('.graph-detail', { hasText: 'Después de izquierda y derecha' }),
     ).toBeVisible()
+    await expectAccessible(page, 'grafo de la ejecución')
     const run = await (await page.request.get(`/api/workflow-runs/${runId}`)).json()
     expect(
       run.stages.map((s: { stageKey: string; agents: unknown[] }) => [s.stageKey, s.agents.length]),

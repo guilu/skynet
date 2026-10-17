@@ -5021,6 +5021,94 @@
     font-size: 0.75rem;
   }
 
+  /* En la ejecución (W7-B), cada caja es un botón con el estado de la fase. */
+  .graph-button {
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .graph-button:focus-visible {
+    outline: 3px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  .graph-group > .graph-button {
+    height: 52px;
+  }
+
+  .graph-state {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    font-size: 0.75rem;
+    font-weight: 800;
+  }
+
+  .graph-activity {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .graph-state-done {
+    border-color: var(--ok-shade);
+  }
+
+  .graph-state-done .graph-state {
+    color: var(--ok-ink);
+  }
+
+  .graph-state-now {
+    border-color: var(--live);
+    box-shadow: 0 0 0 3px var(--live-soft);
+  }
+
+  .graph-state-now .graph-state {
+    color: var(--live-ink);
+  }
+
+  .graph-state-hold {
+    border-color: var(--warn-shade);
+  }
+
+  .graph-state-hold .graph-state {
+    color: var(--warn-ink);
+  }
+
+  .graph-state-fail {
+    border-color: var(--bad-shade);
+  }
+
+  .graph-state-fail .graph-state {
+    color: var(--bad-ink);
+  }
+
+  .graph-state-skip {
+    border-style: dashed;
+    opacity: 0.75;
+  }
+
+  .graph-state-todo .graph-state,
+  .graph-state-skip .graph-state {
+    color: var(--muted);
+  }
+
+  /* La fase abierta abajo: un anillo del acento, como en el camino. */
+  .graph-open {
+    outline: 3px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  .run-progress .workflow-graph {
+    margin-top: var(--space-2);
+  }
+
   .graph-edge-optional .react-flow__edge-path {
     stroke-dasharray: 6 5;
   }

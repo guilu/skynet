@@ -57,10 +57,13 @@ export default function WorkflowGraph({
   stages,
   content,
   label,
+  interactive = false,
 }: {
   stages: GraphStage[]
   content: GraphContent
   label: string
+  /** Si las cajas llevan botones: React Flow no les deja recibir el ratón si no se le dice. */
+  interactive?: boolean
 }) {
   const layout = useMemo(() => layoutStages(stages), [stages])
   const nodes = useMemo(() => {
@@ -77,6 +80,7 @@ export default function WorkflowGraph({
         className: cn('graph-node', group && 'graph-group', content.stageClass?.(box.id)),
         draggable: false,
         connectable: false,
+        style: interactive ? { pointerEvents: 'all' } : undefined,
       })
       for (const child of box.children)
         all.push({
@@ -91,10 +95,11 @@ export default function WorkflowGraph({
           className: cn('graph-node graph-child', content.childClass?.(box.id, child.id)),
           draggable: false,
           connectable: false,
+          style: interactive ? { pointerEvents: 'all' } : undefined,
         })
     }
     return all
-  }, [layout, content])
+  }, [layout, content, interactive])
   const edges = useMemo<Edge[]>(
     () =>
       layout.edges.map((e) => ({

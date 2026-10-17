@@ -696,9 +696,19 @@ describe('App', () => {
     })
     renderAt(`/runs/${run.id}`, <App />)
     const tree = await screen.findByRole('navigation', { name: 'Fases y agentes' })
+    // Por defecto, el grafo (en su propio trozo): las mismas notas en cada caja.
+    const graph = await within(tree).findByRole('group', { name: 'Fases de la ejecución' })
+    expect(within(graph).getByText('Espera a plan')).toBeInTheDocument()
+    expect(within(graph).getByText('Omitida porque se omitió gate')).toBeInTheDocument()
+    expect(within(graph).getByRole('button', { name: '2. fix: Pendiente' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lista' }))
+    expect(within(tree).queryByRole('group', { name: 'Fases de la ejecución' })).toBeNull()
     expect(within(tree).getByText('Espera a plan')).toBeInTheDocument()
     expect(within(tree).getByText('Omitida porque se omitió gate')).toBeInTheDocument()
     expect(within(tree).getByText('Pendiente')).toBeInTheDocument()
+    expect(localStorage.getItem('skynet.runProgress.view')).toBe('list')
+    localStorage.removeItem('skynet.runProgress.view')
     expect(screen.getByRole('link', { name: 'Tres fases' })).toHaveAttribute(
       'href',
       '/workflows/dag',

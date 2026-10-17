@@ -331,7 +331,8 @@ class ContractIT extends IntegrationTest {
               null,
               null,
               false,
-              null),
+              null,
+              List.of()),
           agent);
     }
 
@@ -460,7 +461,8 @@ class ContractIT extends IntegrationTest {
               null,
               null,
               false,
-              null),
+              null,
+              List.of()),
           agent);
     }
 

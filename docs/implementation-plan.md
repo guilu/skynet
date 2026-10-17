@@ -536,6 +536,13 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito W7 (grafo del workflow), planificado el 2026-10-17:** W7-A grafo del workflow, W7-B grafo de la ejecución, W7-C carriles por macrofase (`phase`), accesibilidad y E2E.
 
+**Implementado (W7-B), grafo de la ejecución:**
+
+- `RunGraph` en `RunProgress`: el grafo del workflow con el último intento de cada fase encima (estado con icono y texto, actividad o duración, agente o proveedor, coste, intento y nota de la fase) y un nodo por hijo de una `parallel` con el estado de su agente. Cada caja es un botón con la etiqueta del paso de siempre («2. implement: En curso, 3 min 05 s»); el orden de tabulación es el del YAML.
+- Conmutador «Grafo / Lista» (`localStorage`), la lista por debajo de 720 px y con una sola fase. El SSE refresca el grafo sin recolocarlo.
+- `children` en la fase de la ejecución (`StageRunView`): los hijos de una `parallel` se dibujan antes de tener agente.
+- vitest de los nodos de la ejecución; E2E `engine.e2e.ts`: el grafo pasa de «Espera» a completado sin recargar, con axe.
+
 **Implementado (W7-A), grafo del workflow:**
 
 - `@xyflow/react` 12 y `@dagrejs/dagre` en un trozo aparte que solo se descarga al abrir el grafo (`web/src/components/graph/`).

@@ -1,14 +1,16 @@
-import { Check, Hand, Play, SkipForward, Square, X, type LucideIcon } from 'lucide-react'
-import { useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router'
 import type { AgentRun, Run, StageRun } from '../../api'
 import { formatDuration, statusLabel } from '../../format'
 import { cn } from '../../lib/cn'
 import { StatusBadge } from '../StatusBadge'
+import { useMediaQuery } from '../../useMediaQuery'
+import { LinesSkeleton } from '../ui/Skeleton'
 import { outputSummary } from './agentOutput'
 import { spanDuration, type Span } from './runSpans'
 import { RISK_LABEL } from '../approval/approvalFormat'
 import { StageRetry } from './StageRetry'
+import { ACTIVE, stageActivity, stepState, WAITING } from './stageState'
 import {
   attemptOf,
   checkStates,
@@ -16,7 +18,6 @@ import {
   FAILURE_LABEL,
   failureOf,
   isCorrecting,
-  isVerifying,
   latestAttempts,
   stageNote,
   timeLimitNote,
@@ -29,22 +30,37 @@ const ORIGIN: Record<Exclude<AgentRun['kind'], 'START'>, string> = {
   FORK: 'fork del',
 }
 
-const ACTIVE = ['READY', 'STARTING', 'RUNNING']
-const WAITING = ['WAITING_FOR_INPUT', 'WAITING_FOR_APPROVAL']
+// React Flow va en su propio trozo, como en el workflow.
+const RunGraph = lazy(() => import('../graph/RunGraph'))
 
-/** Aspecto de cada paso del camino: hecho, en curso, esperando a alguien, fallido, omitido… */
-function stepState(status: string): { className: string; icon: LucideIcon | null } {
-  if (status === 'SUCCEEDED') return { className: 'done', icon: Check }
-  if (ACTIVE.includes(status)) return { className: 'now', icon: Play }
-  if (WAITING.includes(status)) return { className: 'hold', icon: Hand }
-  if (status === 'FAILED') return { className: 'fail', icon: X }
-  if (status === 'SKIPPED') return { className: 'skip', icon: SkipForward }
-  if (status === 'CANCELLED') return { className: 'skip', icon: Square }
-  return { className: 'todo', icon: null }
+type ProgressView = 'graph' | 'list'
+const VIEW_KEY = 'skynet.runProgress.view'
+
+function readView(): ProgressView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'graph'
+  } catch {
+    return 'graph'
+  }
+}
+
+/** Grafo o lista, recordado en este navegador. */
+function useProgressView(): [ProgressView, (view: ProgressView) => void] {
+  const [view, setView] = useState(readView)
+  const choose = (next: ProgressView) => {
+    setView(next)
+    try {
+      localStorage.setItem(VIEW_KEY, next)
+    } catch {
+      // La elección dura lo que la pestaña.
+    }
+  }
+  return [view, choose]
 }
 
 /**
- * Progreso de la ejecución: sus fases como un camino horizontal, cada una con su estado. Al pulsar
+ * Progreso de la ejecución: sus fases como un grafo con sus dependencias (W7-B) o como un camino
+ * horizontal, cada una con su estado. En el móvil o con una sola fase, siempre el camino. Al pulsar
  * una fase se ven debajo sus agentes; elegir un agente lo abre en la conversación y el inspector.
  */
 export function RunProgress({
@@ -71,6 +87,10 @@ export function RunProgress({
   const open = stages.find((s) => s.stageKey === openKey)
   const openSpan = spans.find((s) => s.id === open?.id)
   const earlier = open ? earlierAttempts(open, run) : []
+  const [view, setView] = useProgressView()
+  const narrow = useMediaQuery('(max-width: 720px)')
+  const canGraph = !narrow && stages.length > 1
+  const graph = canGraph && view === 'graph'
 
   function choose(stage: StageRun) {
     if (stage.agents.length === 0) {
@@ -86,43 +106,58 @@ export function RunProgress({
       <div className="card-head">
         <h2 id="run-progress-title">Progreso</h2>
         <span className="muted small">{progressSummary(run)}</span>
+        {canGraph && (
+          <div className="segmented progress-view" role="group" aria-label="Ver las fases como">
+            <button type="button" aria-pressed={graph} onClick={() => setView('graph')}>
+              Grafo
+            </button>
+            <button type="button" aria-pressed={!graph} onClick={() => setView('list')}>
+              Lista
+            </button>
+          </div>
+        )}
       </div>
       <nav aria-label="Fases y agentes">
-        <ol className="path" style={{ '--steps': stages.length } as CSSProperties}>
-          {stages.map((stage, i) => {
-            const { className, icon: Icon } = stepState(stage.status)
-            const span = spans.find((s) => s.id === stage.id)
-            const running = stage.agents.find((a) => a.currentTool && !a.finishedAt)
-            const note = stageNote(stage, run)
-            return (
-              <li key={stage.id} className={cn('step', className)}>
-                <button
-                  type="button"
-                  className="step-button"
-                  aria-pressed={stage.stageKey === openKey}
-                  aria-label={`${i + 1}. ${stage.name ?? stage.stageKey}: ${statusLabel(stage.status)}`}
-                  onClick={() => choose(stage)}
-                >
-                  <span className="step-dot" aria-hidden="true">
-                    {Icon ? <Icon size={26} strokeWidth={3} /> : i + 1}
-                  </span>
-                  <strong>{stage.name ?? stage.stageKey}</strong>
-                  <small>
-                    {(stage.cancelling ? 'Cancelando' : null) ??
-                      (isVerifying(stage) ? 'Verificando' : null) ??
-                      (isCorrecting(stage) ? 'Corrigiendo' : null) ??
-                      (stage.status === 'WAITING_FOR_APPROVAL' ? 'Esperando aprobación' : null) ??
-                      running?.currentTool ??
-                      (span && span.start != null && stage.status !== 'SKIPPED'
-                        ? formatDuration(spanDuration(span, now))
-                        : statusLabel(stage.status))}
-                  </small>
-                </button>
-                {note && <small className="step-note muted">{note}</small>}
-              </li>
-            )
-          })}
-        </ol>
+        {graph ? (
+          <Suspense fallback={<LinesSkeleton label="el grafo" lines={4} />}>
+            <RunGraph
+              run={run}
+              stages={stages}
+              spans={spans}
+              now={now}
+              openKey={openKey}
+              selectedAgentId={selectedAgentId}
+              onChoose={choose}
+              onSelectAgent={onSelectAgent}
+            />
+          </Suspense>
+        ) : (
+          <ol className="path" style={{ '--steps': stages.length } as CSSProperties}>
+            {stages.map((stage, i) => {
+              const { className, icon: Icon } = stepState(stage.status)
+              const span = spans.find((s) => s.id === stage.id)
+              const note = stageNote(stage, run)
+              return (
+                <li key={stage.id} className={cn('step', className)}>
+                  <button
+                    type="button"
+                    className="step-button"
+                    aria-pressed={stage.stageKey === openKey}
+                    aria-label={`${i + 1}. ${stage.name ?? stage.stageKey}: ${statusLabel(stage.status)}`}
+                    onClick={() => choose(stage)}
+                  >
+                    <span className="step-dot" aria-hidden="true">
+                      {Icon ? <Icon size={26} strokeWidth={3} /> : i + 1}
+                    </span>
+                    <strong>{stage.name ?? stage.stageKey}</strong>
+                    <small>{stageActivity(stage, span, now)}</small>
+                  </button>
+                  {note && <small className="step-note muted">{note}</small>}
+                </li>
+              )
+            })}
+          </ol>
+        )}
         {open && (
           <div className="step-detail">
             <p className="step-detail-head">
