@@ -45,7 +45,7 @@ describe('Aprobaciones', () => {
     expect(row).toHaveTextContent('TKM-1 · Add model pricing importer')
     const nav = screen.getByRole('navigation', { name: 'Navegación principal' })
     expect(
-      await within(nav).findByRole('link', { name: /^Aprobaciones,\s*1\s*pendiente$/ }),
+      await within(nav).findByRole('link', { name: /^Aprobaciones\s*1\s*pendiente$/ }),
     ).toBeInTheDocument()
   })
 

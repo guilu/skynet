@@ -7,7 +7,6 @@ export function PendingCount() {
   if (n === 0) return null
   return (
     <span className="nav-count">
-      <span className="visually-hidden">, </span>
       {n}
       <span className="visually-hidden"> {n === 1 ? 'pendiente' : 'pendientes'}</span>
     </span>

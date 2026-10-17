@@ -115,7 +115,7 @@ test('una puerta se aprueba, pide cambios y se rechaza desde el centro de aproba
     ).toBeVisible()
     await expect(
       page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', {
-        name: /^Aprobaciones, \d+ pendientes?$/,
+        name: /^Aprobaciones\s*\d+\s*pendientes?$/,
       }),
     ).toBeVisible()
   })
