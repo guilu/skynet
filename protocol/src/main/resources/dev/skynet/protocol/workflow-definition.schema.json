@@ -228,6 +228,10 @@
           "description": "Solo en fases agent y command (en una parallel, en cada hijo): cuántas veces se reintenta si falla y por qué fallos.",
           "$ref": "#/$defs/retry"
         },
+        "phase": {
+          "description": "Macrofase de la fase. El grafo del workflow y el de la ejecución la dibujan como carril, en este orden; una fase sin phase va en el carril de su dependencia. Sin ninguna, no hay carriles.",
+          "enum": ["spec", "plan", "implement", "test", "review", "deliver"]
+        },
         "timeout": {
           "description": "Tiempo máximo de cada intento de la fase, desde que está lista hasta que termina (s, m o h; hasta 168 h). Al vencer se paran sus agentes y la fase falla con `timeout`; en una human-approval, la petición caduca. No vale en fases conditional.",
           "type": "string",

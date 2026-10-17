@@ -74,13 +74,16 @@ stages:
   - id: implement
     type: agent
     agent: developer
+    phase: implement
   - id: tests
     type: command
     command: ./gradlew test  # el comando de tests de tu repositorio
     dependsOn: [implement]
+    phase: test
   - id: review
     type: parallel
     dependsOn: [tests]
+    phase: review
     children:
       - agent: calidad
       - agent: seguridad
@@ -138,6 +141,7 @@ stages:
   - id: spec
     type: agent
     agent: analista
+    phase: spec
     outputSchema:
       type: object
       properties:
@@ -148,6 +152,7 @@ stages:
     type: agent
     agent: desarrollador
     dependsOn: [spec]
+    phase: plan
     prompt: |
       Planifica {{workItem.key}} a partir de su propuesta (openspec/proposal.md):
       {{stages.spec.output.summary}}
@@ -165,6 +170,7 @@ stages:
     type: agent
     agent: desarrollador
     dependsOn: [aprobar-plan]
+    phase: implement
     checks: [tests, diff]
 `
 

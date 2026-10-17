@@ -91,7 +91,8 @@
       "timedOutAt" : null,
       "cancelling" : false,
       "retriedBy" : null,
-      "children" : [ ]
+      "children" : [ ],
+      "phase" : null
     } ]
   } ],
   "activeRunsTotal" : 1,

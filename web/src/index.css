@@ -5117,6 +5117,25 @@
     opacity: 0.35;
   }
 
+  /* Un carril por macrofase: una banda detrás de sus fases, con su nombre arriba. */
+  .graph-lane {
+    display: flex;
+    align-items: flex-start;
+    padding: 8px 12px;
+    background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+    border: 2px solid var(--border);
+    border-radius: var(--r-md);
+    pointer-events: none;
+  }
+
+  .graph-lane-label {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
   .workflow-graph .react-flow__controls {
     display: flex;
     gap: 2px;

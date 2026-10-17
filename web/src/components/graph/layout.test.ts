@@ -1,12 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import type { StageDefinition } from '../../api'
 import { stageDetail, stageHints, toGraphStages } from './definitionNodes'
-import { GROUP_HEADER, layoutStages, NODE_HEIGHT, type GraphStage } from './layout'
+import type { Phase } from '../../api'
+import {
+  GROUP_HEADER,
+  LANE_HEADER,
+  lanesOf,
+  layoutStages,
+  NODE_HEIGHT,
+  type GraphStage,
+} from './layout'
 
 const stage = (id: string, dependsOn: string[] = [], children: string[] = []): GraphStage => ({
   id,
   dependsOn: dependsOn.map((d) => ({ stage: d.replace('?', ''), optional: d.endsWith('?') })),
   children,
+})
+
+const phased = (id: string, phase: Phase | null, dependsOn: string[] = []): GraphStage => ({
+  ...stage(id, dependsOn),
+  phase,
 })
 
 describe('layoutStages', () => {
@@ -59,6 +72,57 @@ describe('layoutStages', () => {
   })
 })
 
+describe('carriles por macrofase', () => {
+  it('sin `phase` en ninguna fase no hay carriles', () => {
+    const stages = [stage('a'), stage('b', ['a'])]
+    expect(lanesOf(stages).size).toBe(0)
+    expect(layoutStages(stages).lanes).toEqual([])
+  })
+
+  it('una fase sin `phase` toma el carril más avanzado de las que espera', () => {
+    const lanes = lanesOf([
+      phased('spec', 'spec'),
+      phased('code', 'implement', ['spec']),
+      phased('notes', null, ['spec']),
+      phased('after', null, ['notes', 'code']),
+      phased('first', null),
+    ])
+    expect(Object.fromEntries(lanes)).toEqual({
+      spec: 'spec',
+      code: 'implement',
+      notes: 'spec',
+      after: 'implement',
+      first: 'spec',
+    })
+  })
+
+  it('los carriles van en el orden de las macrofases, sin pisarse, y cada fase dentro del suyo', () => {
+    const layout = layoutStages([
+      phased('review', 'review', ['code']),
+      phased('code', 'implement', ['plan']),
+      phased('plan', 'plan'),
+      phased('tests', 'implement', ['plan']),
+    ])
+    expect(layout.lanes.map((l) => [l.id, l.label])).toEqual([
+      ['plan', 'Planificación'],
+      ['implement', 'Implementación'],
+      ['review', 'Revisión'],
+    ])
+    for (const [left, right] of layout.lanes.slice(0, -1).map((l, i) => [l, layout.lanes[i + 1]]))
+      expect(right.x).toBeGreaterThan(left.x + left.width)
+    const lane = Object.fromEntries(layout.lanes.map((l) => [l.id, l]))
+    const of = { review: 'review', code: 'implement', plan: 'plan', tests: 'implement' } as const
+    for (const box of layout.stages) {
+      const band = lane[of[box.id as keyof typeof of]]
+      expect(box.x).toBeGreaterThanOrEqual(band.x)
+      expect(box.x + box.width).toBeLessThanOrEqual(band.x + band.width)
+      expect(box.y).toBeGreaterThanOrEqual(band.y + LANE_HEADER)
+      expect(box.y + box.height).toBeLessThanOrEqual(band.y + band.height)
+    }
+    expect(layout.width).toBeGreaterThan(lane.review.x + lane.review.width)
+  })
+})
+
 const definition = (over: Partial<StageDefinition>): StageDefinition => ({
   id: 's',
   name: null,
@@ -77,6 +141,7 @@ const definition = (over: Partial<StageDefinition>): StageDefinition => ({
   approval: null,
   retry: null,
   timeoutSeconds: null,
+  phase: null,
   ...over,
 })
 

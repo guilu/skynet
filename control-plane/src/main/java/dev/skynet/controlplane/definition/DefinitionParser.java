@@ -89,7 +89,8 @@ public final class DefinitionParser {
           "risk",
           "revise",
           "retry",
-          "timeout");
+          "timeout",
+          "phase");
   static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt", "retry");
   static final Set<String> RETRY_KEYS = Set.of("maxAttempts", "on", "delay");
 
@@ -880,6 +881,7 @@ public final class DefinitionParser {
       Approval approval = approval(fields, type, node, path);
       Retry retry = stageRetry(fields, type, path);
       Duration timeout = timeout(fields, type, path);
+      String phase = phase(fields, path);
       Entry schemaEntry = fields.get("outputSchema");
       Map<String, Object> outputSchema = null;
       String outputSchemaPath = null;
@@ -916,7 +918,8 @@ public final class DefinitionParser {
               checks,
               approval,
               retry,
-              timeout);
+              timeout,
+              phase);
       return new StageAt(stage, path, node, fields, dependencyNodes, children);
     }
 
@@ -1276,6 +1279,27 @@ public final class DefinitionParser {
      * El tiempo máximo de un intento de la fase: una duración de hasta una semana. No vale en una
      * {@code conditional}, que no espera a nada.
      */
+    /** La macrofase de la fase, para los carriles del grafo; {@code null} si no la dice. */
+    private String phase(Map<String, Entry> fields, String path) {
+      Entry entry = fields.get("phase");
+      if (entry == null || isNull(entry.value())) return null;
+      String value = text(entry, path + ".phase");
+      if (value == null) return null;
+      if (!StageDefinition.PHASES.contains(value)) {
+        error(
+            entry.value(),
+            path + ".phase",
+            "`phase: "
+                + value
+                + "` no se conoce"
+                + suggestion(value, StageDefinition.PHASES)
+                + ". Admite: "
+                + String.join(", ", StageDefinition.PHASES));
+        return null;
+      }
+      return value;
+    }
+
     private Duration timeout(Map<String, Entry> fields, StageType type, String path) {
       Entry entry = fields.get("timeout");
       if (entry == null) {

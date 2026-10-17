@@ -15,6 +15,7 @@ export function toRunGraphStages(stages: StageRun[]): GraphStage[] {
     id: s.stageKey,
     dependsOn: s.dependsOn,
     children: childrenOf(s),
+    phase: s.phase,
   }))
 }
 

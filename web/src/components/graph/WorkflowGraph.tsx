@@ -6,12 +6,14 @@ import {
   MiniMap,
   Position,
   ReactFlow,
+  useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
-import { useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useMediaQuery } from '../../useMediaQuery'
 import { cn } from '../../lib/cn'
 import { layoutStages, type GraphStage } from './layout'
 
@@ -40,13 +42,54 @@ function StageBox({ data }: NodeProps<Node<BoxData>>) {
   )
 }
 
-const NODE_TYPES = { box: StageBox }
+/** Un carril: solo su nombre arriba; la banda la pinta la clase del nodo. */
+function LaneBox({ data }: NodeProps<Node<{ label: string }>>) {
+  return <span className="graph-lane-label">{data.label}</span>
+}
+
+const NODE_TYPES = { box: StageBox, lane: LaneBox }
 
 /** Ajustar a pantalla sin agrandar las cajas ni encogerlas hasta no poder leerlas: si no cabe, se desplaza. */
 const FIT = { padding: 0.08, minZoom: 0.6, maxZoom: 1 }
 
 /** Con más nodos, el minimapa ayuda a no perderse; con menos, estorba. */
 const MINIMAP_FROM = 8
+
+/**
+ * Con el teclado, la caja que recibe el foco se trae a la vista si estaba fuera, sin cambiar el
+ * zoom; con `prefers-reduced-motion`, sin animación.
+ */
+function FollowFocus({ container }: { container: React.RefObject<HTMLDivElement | null> }) {
+  const flow = useReactFlow()
+  const reduced = useMediaQuery('(prefers-reduced-motion: reduce)')
+  useEffect(() => {
+    const element = container.current
+    if (!element) return
+    const onFocus = (event: FocusEvent) => {
+      const node = (event.target as HTMLElement).closest<HTMLElement>('.react-flow__node')
+      const id = node?.dataset.id
+      if (!node || !id) return
+      const box = node.getBoundingClientRect()
+      const view = element.getBoundingClientRect()
+      const inside =
+        box.left >= view.left &&
+        box.right <= view.right &&
+        box.top >= view.top &&
+        box.bottom <= view.bottom
+      if (inside) return
+      const zoom = flow.getZoom()
+      void flow.fitView({
+        nodes: [{ id }],
+        minZoom: zoom,
+        maxZoom: zoom,
+        duration: reduced ? 0 : 200,
+      })
+    }
+    element.addEventListener('focusin', onFocus)
+    return () => element.removeEventListener('focusin', onFocus)
+  }, [container, flow, reduced])
+  return null
+}
 
 /**
  * Las fases como un grafo de izquierda a derecha (React Flow), de solo lectura: zoom, ajustar a
@@ -67,7 +110,19 @@ export default function WorkflowGraph({
 }) {
   const layout = useMemo(() => layoutStages(stages), [stages])
   const nodes = useMemo(() => {
-    const all: Node<BoxData>[] = []
+    const all: Node[] = layout.lanes.map((lane) => ({
+      id: `lane:${lane.id}`,
+      type: 'lane',
+      position: { x: lane.x, y: lane.y },
+      width: lane.width,
+      height: lane.height,
+      data: { label: lane.label },
+      className: 'graph-lane',
+      draggable: false,
+      connectable: false,
+      selectable: false,
+      zIndex: -1,
+    }))
     for (const box of layout.stages) {
       const group = box.children.length > 0
       all.push({
@@ -124,9 +179,16 @@ export default function WorkflowGraph({
   )
   // Alto justo para el grafo a tamaño natural, sin pasar de un máximo razonable.
   const height = Math.min(Math.max(layout.height + 48, 200), 560)
+  const container = useRef<HTMLDivElement>(null)
 
   return (
-    <div className="workflow-graph" style={{ height }} role="group" aria-label={label}>
+    <div
+      ref={container}
+      className="workflow-graph"
+      style={{ height }}
+      role="group"
+      aria-label={label}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -145,6 +207,7 @@ export default function WorkflowGraph({
         zoomOnDoubleClick={false}
         proOptions={{ hideAttribution: false }}
       >
+        <FollowFocus container={container} />
         <Background gap={24} size={1} />
         <Controls
           position="top-right"
@@ -154,7 +217,12 @@ export default function WorkflowGraph({
           fitViewOptions={FIT}
         />
         {layout.stages.length > MINIMAP_FROM && (
-          <MiniMap pannable zoomable ariaLabel="Minimapa del grafo" />
+          <MiniMap
+            pannable
+            zoomable
+            ariaLabel="Minimapa del grafo"
+            nodeColor={(n) => (n.type === 'lane' ? 'transparent' : 'var(--border-strong)')}
+          />
         )}
       </ReactFlow>
     </div>

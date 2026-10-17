@@ -63,7 +63,8 @@ public record StageRunView(
     Instant timedOutAt,
     boolean cancelling,
     String retriedBy,
-    List<String> children) {
+    List<String> children,
+    String phase) {
 
   /**
    * El {@code retry} de una fase: intentos en total, qué fallos ({@code lost}, {@code error}…) y la
@@ -119,6 +120,7 @@ public record StageRunView(
         s.getRetriedBy(),
         definition == null
             ? List.of()
-            : definition.children().stream().map(StageDefinition.ChildDefinition::id).toList());
+            : definition.children().stream().map(StageDefinition.ChildDefinition::id).toList(),
+        definition == null ? null : definition.phase());
   }
 }
