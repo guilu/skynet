@@ -88,15 +88,16 @@ public final class DefinitionParser {
           "action",
           "risk",
           "revise",
-          "retry");
+          "retry",
+          "timeout");
   static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt", "retry");
   static final Set<String> RETRY_KEYS = Set.of("maxAttempts", "on", "delay");
 
   /** Claves de §11 que llegan con hitos posteriores, con el hito que las ejecuta. */
-  static final Map<String, String> FUTURE_STAGE_KEYS =
-      Map.of(
-          "promptTemplate", "S3",
-          "timeout", "W6");
+  static final Map<String, String> FUTURE_STAGE_KEYS = Map.of("promptTemplate", "S3");
+
+  /** Lo más que puede durar una fase con {@code timeout}: una semana. */
+  static final Duration MAX_TIMEOUT = Duration.ofDays(7);
 
   /** Variables que puede usar un prompt, además de {@code inputs.<nombre>}. */
   static final List<String> CONTEXT_VARIABLES =
@@ -878,6 +879,7 @@ public final class DefinitionParser {
       List<VerificationCheck> checks = verification(fields, type, node, path);
       Approval approval = approval(fields, type, node, path);
       Retry retry = stageRetry(fields, type, path);
+      Duration timeout = timeout(fields, type, path);
       Entry schemaEntry = fields.get("outputSchema");
       Map<String, Object> outputSchema = null;
       String outputSchemaPath = null;
@@ -913,7 +915,8 @@ public final class DefinitionParser {
               outputSchemaPath,
               checks,
               approval,
-              retry);
+              retry,
+              timeout);
       return new StageAt(stage, path, node, fields, dependencyNodes, children);
     }
 
@@ -1267,6 +1270,28 @@ public final class DefinitionParser {
         return null;
       }
       return retry(entry, path + ".retry");
+    }
+
+    /**
+     * El tiempo máximo de un intento de la fase: una duración de hasta una semana. No vale en una
+     * {@code conditional}, que no espera a nada.
+     */
+    private Duration timeout(Map<String, Entry> fields, StageType type, String path) {
+      Entry entry = fields.get("timeout");
+      if (entry == null) {
+        return null;
+      }
+      if (type == StageType.CONDITIONAL) {
+        error(
+            entry.key(),
+            path + ".timeout",
+            "`timeout` no vale en una fase `conditional`: solo evalúa su condición");
+        return null;
+      }
+      if (!type.executable()) {
+        return null;
+      }
+      return duration(entry, path + ".timeout", MAX_TIMEOUT);
     }
 
     /**

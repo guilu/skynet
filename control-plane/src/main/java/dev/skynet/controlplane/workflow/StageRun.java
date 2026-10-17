@@ -24,6 +24,12 @@ public class StageRun {
   /** Un reintento no empieza antes de esta hora (la espera de {@code retry.delay}, W6). */
   private Instant notBefore;
 
+  /** Con {@code timeout}, el intento tiene que terminar antes de esta hora (W6-B). */
+  private Instant deadline;
+
+  /** Llegó a su {@code deadline} y se le pararon los agentes. */
+  private Instant timedOutAt;
+
   @Version private Long version;
 
   @PersistenceCreator
@@ -124,6 +130,28 @@ public class StageRun {
 
   public Instant getNotBefore() {
     return notBefore;
+  }
+
+  public Instant getDeadline() {
+    return deadline;
+  }
+
+  public Instant getTimedOutAt() {
+    return timedOutAt;
+  }
+
+  /** Fija hasta cuándo puede durar el intento, al pasar a lista. */
+  void limitUntil(Instant deadline) {
+    this.deadline = deadline;
+  }
+
+  /** Marca que llegó a su límite. Devuelve {@code false} si ya estaba marcado. */
+  boolean timeOut(Instant now) {
+    if (timedOutAt != null) {
+      return false;
+    }
+    timedOutAt = now;
+    return true;
   }
 
   public Long getVersion() {

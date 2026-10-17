@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.skynet.controlplane.support.IntegrationTest;
+import dev.skynet.controlplane.workflow.RunService;
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.runner.EventBatch;
@@ -21,6 +22,7 @@ import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
@@ -163,6 +165,23 @@ class WorkflowEngineIT extends IntegrationTest {
           command: make test
           dependsOn: [fix]
           retry: {maxAttempts: 3, on: [timeout], delay: 1s}
+      """;
+
+  /** Implementar con un tiempo máximo, que se reintenta si se acaba (W6-B), y pasar los tests. */
+  static final String TIMED =
+      """
+      id: timed
+      version: 1
+      stages:
+        - id: implement
+          type: agent
+          prompt: Implementa
+          timeout: 2s
+          retry: {maxAttempts: 2, on: [timeout], delay: 1s}
+        - id: tests
+          type: command
+          command: make test
+          dependsOn: [implement]
       """;
 
   /** REVIEW con reintentos en el revisor de calidad (W6). */
@@ -403,6 +422,8 @@ class WorkflowEngineIT extends IntegrationTest {
           prompt: Planifica
           dependsOn: [aprobar-spec]
       """;
+
+  @Autowired private RunService runs;
 
   private String projectId;
   private String repositoryId;
@@ -899,6 +920,122 @@ class WorkflowEngineIT extends IntegrationTest {
     assertThat(stagesOf(run, "fix"))
         .extracting(f -> f.path("status").asString())
         .containsExactly("FAILED", "CANCELLED");
+  }
+
+  @Test
+  void aStageThatRunsOutOfTimeIsStoppedAndRetriedWhenItsRetryCoversIt() {
+    String definitionId = publish(TIMED);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    String firstId = runner.claim().getFirst().path("agentRunId").asString();
+
+    // Pasado su timeout, el motor ordena parar el agente y la fase está «Cancelando».
+    JsonNode cancel = awaitCommand(runner);
+    assertThat(cancel.path("type").asString()).isEqualTo("CANCEL");
+    assertThat(cancel.path("agentRunId").asString()).isEqualTo(firstId);
+    JsonNode implement = stagesOf(get("/api/workflow-runs/" + runId), "implement").getFirst();
+    assertThat(implement.path("timeoutSeconds").asInt()).isEqualTo(2);
+    assertThat(implement.path("deadline").isNull()).isFalse();
+    assertThat(implement.path("timedOutAt").isNull()).isFalse();
+    assertThat(implement.path("cancelling").asBoolean()).isTrue();
+
+    // El runner lo para: falla por tiempo y, como su retry lo cubre, se reintenta.
+    Events stopped = new Events(UUID.fromString(firstId));
+    stopped.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 143));
+    runner.send(stopped);
+    List<JsonNode> attempts = stagesOf(get("/api/workflow-runs/" + runId), "implement");
+    assertThat(attempts)
+        .extracting(a -> a.path("status").asString())
+        .containsExactly("FAILED", "PENDING");
+    assertThat(attempts.getFirst().path("agents").get(0).path("failure").asString())
+        .isEqualTo("timeout");
+    assertThat(eventTypes(runId)).contains("stage.timed.out", "stage.retry.scheduled");
+
+    complete(runner, awaitCommand(runner), "/w/eng/implement");
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("SUCCEEDED");
+  }
+
+  @Test
+  void aStageThatTimesOutWithoutRetryFailsTheRun() {
+    String definitionId =
+        publish(TIMED.replace("    retry: {maxAttempts: 2, on: [timeout], delay: 1s}\n", ""));
+    register("laptop");
+    // Sin runner que lo recoja, el agente se queda en cola y se para en el acto.
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+
+    await(() -> "FAILED".equals(get("/api/workflow-runs/" + runId).path("status").asString()));
+    JsonNode implement = stagesOf(get("/api/workflow-runs/" + runId), "implement").getFirst();
+    assertThat(stagesOf(get("/api/workflow-runs/" + runId), "implement")).hasSize(1);
+    assertThat(implement.path("agents").get(0).path("failure").asString()).isEqualTo("timeout");
+    assertThat(stageStatuses(runId)).containsEntry("tests", "CANCELLED");
+  }
+
+  @Test
+  void aGateThatWaitsLongerThanItsTimeoutExpiresAndFailsTheRun() {
+    String definitionId =
+        publish(GATE.replace("    risk: high\n", "    risk: high\n    timeout: 1s\n"));
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/plan", Map.of("summary", "Hacer X"));
+
+    await(() -> "FAILED".equals(get("/api/workflow-runs/" + runId).path("status").asString()));
+    JsonNode approval = get("/api/approvals?status=EXPIRED").get(0);
+    String approvalId = approval.path("id").asString();
+    JsonNode detail = get("/api/approvals/" + approvalId);
+    assertThat(detail.path("decisions").get(0).path("action").asString()).isEqualTo("EXPIRE");
+    assertThat(detail.path("decisions").get(0).path("actor").asString()).isEqualTo("skynet");
+    assertThat(stageStatuses(runId))
+        .containsEntry("aprobar-plan", "FAILED")
+        .containsEntry("implement", "CANCELLED");
+    assertThat(eventTypes(runId)).contains("stage.timed.out", "approval.expired");
+    assertConflict(
+        () -> post("/api/approvals/" + approvalId + "/decisions", Map.of("action", "APPROVE")));
+  }
+
+  @Test
+  void aCancellationTheRunnerDoesNotConfirmIsClosedByTheControlPlane() {
+    String definitionId = publish(RETRIED);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    String agentId = runner.claim().getFirst().path("agentRunId").asString();
+
+    JsonNode cancelling = post("/api/workflow-runs/" + runId + "/cancel", Map.of());
+    assertThat(cancelling.path("status").asString()).isEqualTo("RUNNING");
+    assertThat(cancelling.path("cancelRequestedAt").isNull()).isFalse();
+    assertThat(stagesOf(cancelling, "implement").getFirst().path("cancelling").asBoolean())
+        .isTrue();
+    assertThat(runner.claim()).extracting(c -> c.path("type").asString()).containsExactly("CANCEL");
+
+    // El runner no confirma: pasado el plazo, el control plane da el agente por cancelado.
+    assertThat(runs.unconfirmedCancels(Instant.now().minusSeconds(3600))).isEmpty();
+    runs.unconfirmedCancels(Instant.now().plusSeconds(1)).forEach(runs::forceCancel);
+
+    JsonNode run = get("/api/workflow-runs/" + runId);
+    assertThat(run.path("status").asString()).isEqualTo("CANCELLED");
+    assertThat(run.path("cancelRequestedAt").isNull()).isTrue();
+    assertThat(get("/api/agent-runs/" + agentId).path("agent").path("status").asString())
+        .isEqualTo("CANCELLED");
+    assertThat(eventTypes(runId)).contains("workflow.cancel.requested", "agent.cancel.forced");
+  }
+
+  @Test
+  void cancellingARunCancelsTheRunsLaunchedFromItsAgents() {
+    String definitionId = publish(RETRIED);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    JsonNode implement = runner.claim().getFirst();
+    complete(runner, implement, "/w/eng/implement");
+    runner.claim();
+    String child =
+        post("/api/agent-runs/" + implement.path("agentRunId").asString() + "/retry", Map.of())
+            .path("id")
+            .asString();
+
+    post("/api/workflow-runs/" + runId + "/cancel", Map.of());
+
+    assertThat(get("/api/workflow-runs/" + child).path("status").asString()).isEqualTo("CANCELLED");
+    assertThat(eventTypes(child)).contains("workflow.cancel.requested");
   }
 
   @Test

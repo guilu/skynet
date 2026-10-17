@@ -54,11 +54,16 @@ record Retries(
    * Si el agente ha fallado: terminó mal o terminó bien pero no pasó la verificación de su fase.
    */
   boolean failed(AgentRun agent) {
-    return agent.getStatus() == AgentObservableStatus.FAILED || verificationFailed(agent);
+    return agent.getStatus() == AgentObservableStatus.FAILED
+        || agent.getTimedOutAt() != null
+        || verificationFailed(agent);
   }
 
   /** Por qué falló el agente, o {@code null} si no ha fallado o no se sabe. */
   AgentFailure failureOf(AgentRun agent) {
+    if (agent.getTimedOutAt() != null) {
+      return AgentFailure.TIMEOUT;
+    }
     if (agent.getStatus() == AgentObservableStatus.FAILED) {
       return agent.getFailure();
     }
@@ -75,10 +80,13 @@ record Retries(
 
   /**
    * Por qué falló un intento de una fase que no es {@code parallel}: lo que diga su agente fallido.
-   * Sin agente (no llegó a arrancar en el control plane) o con uno cancelado, {@code null}: no se
-   * reintenta.
+   * Si llegó a su {@code timeout}, {@link AgentFailure#TIMEOUT}. Sin agente (no llegó a arrancar en
+   * el control plane) o con uno cancelado, {@code null}: no se reintenta.
    */
   AgentFailure failureOf(StageRun attempt) {
+    if (attempt.getTimedOutAt() != null) {
+      return AgentFailure.TIMEOUT;
+    }
     List<AgentRun> own = agentsOf(attempt);
     if (own.stream().anyMatch(a -> a.getStatus() == AgentObservableStatus.CANCELLED)) {
       return null;

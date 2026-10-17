@@ -83,7 +83,10 @@ export function RunHeader({
   const verification = verifications.data?.[0]
   // Con varias fases se cancela la ejecución entera; con una, su agente.
   const wholeRun = run.stages.length > 1
-  const cancellable = wholeRun ? run.finishedAt == null : run.currentAgentRunId != null
+  // Se pidió cancelarla y sus agentes aún no han parado: «Cancelando», sin volver a ofrecerlo.
+  const cancelling = run.cancelRequestedAt != null && run.finishedAt == null
+  const cancellable =
+    !cancelling && (wholeRun ? run.finishedAt == null : run.currentAgentRunId != null)
   const [confirming, setConfirming] = useState(false)
   const cancel = useMutation({
     mutationFn: async () => {
@@ -117,7 +120,7 @@ export function RunHeader({
                 {run.workItemKey}
               </Link>
             )}
-            <StatusBadge status={run.status} />
+            <StatusBadge status={cancelling ? 'CANCELLING' : run.status} />
             <span className="connection" role="status">
               <Pill tone={connection.tone} icon={connection.icon}>
                 <span className="visually-hidden">Conexión: </span>
@@ -197,7 +200,7 @@ export function RunHeader({
                 </Button>
               )
             ))}
-          {cancel.isSuccess && (
+          {(cancel.isSuccess || cancelling) && (
             <span role="status" className="small">
               Cancelación solicitada:{' '}
               {wholeRun ? 'los agentes se detendrán' : 'el agente se detendrá'} en unos segundos.

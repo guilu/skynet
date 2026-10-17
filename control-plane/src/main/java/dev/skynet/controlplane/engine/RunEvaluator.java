@@ -9,6 +9,7 @@ import dev.skynet.controlplane.engine.Planner.Retry;
 import dev.skynet.controlplane.engine.Planner.Skip;
 import dev.skynet.controlplane.engine.Planner.Start;
 import dev.skynet.controlplane.engine.Planner.Step;
+import dev.skynet.controlplane.engine.Planner.TimeOut;
 import dev.skynet.controlplane.engine.Planner.Wake;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.controlplane.workflow.RunSteps;
@@ -42,7 +43,10 @@ class RunEvaluator {
      * evaluarla más tarde.
      */
     RETRY_LATER,
-    /** No queda nada que hacer hasta {@link Outcome#wakeAt}, cuando puede empezar un reintento. */
+    /**
+     * No queda nada que hacer hasta {@link Outcome#wakeAt}, cuando puede empezar un reintento o una
+     * fase llega a su {@code timeout}.
+     */
     WAKE_AT
   }
 
@@ -108,7 +112,7 @@ class RunEvaluator {
       for (Step step : plan) {
         switch (step) {
           case Ready ready -> {
-            steps.ready(runId, ready.stage());
+            steps.ready(runId, ready.stage(), published);
             progressed = true;
           }
           case Skip skip -> {
@@ -124,6 +128,7 @@ class RunEvaluator {
             }
           }
           case Cancel cancel -> progressed |= steps.cancel(runId, cancel.stage(), cancel.reason());
+          case TimeOut timeOut -> progressed |= steps.timeOut(runId, timeOut.stage());
           case Retry retry -> {
             steps.retry(runId, retry.stage(), published);
             progressed = true;

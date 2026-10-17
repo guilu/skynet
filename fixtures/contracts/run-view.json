@@ -9,6 +9,7 @@
   "startedAt" : "2026-10-05T09:00:00Z",
   "finishedAt" : "2026-10-05T09:00:42Z",
   "archivedAt" : null,
+  "cancelRequestedAt" : null,
   "currentStageRunId" : null,
   "currentAgentRunId" : null,
   "totals" : {
@@ -117,6 +118,10 @@
     } ],
     "approval" : null,
     "retry" : null,
-    "notBefore" : null
+    "notBefore" : null,
+    "timeoutSeconds" : null,
+    "deadline" : null,
+    "timedOutAt" : null,
+    "cancelling" : false
   } ]
 }

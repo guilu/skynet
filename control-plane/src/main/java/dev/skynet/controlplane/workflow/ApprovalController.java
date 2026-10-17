@@ -24,8 +24,9 @@ class ApprovalController {
           Approvals.PENDING,
           Approvals.APPROVED,
           Approvals.REJECTED,
-          "CHANGES_REQUESTED",
-          Approvals.CANCELLED);
+          Approvals.CHANGES_REQUESTED,
+          Approvals.CANCELLED,
+          Approvals.EXPIRED);
   private static final Set<String> RISKS = Set.of("LOW", "MEDIUM", "HIGH");
 
   private final Approvals approvals;

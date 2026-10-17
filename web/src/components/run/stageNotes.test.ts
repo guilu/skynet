@@ -7,6 +7,7 @@ import {
   joinNames,
   latestAttempts,
   stageNote,
+  timeLimitNote,
 } from './stageNotes'
 
 function stage(
@@ -36,6 +37,10 @@ function stage(
     approval: null,
     retry: null,
     notBefore: null,
+    timeoutSeconds: null,
+    deadline: null,
+    timedOutAt: null,
+    cancelling: false,
   }
 }
 
@@ -198,5 +203,23 @@ describe('stageNote', () => {
       },
       { name: 'diff', target: null, state: 'passed', reasons: [] },
     ])
+  })
+
+  it('el límite de tiempo, la caducidad y «Cancelando»', () => {
+    const limited = { ...stage('implement', 'RUNNING', [], 1), timeoutSeconds: 1800 }
+    expect(timeLimitNote(limited)).toBe('Tiempo máximo: 30 min')
+    const deadline = '2026-10-17T10:30:00Z'
+    const at = new Date(deadline).toLocaleTimeString('es-ES')
+    expect(timeLimitNote({ ...limited, deadline })).toBe(`Tiempo máximo: 30 min · hasta las ${at}`)
+    expect(timeLimitNote(stage('tests', 'RUNNING'))).toBeNull()
+
+    const stopping = { ...limited, cancelling: true }
+    expect(stageNote(stopping, run(stopping))).toBe(
+      'Cancelando: espera a que el runner pare sus agentes',
+    )
+    const timedOut = { ...limited, status: 'FAILED' as const, timedOutAt: deadline }
+    expect(stageNote(timedOut, run(timedOut))).toBe('Falló: se acabó el tiempo')
+    const gate = { ...timedOut, type: 'human-approval', agents: [] }
+    expect(stageNote(gate, run(gate))).toBe('Caducó sin decisión')
   })
 })

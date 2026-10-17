@@ -30,6 +30,7 @@ const STATUS_LABELS: Record<string, string> = {
   PASSED: 'Pasa',
   ERROR: 'Error',
   INTERRUPTED: 'Sin respuesta',
+  CANCELLING: 'Cancelando',
 }
 
 export const statusLabel = (status: string) => STATUS_LABELS[status] ?? status
@@ -39,7 +40,11 @@ export type StatusTone = 'neutral' | 'active' | 'ok' | 'bad' | 'warn'
 export function statusTone(status: string): StatusTone {
   if (['SUCCEEDED', 'COMPLETED', 'ONLINE', 'PASSED'].includes(status)) return 'ok'
   if (['FAILED', 'ERROR'].includes(status)) return 'bad'
-  if (['WAITING_FOR_INPUT', 'WAITING_FOR_APPROVAL', 'UNRESPONSIVE', 'STALE'].includes(status))
+  if (
+    ['WAITING_FOR_INPUT', 'WAITING_FOR_APPROVAL', 'UNRESPONSIVE', 'STALE', 'CANCELLING'].includes(
+      status,
+    )
+  )
     return 'warn'
   if (['RUNNING', 'STARTING', 'THINKING', 'EXECUTING'].includes(status)) return 'active'
   return 'neutral'
@@ -101,6 +106,18 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `Fase ${p('stageKey')}: se reintenta (intento ${p('attempt')} de ${p('maxAttempts')}) en ${formatDuration(
         Number(payload.delaySeconds ?? 0) * 1000,
       )}`
+    case 'stage.timed.out':
+      return `Fase ${p('stageKey')}: se acabó su tiempo (intento ${p('attempt')})`
+    case 'workflow.cancel.requested':
+      return payload.reason === 'parent-cancelled'
+        ? 'Cancelación pedida: se canceló la ejecución que la lanzó'
+        : 'Cancelación pedida'
+    case 'agent.cancel.requested':
+      return payload.reason === 'stage-timeout'
+        ? 'Parada pedida al runner: se acabó el tiempo de su fase'
+        : 'Cancelación pedida al runner'
+    case 'agent.cancel.forced':
+      return 'El runner no confirmó la cancelación: se da por cancelado'
     case 'stage.start.failed':
       return `La fase ${p('stageKey')} no pudo arrancar: ${p('error')}`
     case 'agent.spawned':
@@ -167,6 +184,8 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `${p('actor')} pidió cambios a ${p('reviseStageKey')}: ${truncate(p('comment'), 120)}`
     case 'approval.commented':
       return `${p('actor')} comentó ${p('stageKey')}: ${truncate(p('comment'), 120)}`
+    case 'approval.expired':
+      return `La aprobación de ${p('stageKey')} caducó sin decisión`
     case 'approval.cancelled':
       return `Aprobación de ${p('stageKey')} cancelada`
     case 'approval.correction.failed':

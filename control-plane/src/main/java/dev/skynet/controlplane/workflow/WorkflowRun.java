@@ -24,6 +24,10 @@ public class WorkflowRun {
 
   private Instant startedAt;
   private Instant finishedAt;
+
+  /** Se pidió cancelarla y aún no ha terminado: «Cancelando» (W6-B). */
+  private Instant cancelRequestedAt;
+
   @Version private Long version;
 
   @PersistenceCreator
@@ -93,6 +97,19 @@ public class WorkflowRun {
 
   public Instant getCreatedAt() {
     return createdAt;
+  }
+
+  public Instant getCancelRequestedAt() {
+    return cancelRequestedAt;
+  }
+
+  /** Marca la cancelación pedida. Devuelve {@code false} si ya estaba pedida. */
+  boolean requestCancel(Instant now) {
+    if (cancelRequestedAt != null) {
+      return false;
+    }
+    cancelRequestedAt = now;
+    return true;
   }
 
   public Instant getArchivedAt() {

@@ -19,6 +19,7 @@ export const APPROVAL_STATUS_LABEL: Record<ApprovalStatus, string> = {
   REJECTED: 'Rechazada',
   CHANGES_REQUESTED: 'Cambios pedidos',
   CANCELLED: 'Cancelada',
+  EXPIRED: 'Caducada',
 }
 
 export const APPROVAL_STATUS_TONE: Record<ApprovalStatus, StatusTone> = {
@@ -27,6 +28,7 @@ export const APPROVAL_STATUS_TONE: Record<ApprovalStatus, StatusTone> = {
   REJECTED: 'bad',
   CHANGES_REQUESTED: 'active',
   CANCELLED: 'neutral',
+  EXPIRED: 'bad',
 }
 
 export const DECISION_LABEL: Record<string, string> = {
@@ -35,6 +37,7 @@ export const DECISION_LABEL: Record<string, string> = {
   REQUEST_CHANGES: 'Pidió cambios',
   COMMENT: 'Comentó',
   CANCEL: 'Canceló',
+  EXPIRE: 'Caducó',
 }
 
 /** «TKM-1 · Añadir precios», o lo que haya del trabajo. */

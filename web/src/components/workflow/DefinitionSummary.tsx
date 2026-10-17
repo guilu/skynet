@@ -1,6 +1,7 @@
 import type { RetryPolicy, VerificationCheck, WorkflowModel } from '../../api'
 import { formatDuration, providerName } from '../../format'
 import { RISK_LABEL } from '../approval/approvalFormat'
+import { formatSeconds } from '../run/stageNotes'
 
 const WORKSPACE = { INHERIT: 'Continúa el de su dependencia', ISOLATED: 'Uno nuevo' } as const
 const WITH_WORKSPACE = ['agent', 'command', 'parallel']
@@ -61,6 +62,8 @@ export function DefinitionSummary({ definition }: { definition: WorkflowModel })
                     )
                     .join(', ')}`}
                 {s.retry && ` · Reintenta: ${retryText(s.retry)}`}
+                {s.timeoutSeconds != null &&
+                  ` · Tiempo máximo: ${formatSeconds(s.timeoutSeconds)} por intento`}
                 {s.approval && (
                   <>
                     {' · Pide aprobar '}

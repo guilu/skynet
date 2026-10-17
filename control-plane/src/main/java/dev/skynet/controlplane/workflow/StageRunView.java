@@ -28,6 +28,11 @@ import java.util.UUID;
  *     null} si no ha preguntado todavía (o no es una puerta)
  * @param retry cuándo se reintenta la fase si falla ({@code retry} del YAML), o {@code null}
  * @param notBefore un reintento que no empieza antes de esta hora, o {@code null} (W6)
+ * @param timeoutSeconds el {@code timeout} de la fase en segundos, o {@code null} (W6-B)
+ * @param deadline el intento tiene que terminar antes de esta hora, o {@code null}
+ * @param timedOutAt cuándo llegó a su límite, o {@code null}
+ * @param cancelling se ha pedido parar alguno de sus agentes y el runner aún no lo ha confirmado:
+ *     «Cancelando»
  */
 public record StageRunView(
     UUID id,
@@ -48,7 +53,11 @@ public record StageRunView(
     List<VerificationResult> verifications,
     ApprovalSummary approval,
     RetryView retry,
-    Instant notBefore) {
+    Instant notBefore,
+    Long timeoutSeconds,
+    Instant deadline,
+    Instant timedOutAt,
+    boolean cancelling) {
 
   /**
    * El {@code retry} de una fase: intentos en total, qué fallos ({@code lost}, {@code error}…) y la
@@ -96,6 +105,10 @@ public record StageRunView(
         verifications,
         approval,
         definition == null ? null : RetryView.of(definition.retry()),
-        s.getNotBefore());
+        s.getNotBefore(),
+        definition == null ? null : definition.timeoutSeconds(),
+        s.getDeadline(),
+        s.getTimedOutAt(),
+        agents.stream().anyMatch(a -> a.cancelRequestedAt() != null && !a.status().isTerminal()));
   }
 }

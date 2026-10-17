@@ -83,7 +83,7 @@ stages:
 
 - El runner lo ejecuta con `sh -c` en el worktree de la fase, con las mismas reglas que una fase `agent` (`workspace`, `workspaceFrom`), y la fase siguiente puede continuar ese worktree.
 - Termina bien solo con código 0; cualquier otro código, el tiempo agotado o una cancelación la hacen fallar, y entonces se aplica el fail-fast.
-- Lleva el entorno que el repositorio permite a sus agentes y el tiempo máximo de las verificaciones (`SKYNET_VERIFICATION_TIMEOUT`, 30 min). El `timeout` por fase llega en W6.
+- Lleva el entorno que el repositorio permite a sus agentes y el tiempo máximo de las verificaciones (`SKYNET_VERIFICATION_TIMEOUT`, 30 min), o el `timeout` de la fase si lo tiene (ver «Límites de tiempo»).
 - No admite `agent`, `prompt` ni variables `{{...}}`: un dato de entrada dentro de un comando de shell podría colar otro comando.
 - El comando lo escribe quien publica el workflow, igual que el comando de verificación del repositorio.
 - En la ejecución es una invocación más de su fase (con proveedor `command`): una herramienta `Bash` con su salida, y como artefactos el comando, la salida completa (`command.log`) y los cambios del worktree. No se verifica después (ya es un comando) y no se puede continuar ni reintentar por separado.
@@ -252,7 +252,7 @@ stages:
   - Lo que leen después la puerta y las fases siguientes (`{{stages.plan.output…}}`, el worktree) es lo de la última corrección. No hay límite de rondas.
   - Si no se puede continuar la sesión (el proveedor no lo permite, el worktree se eliminó, hay otra invocación en él), responde 409 y la petición sigue pendiente.
 - Una petición pendiente solo se decide una vez: una segunda decisión (o una a la vez que otra) responde 409. Las decisiones y comentarios se guardan con quién y cuándo, y no se modifican ni se borran (salvo al eliminar la ejecución).
-- Eventos: `approval.requested`, `approval.granted`, `approval.rejected`, `approval.changes_requested`, `approval.correction.failed`, `approval.commented` y `approval.cancelled`.
+- Eventos: `approval.requested`, `approval.granted`, `approval.rejected`, `approval.changes_requested`, `approval.correction.failed`, `approval.commented`, `approval.cancelled` y `approval.expired`.
 - En la web se decide en **Aprobaciones**. El menú cuenta las pendientes, que salen también en «Necesita tu atención» del dashboard. La página de cada petición enseña la evidencia, lo que se concede, las consecuencias y el historial. En el progreso de la ejecución, la puerta lleva a «Revisar». Aprobar algo de riesgo `high` pide confirmarlo.
 
 **Reintentos.** `retry` en una fase `agent` o `command` hace que el motor la repita si falla por algo pasajero, en vez de aplicar el fail-fast:
@@ -274,7 +274,7 @@ stages:
   | `lost` | el runner se cayó o perdió la invocación | sí |
   | `start` | no llegó a arrancar: no se pudo preparar el worktree, lanzar el proceso o no hay CLI del proveedor | sí |
   | `error` | el proceso terminó con error (código distinto de 0, resultado con error) | sí |
-  | `timeout` | se acabó el tiempo del agente (`limits.timeoutMinutes`) | no |
+  | `timeout` | se acabó el tiempo del agente (`limits.timeoutMinutes`) o el de su fase (`timeout`) | no |
   | `budget` | superó el presupuesto o los turnos | no |
   | `verification` | la salida estructurada o las comprobaciones de la fase (`artifacts`, `checks`) no pasaron | no |
 
@@ -286,13 +286,34 @@ stages:
 - `retry` en una fase `conditional`, `verification` o `human-approval` es un error.
 - **En la web:** el progreso enseña el último intento de cada fase («Reintenta a las 10:30:15 (intento 2 de 3)»), por qué falló cada agente («Falló: terminó con error») y, al abrir la fase, sus intentos anteriores con sus agentes. El resumen del workflow dice qué fases se reintentan.
 
+**Límites de tiempo.** `timeout` limita lo que puede durar cada intento de una fase, desde que queda lista (`READY`) hasta que termina, incluidas la espera a un runner y sus comprobaciones:
+
+```yaml
+  - id: implement
+    type: agent
+    prompt: Implementa el plan
+    timeout: 30m              # s, m o h; hasta 168 h
+    retry: {maxAttempts: 2, on: [timeout]}
+```
+
+- Al acabarse, el motor emite `stage.timed.out` y ordena parar sus agentes (`agent.cancel.requested` con `reason: stage-timeout`). Cuando el runner lo confirma, cada uno termina `FAILED` con `failure: timeout` y la fase falla. Solo se reintenta si `timeout` está en su `retry.on`, que no lo está por defecto; si no, se aplica el fail-fast.
+- Vale en las fases `agent`, `command`, `parallel` (cuenta para la fase entera), `verification` y `human-approval`. En una `conditional` es un error: solo evalúa su condición.
+- En una puerta `human-approval`, el `timeout` es su caducidad: si nadie decide a tiempo, la petición queda `EXPIRED`, firmada por `skynet` (decisión `EXPIRE`, evento `approval.expired`), y la puerta falla con fail-fast. Si estaba corrigiendo (se pidieron cambios), se para la corrección y la puerta falla igual.
+- Es independiente de `limits.timeoutMinutes`, que limita cada proceso del agente y lo aplica el runner.
+- La API enseña `timeoutSeconds`, `deadline` (la hora límite del intento en curso) y `timedOutAt` en cada fase.
+
+**Cancelar.** Cancelar una ejecución (`POST /api/workflow-runs/{id}/cancel`) la deja en «Cancelando» (`cancelRequestedAt` en la API, evento `workflow.cancel.requested`) mientras sus agentes paran; termina `CANCELLED` cuando han parado todos. También:
+
+- Cancela los reintentos programados y las ejecuciones lanzadas desde sus agentes que no han terminado (con `reason: parent-cancelled`), y las de estas, en cascada.
+- Si el runner no confirma que ha parado un agente en `SKYNET_CANCEL_TIMEOUT` (70 s: los 10 s de gracia del runner más un margen), el control plane lo da por cancelado (`agent.cancel.forced`) y la ejecución termina igual. La orden sigue en la cola del runner, por si vuelve.
+- En la web, la cabecera dice «Cancelando» y no vuelve a ofrecer cancelar; la fase cuyos agentes aún no han parado dice «Cancelando», y la que se quedó sin tiempo, «Falló: se acabó el tiempo» o, en una puerta, «Caducó sin decisión». El resumen del workflow enseña el tiempo máximo de cada fase.
+
 ## Lo que aún no se ejecuta
 
 El YAML admite ya todo §11 para poder escribir los workflows de la especificación, pero solo se publica un workflow que el motor sabe ejecutar. Lo demás sale como problema `UNSUPPORTED` con el hito en el que llega:
 
 | Qué | Hito |
 |---|---|
-| `timeout` | W6 |
 | Fases `github-pr`, `github-check`, `github-merge` y `merge` | S2 |
 | `promptTemplate` | S3 |
 | `provider: opencode` | sin fecha |
@@ -361,7 +382,7 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `POST` | `/api/work-items/{id}/runs` | Lanza una versión publicada (`definitionId`, `inputs`; ver arriba) |
 | `GET` | `/api/workflow-versions/{id}/effective-policy?repositoryId=` | Lo que se permitirá al agente de cada fase en ese repositorio (los límites que no fija el agente, `null`, salen del lanzamiento) |
 | `POST` | `/api/workflow-runs/{id}/cancel` | Cancela una ejecución y sus agentes |
-| `GET` | `/api/approvals?status=&projectId=&risk=` | Las peticiones de aprobación: primero las pendientes (las de más riesgo y las más antiguas), luego las decididas. `status` admite varios separados por comas (`PENDING`, `APPROVED`, `REJECTED`, `CHANGES_REQUESTED`, `CANCELLED`) |
+| `GET` | `/api/approvals?status=&projectId=&risk=` | Las peticiones de aprobación: primero las pendientes (las de más riesgo y las más antiguas), luego las decididas. `status` admite varios separados por comas (`PENDING`, `APPROVED`, `REJECTED`, `CHANGES_REQUESTED`, `CANCELLED`, `EXPIRED`) |
 | `GET` | `/api/approvals/{id}` | Una petición con su evidencia y sus decisiones |
 | `POST` | `/api/approvals/{id}/decisions` | Decide (`{action: APPROVE \| REJECT \| REQUEST_CHANGES \| COMMENT, comment}`) |
 

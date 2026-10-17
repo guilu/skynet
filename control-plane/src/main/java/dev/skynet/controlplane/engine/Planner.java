@@ -27,6 +27,8 @@ import java.util.Map;
  *       ejecución termina fallida o cancelada cuando todas han terminado. Un hijo de una fase
  *       {@code parallel} que falla (sin reintento) o se cancela cuenta igual: se cancelan sus
  *       hermanos y las demás fases.
+ *   <li>Si un intento llega a su {@code timeout} (W6-B), se paran sus agentes y la fase falla por
+ *       tiempo; mientras no llega, hay que volver a evaluar entonces.
  *   <li>Si todas terminan bien (u omitidas), la ejecución termina bien.
  * </ul>
  */
@@ -34,7 +36,7 @@ final class Planner {
 
   private Planner() {}
 
-  sealed interface Step permits Ready, Skip, Start, Cancel, Retry, Wake, Finish {}
+  sealed interface Step permits Ready, Skip, Start, Cancel, TimeOut, Retry, Wake, Finish {}
 
   record Ready(String stage) implements Step {}
 
@@ -44,11 +46,15 @@ final class Planner {
 
   record Cancel(String stage, String reason) implements Step {}
 
+  /** El intento de la fase ha llegado a su {@code timeout}. */
+  record TimeOut(String stage) implements Step {}
+
   /** Programar el intento siguiente de una fase que ha fallado. */
   record Retry(String stage) implements Step {}
 
   /**
-   * Nada que hacer hasta {@code at}, cuando un reintento puede empezar: hay que volver entonces.
+   * Nada que hacer hasta {@code at}, cuando un reintento puede empezar o una fase llega a su {@code
+   * timeout}: hay que volver entonces.
    */
   record Wake(Instant at) implements Step {}
 
@@ -77,6 +83,19 @@ final class Planner {
       return steps;
     }
 
+    Instant wake = null;
+    for (StageState state : stages.values()) {
+      Instant deadline = state.deadline();
+      if (deadline == null || state.status().isTerminal()) {
+        continue;
+      }
+      if (deadline.isAfter(now)) {
+        wake = wake == null || deadline.isBefore(wake) ? deadline : wake;
+      } else {
+        steps.add(new TimeOut(state.key()));
+      }
+    }
+
     boolean retrying = false;
     for (StageState state : stages.values()) {
       if (state.status() == StageStatus.FAILED && state.retries()) {
@@ -84,7 +103,6 @@ final class Planner {
         retrying = true;
       }
     }
-    Instant wake = null;
 
     // Estados tras aplicar lo que se decide aquí, para que una omisión se propague en la misma
     // pasada.

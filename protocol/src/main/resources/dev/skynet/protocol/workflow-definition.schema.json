@@ -228,7 +228,11 @@
           "description": "Solo en fases agent y command (en una parallel, en cada hijo): cuántas veces se reintenta si falla y por qué fallos.",
           "$ref": "#/$defs/retry"
         },
-        "timeout": { "description": "Llega en W6." },
+        "timeout": {
+          "description": "Tiempo máximo de cada intento de la fase, desde que está lista hasta que termina (s, m o h; hasta 168 h). Al vencer se paran sus agentes y la fase falla con `timeout`; en una human-approval, la petición caduca. No vale en fases conditional.",
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,5}(s|m|h)$"
+        },
         "condition": {
           "description": "Se evalúa cuando la fase está lista; si es falsa, la fase se omite. Lee <fase>.status, <fase>.exitCode, <fase>.<campo> del output de su agente e inputs.<nombre>, con == != < <= > >= && || ! in. En una fase conditional es lo único que hace.",
           "type": "string",

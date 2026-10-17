@@ -11,6 +11,7 @@ import dev.skynet.controlplane.engine.Planner.Ready;
 import dev.skynet.controlplane.engine.Planner.Retry;
 import dev.skynet.controlplane.engine.Planner.Skip;
 import dev.skynet.controlplane.engine.Planner.Start;
+import dev.skynet.controlplane.engine.Planner.TimeOut;
 import dev.skynet.controlplane.engine.Planner.Wake;
 import dev.skynet.controlplane.workflow.RunSteps.StageState;
 import dev.skynet.protocol.StageStatus;
@@ -146,6 +147,17 @@ class PlannerTest {
 
     assertThat(Planner.plan(DAG, stages, NOW))
         .containsExactly(new Finish(WorkflowRunStatus.FAILED, "stage-failed"));
+  }
+
+  @Test
+  void aStageWakesTheEngineAtItsDeadlineAndThenTimesOut() {
+    Map<String, StageState> stages = states("RUNNING", "SUCCEEDED", "PENDING", "PENDING");
+    Instant deadline = NOW.plusSeconds(60);
+    stages.put(
+        "plan", new StageState("plan", StageStatus.RUNNING, true, null, false, null, deadline));
+
+    assertThat(Planner.plan(DAG, stages, NOW)).containsExactly(new Wake(deadline));
+    assertThat(Planner.plan(DAG, stages, deadline)).containsExactly(new TimeOut("plan"));
   }
 
   @Test

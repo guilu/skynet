@@ -83,6 +83,12 @@ public class AgentRun {
   /** Por qué falló, o {@code null} si no ha fallado (W6). */
   private AgentFailure failure;
 
+  /**
+   * Se paró porque su fase llegó a su {@code timeout} (W6-B): termina {@code FAILED} con {@link
+   * AgentFailure#TIMEOUT} en vez de {@code CANCELLED}.
+   */
+  private Instant timedOutAt;
+
   @Version private Long version;
 
   @PersistenceCreator
@@ -392,7 +398,7 @@ public class AgentRun {
       Integer exitCode, String signal, String runnerError, AgentFailure runnerFailure) {
     this.exitCode = exitCode;
     if (cancelRequestedAt != null) {
-      return AgentObservableStatus.CANCELLED;
+      return timedOutAt != null ? timedOutStatus() : AgentObservableStatus.CANCELLED;
     }
     if (runnerError != null) {
       error = runnerError;
@@ -444,6 +450,29 @@ public class AgentRun {
   AgentLimits limits() {
     return new AgentLimits(
         maxTurns, maxBudgetUsd, timeoutSeconds == null ? null : Duration.ofSeconds(timeoutSeconds));
+  }
+
+  /**
+   * Su fase ha llegado a su {@code timeout}: lo que quede de él se para y cuenta como fallo por
+   * tiempo. Devuelve {@code false} si ya estaba marcado.
+   */
+  boolean timeOut(Instant now) {
+    if (timedOutAt != null) {
+      return false;
+    }
+    timedOutAt = now;
+    return true;
+  }
+
+  /** El estado de un agente parado por el {@code timeout} de su fase. */
+  AgentObservableStatus timedOutStatus() {
+    error = "Se acabó el tiempo de su fase";
+    failure = AgentFailure.TIMEOUT;
+    return AgentObservableStatus.FAILED;
+  }
+
+  public Instant getTimedOutAt() {
+    return timedOutAt;
   }
 
   /** Marca la cancelación pedida. Devuelve {@code false} si ya estaba pedida. */

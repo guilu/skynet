@@ -534,6 +534,15 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito W6 (reintentos y cancelación), planificado el 2026-10-17:** W6-A reintentos automáticos, W6-B límites de tiempo y cancelación, W6-C «Reintentar fase», web y E2E.
 
+**Implementado (W6-B), límites de tiempo y cancelación:**
+
+- YAML: `timeout` por fase (`s`, `m` o `h`, hasta 168 h; `StageDefinition.timeout`), en todas salvo `conditional`. Sale de los problemas `UNSUPPORTED`.
+- Motor: al pasar a `READY`, el intento guarda su `deadline` (`stage_run.deadline`, migración `V22`; `stage.ready` lo lleva). El `Planner` despierta la ejecución a esa hora y, si la fase sigue sin terminar, da el paso `TimeOut`: `stage.timed.out`, se paran sus agentes (`agent.cancel.requested` con `reason: stage-timeout`) y terminan `FAILED` con `failure: timeout` (`agent_run.timed_out_at`). La fase falla y se reintenta si `timeout` está en `retry.on`. Una fase que se queda sin tiempo esperando un runner pasa de `READY` a `FAILED`.
+- Puertas: con `timeout`, la petición pendiente caduca (`EXPIRED`, decisión `EXPIRE` de `skynet`, `approval.expired`) y la puerta falla con fail-fast.
+- Cancelar: `workflow_run.cancel_requested_at` (`cancelRequestedAt` en la API, «Cancelando»), `workflow.cancel.requested`; cancela los reintentos programados y las ejecuciones hijas activas en cascada (`parent-cancelled`). `CancelWatchdog` cierra las cancelaciones que el runner no confirma en `SKYNET_CANCEL_TIMEOUT` (70 s) con `agent.cancel.forced`.
+- API: en cada fase `timeoutSeconds`, `deadline`, `timedOutAt` y `cancelling`; en la ejecución, `cancelRequestedAt`; `EXPIRED` en `/api/approvals`.
+- Web: «Cancelando» en la cabecera y en la fase, «Falló: se acabó el tiempo», «Caducó sin decisión», el tiempo máximo en el detalle de la fase y en el resumen del workflow, el filtro «Caducadas» en **Aprobaciones** y los eventos nuevos en el timeline.
+
 **Implementado (W6-A), reintentos automáticos:**
 
 - Por qué falló cada agente (`agent_run.failure`, migración `V21`): `lost`, `start`, `error`, `timeout`, `budget` o `verification` (`AgentFailure` en el protocolo). El runner la manda en `PROCESS_EXITED`; el control plane pone `lost` a las invocaciones perdidas y `verification` a las que no cumplen su salida o sus comprobaciones. Sale en la API (`failure`) y en `agent.status.changed`.
@@ -543,7 +552,7 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 - `parallel`: se reintentan solo los hijos que fallaron; las salidas y los worktrees de los demás se buscan en todos los intentos.
 - Web: el progreso enseña el último intento de cada fase, «Reintenta a las … (intento N de M)», «Falló: …» y los intentos anteriores al abrir la fase; el resumen del workflow, «Reintenta: hasta N intentos…»; el timeline, `stage.retry.scheduled`.
 - fake-claude: `FAKE_CLAUDE_FAIL_ONCE=<fichero>` falla la primera vez (código 1) y funciona las siguientes.
-- Llegan en W6-C: «Reintentar fase» y el E2E de aceptación.
+- Llegan en W6-C: «Reintentar fase» y el E2E de aceptación (el `timeout` por fase y la cancelación forzada llegaron en W6-B).
 
 **Implementado (W5-C), centro de aprobaciones y E2E:**
 

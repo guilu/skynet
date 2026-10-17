@@ -41,6 +41,21 @@ function retryNote(stage: StageRun): string | null {
   return `Reintenta a las ${at} (intento ${stage.attempt}${of})`
 }
 
+/** «Tiempo máximo: 30 min · hasta las 10:30:15» mientras el intento tiene un límite. */
+export function timeLimitNote(stage: StageRun): string | null {
+  if (!stage.timeoutSeconds) return null
+  const limit = `Tiempo máximo: ${formatSeconds(stage.timeoutSeconds)}`
+  if (!stage.deadline || stage.timedOutAt) return limit
+  return `${limit} · hasta las ${new Date(stage.deadline).toLocaleTimeString('es-ES')}`
+}
+
+/** 90 → «90 s», 1800 → «30 min», 7200 → «2 h». */
+export function formatSeconds(seconds: number): string {
+  if (seconds % 3600 === 0) return `${seconds / 3600} h`
+  if (seconds % 60 === 0) return `${seconds / 60} min`
+  return `${seconds} s`
+}
+
 /** «a», «a y b», «a, b y c». */
 export function joinNames(names: string[]): string {
   if (names.length <= 1) return names.join('')
@@ -122,6 +137,9 @@ export function stageNote(stage: StageRun, run: Run): string {
   const deps = stage.dependsOn
   const retrying = retryNote(stage)
   if (retrying) return retrying
+  if (stage.cancelling) return 'Cancelando: espera a que el runner pare sus agentes'
+  if (stage.status === 'FAILED' && stage.timedOutAt)
+    return stage.type === 'human-approval' ? 'Caducó sin decisión' : 'Falló: se acabó el tiempo'
   if (isVerifying(stage)) return `Verificando: ${joinNames(stage.checks.map((c) => c.name))}`
   if (isCorrecting(stage)) return 'Corrigiendo con los cambios que se pidieron'
   if (stage.status === 'WAITING_FOR_APPROVAL')
