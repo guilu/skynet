@@ -44,6 +44,7 @@ function stage(
     cancelling: false,
     retriedBy: null,
     children: [],
+    phase: null,
   }
 }
 

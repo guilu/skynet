@@ -235,7 +235,8 @@ export interface StageRun {
   /** Quién pidió este intento con «Reintentar fase»; null si lo programó el motor. */
   retriedBy: string | null
   /** Hijos de una fase `parallel`, en el orden del YAML; vacío en las demás. */
-  children: string[]
+  children: string[] /** Macrofase de la fase en el YAML (carril del grafo); null si no la dice. */
+  phase: Phase | null
 }
 
 export type ApprovalRisk = 'LOW' | 'MEDIUM' | 'HIGH'
@@ -576,6 +577,10 @@ export interface AgentDefinition {
   output: { type: 'object'; properties: Record<string, { type: string }> } | null
 }
 
+/** Las macrofases de `phase`, en el orden de los carriles del grafo. */
+export const PHASES = ['spec', 'plan', 'implement', 'test', 'review', 'deliver'] as const
+export type Phase = (typeof PHASES)[number]
+
 export interface StageDefinition {
   id: string
   name: string | null
@@ -603,6 +608,8 @@ export interface StageDefinition {
   retry: RetryPolicy | null
   /** Tiempo máximo de cada intento en segundos; null si no tiene límite. */
   timeoutSeconds: number | null
+  /** Macrofase de la fase, que el grafo dibuja como carril; null si no la dice. */
+  phase: Phase | null
 }
 
 /** Una comprobación de fase: `artifacts`, `tests`, `diff`, `commit`, `scope` o `command`. */

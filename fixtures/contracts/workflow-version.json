@@ -69,6 +69,7 @@
       "checks" : [ ],
       "approval" : null,
       "retry" : null,
+      "phase" : null,
       "timeoutSeconds" : null
     }, {
       "id" : "fix",
@@ -94,6 +95,7 @@
         "on" : [ "lost", "start", "error" ],
         "delaySeconds" : 30
       },
+      "phase" : null,
       "timeoutSeconds" : null
     }, {
       "id" : "verify",
@@ -131,6 +133,7 @@
       } ],
       "approval" : null,
       "retry" : null,
+      "phase" : null,
       "timeoutSeconds" : 1800
     } ]
   }

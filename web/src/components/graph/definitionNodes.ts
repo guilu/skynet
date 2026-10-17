@@ -55,5 +55,6 @@ export function toGraphStages(definition: WorkflowModel): GraphStage[] {
     id: s.id,
     dependsOn: s.dependsOn,
     children: s.type === 'parallel' ? s.children.map((c) => c.id) : [],
+    phase: s.phase,
   }))
 }

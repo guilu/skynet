@@ -37,6 +37,9 @@ import tools.jackson.databind.json.JsonMapper;
  *     null} si no se reintenta. En una {@code parallel}, cada hijo lleva el suyo
  * @param timeout tiempo máximo de cada intento de la fase, desde que está lista hasta que termina
  *     (W6-B); {@code null} si no tiene. En una {@code human-approval}, cuánto espera la decisión
+ * @param phase macrofase de la fase ({@code spec}, {@code plan}, {@code implement}, {@code test},
+ *     {@code review} o {@code deliver}), que el grafo dibuja como carril (W7-C); {@code null} si no
+ *     la dice
  */
 public record StageDefinition(
     String id,
@@ -55,7 +58,12 @@ public record StageDefinition(
     List<VerificationCheck> checks,
     Approval approval,
     Retry retry,
-    @JsonIgnore Duration timeout) {
+    @JsonIgnore Duration timeout,
+    String phase) {
+
+  /** Las macrofases que admite {@code phase}, en el orden de los carriles del grafo. */
+  public static final List<String> PHASES =
+      List.of("spec", "plan", "implement", "test", "review", "deliver");
 
   public StageDefinition {
     dependsOn = List.copyOf(dependsOn);
@@ -98,6 +106,7 @@ public record StageDefinition(
         checks,
         approval,
         retry,
+        null,
         null);
   }
 

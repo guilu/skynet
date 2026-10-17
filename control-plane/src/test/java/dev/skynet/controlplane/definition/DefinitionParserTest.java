@@ -1496,6 +1496,49 @@ class DefinitionParserTest {
   }
 
   @Test
+  void phaseNamesTheMacroPhaseOfAStageForTheGraphLanes() {
+    Parsed parsed =
+        parse(
+            """
+            id: carriles
+            stages:
+              - id: spec
+                type: agent
+                prompt: Especifica
+                phase: spec
+              - id: implement
+                type: agent
+                prompt: Implementa
+                dependsOn: [spec]
+                phase: implement
+              - id: tests
+                type: command
+                command: make test
+                dependsOn: [implement]
+            """);
+    assertThat(parsed.validation().problems()).isEmpty();
+    WorkflowDefinition definition = parsed.definition();
+    assertThat(definition.stage("spec").orElseThrow().phase()).isEqualTo("spec");
+    assertThat(definition.stage("implement").orElseThrow().phase()).isEqualTo("implement");
+    assertThat(definition.stage("tests").orElseThrow().phase()).isNull();
+
+    Parsed wrong =
+        parse(
+            """
+            id: carriles
+            stages:
+              - id: implement
+                type: agent
+                prompt: Implementa
+                phase: implemnt
+            """);
+    assertThat(messages(wrong, Severity.ERROR))
+        .containsExactly(
+            "`phase: implemnt` no se conoce; ¿quisiste decir `implement`?. Admite: spec, plan,"
+                + " implement, test, review, deliver");
+  }
+
+  @Test
   void retryOnlyFitsStagesThatDoWorkAndSaysWhatIsWrong() {
     Parsed parsed =
         parse(

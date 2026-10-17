@@ -8,6 +8,9 @@ import { expectAccessible, login, publishWorkflowViaApi, workItemViaApi } from '
  * publicada y lanzada desde la web, termina «Completada» con hallazgos (corrige) y sin ellos (omite
  * la corrección).
  *
+ * Con W7-C, además, el grafo de la ejecución muestra los carriles de la plantilla y pasa de
+ * pendiente a completada sin recargar.
+ *
  * El runner de las E2E lanza fake-claude con `FAKE_CLAUDE_STRUCTURED_OUTPUT=@.revision.json`: cada
  * revisor devuelve lo que la fase `tests` dejó en ese fichero del worktree, que los hijos de la fase
  * `parallel` ven en su copia.
@@ -74,6 +77,14 @@ async function openStage(page: Page, position: number, key: string) {
 
 const statuses = (stages: RunStage[]) => stages.map((s) => [s.stageKey, s.status])
 
+/** El grafo de la ejecución y sus cinco fases (sin los hijos de `review`). */
+function runGraph(page: Page) {
+  const graph = page
+    .getByRole('navigation', { name: 'Fases y agentes' })
+    .getByRole('group', { name: 'Fases de la ejecución' })
+  return { graph, stages: graph.locator('.graph-node:not(.graph-child)') }
+}
+
 test('la plantilla «Revisión en paralelo» corrige solo cuando hay hallazgos', async ({ page }) => {
   test.setTimeout(480_000)
   const suffix = Date.now().toString(36)
@@ -120,7 +131,15 @@ test('la plantilla «Revisión en paralelo» corrige solo cuando hay hallazgos',
   const { workItemId } = await workItemViaApi(page)
 
   await test.step('con hallazgos, corrige y pasa los tests finales', async () => {
-    const stages = await finished(page, await launch(page, workItemId, withFindings))
+    const runId = await launch(page, workItemId, withFindings)
+    // W7-C: el grafo con un carril por macrofase de la plantilla; recién lanzada, aún no ha
+    // terminado y se pone al día sola, sin recargar.
+    const { graph, stages: boxes } = runGraph(page)
+    await expect(graph.locator('.graph-lane')).toHaveText(['Implementación', 'Tests', 'Revisión'])
+    await expect(boxes).toHaveCount(5)
+    await expect(boxes.and(page.locator('.graph-state-done'))).not.toHaveCount(5)
+    const stages = await finished(page, runId)
+    await expect(boxes.and(page.locator('.graph-state-done'))).toHaveCount(5)
     expect(statuses(stages)).toEqual([
       ['implement', 'SUCCEEDED'],
       ['tests', 'SUCCEEDED'],
@@ -150,6 +169,10 @@ test('la plantilla «Revisión en paralelo» corrige solo cuando hay hallazgos',
 
   await test.step('sin hallazgos, omite la corrección y pasa los tests finales', async () => {
     const stages = await finished(page, await launch(page, workItemId, clean))
+    const { graph, stages: boxes } = runGraph(page)
+    await expect(boxes.and(page.locator('.graph-state-done'))).toHaveCount(4)
+    await expect(boxes.and(page.locator('.graph-state-skip'))).toHaveCount(1)
+    await expect(graph.locator('.graph-edge-dim')).toHaveCount(1)
     expect(statuses(stages)).toEqual([
       ['implement', 'SUCCEEDED'],
       ['tests', 'SUCCEEDED'],
@@ -160,5 +183,6 @@ test('la plantilla «Revisión en paralelo» corrige solo cuando hay hallazgos',
     expect(stages.find((s) => s.stageKey === 'fix')!.agents).toHaveLength(0)
     const fix = await openStage(page, 4, 'fix')
     await expect(fix).toContainText('Omitida: review.hasBlockingFindings es falsa')
+    await expectAccessible(page, 'grafo de la ejecución con una fase omitida')
   })
 })

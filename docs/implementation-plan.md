@@ -536,6 +536,15 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito W7 (grafo del workflow), planificado el 2026-10-17:** W7-A grafo del workflow, W7-B grafo de la ejecución, W7-C carriles por macrofase (`phase`), accesibilidad y E2E.
 
+**Implementado (W7-C), carriles, accesibilidad y E2E:**
+
+- Clave `phase` en las fases (`spec`, `plan`, `implement`, `test`, `review`, `deliver`; validada con sugerencia), en el schema y en `StageDefinition`/`StageRunView`; las plantillas «Revisión en paralelo», «Revisión con Codex y Gemini» y «Especificar, planificar e implementar» la usan.
+- `lanesOf` y carriles en `layoutStages`: un carril por macrofase usada, de izquierda a derecha; una fase sin `phase` hereda el carril más avanzado de sus dependencias. Lo mismo en el grafo de la definición y en el de la ejecución.
+- Accesibilidad: la caja que recibe el foco con el teclado se trae a la vista; con `prefers-reduced-motion`, sin animación.
+- vitest de los carriles; E2E: `workflows.e2e.ts` comprueba los carriles del grafo de la definición, y `nodes.e2e.ts` lanza «Revisión en paralelo» desde la web y ve el grafo pasar a completado sin recargar, con sus carriles y axe.
+
+**Hito W7 terminado.**
+
 **Implementado (W7-B), grafo de la ejecución:**
 
 - `RunGraph` en `RunProgress`: el grafo del workflow con el último intento de cada fase encima (estado con icono y texto, actividad o duración, agente o proveedor, coste, intento y nota de la fase) y un nodo por hijo de una `parallel` con el estado de su agente. Cada caja es un botón con la etiqueta del paso de siempre («2. implement: En curso, 3 min 05 s»); el orden de tabulación es el del YAML.

@@ -124,6 +124,8 @@ test('la pestaña Grafo dibuja la plantilla «Revisión en paralelo»', async ({
   await expect(graph.locator('.react-flow__edge')).toHaveCount(5)
   await expect(graph.locator('.graph-edge-optional')).toHaveCount(1)
   await expect(graph.getByText('developer · si review.hasBlockingFindings')).toBeVisible()
+  // W7-C: un carril por macrofase; fix y tests-finales, sin `phase`, heredan el de review.
+  await expect(graph.locator('.graph-lane')).toHaveText(['Implementación', 'Tests', 'Revisión'])
   await expectAccessible(page, 'grafo del workflow')
   await graph.screenshot({ path: `${process.env.E2E_OUT ?? 'build'}/w7a-grafo.png` })
 
