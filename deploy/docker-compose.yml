@@ -59,9 +59,11 @@ services:
       SKYNET_SECURE_COOKIES: ${SKYNET_SECURE_COOKIES:-false}
       SKYNET_SESSION_TIMEOUT: ${SKYNET_SESSION_TIMEOUT:-12h}
       SKYNET_CORS_ORIGINS: ${SKYNET_CORS_ORIGINS:-}
-      # Worktrees sin uso que se eliminan solos, y tiempo máximo del comando de verificación.
+      # Worktrees sin uso que se eliminan solos, tiempo máximo del comando de verificación y espera
+      # a que el runner confirme una cancelación.
       SKYNET_WORKTREE_RETENTION: ${SKYNET_WORKTREE_RETENTION:-7d}
       SKYNET_VERIFICATION_TIMEOUT: ${SKYNET_VERIFICATION_TIMEOUT:-30m}
+      SKYNET_CANCEL_TIMEOUT: ${SKYNET_CANCEL_TIMEOUT:-70s}
     volumes:
       - artifacts-data:/data/artifacts
     # Los runners se conectan aquí o a la web, que redirige /api. El healthcheck es el de la imagen.

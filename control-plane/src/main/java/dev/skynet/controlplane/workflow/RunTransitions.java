@@ -93,13 +93,13 @@ class RunTransitions {
   StageRun readyStage(StageRun stage, Instant now) {
     stage.transitionTo(StageStatus.READY, now);
     StageRun saved = stageRuns.save(stage);
-    append(
-        "stage_run",
-        stage.getId(),
-        "stage.ready",
-        stage.getWorkflowRunId(),
-        Map.of("stageKey", stage.getStageKey(), "attempt", stage.getAttempt()),
-        now);
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("stageKey", stage.getStageKey());
+    payload.put("attempt", stage.getAttempt());
+    if (stage.getDeadline() != null) {
+      payload.put("deadline", stage.getDeadline());
+    }
+    append("stage_run", stage.getId(), "stage.ready", stage.getWorkflowRunId(), payload, now);
     return saved;
   }
 

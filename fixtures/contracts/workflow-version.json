@@ -4,7 +4,7 @@
   "key" : "revisar-y-corregir",
   "version" : 2,
   "status" : "VALIDATED",
-  "sourceYaml" : "id: revisar-y-corregir\nversion: 2\nname: Revisar y corregir\ndescription: Un agente revisa el cambio y otro corrige lo que encuentre.\n\ninputs:\n  foco:\n    type: string\n    required: false\n    default: seguridad\n    description: En qué fijarse.\n\nagents:\n  reviewer:\n    description: Revisor exigente.\n    prompt: |\n      Revisa {{workItem.key}} ({{workItem.title}}) poniendo el foco en {{inputs.foco}}.\n    tools: [Read, Grep, Glob]\n    permissionMode: dontAsk\n    model: claude-haiku-4-5\n    limits:\n      maxTurns: 30\n      maxBudgetUsd: 1.5\n      timeoutMinutes: 20\n\nstages:\n  - id: review\n    type: agent\n    agent: reviewer\n    outputSchema:\n      type: object\n      properties:\n        summary:\n          type: string\n  - id: fix\n    type: agent\n    prompt: \"Corrige lo que encontró la revisión: {{stages.review.output.summary}}\"\n    dependsOn: [review]\n    retry: {maxAttempts: 2}\n  - id: verify\n    type: verification\n    dependsOn: [\"fix?\"]\n    artifacts: [docs/review.md]\n    checks: [tests, scope, {command: npm run lint}]\n    scope: [\"src/**\", \"docs/**\"]\n    timeout: 30m\n",
+  "sourceYaml" : "id: revisar-y-corregir\nversion: 2\nname: Revisar y corregir\ndescription: Un agente revisa el cambio y otro corrige lo que encuentre.\n\ninputs:\n  foco:\n    type: string\n    required: false\n    default: seguridad\n    description: En qué fijarse.\n\nagents:\n  reviewer:\n    description: Revisor exigente.\n    prompt: |\n      Revisa {{workItem.key}} ({{workItem.title}}) poniendo el foco en {{inputs.foco}}.\n    tools: [Read, Grep, Glob]\n    permissionMode: dontAsk\n    model: claude-haiku-4-5\n    limits:\n      maxTurns: 30\n      maxBudgetUsd: 1.5\n      timeoutMinutes: 20\n\nstages:\n  - id: review\n    type: agent\n    agent: reviewer\n    outputSchema:\n      type: object\n      properties:\n        summary:\n          type: string\n  - id: fix\n    type: agent\n    prompt: \"Corrige lo que encontró la revisión: {{stages.review.output.summary}}\"\n    dependsOn: [review]\n    retry: {maxAttempts: 2}\n    promptTemplate: corregir\n  - id: verify\n    type: verification\n    dependsOn: [\"fix?\"]\n    artifacts: [docs/review.md]\n    checks: [tests, scope, {command: npm run lint}]\n    scope: [\"src/**\", \"docs/**\"]\n    timeout: 30m\n",
   "revision" : 3,
   "createdAt" : "2026-10-05T09:02:00Z",
   "updatedAt" : "2026-10-05T09:03:00Z",
@@ -15,10 +15,10 @@
     "publishable" : false,
     "problems" : [ {
       "severity" : "UNSUPPORTED",
-      "path" : "stages.verify.timeout",
-      "line" : 46,
+      "path" : "stages.fix.promptTemplate",
+      "line" : 40,
       "column" : 5,
-      "message" : "`timeout` todavía no se usa: llega en W6"
+      "message" : "`promptTemplate` todavía no se usa: llega en S3"
     } ]
   },
   "definition" : {
@@ -68,7 +68,8 @@
       "outputSchemaPath" : null,
       "checks" : [ ],
       "approval" : null,
-      "retry" : null
+      "retry" : null,
+      "timeoutSeconds" : null
     }, {
       "id" : "fix",
       "name" : null,
@@ -92,7 +93,8 @@
         "maxAttempts" : 2,
         "on" : [ "lost", "start", "error" ],
         "delaySeconds" : 30
-      }
+      },
+      "timeoutSeconds" : null
     }, {
       "id" : "verify",
       "name" : null,
@@ -128,7 +130,8 @@
         "paths" : [ ]
       } ],
       "approval" : null,
-      "retry" : null
+      "retry" : null,
+      "timeoutSeconds" : 1800
     } ]
   }
 }

@@ -49,6 +49,7 @@ public class Approvals {
   static final String REJECTED = "REJECTED";
   static final String CANCELLED = "CANCELLED";
   static final String CHANGES_REQUESTED = "CHANGES_REQUESTED";
+  static final String EXPIRED = "EXPIRED";
 
   /** Quién firma la cancelación de una petición cuando se cancela su fase. */
   static final String SYSTEM_ACTOR = "skynet";
@@ -389,6 +390,27 @@ public class Approvals {
               record(id, "CANCEL", reason, SYSTEM_ACTOR, now);
               append(summary(id), "approval.cancelled", SYSTEM_ACTOR, reason, now);
             });
+  }
+
+  /**
+   * La puerta {@code stage} ha llegado a su {@code timeout} (W6-B): su petición pendiente, si la
+   * tiene, caduca ({@code EXPIRED}), firmada por {@code skynet}, con {@code approval.expired}.
+   * Nunca se aprueba sola. Devuelve si había una pendiente.
+   */
+  boolean expirePending(StageRun stage, Instant now) {
+    List<UUID> pending =
+        jdbc.sql(
+                "SELECT id FROM approval_request WHERE stage_run_id = ? AND status = ?"
+                    + " ORDER BY round")
+            .params(stage.getId(), PENDING)
+            .query(UUID.class)
+            .list();
+    for (UUID id : pending) {
+      close(id, EXPIRED, now);
+      record(id, "EXPIRE", "timeout", SYSTEM_ACTOR, now);
+      append(summary(id), "approval.expired", SYSTEM_ACTOR, "timeout", now);
+    }
+    return !pending.isEmpty();
   }
 
   /**

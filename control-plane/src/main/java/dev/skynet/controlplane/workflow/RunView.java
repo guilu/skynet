@@ -13,6 +13,8 @@ import java.util.UUID;
  * @param currentAgentRunId agente que no ha terminado (en cola, arrancando o trabajando), o {@code
  *     null}
  * @param archivedAt cuándo se archivó la ejecución; no cuenta el archivado de su trabajo o proyecto
+ * @param cancelRequestedAt se pidió cancelarla y aún no ha terminado: «Cancelando» (W6-B); {@code
+ *     null} si no
  * @param totals tokens y coste sumados de todos los agentes
  * @param workflow workflow y versión que sigue, o {@code null} si la versión ya no se puede leer
  */
@@ -27,6 +29,7 @@ public record RunView(
     Instant startedAt,
     Instant finishedAt,
     Instant archivedAt,
+    Instant cancelRequestedAt,
     UUID currentStageRunId,
     UUID currentAgentRunId,
     RunTotals totals,
@@ -50,6 +53,7 @@ public record RunView(
         r.getStartedAt(),
         r.getFinishedAt(),
         r.getArchivedAt(),
+        r.getFinishedAt() == null ? r.getCancelRequestedAt() : null,
         stages.stream()
             .filter(s -> !s.status().isTerminal())
             .map(StageRunView::id)

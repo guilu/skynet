@@ -1,5 +1,7 @@
 package dev.skynet.controlplane.definition;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonValue;
 import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.runner.VerificationCheck;
@@ -33,6 +35,8 @@ import tools.jackson.databind.json.JsonMapper;
  * @param approval lo que pide una fase {@code human-approval}; {@code null} en las demás
  * @param retry cuándo se reintenta una fase {@code agent} o {@code command} que falla (W6); {@code
  *     null} si no se reintenta. En una {@code parallel}, cada hijo lleva el suyo
+ * @param timeout tiempo máximo de cada intento de la fase, desde que está lista hasta que termina
+ *     (W6-B); {@code null} si no tiene. En una {@code human-approval}, cuánto espera la decisión
  */
 public record StageDefinition(
     String id,
@@ -50,12 +54,57 @@ public record StageDefinition(
     String outputSchemaPath,
     List<VerificationCheck> checks,
     Approval approval,
-    Retry retry) {
+    Retry retry,
+    @JsonIgnore Duration timeout) {
 
   public StageDefinition {
     dependsOn = List.copyOf(dependsOn);
     children = children == null ? List.of() : List.copyOf(children);
     checks = checks == null ? List.of() : List.copyOf(checks);
+  }
+
+  /** Una fase sin tiempo máximo. */
+  public StageDefinition(
+      String id,
+      String name,
+      StageType type,
+      String agent,
+      String prompt,
+      List<Dependency> dependsOn,
+      WorkspaceMode workspace,
+      String workspaceFrom,
+      String command,
+      List<ChildDefinition> children,
+      String condition,
+      Map<String, Object> outputSchema,
+      String outputSchemaPath,
+      List<VerificationCheck> checks,
+      Approval approval,
+      Retry retry) {
+    this(
+        id,
+        name,
+        type,
+        agent,
+        prompt,
+        dependsOn,
+        workspace,
+        workspaceFrom,
+        command,
+        children,
+        condition,
+        outputSchema,
+        outputSchemaPath,
+        checks,
+        approval,
+        retry,
+        null);
+  }
+
+  /** En la API, el {@code timeout} en segundos, o {@code null}. */
+  @JsonProperty
+  public Long timeoutSeconds() {
+    return timeout == null ? null : timeout.toSeconds();
   }
 
   /** Una fase que no se reintenta. */
@@ -91,7 +140,7 @@ public record StageDefinition(
         outputSchemaPath,
         checks,
         approval,
-        null);
+        (Retry) null);
   }
 
   /** Una fase que no es una puerta de aprobación. */

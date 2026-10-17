@@ -59,6 +59,8 @@ public class RunSteps {
    *     reintentar no cuenta
    * @param retries el intento ha fallado y toca reintentarlo ({@code retry} de la fase, W6)
    * @param notBefore un reintento que no puede empezar antes de esta hora, o {@code null}
+   * @param deadline el intento tiene que terminar antes de esta hora ({@code timeout}, W6-B);
+   *     {@code null} si no tiene límite o ya lo ha alcanzado
    */
   public record StageState(
       String key,
@@ -66,7 +68,18 @@ public class RunSteps {
       boolean hasAgent,
       StageStatus ending,
       boolean retries,
-      Instant notBefore) {
+      Instant notBefore,
+      Instant deadline) {
+
+    public StageState(
+        String key,
+        StageStatus status,
+        boolean hasAgent,
+        StageStatus ending,
+        boolean retries,
+        Instant notBefore) {
+      this(key, status, hasAgent, ending, retries, notBefore, null);
+    }
 
     public StageState(String key, StageStatus status, boolean hasAgent, StageStatus ending) {
       this(key, status, hasAgent, ending, false, null);
@@ -182,7 +195,8 @@ public class RunSteps {
               !agents.isEmpty(),
               ending,
               retries.plan(stageDefinition).retries(),
-              stage.getNotBefore()));
+              stage.getNotBefore(),
+              stage.getTimedOutAt() == null ? stage.getDeadline() : null));
     }
     return stages;
   }
@@ -301,9 +315,24 @@ public class RunSteps {
         > 0;
   }
 
-  /** La fase puede empezar: sus dependencias han terminado bien. */
-  public void ready(UUID runId, String stageKey) {
-    transitions.readyStage(stage(runId, stageKey), time.now());
+  /**
+   * La fase puede empezar: sus dependencias han terminado bien. Con {@code timeout}, desde ahora
+   * cuenta su tiempo.
+   */
+  public void ready(UUID runId, String stageKey, PublishedDefinition published) {
+    Instant now = time.now();
+    StageRun stage = stage(runId, stageKey);
+    published
+        .definition()
+        .stage(stageKey)
+        .map(StageDefinition::timeout)
+        .ifPresent(timeout -> stage.limitUntil(now.plus(timeout)));
+    transitions.readyStage(stage, now);
+  }
+
+  /** La fase ha llegado a su {@code timeout} (ver {@link RunService#timeOutStage}). */
+  public boolean timeOut(UUID runId, String stageKey) {
+    return runs.timeOutStage(stage(runId, stageKey), time.now());
   }
 
   /** La fase no se ejecutará. */

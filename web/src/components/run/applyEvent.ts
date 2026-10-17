@@ -17,6 +17,11 @@ const STRUCTURAL = [
   'stage.start.failed',
   // Un reintento crea el intento siguiente de la fase.
   'stage.retry.scheduled',
+  // Límites de tiempo y cancelación: «Cancelando» y el fallo por tiempo solo los da el backend.
+  'stage.timed.out',
+  'workflow.cancel.requested',
+  'agent.cancel.requested',
+  'agent.cancel.forced',
   'agent.spawned',
   // Las comprobaciones de una fase: su resultado solo lo da el backend.
   'stage.verification.started',

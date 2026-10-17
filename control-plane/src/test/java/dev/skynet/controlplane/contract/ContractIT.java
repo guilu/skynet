@@ -326,7 +326,11 @@ class ContractIT extends IntegrationTest {
                           new VerificationResult.CheckResult("diff", null, true, null)))),
               null,
               null,
-              null),
+              null,
+              null,
+              null,
+              null,
+              false),
           agent);
     }
 
@@ -450,7 +454,11 @@ class ContractIT extends IntegrationTest {
               List.of(),
               null,
               null,
-              null),
+              null,
+              null,
+              null,
+              null,
+              false),
           agent);
     }
 
@@ -471,6 +479,7 @@ class ContractIT extends IntegrationTest {
           at(0),
           at(0),
           finishedAt,
+          null,
           null,
           currentStage,
           currentAgent,
@@ -721,6 +730,7 @@ class ContractIT extends IntegrationTest {
             prompt: "Corrige lo que encontró la revisión: {{stages.review.output.summary}}"
             dependsOn: [review]
             retry: {maxAttempts: 2}
+            promptTemplate: corregir
           - id: verify
             type: verification
             dependsOn: ["fix?"]

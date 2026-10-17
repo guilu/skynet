@@ -17,6 +17,7 @@ import {
   isVerifying,
   latestAttempts,
   stageNote,
+  timeLimitNote,
   type CheckState,
 } from './stageNotes'
 
@@ -105,7 +106,8 @@ export function RunProgress({
                   </span>
                   <strong>{stage.name ?? stage.stageKey}</strong>
                   <small>
-                    {(isVerifying(stage) ? 'Verificando' : null) ??
+                    {(stage.cancelling ? 'Cancelando' : null) ??
+                      (isVerifying(stage) ? 'Verificando' : null) ??
                       (isCorrecting(stage) ? 'Corrigiendo' : null) ??
                       (stage.status === 'WAITING_FOR_APPROVAL' ? 'Esperando aprobación' : null) ??
                       running?.currentTool ??
@@ -131,6 +133,7 @@ export function RunProgress({
                 </span>
               )}
               {open.agent && <span className="muted small"> · agente {open.agent}</span>}
+              {timeLimitNote(open) && <span className="muted small"> · {timeLimitNote(open)}</span>}
               {open.type === 'parallel' && (
                 <span className="muted small"> · {open.agents.length} agentes a la vez</span>
               )}

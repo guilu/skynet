@@ -24,6 +24,7 @@ const STATUSES: (ChipOption & { value: ApprovalStatus })[] = [
   { value: 'REJECTED', label: 'Rechazadas', tone: 'bad' },
   { value: 'CHANGES_REQUESTED', label: 'Cambios pedidos', tone: 'active' },
   { value: 'CANCELLED', label: 'Canceladas', tone: 'neutral' },
+  { value: 'EXPIRED', label: 'Caducadas', tone: 'bad' },
 ]
 
 const RISKS: ApprovalRisk[] = ['HIGH', 'MEDIUM', 'LOW']

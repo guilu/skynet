@@ -86,13 +86,13 @@ describe('Workflows', () => {
 
     const editor = await screen.findByLabelText(`YAML de ${draft.key} v2`)
     expect(await screen.findByText('1 aún no se ejecuta')).toBeInTheDocument()
-    expect(screen.getByText(/`timeout` todavía no se usa: llega en W6/)).toBeInTheDocument()
+    expect(screen.getByText(/`promptTemplate` todavía no se usa: llega en S3/)).toBeInTheDocument()
     expect(screen.getByText(/Usa algo que el motor aún no ejecuta/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Publicar…' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Guardar' })).toBeDisabled()
     const summary = screen.getByRole('region', { name: 'Qué define' })
     expect(within(summary).getAllByRole('listitem')[2]).toHaveTextContent(
-      'verify verification · Comprueba artifacts docs/review.md, tests, scope src/**, docs/**, command npm run lint · Depende de fix (opcional)',
+      'verify verification · Tiempo máximo: 30 min por intento · Comprueba artifacts docs/review.md, tests, scope src/**, docs/**, command npm run lint · Depende de fix (opcional)',
     )
     expect(within(summary).getAllByRole('listitem')[0]).toHaveTextContent(
       'review agent · Agente: reviewer · Salida: summary',

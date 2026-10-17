@@ -681,9 +681,11 @@ public class RunService {
   }
 
   /**
-   * Cancela la ejecución: las fases que no han empezado se cancelan, los agentes en cola se retiran
-   * y a los que ya están en un runner se les ordena terminar. Queda cancelada cuando terminan todas
-   * sus fases. Pedirlo otra vez mientras tanto no tiene efecto.
+   * Cancela la ejecución: las fases que no han empezado (y los reintentos que esperan su hora) se
+   * cancelan, los agentes en cola se retiran y a los que ya están en un runner se les ordena
+   * terminar. Mientras tanto está «Cancelando» ({@code cancelRequestedAt}) y queda cancelada cuando
+   * terminan todas sus fases. Cancela también las ejecuciones hijas activas que salieron de sus
+   * agentes (continuaciones, bifurcaciones y «Reintentar…»). Pedirlo otra vez no tiene efecto.
    */
   @Transactional
   public RunView cancelRun(UUID workflowRunId) {
@@ -693,13 +695,49 @@ public class RunService {
       throw new ConflictException(
           "La ejecución " + workflowRunId + " ya ha terminado (" + run.getStatus() + ")");
     }
-    Instant now = time.now();
+    cancelTree(run, "cancelled-by-user", time.now());
+    return run(workflowRunId);
+  }
+
+  /** Cancela la ejecución y, después, sus hijas activas, con el mismo motivo. */
+  private void cancelTree(WorkflowRun run, String reason, Instant now) {
+    if (run.requestCancel(now)) {
+      run = workflowRuns.save(run);
+      append(
+          "workflow_run",
+          run.getId(),
+          "workflow.cancel.requested",
+          run.getId(),
+          Map.of("reason", reason),
+          now);
+    }
     for (StageRun stage :
         stageRuns.findByWorkflowRunIdInOrderByCreatedAtAsc(List.of(run.getId()))) {
-      cancelStage(stage, "cancelled-by-user", now);
+      cancelStage(stage, reason, now);
     }
     publisher.publishEvent(new WorkflowRunChanged(run.getId()));
-    return run(workflowRunId);
+    for (UUID child : activeChildren(run.getId())) {
+      lockRun(child);
+      WorkflowRun childRun = runEntity(child);
+      if (!childRun.getStatus().isTerminal()) {
+        cancelTree(childRun, "parent-cancelled", now);
+      }
+    }
+  }
+
+  /** Las ejecuciones sin terminar lanzadas desde un agente de {@code workflowRunId}. */
+  private List<UUID> activeChildren(UUID workflowRunId) {
+    return jdbc.sql(
+            "SELECT DISTINCT cs.workflow_run_id FROM agent_run child"
+                + " JOIN stage_run cs ON cs.id = child.stage_run_id"
+                + " JOIN workflow_run cw ON cw.id = cs.workflow_run_id"
+                + " JOIN agent_run parent ON parent.id = child.parent_agent_run_id"
+                + " JOIN stage_run ps ON ps.id = parent.stage_run_id"
+                + " WHERE ps.workflow_run_id = ? AND cs.workflow_run_id <> ?"
+                + " AND cw.status NOT IN ('SUCCEEDED', 'FAILED', 'CANCELLED')")
+        .params(workflowRunId, workflowRunId)
+        .query(UUID.class)
+        .list();
   }
 
   /**
@@ -711,39 +749,7 @@ public class RunService {
     if (stage.getStatus().isTerminal()) {
       return false;
     }
-    boolean running = false;
-    List<AgentRun> own = agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
-    List<AgentRun> toCancel = new ArrayList<>(own);
-    // Una puerta que corrige espera a la corrección, que vive en la fase `revise` (W5-B).
-    approvals
-        .correction(stage.getId())
-        .flatMap(c -> agentRuns.findById(c.agentRunId()))
-        .ifPresent(toCancel::add);
-    for (AgentRun agent : toCancel) {
-      if (agent.getStatus() == AgentObservableStatus.QUEUED) {
-        transitions.agent(
-            agent, AgentObservableStatus.CANCELLED, stage.getWorkflowRunId(), reason, now);
-        publisher.publishEvent(new AgentRunWithdrawn(agent.getId()));
-      } else if (agent.isVerification() && !agent.getStatus().isTerminal()) {
-        // Una fase verification no tiene proceso en el runner: se cancela en el acto.
-        transitions.agent(
-            agent, AgentObservableStatus.CANCELLED, stage.getWorkflowRunId(), reason, now);
-      } else if (!agent.getStatus().isTerminal()) {
-        running = true;
-        if (agent.requestCancel(now)) {
-          agent = agentRuns.save(agent);
-          append(
-              "agent_run",
-              agent.getId(),
-              "agent.cancel.requested",
-              stage.getWorkflowRunId(),
-              Map.of("runnerId", agent.getRunnerId()),
-              now);
-          publisher.publishEvent(new AgentCancelRequested(agent.getId(), agent.getRunnerId()));
-        }
-      }
-    }
-    if (running) {
+    if (stopAgents(stage, reason, false, now)) {
       return false;
     }
     // Si un hijo de una fase parallel ya había fallado (o no pasó su verificación), la fase falla;
@@ -758,6 +764,133 @@ public class RunService {
       transitions.advanceStage(stage, StageStatus.CANCELLED, reason, now);
     }
     return true;
+  }
+
+  /**
+   * El intento de la fase ha llegado a su {@code timeout} (W6-B), con {@code stage.timed.out}. Una
+   * puerta que espera decisión caduca ({@code EXPIRED}) y falla. Si no, sus agentes se paran como
+   * al cancelar, pero terminan {@code FAILED} con el fallo {@code timeout}, y la fase falla cuando
+   * terminan: el motor la reintenta si su {@code retry.on} incluye {@code timeout}. Devuelve si ha
+   * cambiado algo.
+   */
+  boolean timeOutStage(StageRun stage, Instant now) {
+    if (stage.getStatus().isTerminal() || !stage.timeOut(now)) {
+      return false;
+    }
+    stage = stageRuns.save(stage);
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("stageKey", stage.getStageKey());
+    payload.put("attempt", stage.getAttempt());
+    payload.put("deadline", stage.getDeadline());
+    append("stage_run", stage.getId(), "stage.timed.out", stage.getWorkflowRunId(), payload, now);
+    if (approvals.expirePending(stage, now)) {
+      transitions.advanceStage(stage, StageStatus.FAILED, "approval-expired", now);
+      return true;
+    }
+    if (stopAgents(stage, "stage-timeout", true, now)) {
+      return true;
+    }
+    List<AgentRun> agents = agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
+    if (!agents.isEmpty() && RunTransitions.outcome(agents) != AgentObservableStatus.COMPLETED) {
+      transitions.finishStage(stage, now);
+    } else {
+      // Sus agentes habían terminado y la fase seguía comprobando su worktree: los que aún se
+      // comprobaban cuentan como fallidos por tiempo, y se repiten si la fase se reintenta.
+      Map<UUID, VerificationResult> checking = verifications.latestOfStage(stage.getId());
+      for (AgentRun agent : agents) {
+        VerificationResult result = checking.get(agent.getId());
+        if (result != null && result.isLive() && agent.timeOut(now)) {
+          agentRuns.save(agent);
+        }
+      }
+      transitions.advanceStage(stage, StageStatus.FAILED, "stage-timeout", now);
+    }
+    return true;
+  }
+
+  /**
+   * Para los agentes de la fase que no han terminado (y la corrección de una puerta, W5-B): los que
+   * siguen en cola o son una verificación terminan en el acto y a los que están en un runner se les
+   * ordena terminar. Con {@code timeout}, terminan {@code FAILED} por tiempo en vez de cancelados.
+   * Devuelve si queda alguno en un runner: la fase se cierra cuando acabe.
+   */
+  private boolean stopAgents(StageRun stage, String reason, boolean timeout, Instant now) {
+    boolean running = false;
+    List<AgentRun> own = agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
+    List<AgentRun> toStop = new ArrayList<>(own);
+    // Una puerta que corrige espera a la corrección, que vive en la fase `revise` (W5-B).
+    approvals
+        .correction(stage.getId())
+        .flatMap(c -> agentRuns.findById(c.agentRunId()))
+        .ifPresent(toStop::add);
+    for (AgentRun agent : toStop) {
+      if (agent.getStatus().isTerminal()) {
+        continue;
+      }
+      boolean marked = timeout && agent.timeOut(now);
+      if (agent.getStatus() == AgentObservableStatus.QUEUED || agent.isVerification()) {
+        // Una fase verification no tiene proceso en el runner: se para en el acto.
+        AgentObservableStatus next =
+            timeout ? agent.timedOutStatus() : AgentObservableStatus.CANCELLED;
+        transitions.agent(agent, next, stage.getWorkflowRunId(), reason, now);
+        if (!agent.isVerification()) {
+          publisher.publishEvent(new AgentRunWithdrawn(agent.getId()));
+        }
+        continue;
+      }
+      running = true;
+      if (agent.requestCancel(now)) {
+        agent = agentRuns.save(agent);
+        append(
+            "agent_run",
+            agent.getId(),
+            "agent.cancel.requested",
+            stage.getWorkflowRunId(),
+            Map.of("runnerId", agent.getRunnerId(), "reason", reason),
+            now);
+        publisher.publishEvent(new AgentCancelRequested(agent.getId(), agent.getRunnerId()));
+      } else if (marked) {
+        agentRuns.save(agent);
+      }
+    }
+    return running;
+  }
+
+  /**
+   * El runner no ha confirmado a tiempo la cancelación del agente (está caído o no responde): se da
+   * por terminado, cancelado o fallido por tiempo, con {@code agent.cancel.forced}. La orden de
+   * matar el proceso sigue en la cola del runner, que la recibe si vuelve. Devuelve si lo ha
+   * cerrado.
+   */
+  @Transactional
+  public boolean forceCancel(UUID agentRunId) {
+    AgentRun agent = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
+    if (agent.getStatus().isTerminal() || agent.getCancelRequestedAt() == null) {
+      return false;
+    }
+    StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
+    WorkflowRun run = workflowRuns.findById(stage.getWorkflowRunId()).orElseThrow();
+    Instant now = time.now();
+    AgentObservableStatus outcome = agent.exited(null, null, null);
+    Map<String, Object> forced = new LinkedHashMap<>();
+    forced.put("runnerId", agent.getRunnerId());
+    forced.put("requestedAt", agent.getCancelRequestedAt());
+    append("agent_run", agent.getId(), "agent.cancel.forced", run.getId(), forced, now);
+    transitions.advanceAgent(agent, outcome, run.getId(), "cancel-unconfirmed", now);
+    transitions.finishStage(stage, now);
+    publisher.publishEvent(new WorkflowRunChanged(run.getId()));
+    return true;
+  }
+
+  /** Los agentes con la cancelación pedida antes de {@code before} que aún no han terminado. */
+  @Transactional(readOnly = true)
+  public List<UUID> unconfirmedCancels(Instant before) {
+    return jdbc.sql(
+            "SELECT id FROM agent_run WHERE cancel_requested_at < ? AND status NOT IN"
+                + " ('COMPLETED', 'FAILED', 'CANCELLED') ORDER BY cancel_requested_at")
+        .param(Timestamp.from(before))
+        .query(UUID.class)
+        .list();
   }
 
   /** Bloquea la ejecución hasta el final de la transacción: el motor la evalúa de una en una. */

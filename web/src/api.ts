@@ -224,10 +224,19 @@ export interface StageRun {
   retry: RetryPolicy | null
   /** Un reintento programado no arranca antes de esta hora. */
   notBefore: string | null
+  /** El `timeout` de la fase en segundos; null si no tiene límite. */
+  timeoutSeconds: number | null
+  /** El intento tiene que terminar antes de esta hora. */
+  deadline: string | null
+  /** Cuándo llegó a su límite; null si no llegó. */
+  timedOutAt: string | null
+  /** Se ha pedido parar alguno de sus agentes y el runner aún no lo ha confirmado. */
+  cancelling: boolean
 }
 
 export type ApprovalRisk = 'LOW' | 'MEDIUM' | 'HIGH'
-export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'CANCELLED'
+export type ApprovalStatus =
+  'PENDING' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'CANCELLED' | 'EXPIRED'
 export type ApprovalAction = 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'COMMENT'
 
 /** De dónde viene una puerta de aprobación. */
@@ -344,6 +353,8 @@ export interface Run {
   finishedAt: string | null
   /** Cuándo se archivó la ejecución; no cuenta el archivado de su trabajo o proyecto. */
   archivedAt: string | null
+  /** Se pidió cancelarla y aún no ha terminado: «Cancelando». */
+  cancelRequestedAt: string | null
   /** Fase y agente que aún no han terminado; null cuando todo ha terminado. */
   currentStageRunId: string | null
   currentAgentRunId: string | null
@@ -586,6 +597,8 @@ export interface StageDefinition {
   approval: { action: string; risk: ApprovalRisk; revise: string | null } | null
   /** Cuándo se reintenta si falla; null si no se reintenta. */
   retry: RetryPolicy | null
+  /** Tiempo máximo de cada intento en segundos; null si no tiene límite. */
+  timeoutSeconds: number | null
 }
 
 /** Una comprobación de fase: `artifacts`, `tests`, `diff`, `commit`, `scope` o `command`. */

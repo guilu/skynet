@@ -1439,6 +1439,63 @@ class DefinitionParserTest {
   }
 
   @Test
+  void timeoutLimitsEachAttemptOfAStageAndNotAConditionalOne() {
+    Parsed parsed =
+        parse(
+            """
+            id: limites
+            stages:
+              - id: implement
+                type: agent
+                prompt: Implementa
+                timeout: 45m
+              - id: aprobar
+                type: human-approval
+                dependsOn: [implement]
+                action: Aprobar
+                timeout: 72h
+              - id: tests
+                type: command
+                command: make test
+                dependsOn: [aprobar]
+                timeout: 30s
+            """);
+    assertThat(parsed.validation().problems()).isEmpty();
+    assertThat(parsed.validation().publishable()).isTrue();
+    WorkflowDefinition definition = parsed.definition();
+    assertThat(definition.stage("implement").orElseThrow().timeout())
+        .isEqualTo(Duration.ofMinutes(45));
+    assertThat(definition.stage("aprobar").orElseThrow().timeoutSeconds()).isEqualTo(259_200);
+    assertThat(definition.stage("tests").orElseThrow().timeout()).isEqualTo(Duration.ofSeconds(30));
+
+    Parsed wrong =
+        parse(
+            """
+            id: limites
+            stages:
+              - id: implement
+                type: agent
+                prompt: Implementa
+                timeout: 200h
+              - id: decide
+                type: conditional
+                dependsOn: [implement]
+                condition: implement.status == "SUCCEEDED"
+                timeout: 1m
+              - id: tests
+                type: command
+                command: make test
+                dependsOn: [implement]
+                timeout: media hora
+            """);
+    assertThat(messages(wrong, Severity.ERROR))
+        .containsExactlyInAnyOrder(
+            "`stages.implement.timeout` no puede pasar de 168 h",
+            "`timeout` no vale en una fase `conditional`: solo evalúa su condición",
+            "`media hora` no es una duración: usa segundos, minutos u horas, p. ej. `30s`, `2m`");
+  }
+
+  @Test
   void retryOnlyFitsStagesThatDoWorkAndSaysWhatIsWrong() {
     Parsed parsed =
         parse(

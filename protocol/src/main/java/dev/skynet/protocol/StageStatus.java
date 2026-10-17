@@ -27,7 +27,8 @@ public enum StageStatus {
   public Set<StageStatus> allowedNext() {
     return switch (this) {
       case PENDING -> EnumSet.of(READY, SKIPPED, CANCELLED);
-      case READY -> EnumSet.of(STARTING, SKIPPED, CANCELLED);
+      // Una fase lista puede fallar sin arrancar: se acabó su tiempo esperando un runner (W6-B).
+      case READY -> EnumSet.of(STARTING, SKIPPED, FAILED, CANCELLED);
       case STARTING -> EnumSet.of(RUNNING, FAILED, CANCELLED);
       case RUNNING ->
           EnumSet.of(WAITING_FOR_INPUT, WAITING_FOR_APPROVAL, SUCCEEDED, FAILED, CANCELLED);

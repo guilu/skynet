@@ -128,6 +128,10 @@ const CONVERSATION_MESSAGE: Keys<ConversationMessage> = {
 const STAGE_RUN: Keys<StageRun> = {
   retry: true,
   notBefore: true,
+  timeoutSeconds: true,
+  deadline: true,
+  timedOutAt: true,
+  cancelling: true,
   id: true,
   stageKey: true,
   name: true,
@@ -164,6 +168,7 @@ const RUN: Keys<Run> = {
   startedAt: true,
   finishedAt: true,
   archivedAt: true,
+  cancelRequestedAt: true,
   currentStageRunId: true,
   currentAgentRunId: true,
   totals: true,
@@ -441,6 +446,7 @@ const AGENT_DEFINITION: Keys<AgentDefinition> = {
 }
 const STAGE_DEFINITION: Keys<StageDefinition> = {
   retry: true,
+  timeoutSeconds: true,
   id: true,
   name: true,
   type: true,
