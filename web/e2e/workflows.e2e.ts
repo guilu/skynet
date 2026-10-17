@@ -104,3 +104,31 @@ test('importar, validar mientras se escribe, publicar, editar y descartar un wor
     await expect(row.getByText('v1')).toBeVisible()
   })
 })
+
+test('la pestaña Grafo dibuja la plantilla «Revisión en paralelo»', async ({ page }) => {
+  await page.goto('/workflows/new')
+  await login(page)
+  await page.getByLabel('Plantilla').selectOption({ label: 'Revisión en paralelo' })
+  await expect(problemsCard(page).getByText('Sin problemas')).toBeVisible()
+  await page.getByRole('tab', { name: 'Grafo' }).click()
+  await expect(page).toHaveURL(/view=graph/)
+
+  const graph = page.getByRole('group', { name: 'Grafo de Revisión en paralelo' })
+  await expect(graph.locator('.graph-node:not(.graph-child)')).toHaveCount(5)
+  // La parallel es una caja con sus dos revisores dentro.
+  const review = graph.locator('.graph-group')
+  await expect(review).toContainText('2 a la vez')
+  // React Flow pinta los hijos al lado de su grupo en el DOM, no dentro.
+  await expect(graph.locator('.graph-child')).toHaveText([/calidad/, /seguridad/])
+  // implement→tests→review→fix y review→tests-finales, más la opcional fix?→tests-finales.
+  await expect(graph.locator('.react-flow__edge')).toHaveCount(5)
+  await expect(graph.locator('.graph-edge-optional')).toHaveCount(1)
+  await expect(graph.getByText('developer · si review.hasBlockingFindings')).toBeVisible()
+  await expectAccessible(page, 'grafo del workflow')
+  await graph.screenshot({ path: `${process.env.E2E_OUT ?? 'build'}/w7a-grafo.png` })
+
+  // El YAML sigue donde estaba.
+  await page.getByRole('tab', { name: 'YAML' }).click()
+  await expect(page.locator('.monaco-editor').getByText('id: revision-en-paralelo')).toBeVisible()
+  await expect(graph).toHaveCount(0)
+})

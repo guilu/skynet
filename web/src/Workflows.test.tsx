@@ -135,6 +135,28 @@ describe('Workflows', () => {
     expect(v2.status).toBe('VALIDATED')
   })
 
+  it('la pestaña Grafo dibuja las fases y se recuerda en la URL', async () => {
+    stubApi({
+      [`/api/workflows/${draft.key}`]: workflow,
+      [`/api/workflow-versions/${draft.id}`]: draft,
+      [`/api/workflow-versions/${v1.id}`]: published,
+    })
+    renderAt(`/workflows/${draft.key}?version=${v1.id}`, <App />)
+
+    const tabs = await screen.findByRole('tablist', { name: 'Vista de la definición' })
+    fireEvent.click(within(tabs).getByRole('tab', { name: 'Grafo' }))
+    const graph = await screen.findByRole('group', { name: /^Grafo de / })
+    const names = [...graph.querySelectorAll('.graph-name')].map((n) => n.getAttribute('title'))
+    expect(names).toEqual(published.definition!.stages.map((st) => st.name ?? st.id))
+    // El editor sigue montado, oculto, para no perder lo escrito.
+    expect(
+      screen.getByLabelText(`YAML de ${draft.key} v1`, { selector: 'textarea' }),
+    ).not.toBeVisible()
+    fireEvent.click(within(tabs).getByRole('tab', { name: 'YAML' }))
+    expect(screen.getByLabelText(`YAML de ${draft.key} v1`)).toBeVisible()
+    expect(screen.queryByRole('group', { name: /^Grafo de / })).toBeNull()
+  })
+
   it('el alta crea el borrador con la plantilla y lleva a su página', async () => {
     const fetch = stubApi({
       'POST /api/workflows': { ...draft, version: 1, key: 'mi-workflow' },
