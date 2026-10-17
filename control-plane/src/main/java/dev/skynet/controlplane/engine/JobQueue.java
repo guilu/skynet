@@ -66,6 +66,20 @@ class JobQueue {
   }
 
   /**
+   * No hay nada que hacer hasta {@code at} (un reintento con espera, W6): el trabajo se queda,
+   * libre, para entonces. Si se ha vuelto a encolar mientras tanto, se evalúa ya.
+   */
+  @Transactional
+  void wakeAt(UUID runId, long generation, Instant at) {
+    jdbc.sql(
+            "UPDATE workflow_job SET locked_until = NULL, attempts = 0, last_error = NULL,"
+                + " run_after = CASE WHEN generation = ? THEN ? ELSE run_after END"
+                + " WHERE workflow_run_id = ?")
+        .params(generation, Timestamp.from(at), runId)
+        .update();
+  }
+
+  /**
    * La evaluación tuvo que esperar o falló: se vuelve a intentar pasado {@code delay}, más tarde
    * cuantos más intentos lleve.
    */

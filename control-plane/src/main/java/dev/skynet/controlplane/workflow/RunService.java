@@ -19,6 +19,7 @@ import dev.skynet.controlplane.shared.NotFoundException;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.controlplane.workitem.WorkItem;
 import dev.skynet.controlplane.workitem.WorkItemService;
+import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.AgentProviderKind;
 import dev.skynet.protocol.AgentProviderKind.Capability;
@@ -802,7 +803,7 @@ public class RunService {
     WorkflowRun run = workflowRuns.findById(stage.getWorkflowRunId()).orElseThrow();
     Instant now = time.now();
     AgentObservableStatus outcome =
-        agent.exited(null, null, "El proceso ya no existe en el runner");
+        agent.exited(null, null, "El proceso ya no existe en el runner", AgentFailure.LOST);
     agent = transitions.advanceAgent(agent, outcome, run.getId(), "process-lost", now);
     transitions.finishStage(stage, now);
     agentRuns.save(agent);

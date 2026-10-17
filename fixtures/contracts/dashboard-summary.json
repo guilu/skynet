@@ -78,10 +78,13 @@
           "removedAt" : null
         },
         "childKey" : null,
-        "structuredOutput" : null
+        "structuredOutput" : null,
+        "failure" : null
       } ],
       "verifications" : [ ],
-      "approval" : null
+      "approval" : null,
+      "retry" : null,
+      "notBefore" : null
     } ]
   } ],
   "activeRunsTotal" : 1,

@@ -5,12 +5,16 @@ import dev.skynet.controlplane.definition.WorkflowDefinitions;
 import dev.skynet.controlplane.engine.Planner.Cancel;
 import dev.skynet.controlplane.engine.Planner.Finish;
 import dev.skynet.controlplane.engine.Planner.Ready;
+import dev.skynet.controlplane.engine.Planner.Retry;
 import dev.skynet.controlplane.engine.Planner.Skip;
 import dev.skynet.controlplane.engine.Planner.Start;
 import dev.skynet.controlplane.engine.Planner.Step;
+import dev.skynet.controlplane.engine.Planner.Wake;
+import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.controlplane.workflow.RunSteps;
 import dev.skynet.controlplane.workflow.RunSteps.RunState;
 import dev.skynet.controlplane.workflow.RunSteps.StartOutcome;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,22 +34,36 @@ class RunEvaluator {
   /** Tope de pasadas por evaluación; cada pasada aplica al menos un cambio. */
   private static final int MAX_PASSES = 100;
 
-  enum Outcome {
+  enum Kind {
     /** No queda nada que hacer hasta el próximo cambio (o la ejecución ha terminado). */
     DONE,
     /**
      * Una fase espera a que se libere su worktree, o la ejecución estaba ocupada: hay que volver a
      * evaluarla más tarde.
      */
-    RETRY_LATER
+    RETRY_LATER,
+    /** No queda nada que hacer hasta {@link Outcome#wakeAt}, cuando puede empezar un reintento. */
+    WAKE_AT
+  }
+
+  /** Cómo ha ido una evaluación; {@code wakeAt} solo con {@link Kind#WAKE_AT}. */
+  record Outcome(Kind kind, Instant wakeAt) {
+    static final Outcome DONE = new Outcome(Kind.DONE, null);
+    static final Outcome RETRY_LATER = new Outcome(Kind.RETRY_LATER, null);
+
+    static Outcome wakeAt(Instant at) {
+      return new Outcome(Kind.WAKE_AT, at);
+    }
   }
 
   private final RunSteps steps;
   private final WorkflowDefinitions definitions;
+  private final TimeSource time;
 
-  RunEvaluator(RunSteps steps, WorkflowDefinitions definitions) {
+  RunEvaluator(RunSteps steps, WorkflowDefinitions definitions, TimeSource time) {
     this.steps = steps;
     this.definitions = definitions;
+    this.time = time;
   }
 
   /** Evalúa en su propia transacción (los workers). */
@@ -81,9 +99,12 @@ class RunEvaluator {
         // Una puerta ha vuelto a preguntar o ha terminado: se planifica con su estado nuevo.
         continue;
       }
-      List<Step> plan = Planner.plan(published.definition(), state.stages());
+      List<Step> plan =
+          Planner.plan(
+              published.definition(), steps.stages(runId, published.definition()), time.now());
       boolean progressed = false;
       boolean deferred = false;
+      Instant wake = null;
       for (Step step : plan) {
         switch (step) {
           case Ready ready -> {
@@ -103,6 +124,11 @@ class RunEvaluator {
             }
           }
           case Cancel cancel -> progressed |= steps.cancel(runId, cancel.stage(), cancel.reason());
+          case Retry retry -> {
+            steps.retry(runId, retry.stage(), published);
+            progressed = true;
+          }
+          case Wake next -> wake = next.at();
           case Finish finish -> {
             steps.finish(runId, finish.status(), finish.reason());
             return Outcome.DONE;
@@ -110,7 +136,10 @@ class RunEvaluator {
         }
       }
       if (!progressed) {
-        return deferred ? Outcome.RETRY_LATER : Outcome.DONE;
+        if (deferred) {
+          return Outcome.RETRY_LATER;
+        }
+        return wake == null ? Outcome.DONE : Outcome.wakeAt(wake);
       }
     }
     throw new IllegalStateException(

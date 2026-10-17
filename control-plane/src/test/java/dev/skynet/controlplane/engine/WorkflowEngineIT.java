@@ -139,6 +139,40 @@ class WorkflowEngineIT extends IntegrationTest {
           workspaceFrom: review.seguridad
       """;
 
+  /**
+   * Implementar, corregir con reintentos en el mismo worktree y pasar los tests, que solo se
+   * reintentan si se acaba el tiempo (W6).
+   */
+  static final String RETRIED =
+      """
+      id: retried
+      version: 1
+      stages:
+        - id: implement
+          type: agent
+          prompt: Implementa
+        - id: fix
+          type: agent
+          prompt: Corrige
+          dependsOn: [implement]
+          retry:
+            maxAttempts: 2
+            delay: 1s
+        - id: tests
+          type: command
+          command: make test
+          dependsOn: [fix]
+          retry: {maxAttempts: 3, on: [timeout], delay: 1s}
+      """;
+
+  /** REVIEW con reintentos en el revisor de calidad (W6). */
+  static final String REVIEW_RETRIED =
+      REVIEW
+          .replace("id: review\nversion: 1", "id: review-retried\nversion: 1")
+          .replace(
+              "- agent: calidad\n",
+              "- agent: calidad\n        retry: {maxAttempts: 2, delay: 1s}\n");
+
   /** Revisar con salida estructurada y corregir solo si hay hallazgos que bloquean. */
   static final String FIX =
       """
@@ -761,6 +795,151 @@ class WorkflowEngineIT extends IntegrationTest {
     runner.send(security);
     assertThat(stageStatuses(runId)).containsEntry("review", "FAILED");
     assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("FAILED");
+  }
+
+  @Test
+  void aTransientFailureIsRetriedFromHowItsDependencyLeftTheWorktree() {
+    String definitionId = publish(RETRIED);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+
+    // fix falla con un error del proceso: se reintenta, sin cancelar nada.
+    JsonNode first = runner.claim().getFirst();
+    String firstId = first.path("agentRunId").asString();
+    Events events = new Events(UUID.fromString(firstId));
+    events.add(
+        AgentEventType.WORKSPACE_READY,
+        Map.of(
+            "path", "/w/eng/implement",
+            "branch", "skynet/implement",
+            "baseCommit", "abc",
+            "snapshot", "snap-1"));
+    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", "f1"));
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 1));
+    runner.send(events);
+
+    JsonNode run = get("/api/workflow-runs/" + runId);
+    assertThat(run.path("status").asString()).isEqualTo("RUNNING");
+    List<JsonNode> fix = stagesOf(run, "fix");
+    assertThat(fix)
+        .extracting(f -> f.path("status").asString())
+        .containsExactly("FAILED", "PENDING");
+    assertThat(fix.get(0).path("agents").get(0).path("failure").asString()).isEqualTo("error");
+    assertThat(fix.get(1).path("attempt").asInt()).isEqualTo(2);
+    assertThat(fix.get(1).path("notBefore").isNull()).isFalse();
+    assertThat(fix.get(1).path("retry").path("maxAttempts").asInt()).isEqualTo(2);
+    assertThat(eventTypes(runId)).contains("stage.retry.scheduled");
+
+    // Pasada la espera, el segundo intento vuelve al worktree como lo dejó implement.
+    JsonNode second = awaitCommand(runner);
+    assertThat(second.path("start").path("prompt").asString()).isEqualTo("Corrige");
+    JsonNode workspace = second.path("start").path("workspace");
+    assertThat(workspace.path("path").asString()).isEqualTo("/w/eng/implement");
+    assertThat(workspace.path("restore").asString()).isEqualTo("snap-1");
+    JsonNode retried = get("/api/agent-runs/" + second.path("agentRunId").asString()).path("agent");
+    assertThat(retried.path("kind").asString()).isEqualTo("RETRY");
+    assertThat(retried.path("parentAgentRunId").asString()).isEqualTo(firstId);
+    complete(runner, second, "/w/eng/implement");
+    assertThat(stageStatuses(runId)).containsEntry("fix", "SUCCEEDED");
+
+    // tests solo se reintenta si se acaba el tiempo: un código distinto de 0 falla la ejecución.
+    JsonNode tests = runner.claim().getFirst();
+    Events failed = new Events(UUID.fromString(tests.path("agentRunId").asString()));
+    failed.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 2));
+    runner.send(failed);
+    assertThat(stageStatuses(runId)).containsEntry("tests", "FAILED");
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("FAILED");
+  }
+
+  @Test
+  void aStageThatRunsOutOfAttemptsFailsTheRun() {
+    String definitionId = publish(RETRIED);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+
+    for (int attempt = 1; attempt <= 2; attempt++) {
+      JsonNode fix = attempt == 1 ? runner.claim().getFirst() : awaitCommand(runner);
+      Events events = new Events(UUID.fromString(fix.path("agentRunId").asString()));
+      // El runner se cae a mitad: es un fallo pasajero.
+      events.add(
+          AgentEventType.PROCESS_EXITED,
+          Map.of("error", "El runner se detuvo durante la ejecución", "failure", "lost"));
+      runner.send(events);
+    }
+
+    await(() -> "FAILED".equals(get("/api/workflow-runs/" + runId).path("status").asString()));
+    List<JsonNode> fix = stagesOf(get("/api/workflow-runs/" + runId), "fix");
+    assertThat(fix)
+        .extracting(f -> f.path("status").asString())
+        .containsExactly("FAILED", "FAILED");
+    assertThat(fix.get(1).path("agents").get(0).path("failure").asString()).isEqualTo("lost");
+    assertThat(stageStatuses(runId)).containsEntry("tests", "CANCELLED");
+  }
+
+  @Test
+  void cancellingARunWhileARetryWaitsCancelsIt() {
+    String definitionId = publish(RETRIED.replace("delay: 1s\n", "delay: 1h\n"));
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    Events events =
+        new Events(UUID.fromString(runner.claim().getFirst().path("agentRunId").asString()));
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 1));
+    runner.send(events);
+    assertThat(stagesOf(get("/api/workflow-runs/" + runId), "fix"))
+        .extracting(f -> f.path("status").asString())
+        .containsExactly("FAILED", "PENDING");
+
+    post("/api/workflow-runs/" + runId + "/cancel", Map.of());
+
+    JsonNode run = get("/api/workflow-runs/" + runId);
+    assertThat(run.path("status").asString()).isEqualTo("CANCELLED");
+    assertThat(stagesOf(run, "fix"))
+        .extracting(f -> f.path("status").asString())
+        .containsExactly("FAILED", "CANCELLED");
+  }
+
+  @Test
+  void aFailedChildIsRetriedAloneWhileItsSiblingFinishes() {
+    String definitionId = publish(REVIEW_RETRIED);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    Map<String, JsonNode> byPrompt = new HashMap<>();
+    runner.claim().forEach(c -> byPrompt.put(c.path("start").path("prompt").asString(), c));
+    JsonNode quality = byPrompt.get("Revisa la calidad de ENG-1");
+
+    // calidad falla; seguridad no recibe la orden de terminar.
+    Events failed = new Events(UUID.fromString(quality.path("agentRunId").asString()));
+    failed.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 1));
+    runner.send(failed);
+    assertThat(stageStatuses(runId))
+        .containsEntry("review", "STARTING")
+        .containsEntry("fix", "PENDING");
+    assertThat(runner.claim()).isEmpty();
+
+    // Cuando seguridad termina, la fase falla y se programa otro intento solo para calidad.
+    complete(runner, byPrompt.get("Revisa la seguridad"), "/w/eng/seguridad");
+    assertThat(stagesOf(get("/api/workflow-runs/" + runId), "review"))
+        .extracting(r -> r.path("status").asString())
+        .containsExactly("FAILED", "PENDING");
+    JsonNode again = awaitCommand(runner);
+    assertThat(again.path("start").path("prompt").asString())
+        .isEqualTo("Revisa la calidad de ENG-1");
+    assertThat(again.path("start").path("workspace").path("copy").asBoolean()).isTrue();
+    assertThat(runner.claim()).isEmpty();
+    complete(runner, again, "/w/eng/calidad-2");
+    assertThat(stageStatuses(runId)).containsEntry("review", "SUCCEEDED");
+
+    // fix sigue; harden continúa el worktree de seguridad, del primer intento.
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    JsonNode harden = runner.claim().getFirst();
+    assertThat(harden.path("start").path("workspace").path("path").asString())
+        .isEqualTo("/w/eng/seguridad");
+    complete(runner, harden, "/w/eng/seguridad");
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("SUCCEEDED");
   }
 
   @Test
@@ -1729,6 +1908,31 @@ class WorkflowEngineIT extends IntegrationTest {
     }
     events.add(AgentEventType.VERIFICATION_COMPLETED, result);
     runner.send(events);
+  }
+
+  /** Los intentos de la fase {@code stageKey}, del primero al último. */
+  private static List<JsonNode> stagesOf(JsonNode run, String stageKey) {
+    List<JsonNode> attempts = new ArrayList<>();
+    run.path("stages")
+        .forEach(
+            s -> {
+              if (s.path("stageKey").asString().equals(stageKey)) {
+                attempts.add(s);
+              }
+            });
+    return attempts;
+  }
+
+  /** Espera a que el runner reciba una orden (un reintento, pasada su espera). */
+  private static JsonNode awaitCommand(Runner runner) {
+    List<JsonNode> claimed = new ArrayList<>();
+    await(
+        () -> {
+          claimed.addAll(runner.claim());
+          return !claimed.isEmpty();
+        });
+    assertThat(claimed).hasSize(1);
+    return claimed.getFirst();
   }
 
   private Map<String, String> stageStatuses(String runId) {

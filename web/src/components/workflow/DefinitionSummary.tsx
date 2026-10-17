@@ -1,5 +1,5 @@
-import type { VerificationCheck, WorkflowModel } from '../../api'
-import { providerName } from '../../format'
+import type { RetryPolicy, VerificationCheck, WorkflowModel } from '../../api'
+import { formatDuration, providerName } from '../../format'
 import { RISK_LABEL } from '../approval/approvalFormat'
 
 const WORKSPACE = { INHERIT: 'Continúa el de su dependencia', ISOLATED: 'Uno nuevo' } as const
@@ -9,6 +9,14 @@ const WITH_WORKSPACE = ['agent', 'command', 'parallel']
 function checkText(check: VerificationCheck): string {
   const target = check.command ?? check.paths.join(', ')
   return target ? `${check.name} ${target}` : check.name
+}
+
+/** «hasta 3 intentos si falla por lost, start o error; espera 30 s» */
+function retryText(retry: RetryPolicy): string {
+  const on = retry.on.join(', ').replace(/, ([^,]*)$/, ' o $1')
+  return `hasta ${retry.maxAttempts} intentos si falla por ${on}; espera ${formatDuration(
+    retry.delaySeconds * 1000,
+  )}`
 }
 
 function workspaceLabel(stage: WorkflowModel['stages'][number]): string {
@@ -46,8 +54,13 @@ export function DefinitionSummary({ definition }: { definition: WorkflowModel })
                 )}
                 {s.type === 'parallel' &&
                   ` · A la vez: ${s.children
-                    .map((c) => (c.id === c.agent ? c.id : `${c.id} (${c.agent})`))
+                    .map(
+                      (c) =>
+                        (c.id === c.agent ? c.id : `${c.id} (${c.agent})`) +
+                        (c.retry ? ` [${retryText(c.retry)}]` : ''),
+                    )
                     .join(', ')}`}
+                {s.retry && ` · Reintenta: ${retryText(s.retry)}`}
                 {s.approval && (
                   <>
                     {' · Pide aprobar '}

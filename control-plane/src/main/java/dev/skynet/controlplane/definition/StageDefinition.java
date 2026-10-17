@@ -1,6 +1,9 @@
 package dev.skynet.controlplane.definition;
 
+import com.fasterxml.jackson.annotation.JsonValue;
+import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.runner.VerificationCheck;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -28,6 +31,8 @@ import tools.jackson.databind.json.JsonMapper;
  * @param checks lo que Skynet comprueba en su worktree antes de darla por buena ({@code artifacts},
  *     {@code checks} y {@code scope} del YAML), en el orden en que se ejecuta; vacío si nada
  * @param approval lo que pide una fase {@code human-approval}; {@code null} en las demás
+ * @param retry cuándo se reintenta una fase {@code agent} o {@code command} que falla (W6); {@code
+ *     null} si no se reintenta. En una {@code parallel}, cada hijo lleva el suyo
  */
 public record StageDefinition(
     String id,
@@ -44,12 +49,49 @@ public record StageDefinition(
     Map<String, Object> outputSchema,
     String outputSchemaPath,
     List<VerificationCheck> checks,
-    Approval approval) {
+    Approval approval,
+    Retry retry) {
 
   public StageDefinition {
     dependsOn = List.copyOf(dependsOn);
     children = children == null ? List.of() : List.copyOf(children);
     checks = checks == null ? List.of() : List.copyOf(checks);
+  }
+
+  /** Una fase que no se reintenta. */
+  public StageDefinition(
+      String id,
+      String name,
+      StageType type,
+      String agent,
+      String prompt,
+      List<Dependency> dependsOn,
+      WorkspaceMode workspace,
+      String workspaceFrom,
+      String command,
+      List<ChildDefinition> children,
+      String condition,
+      Map<String, Object> outputSchema,
+      String outputSchemaPath,
+      List<VerificationCheck> checks,
+      Approval approval) {
+    this(
+        id,
+        name,
+        type,
+        agent,
+        prompt,
+        dependsOn,
+        workspace,
+        workspaceFrom,
+        command,
+        children,
+        condition,
+        outputSchema,
+        outputSchemaPath,
+        checks,
+        approval,
+        null);
   }
 
   /** Una fase que no es una puerta de aprobación. */
@@ -228,13 +270,62 @@ public record StageDefinition(
   }
 
   /**
+   * Cuándo se reintenta una fase que falla ({@code retry} en el YAML, W6).
+   *
+   * @param maxAttempts intentos en total, incluido el primero
+   * @param on por qué fallos se reintenta
+   * @param delay espera antes del segundo intento; se dobla en cada uno, hasta {@link #MAX_DELAY}
+   */
+  public record Retry(int maxAttempts, List<AgentFailure> on, Duration delay) {
+
+    /** Lo que se reintenta si {@code on} no dice otra cosa: los fallos pasajeros. */
+    public static final List<AgentFailure> DEFAULT_ON =
+        List.of(AgentFailure.LOST, AgentFailure.START, AgentFailure.ERROR);
+
+    public static final Duration DEFAULT_DELAY = Duration.ofSeconds(30);
+    public static final Duration MAX_DELAY = Duration.ofHours(1);
+
+    public Retry {
+      on = List.copyOf(on);
+    }
+
+    /** Si tras fallar así el intento {@code attempt} toca otro. */
+    public boolean retries(AgentFailure failure, int attempt) {
+      return failure != null && on.contains(failure) && attempt < maxAttempts;
+    }
+
+    /** La espera antes del intento que sigue al {@code attempt}: 30 s, 60 s, 120 s… */
+    public Duration delayAfter(int attempt) {
+      Duration wait = delay;
+      for (int i = 1; i < attempt && wait.compareTo(MAX_DELAY) < 0; i++) {
+        wait = wait.multipliedBy(2);
+      }
+      return wait.compareTo(MAX_DELAY) > 0 ? MAX_DELAY : wait;
+    }
+
+    /** En la API: {@code {maxAttempts, on: [lost, …], delaySeconds}}, como en el YAML. */
+    @JsonValue
+    public Json json() {
+      return new Json(maxAttempts, on.stream().map(AgentFailure::id).toList(), delay.toSeconds());
+    }
+
+    public record Json(int maxAttempts, List<String> on, long delaySeconds) {}
+  }
+
+  /**
    * Un agente de una fase {@code parallel}.
    *
    * @param id id del hijo, único en la fase; por defecto, el nombre de su agente
    * @param agent agente de {@code agents} que lo ejecuta
    * @param prompt plantilla de su prompt; si es {@code null} se usa la del agente
+   * @param retry cuándo se reintenta si falla, o {@code null} si no se reintenta
    */
-  public record ChildDefinition(String id, String agent, String prompt) {}
+  public record ChildDefinition(String id, String agent, String prompt, Retry retry) {
+
+    public ChildDefinition(String id, String agent, String prompt) {
+      this(id, agent, prompt, null);
+    }
+  }
 
   /**
    * Dependencia de otra fase. Una opcional ({@code plan?} en el YAML) también se da por cumplida si

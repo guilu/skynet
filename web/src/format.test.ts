@@ -3,6 +3,14 @@ import { describeEvent, formatCompact, formatDuration, statusTone } from './form
 
 describe('describeEvent', () => {
   it('describe las fases que mueve el motor', () => {
+    expect(
+      describeEvent('stage.retry.scheduled', {
+        stageKey: 'implement',
+        attempt: 2,
+        maxAttempts: 3,
+        delaySeconds: 30,
+      }),
+    ).toBe('Fase implement: se reintenta (intento 2 de 3) en 30 s')
     expect(describeEvent('stage.pending', { stageKey: 'fix', dependsOn: ['plan?', 'tests'] })).toBe(
       'Fase fix en espera de plan?, tests',
     )

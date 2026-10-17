@@ -40,7 +40,8 @@
         "removedAt" : null
       },
       "childKey" : null,
-      "structuredOutput" : null
+      "structuredOutput" : null,
+      "failure" : null
     },
     "prompt" : "Implementa el importador de precios de modelos",
     "messages" : [ {
@@ -89,7 +90,8 @@
         "removedAt" : null
       },
       "childKey" : null,
-      "structuredOutput" : null
+      "structuredOutput" : null,
+      "failure" : null
     },
     "prompt" : "Añade también los precios de caché",
     "messages" : [ {

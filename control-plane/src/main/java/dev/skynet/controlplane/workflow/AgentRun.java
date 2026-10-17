@@ -1,6 +1,7 @@
 package dev.skynet.controlplane.workflow;
 
 import dev.skynet.controlplane.shared.ConflictException;
+import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.runner.AgentLimits;
 import java.math.BigDecimal;
@@ -72,6 +73,15 @@ public class AgentRun {
 
   /** {@code HEAD} del worktree al empezar: la base de los checks {@code diff} y {@code commit}. */
   private String baseCommit;
+
+  /**
+   * Instantánea del worktree que continúa, tal como estaba al empezar ({@code snapshot} de {@code
+   * workspace.ready}): a ella vuelve un reintento de la fase (W6).
+   */
+  private String baseSnapshot;
+
+  /** Por qué falló, o {@code null} si no ha fallado (W6). */
+  private AgentFailure failure;
 
   @Version private Long version;
 
@@ -369,12 +379,24 @@ public class AgentRun {
    * resultado sin error y código de salida 0; fallido en cualquier otro caso.
    */
   AgentObservableStatus exited(Integer exitCode, String signal, String runnerError) {
+    return exited(exitCode, signal, runnerError, null);
+  }
+
+  /**
+   * Como {@link #exited(Integer, String, String)}, con la categoría del fallo que manda el runner
+   * ({@code failure}): sin ella, un error del runner cuenta como {@link AgentFailure#ERROR}. Un
+   * resultado que agota los turnos o el presupuesto cuenta como {@link AgentFailure#BUDGET} y una
+   * salida estructurada que falta, como {@link AgentFailure#VERIFICATION}.
+   */
+  AgentObservableStatus exited(
+      Integer exitCode, String signal, String runnerError, AgentFailure runnerFailure) {
     this.exitCode = exitCode;
     if (cancelRequestedAt != null) {
       return AgentObservableStatus.CANCELLED;
     }
     if (runnerError != null) {
       error = runnerError;
+      failure = runnerFailure != null ? runnerFailure : AgentFailure.ERROR;
       return AgentObservableStatus.FAILED;
     }
     if (isCommand()) {
@@ -385,15 +407,22 @@ public class AgentRun {
           "El comando terminó con código "
               + exitCode
               + (signal != null ? " (señal " + signal + ")" : "");
+      failure = AgentFailure.ERROR;
       return AgentObservableStatus.FAILED;
     }
     if (Boolean.FALSE.equals(resultIsError) && Integer.valueOf(0).equals(exitCode)) {
       if (outputSchema != null && structuredOutput == null) {
         error = "El agente no devolvió la salida estructurada que pide su `output`";
+        failure = AgentFailure.VERIFICATION;
         return AgentObservableStatus.FAILED;
       }
       return AgentObservableStatus.COMPLETED;
     }
+    failure =
+        resultSubtype != null
+                && (resultSubtype.contains("max_turns") || resultSubtype.contains("budget"))
+            ? AgentFailure.BUDGET
+            : AgentFailure.ERROR;
     if (error == null) {
       error =
           resultIsError == null
@@ -497,6 +526,23 @@ public class AgentRun {
   /** Por qué falla una invocación que no termina con un proceso (una fase {@code verification}). */
   void fail(String reason) {
     this.error = reason;
+    this.failure = AgentFailure.VERIFICATION;
+  }
+
+  /** Por qué falló, o {@code null} si no ha fallado. */
+  public AgentFailure getFailure() {
+    return failure;
+  }
+
+  public String getBaseSnapshot() {
+    return baseSnapshot;
+  }
+
+  /** La instantánea del worktree cuando la invocación lo recibió; solo cuenta la primera. */
+  void recordBaseSnapshot(String snapshot) {
+    if (baseSnapshot == null) {
+      baseSnapshot = snapshot;
+    }
   }
 
   /** El {@code HEAD} del worktree cuando la invocación lo recibió; solo cuenta el primero. */

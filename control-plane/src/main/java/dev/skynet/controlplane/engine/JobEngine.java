@@ -54,8 +54,11 @@ class JobEngine implements WorkflowEngine {
   public void runChanged(UUID workflowRunId) {
     long generation = jobs.enqueue(workflowRunId);
     try {
-      if (evaluator.evaluateNested(workflowRunId) == Outcome.DONE) {
-        jobs.complete(workflowRunId, generation);
+      Outcome outcome = evaluator.evaluateNested(workflowRunId);
+      switch (outcome.kind()) {
+        case DONE -> jobs.complete(workflowRunId, generation);
+        case WAKE_AT -> jobs.wakeAt(workflowRunId, generation, outcome.wakeAt());
+        case RETRY_LATER -> {}
       }
     } catch (RuntimeException e) {
       log.warn("No se pudo evaluar la ejecución {}; la retoma un worker", workflowRunId, e);
@@ -99,10 +102,12 @@ class JobEngine implements WorkflowEngine {
   /** Evalúa un trabajo reclamado; lo termina, o lo deja para más tarde si no ha podido. */
   void process(Job job) {
     try {
-      if (evaluator.evaluate(job.runId()) == Outcome.DONE) {
-        jobs.complete(job.runId(), job.generation());
-      } else {
-        jobs.retryLater(job.runId(), job.generation(), properties.retryDelay(), null);
+      Outcome outcome = evaluator.evaluate(job.runId());
+      switch (outcome.kind()) {
+        case DONE -> jobs.complete(job.runId(), job.generation());
+        case WAKE_AT -> jobs.wakeAt(job.runId(), job.generation(), outcome.wakeAt());
+        case RETRY_LATER ->
+            jobs.retryLater(job.runId(), job.generation(), properties.retryDelay(), null);
       }
     } catch (RuntimeException e) {
       log.warn(

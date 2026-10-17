@@ -3,6 +3,7 @@ package dev.skynet.controlplane.workflow;
 import dev.skynet.controlplane.definition.StageDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.Dependency;
 import dev.skynet.controlplane.definition.WorkflowDefinition;
+import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.runner.VerificationCheck;
 import java.time.Instant;
@@ -25,6 +26,8 @@ import java.util.UUID;
  *     la fase está «Verificando»
  * @param approval la última petición de aprobación de una fase {@code human-approval}, o {@code
  *     null} si no ha preguntado todavía (o no es una puerta)
+ * @param retry cuándo se reintenta la fase si falla ({@code retry} del YAML), o {@code null}
+ * @param notBefore un reintento que no empieza antes de esta hora, o {@code null} (W6)
  */
 public record StageRunView(
     UUID id,
@@ -43,7 +46,25 @@ public record StageRunView(
     Instant finishedAt,
     List<AgentRunView> agents,
     List<VerificationResult> verifications,
-    ApprovalSummary approval) {
+    ApprovalSummary approval,
+    RetryView retry,
+    Instant notBefore) {
+
+  /**
+   * El {@code retry} de una fase: intentos en total, qué fallos ({@code lost}, {@code error}…) y la
+   * primera espera en segundos.
+   */
+  public record RetryView(int maxAttempts, List<String> on, long delaySeconds) {
+
+    static RetryView of(StageDefinition.Retry retry) {
+      return retry == null
+          ? null
+          : new RetryView(
+              retry.maxAttempts(),
+              retry.on().stream().map(AgentFailure::id).toList(),
+              retry.delay().toSeconds());
+    }
+  }
 
   /**
    * @param workflow el workflow de la ejecución, o {@code null} si la versión ya no se puede leer
@@ -73,6 +94,8 @@ public record StageRunView(
         s.getFinishedAt(),
         agents,
         verifications,
-        approval);
+        approval,
+        definition == null ? null : RetryView.of(definition.retry()),
+        s.getNotBefore());
   }
 }

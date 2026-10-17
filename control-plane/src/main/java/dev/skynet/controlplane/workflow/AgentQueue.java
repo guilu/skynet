@@ -121,6 +121,9 @@ class AgentQueue {
       spawned.put("copyOfWorkspace", invocation.workspace().path());
     } else if (invocation.workspace() != null) {
       spawned.put("workspaceId", invocation.workspaceId());
+      if (invocation.workspace().restore() != null) {
+        spawned.put("restoreSnapshot", invocation.workspace().restore());
+      }
     }
     transitions.append("agent_run", agent.getId(), "agent.spawned", run.getId(), spawned, now);
     publisher.publishEvent(

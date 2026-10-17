@@ -255,13 +255,44 @@ stages:
 - Eventos: `approval.requested`, `approval.granted`, `approval.rejected`, `approval.changes_requested`, `approval.correction.failed`, `approval.commented` y `approval.cancelled`.
 - En la web se decide en **Aprobaciones**. El menú cuenta las pendientes, que salen también en «Necesita tu atención» del dashboard. La página de cada petición enseña la evidencia, lo que se concede, las consecuencias y el historial. En el progreso de la ejecución, la puerta lleva a «Revisar». Aprobar algo de riesgo `high` pide confirmarlo.
 
+**Reintentos.** `retry` en una fase `agent` o `command` hace que el motor la repita si falla por algo pasajero, en vez de aplicar el fail-fast:
+
+```yaml
+  - id: implement
+    type: agent
+    prompt: Implementa el plan
+    retry:
+      maxAttempts: 3            # intentos en total, incluido el primero (1-5); obligatorio
+      on: [lost, start, error]  # qué fallos se reintentan; este es el valor por defecto
+      delay: 30s                # espera antes del segundo intento (s, m o h); se dobla en cada uno, hasta 1 h
+```
+
+- Cada agente que falla guarda por qué (`failure`):
+
+  | Categoría | Cuándo | En `on` por defecto |
+  |---|---|---|
+  | `lost` | el runner se cayó o perdió la invocación | sí |
+  | `start` | no llegó a arrancar: no se pudo preparar el worktree, lanzar el proceso o no hay CLI del proveedor | sí |
+  | `error` | el proceso terminó con error (código distinto de 0, resultado con error) | sí |
+  | `timeout` | se acabó el tiempo del agente (`limits.timeoutMinutes`) | no |
+  | `budget` | superó el presupuesto o los turnos | no |
+  | `verification` | la salida estructurada o las comprobaciones de la fase (`artifacts`, `checks`) no pasaron | no |
+
+  Cancelar no es un fallo y nunca se reintenta.
+- Cada intento es una fase nueva de la misma ejecución (`attempt` 2, 3…) con agentes nuevos y sesión nueva. El intento que falló se queda como estaba, con sus agentes, sus logs y su coste.
+- Mientras espera su hora, el intento nuevo está `PENDING` con `notBefore`, y el evento `stage.retry.scheduled` dice qué intento es, por qué falló el anterior y cuándo arranca. Las demás fases siguen a lo suyo. Si otra fase falla sin reintentos, el fail-fast cancela también el intento que espera; cancelar la ejecución, también.
+- El intento nuevo parte del worktree tal como lo encontró el que falló: al arrancar cada agente, el runner guarda una foto del worktree (`refs/skynet/snapshots/<agente>`, con lo confirmado y lo que no) y, antes del reintento, lo deja como en esa foto. Lo que dejó el intento fallido se sigue viendo en sus artefactos y su diff.
+- En una fase `parallel`, `retry` va en cada hijo de `children` (en la fase es un error). Si un hijo falla, sus hermanos terminan; después, el intento nuevo de la fase repite solo los hijos que fallaron y pueden reintentarse. Los que terminaron bien no se repiten y sus salidas y worktrees siguen valiendo.
+- `retry` en una fase `conditional`, `verification` o `human-approval` es un error.
+- **En la web:** el progreso enseña el último intento de cada fase («Reintenta a las 10:30:15 (intento 2 de 3)»), por qué falló cada agente («Falló: terminó con error») y, al abrir la fase, sus intentos anteriores con sus agentes. El resumen del workflow dice qué fases se reintentan.
+
 ## Lo que aún no se ejecuta
 
 El YAML admite ya todo §11 para poder escribir los workflows de la especificación, pero solo se publica un workflow que el motor sabe ejecutar. Lo demás sale como problema `UNSUPPORTED` con el hito en el que llega:
 
 | Qué | Hito |
 |---|---|
-| `retry` y `timeout` | W6 |
+| `timeout` | W6 |
 | Fases `github-pr`, `github-check`, `github-merge` y `merge` | S2 |
 | `promptTemplate` | S3 |
 | `provider: opencode` | sin fecha |

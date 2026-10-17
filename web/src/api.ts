@@ -130,6 +130,8 @@ export interface AgentRun {
   cancelRequestedAt: string | null
   resultSubtype: string | null
   error: string | null
+  /** Por qué falló (W6), o null si no falló. Decide si la fase se reintenta. */
+  failure: AgentFailure | null
   /** Tipo del último evento del agente, p. ej. `agent.tool.started`. */
   lastEventType: string | null
   /** Herramienta en curso, o null si no hay ninguna. */
@@ -140,6 +142,16 @@ export interface AgentRun {
   childKey: string | null
   /** Salida estructurada que devolvió el agente según su `output`, o null. */
   structuredOutput: unknown
+}
+
+/** Por qué falló un agente: `lost`, `start`, `error`, `timeout`, `budget` o `verification`. */
+export type AgentFailure = 'lost' | 'start' | 'error' | 'timeout' | 'budget' | 'verification'
+
+/** `retry` de una fase o de un hijo: intentos en total, qué fallos y la primera espera. */
+export interface RetryPolicy {
+  maxAttempts: number
+  on: AgentFailure[]
+  delaySeconds: number
 }
 
 export interface Workspace {
@@ -208,6 +220,10 @@ export interface StageRun {
   verifications: VerificationResult[]
   /** La última petición de una fase `human-approval`; null si no ha preguntado todavía. */
   approval: ApprovalSummary | null
+  /** Cuándo se reintenta si falla; null si no se reintenta. */
+  retry: RetryPolicy | null
+  /** Un reintento programado no arranca antes de esta hora. */
+  notBefore: string | null
 }
 
 export type ApprovalRisk = 'LOW' | 'MEDIUM' | 'HIGH'
@@ -557,7 +573,7 @@ export interface StageDefinition {
   /** Comando de shell de una fase `command`. */
   command: string | null
   /** Agentes de una fase `parallel`, que se ejecutan a la vez. */
-  children: { id: string; agent: string; prompt: string | null }[]
+  children: { id: string; agent: string; prompt: string | null; retry: RetryPolicy | null }[]
   /** Condición que decide si la fase se ejecuta; null: siempre. */
   condition: string | null
   /** Salida estructurada de la fase en línea, que manda sobre el `output` de su agente. */
@@ -568,6 +584,8 @@ export interface StageDefinition {
   checks: VerificationCheck[]
   /** Lo que pide una fase `human-approval`; null en las demás. */
   approval: { action: string; risk: ApprovalRisk; revise: string | null } | null
+  /** Cuándo se reintenta si falla; null si no se reintenta. */
+  retry: RetryPolicy | null
 }
 
 /** Una comprobación de fase: `artifacts`, `tests`, `diff`, `commit`, `scope` o `command`. */

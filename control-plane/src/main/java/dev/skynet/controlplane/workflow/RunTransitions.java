@@ -44,13 +44,11 @@ class RunTransitions {
       AgentRun agent, AgentObservableStatus next, UUID workflowRunId, String reason, Instant now) {
     AgentObservableStatus previous = agent.transitionTo(next, now);
     AgentRun saved = agentRuns.save(agent);
-    append(
-        "agent_run",
-        agent.getId(),
-        "agent.status.changed",
-        workflowRunId,
-        statusChange(previous, next, reason),
-        now);
+    Map<String, Object> payload = statusChange(previous, next, reason);
+    if (next == AgentObservableStatus.FAILED && agent.getFailure() != null) {
+      payload.put("failure", agent.getFailure().id());
+    }
+    append("agent_run", agent.getId(), "agent.status.changed", workflowRunId, payload, now);
     return saved;
   }
 

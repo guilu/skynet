@@ -4,13 +4,16 @@ import dev.skynet.controlplane.definition.Problem.Severity;
 import dev.skynet.controlplane.definition.StageDefinition.Approval;
 import dev.skynet.controlplane.definition.StageDefinition.ChildDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.Dependency;
+import dev.skynet.controlplane.definition.StageDefinition.Retry;
 import dev.skynet.controlplane.definition.StageDefinition.Risk;
 import dev.skynet.controlplane.definition.StageDefinition.WorkspaceMode;
 import dev.skynet.controlplane.project.AgentPolicy;
+import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.AgentProviderKind;
 import dev.skynet.protocol.runner.VerificationCheck;
 import java.io.StringReader;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -84,14 +87,15 @@ public final class DefinitionParser {
           "scope",
           "action",
           "risk",
-          "revise");
-  static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt");
+          "revise",
+          "retry");
+  static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt", "retry");
+  static final Set<String> RETRY_KEYS = Set.of("maxAttempts", "on", "delay");
 
   /** Claves de §11 que llegan con hitos posteriores, con el hito que las ejecuta. */
   static final Map<String, String> FUTURE_STAGE_KEYS =
       Map.of(
           "promptTemplate", "S3",
-          "retry", "W6",
           "timeout", "W6");
 
   /** Variables que puede usar un prompt, además de {@code inputs.<nombre>}. */
@@ -873,6 +877,7 @@ public final class DefinitionParser {
       String condition = condition(fields, type, node, path);
       List<VerificationCheck> checks = verification(fields, type, node, path);
       Approval approval = approval(fields, type, node, path);
+      Retry retry = stageRetry(fields, type, path);
       Entry schemaEntry = fields.get("outputSchema");
       Map<String, Object> outputSchema = null;
       String outputSchemaPath = null;
@@ -907,7 +912,8 @@ public final class DefinitionParser {
               outputSchema,
               outputSchemaPath,
               checks,
-              approval);
+              approval,
+              retry);
       return new StageAt(stage, path, node, fields, dependencyNodes, children);
     }
 
@@ -1235,6 +1241,143 @@ public final class DefinitionParser {
     }
 
     /**
+     * El {@code retry} de una fase: vale en las {@code agent} y {@code command}. En una {@code
+     * parallel} va en cada hijo, que se reintenta solo; en las demás no hay nada que repetir.
+     */
+    private Retry stageRetry(Map<String, Entry> fields, StageType type, String path) {
+      Entry entry = fields.get("retry");
+      if (entry == null) {
+        return null;
+      }
+      if (type == StageType.PARALLEL) {
+        error(
+            entry.key(),
+            path + ".retry",
+            "En una fase `parallel`, pon `retry` en cada hijo de `children`: se reintenta solo el"
+                + " hijo que falla");
+        return null;
+      }
+      if (type != StageType.AGENT && type != StageType.COMMAND) {
+        if (type.executable()) {
+          error(
+              entry.key(),
+              path + ".retry",
+              "`retry` solo vale en fases `agent` y `command`; esta es `" + type.yaml() + "`");
+        }
+        return null;
+      }
+      return retry(entry, path + ".retry");
+    }
+
+    /**
+     * Cuándo se reintenta: {@code maxAttempts} (obligatorio, intentos en total), {@code on} (por
+     * qué fallos; por defecto los pasajeros) y {@code delay} (la primera espera; por defecto 30 s).
+     */
+    private Retry retry(Entry entry, String path) {
+      if (entry == null) {
+        return null;
+      }
+      Map<String, Entry> fields = mapping(entry.value(), path, RETRY_KEYS, Map.of());
+      if (fields == null) {
+        return null;
+      }
+      Integer maxAttempts = integer(fields.get("maxAttempts"), path + ".maxAttempts", 1, 5);
+      if (fields.get("maxAttempts") == null) {
+        error(
+            entry.value(),
+            path + ".maxAttempts",
+            "A `retry` le falta `maxAttempts`, los intentos en total, p. ej. `maxAttempts: 3`");
+      }
+      List<AgentFailure> on = Retry.DEFAULT_ON;
+      Entry onEntry = fields.get("on");
+      if (onEntry != null) {
+        on = failures(onEntry, path + ".on");
+      }
+      Duration delay = Retry.DEFAULT_DELAY;
+      Entry delayEntry = fields.get("delay");
+      if (delayEntry != null) {
+        delay = duration(delayEntry, path + ".delay", Retry.MAX_DELAY);
+      }
+      if (maxAttempts == null || on == null || delay == null) {
+        return null;
+      }
+      return new Retry(maxAttempts, on, delay);
+    }
+
+    /** Las categorías de fallo de {@code retry.on}: una lista no vacía, sin repetidas. */
+    private List<AgentFailure> failures(Entry entry, String path) {
+      List<String> names = Arrays.stream(AgentFailure.values()).map(AgentFailure::id).toList();
+      if (!(entry.value() instanceof SequenceNode sequence) || sequence.getValue().isEmpty()) {
+        error(
+            entry.value(),
+            path,
+            "`on` debe ser una lista de fallos, p. ej. `on: [lost, error]`. Admite: "
+                + String.join(", ", names));
+        return null;
+      }
+      List<AgentFailure> failures = new ArrayList<>();
+      boolean valid = true;
+      for (int i = 0; i < sequence.getValue().size(); i++) {
+        Node item = sequence.getValue().get(i);
+        String value = scalarText(item, path + "[" + i + "]");
+        if (value == null) {
+          valid = false;
+          continue;
+        }
+        AgentFailure failure = AgentFailure.fromId(value).orElse(null);
+        if (failure == null) {
+          error(
+              item,
+              path + "[" + i + "]",
+              "Fallo `"
+                  + value
+                  + "` desconocido"
+                  + suggestion(value, names)
+                  + ". Admite: "
+                  + String.join(", ", names));
+          valid = false;
+        } else if (failures.contains(failure)) {
+          warning(item, path + "[" + i + "]", "`" + value + "` está repetido");
+        } else {
+          failures.add(failure);
+        }
+      }
+      return valid ? failures : null;
+    }
+
+    /**
+     * Una duración como {@code 30s}, {@code 2m} o {@code 1h}, de al menos 1 s y hasta {@code max}.
+     */
+    private Duration duration(Entry entry, String path, Duration max) {
+      String value = scalarText(entry.value(), path);
+      if (value == null) {
+        return null;
+      }
+      Matcher matcher = Pattern.compile("([1-9][0-9]{0,5})([smh])").matcher(value.strip());
+      if (!matcher.matches()) {
+        error(
+            entry.value(),
+            path,
+            "`"
+                + value
+                + "` no es una duración: usa segundos, minutos u horas, p. ej. `30s`, `2m`");
+        return null;
+      }
+      long amount = Long.parseLong(matcher.group(1));
+      Duration duration =
+          switch (matcher.group(2)) {
+            case "s" -> Duration.ofSeconds(amount);
+            case "m" -> Duration.ofMinutes(amount);
+            default -> Duration.ofHours(amount);
+          };
+      if (duration.compareTo(max) > 0) {
+        error(entry.value(), path, "`" + path + "` no puede pasar de " + max.toHours() + " h");
+        return null;
+      }
+      return duration;
+    }
+
+    /**
      * Los hijos de una fase {@code parallel}: obligatorios, cada uno con su agente, y sin agente,
      * prompt ni comando propios en la fase. En las demás fases, {@code children} no vale.
      */
@@ -1315,7 +1458,10 @@ public final class DefinitionParser {
         ChildAt child =
             new ChildAt(
                 new ChildDefinition(
-                    id, agent, text(childFields.get("prompt"), childPath + ".prompt")),
+                    id,
+                    agent,
+                    text(childFields.get("prompt"), childPath + ".prompt"),
+                    retry(childFields.get("retry"), childPath + ".retry")),
                 childPath,
                 childFields);
         ChildAt previous = byId.putIfAbsent(id, child);

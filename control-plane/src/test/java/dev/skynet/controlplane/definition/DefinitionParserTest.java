@@ -8,9 +8,12 @@ import dev.skynet.controlplane.definition.Problem.Severity;
 import dev.skynet.controlplane.definition.StageDefinition.Approval;
 import dev.skynet.controlplane.definition.StageDefinition.ChildDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.Dependency;
+import dev.skynet.controlplane.definition.StageDefinition.Retry;
 import dev.skynet.controlplane.definition.StageDefinition.Risk;
+import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.runner.VerificationCheck;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -147,8 +150,7 @@ class DefinitionParserTest {
     assertThat(messages(parsed, Severity.UNSUPPORTED))
         .contains(
             "El tipo `github-pr` todavía no se ejecuta: llega en S2",
-            "`promptTemplate` todavía no se usa: llega en S3",
-            "`retry` todavía no se usa: llega en W6");
+            "`promptTemplate` todavía no se usa: llega en S3");
 
     WorkflowDefinition definition = parsed.definition();
     assertThat(definition.stage("pull-request").orElseThrow().dependsOn())
@@ -1378,6 +1380,107 @@ class DefinitionParserTest {
     Parsed parsed = parse(yaml);
     assertThat(parsed.validation().problems()).isEmpty();
     assertThat(parsed.definition().inputs().getFirst().defaultValue()).isEqualTo("seguridad");
+  }
+
+  @Test
+  void retryRepeatsAgentAndCommandStagesAndEachParallelChild() {
+    Parsed parsed =
+        parse(
+            """
+            id: reintentos
+            agents:
+              calidad:
+                prompt: Revisa
+              seguridad:
+                prompt: Revisa la seguridad
+            stages:
+              - id: implement
+                type: agent
+                prompt: Implementa
+                retry:
+                  maxAttempts: 3
+              - id: tests
+                type: command
+                command: make test
+                dependsOn: [implement]
+                retry: {maxAttempts: 2, on: [timeout, error], delay: 2m}
+              - id: review
+                type: parallel
+                dependsOn: [tests]
+                children:
+                  - agent: calidad
+                    retry: {maxAttempts: 2, delay: 1h}
+                  - agent: seguridad
+            """);
+    assertThat(parsed.validation().problems()).isEmpty();
+    assertThat(parsed.validation().publishable()).isTrue();
+    WorkflowDefinition definition = parsed.definition();
+    assertThat(definition.stage("implement").orElseThrow().retry())
+        .isEqualTo(new Retry(3, Retry.DEFAULT_ON, Duration.ofSeconds(30)));
+    assertThat(definition.stage("tests").orElseThrow().retry())
+        .isEqualTo(
+            new Retry(2, List.of(AgentFailure.TIMEOUT, AgentFailure.ERROR), Duration.ofMinutes(2)));
+    StageDefinition review = definition.stage("review").orElseThrow();
+    assertThat(review.retry()).isNull();
+    assertThat(review.child("calidad").orElseThrow().retry().delay())
+        .isEqualTo(Duration.ofHours(1));
+    assertThat(review.child("seguridad").orElseThrow().retry()).isNull();
+
+    // La espera se dobla en cada intento, hasta una hora.
+    Retry retry = definition.stage("implement").orElseThrow().retry();
+    assertThat(retry.delayAfter(1)).isEqualTo(Duration.ofSeconds(30));
+    assertThat(retry.delayAfter(2)).isEqualTo(Duration.ofSeconds(60));
+    assertThat(new Retry(5, Retry.DEFAULT_ON, Duration.ofMinutes(40)).delayAfter(3))
+        .isEqualTo(Duration.ofHours(1));
+    assertThat(retry.retries(AgentFailure.LOST, 2)).isTrue();
+    assertThat(retry.retries(AgentFailure.LOST, 3)).isFalse();
+    assertThat(retry.retries(AgentFailure.TIMEOUT, 1)).isFalse();
+    assertThat(retry.retries(null, 1)).isFalse();
+  }
+
+  @Test
+  void retryOnlyFitsStagesThatDoWorkAndSaysWhatIsWrong() {
+    Parsed parsed =
+        parse(
+            """
+            id: reintentos-mal
+            agents:
+              calidad:
+                prompt: Revisa
+            stages:
+              - id: implement
+                type: agent
+                prompt: Implementa
+                retry: {on: [error]}
+              - id: tests
+                type: command
+                command: make test
+                dependsOn: [implement]
+                retry: {maxAttempts: 9, on: [errror], delay: 5 minutos}
+              - id: review
+                type: parallel
+                dependsOn: [tests]
+                retry: {maxAttempts: 2}
+                children:
+                  - agent: calidad
+                    retry: {maxAttempts: 2, delay: 2h}
+              - id: aprobar
+                type: human-approval
+                dependsOn: [review]
+                action: Aprobar
+                retry: {maxAttempts: 2}
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .containsExactlyInAnyOrder(
+            "A `retry` le falta `maxAttempts`, los intentos en total, p. ej. `maxAttempts: 3`",
+            "`stages.tests.retry.maxAttempts` debe estar entre 1 y 5",
+            "Fallo `errror` desconocido; ¿quisiste decir `error`?. Admite: lost, start, error,"
+                + " timeout, budget, verification",
+            "`5 minutos` no es una duración: usa segundos, minutos u horas, p. ej. `30s`, `2m`",
+            "En una fase `parallel`, pon `retry` en cada hijo de `children`: se reintenta solo el"
+                + " hijo que falla",
+            "`stages.review.children[0].retry.delay` no puede pasar de 1 h",
+            "`retry` solo vale en fases `agent` y `command`; esta es `human-approval`");
   }
 
   private static Parsed parse(String yaml) {

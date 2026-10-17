@@ -21,12 +21,16 @@ import dev.skynet.protocol.WorkflowRunStatus;
 import dev.skynet.protocol.runner.AgentLimits;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
@@ -42,9 +46,8 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 public class RunSteps {
 
-  /** Estado de una ejecución, tal como lo ve el motor. */
-  public record RunState(
-      UUID runId, UUID definitionId, WorkflowRunStatus status, Map<String, StageState> stages) {}
+  /** Una ejecución bloqueada por el motor. */
+  public record RunState(UUID runId, UUID definitionId, WorkflowRunStatus status) {}
 
   /**
    * Una fase de la ejecución: su último intento y si ya tiene agente.
@@ -52,9 +55,22 @@ public class RunSteps {
    * @param hasAgent ya se le ha puesto en cola un agente (no hay que arrancarla otra vez)
    * @param ending {@code FAILED} o {@code CANCELLED} si la fase sigue en curso pero uno de sus
    *     agentes (un hijo de una fase {@code parallel}) ya ha fallado o se ha cancelado: así acabará
-   *     la fase en cuanto terminen los demás; {@code null} si no
+   *     la fase en cuanto terminen los demás; {@code null} si no. Un hijo que falló pero se va a
+   *     reintentar no cuenta
+   * @param retries el intento ha fallado y toca reintentarlo ({@code retry} de la fase, W6)
+   * @param notBefore un reintento que no puede empezar antes de esta hora, o {@code null}
    */
-  public record StageState(String key, StageStatus status, boolean hasAgent, StageStatus ending) {
+  public record StageState(
+      String key,
+      StageStatus status,
+      boolean hasAgent,
+      StageStatus ending,
+      boolean retries,
+      Instant notBefore) {
+
+    public StageState(String key, StageStatus status, boolean hasAgent, StageStatus ending) {
+      this(key, status, hasAgent, ending, false, null);
+    }
 
     public StageState(String key, StageStatus status, boolean hasAgent) {
       this(key, status, hasAgent, null);
@@ -130,7 +146,7 @@ public class RunSteps {
   /**
    * Bloquea la ejecución hasta el final de la transacción y devuelve su estado, o vacío si ya no
    * existe (se eliminó). Con {@code skipIfBusy}, si otra transacción la tiene bloqueada no espera y
-   * devuelve vacío (ver {@link #exists}).
+   * devuelve vacío (ver {@link #exists}). Sus fases, con {@link #stages}.
    */
   public Optional<RunState> lock(UUID runId, boolean skipIfBusy) {
     boolean locked =
@@ -145,27 +161,135 @@ public class RunSteps {
       return Optional.empty();
     }
     WorkflowRun run = workflowRuns.findById(runId).orElseThrow();
+    return Optional.of(new RunState(runId, run.getDefinitionId(), run.getStatus()));
+  }
+
+  /** El último intento de cada fase de la ejecución, como lo ve el motor. */
+  public Map<String, StageState> stages(UUID runId, WorkflowDefinition definition) {
     Map<String, StageState> stages = new LinkedHashMap<>();
-    for (StageRun stage : latestStages(runId).values()) {
-      List<AgentRun> agents =
-          agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
-      List<AgentRun> finished = agents.stream().filter(a -> a.getStatus().isTerminal()).toList();
+    for (Map.Entry<String, Retries> entry : attempts(runId).entrySet()) {
+      Retries retries = entry.getValue();
+      StageRun stage = retries.latest();
+      StageDefinition stageDefinition = definition.stage(entry.getKey()).orElse(null);
+      List<AgentRun> agents = retries.agentsOf(stage);
       StageStatus ending =
-          stage.getStatus().isTerminal()
-              ? null
-              : switch (RunTransitions.outcome(finished)) {
-                // Un hijo que terminó bien pero no pasó su verificación también hace fallar la
-                // fase.
-                case COMPLETED ->
-                    verifications.stageFailed(stage.getId()) ? StageStatus.FAILED : null;
-                case CANCELLED -> StageStatus.CANCELLED;
-                default -> StageStatus.FAILED;
-              };
+          stage.getStatus().isTerminal() ? null : ending(stage, stageDefinition, retries, agents);
       stages.put(
           stage.getStageKey(),
-          new StageState(stage.getStageKey(), stage.getStatus(), !agents.isEmpty(), ending));
+          new StageState(
+              stage.getStageKey(),
+              stage.getStatus(),
+              !agents.isEmpty(),
+              ending,
+              retries.plan(stageDefinition).retries(),
+              stage.getNotBefore()));
     }
-    return Optional.of(new RunState(runId, run.getDefinitionId(), run.getStatus(), stages));
+    return stages;
+  }
+
+  /**
+   * Cómo acabará una fase en curso por lo que ya ha terminado de ella: {@code FAILED} si uno de sus
+   * agentes falló (o no pasó su verificación), {@code CANCELLED} si se canceló, {@code null} si
+   * nada. Un hijo de una {@code parallel} que falló pero se va a reintentar no cuenta: sus hermanos
+   * siguen.
+   */
+  private StageStatus ending(
+      StageRun stage, StageDefinition definition, Retries retries, List<AgentRun> agents) {
+    List<AgentRun> finished = agents.stream().filter(a -> a.getStatus().isTerminal()).toList();
+    if (definition != null && definition.type() == StageType.PARALLEL) {
+      StageStatus ending = null;
+      for (AgentRun agent : finished) {
+        if (retries.failed(agent) && !retries.childRetries(definition, agent)) {
+          return StageStatus.FAILED;
+        }
+        if (agent.getStatus() == AgentObservableStatus.CANCELLED) {
+          ending = StageStatus.CANCELLED;
+        }
+      }
+      return ending;
+    }
+    return switch (RunTransitions.outcome(finished)) {
+      // Un agente que terminó bien pero no pasó su verificación también hace fallar la fase.
+      case COMPLETED -> verifications.stageFailed(stage.getId()) ? StageStatus.FAILED : null;
+      case CANCELLED -> StageStatus.CANCELLED;
+      default -> StageStatus.FAILED;
+    };
+  }
+
+  /**
+   * Programa el intento siguiente de una fase que ha fallado y se reintenta: pendiente, sin empezar
+   * hasta que pase la espera de su {@code retry}, con {@code stage.retry.scheduled}. Cancelar la
+   * ejecución mientras espera lo cancela.
+   */
+  public void retry(UUID runId, String stageKey, PublishedDefinition published) {
+    Instant now = time.now();
+    Retries retries = attempts(runId).get(stageKey);
+    StageDefinition definition = published.definition().stage(stageKey).orElseThrow();
+    Retries.Plan plan = retries.plan(definition);
+    if (!plan.retries()) {
+      throw new IllegalStateException("La fase " + stageKey + " no se reintenta");
+    }
+    StageRun failed = retries.latest();
+    Instant notBefore = now.plus(plan.delay());
+    StageRun next = stageRuns.save(StageRun.retry(failed, notBefore, now));
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("stageKey", stageKey);
+    payload.put("attempt", next.getAttempt());
+    payload.put("previousStageRunId", failed.getId());
+    payload.put("failure", plan.failure() == null ? null : plan.failure().id());
+    if (definition.retry() != null) {
+      payload.put("maxAttempts", definition.retry().maxAttempts());
+    }
+    if (!plan.children().isEmpty()) {
+      payload.put(
+          "children",
+          plan.children().stream()
+              .map(
+                  c -> {
+                    Map<String, Object> child = new LinkedHashMap<>();
+                    child.put("childKey", c.child());
+                    child.put("attempt", c.attempts() + 1);
+                    child.put(
+                        "maxAttempts",
+                        definition.child(c.child()).orElseThrow().retry().maxAttempts());
+                    child.put("failure", c.failure() == null ? null : c.failure().id());
+                    return child;
+                  })
+              .toList());
+    }
+    payload.put("delaySeconds", plan.delay().toSeconds());
+    payload.put("notBefore", notBefore);
+    transitions.append("stage_run", next.getId(), "stage.retry.scheduled", runId, payload, now);
+  }
+
+  /** Todos los intentos de cada fase, con sus agentes y verificaciones, por orden de creación. */
+  private Map<String, Retries> attempts(UUID runId) {
+    List<StageRun> all =
+        stageRuns.findByWorkflowRunIdInOrderByCreatedAtAsc(List.of(runId)).stream()
+            .sorted(Comparator.comparing(StageRun::getAttempt))
+            .toList();
+    List<UUID> ids = all.stream().map(StageRun::getId).toList();
+    List<AgentRun> agents =
+        ids.isEmpty() ? List.of() : agentRuns.findByStageRunIdInOrderByCreatedAtAsc(ids);
+    Map<UUID, VerificationResult> byAgent = new HashMap<>();
+    verifications
+        .latestOfStages(ids)
+        .values()
+        .forEach(list -> list.forEach(v -> byAgent.put(v.agentRunId(), v)));
+    Map<String, List<StageRun>> byKey = new LinkedHashMap<>();
+    all.forEach(st -> byKey.computeIfAbsent(st.getStageKey(), k -> new ArrayList<>()).add(st));
+    Map<String, Retries> attempts = new LinkedHashMap<>();
+    byKey.forEach(
+        (key, stages) -> {
+          Set<UUID> own = stages.stream().map(StageRun::getId).collect(Collectors.toSet());
+          attempts.put(
+              key,
+              new Retries(
+                  stages,
+                  agents.stream().filter(a -> own.contains(a.getStageRunId())).toList(),
+                  byAgent));
+        });
+    return attempts;
   }
 
   /** Si la ejecución existe, sin bloquearla. */
@@ -275,7 +399,15 @@ public class RunSteps {
                       .asCommand(command.command()));
         }
         case PARALLEL -> {
+          // Un reintento repite solo los hijos que no han terminado bien en un intento anterior.
+          List<String> done =
+              stage.getAttempt() > 1
+                  ? attempts(runId).get(stageKey).succeededChildren()
+                  : List.of();
           for (ChildDefinition child : stageDefinition.children()) {
+            if (done.contains(child.id())) {
+              continue;
+            }
             Invocation invocation =
                 agentInvocation(
                     run,
@@ -311,6 +443,11 @@ public class RunSteps {
                   : Invocation.inWorkspace(invocation.prompt(), invocation.policy(), source));
         }
       }
+      if (stage.getAttempt() > 1) {
+        WorkspaceView continued = source;
+        invocations.replaceAll(
+            (child, invocation) -> retrying(runId, stageKey, child, invocation, continued));
+      }
       invocations.forEach(
           (child, invocation) ->
               agentQueue.queue(run, stage, workItem, repository, invocation, child, now));
@@ -319,6 +456,21 @@ public class RunSteps {
       fail(stage, e.getMessage(), now);
       return StartOutcome.FAILED;
     }
+  }
+
+  /**
+   * La invocación de un reintento: enlazada con el agente del intento anterior y, si continúa el
+   * worktree de otra fase, devolviéndolo antes a como estaba cuando empezó ese intento, para no
+   * partir de lo que dejó a medias.
+   */
+  private Invocation retrying(
+      UUID runId, String stageKey, String child, Invocation invocation, WorkspaceView source) {
+    Retries retries = attempts(runId).get(stageKey);
+    String restore =
+        source != null && invocation.workspace() != null && !invocation.workspace().copy()
+            ? retries.snapshotOf(source.id())
+            : null;
+    return invocation.retrying(retries.previousAgent(child), restore);
   }
 
   /**
@@ -482,6 +634,11 @@ public class RunSteps {
       }
       List<AgentRun> agents =
           agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
+      if (stageDefinition.type() == StageType.PARALLEL) {
+        // Un hijo que terminó bien en un intento anterior no se repite en el siguiente.
+        agents =
+            List.copyOf(attempts(run.getId()).get(stage.getStageKey()).latestByChild().values());
+      }
       if (parts.size() == 2 && field.equals("exitCode")) {
         return agents.isEmpty() ? null : agents.getLast().getExitCode();
       }
@@ -636,7 +793,12 @@ public class RunSteps {
       return inherited == null ? null : worktreeOf(runId, inherited, definition);
     }
     StageRun stage = stage(runId, stageKey);
-    return agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId())).stream()
+    List<AgentRun> agents =
+        child == null
+            ? agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()))
+            // El hijo pudo terminar bien en un intento anterior de su fase.
+            : attempts(runId).get(stageKey).agents();
+    return agents.stream()
         .filter(a -> child == null || child.equals(a.getChildKey()))
         .map(AgentRun::getWorkspaceId)
         .filter(java.util.Objects::nonNull)

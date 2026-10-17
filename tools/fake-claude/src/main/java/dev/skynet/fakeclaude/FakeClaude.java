@@ -39,6 +39,10 @@ import tools.jackson.databind.node.ObjectNode;
  *       {@code result} devuelve en {@code structured_output}, o {@code @ruta} para leerlo de ese
  *       fichero del directorio de trabajo (así cada ejecución decide el suyo). Sin ella, o sin el
  *       fichero, no devuelve ninguno, como un agente que no consigue cumplir el schema.
+ *   <li>{@code FAKE_CLAUDE_FAIL_ONCE}: ruta de un fichero. Si no existe, lo crea y termina con
+ *       código 1 sin emitir nada, como un fallo pasajero; si ya existe, se comporta como siempre.
+ *       Para probar los reintentos (W6): conviene que esté fuera del worktree, porque el reintento
+ *       lo restaura y borraría el fichero.
  *   <li>{@code CLAUDE_CONFIG_DIR}: si está definida, guarda cada sesión en {@code
  *       <dir>/projects/<cwd>/<sesión>.jsonl}, como el CLI real, y {@code --resume} falla si no
  *       encuentra la sesión en el directorio de trabajo actual. Sin ella no comprueba nada.
@@ -75,6 +79,16 @@ public final class FakeClaude {
     if (!"stream-json".equals(inv.outputFormat())) {
       err.println("fake-claude: solo se admite --output-format stream-json");
       return 2;
+    }
+    String failOnce = env.get("FAKE_CLAUDE_FAIL_ONCE");
+    if (failOnce != null && !failOnce.isBlank()) {
+      Path marker = cwd.resolve(failOnce);
+      if (!Files.exists(marker)) {
+        Files.createDirectories(marker.toAbsolutePath().getParent());
+        Files.writeString(marker, "fake-claude falló aquí una vez\n");
+        err.println("fake-claude: fallo pasajero simulado (FAKE_CLAUDE_FAIL_ONCE)");
+        return 1;
+      }
     }
     String sessionId = inv.effectiveSessionId();
     Path sessionFile = sessionFile(env, cwd, sessionId);

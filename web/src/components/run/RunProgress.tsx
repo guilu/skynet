@@ -8,7 +8,17 @@ import { StatusBadge } from '../StatusBadge'
 import { outputSummary } from './agentOutput'
 import { spanDuration, type Span } from './runSpans'
 import { RISK_LABEL } from '../approval/approvalFormat'
-import { checkStates, isCorrecting, isVerifying, stageNote, type CheckState } from './stageNotes'
+import {
+  checkStates,
+  earlierAttempts,
+  FAILURE_LABEL,
+  failureOf,
+  isCorrecting,
+  isVerifying,
+  latestAttempts,
+  stageNote,
+  type CheckState,
+} from './stageNotes'
 
 const ORIGIN: Record<Exclude<AgentRun['kind'], 'START'>, string> = {
   RESUME: 'reanudación del',
@@ -49,15 +59,19 @@ export function RunProgress({
 }) {
   // Una fase sin agentes (omitida, pendiente) se abre sin cambiar el agente elegido; en cuanto se
   // elige otro agente, manda la fase de ese agente.
-  const [peek, setPeek] = useState<{ stageId: string; agentId: string | undefined } | null>(null)
+  // Cada fase se ve con su último intento; los anteriores, en su detalle.
+  const [peek, setPeek] = useState<{ stageKey: string; agentId: string | undefined } | null>(null)
+  const stages = latestAttempts(run)
   const stageOfAgent = run.stages.find((s) => s.agents.some((a) => a.id === selectedAgentId))
-  const openId = (peek?.agentId === selectedAgentId ? peek?.stageId : undefined) ?? stageOfAgent?.id
-  const open = run.stages.find((s) => s.id === openId)
-  const openSpan = spans.find((s) => s.id === openId)
+  const openKey =
+    (peek?.agentId === selectedAgentId ? peek?.stageKey : undefined) ?? stageOfAgent?.stageKey
+  const open = stages.find((s) => s.stageKey === openKey)
+  const openSpan = spans.find((s) => s.id === open?.id)
+  const earlier = open ? earlierAttempts(open, run) : []
 
   function choose(stage: StageRun) {
     if (stage.agents.length === 0) {
-      setPeek({ stageId: stage.id, agentId: selectedAgentId })
+      setPeek({ stageKey: stage.stageKey, agentId: selectedAgentId })
       return
     }
     setPeek(null)
@@ -71,8 +85,8 @@ export function RunProgress({
         <span className="muted small">{progressSummary(run)}</span>
       </div>
       <nav aria-label="Fases y agentes">
-        <ol className="path" style={{ '--steps': run.stages.length } as CSSProperties}>
-          {run.stages.map((stage, i) => {
+        <ol className="path" style={{ '--steps': stages.length } as CSSProperties}>
+          {stages.map((stage, i) => {
             const { className, icon: Icon } = stepState(stage.status)
             const span = spans.find((s) => s.id === stage.id)
             const running = stage.agents.find((a) => a.currentTool && !a.finishedAt)
@@ -82,7 +96,7 @@ export function RunProgress({
                 <button
                   type="button"
                   className="step-button"
-                  aria-pressed={stage.id === openId}
+                  aria-pressed={stage.stageKey === openKey}
                   aria-label={`${i + 1}. ${stage.name ?? stage.stageKey}: ${statusLabel(stage.status)}`}
                   onClick={() => choose(stage)}
                 >
@@ -109,7 +123,13 @@ export function RunProgress({
           <div className="step-detail">
             <p className="step-detail-head">
               <strong>{open.name ?? open.stageKey}</strong> <StatusBadge status={open.status} />
-              {openSpan?.detail && <span className="muted small"> {openSpan.detail}</span>}
+              {open.attempt > 1 && (
+                <span className="muted small">
+                  {' '}
+                  intento {open.attempt}
+                  {open.retry && ` de ${open.retry.maxAttempts}`}
+                </span>
+              )}
               {open.agent && <span className="muted small"> · agente {open.agent}</span>}
               {open.type === 'parallel' && (
                 <span className="muted small"> · {open.agents.length} agentes a la vez</span>
@@ -136,6 +156,13 @@ export function RunProgress({
               </p>
             )}
             {open.checks.length > 0 && <StageChecks checks={checkStates(open)} />}
+            {earlier.length > 0 && (
+              <EarlierAttempts
+                attempts={earlier}
+                selectedAgentId={selectedAgentId}
+                onSelectAgent={onSelectAgent}
+              />
+            )}
             {open.type === 'human-approval' ? (
               <GateDetail stage={open} />
             ) : open.agents.length === 0 ? (
@@ -163,6 +190,11 @@ export function RunProgress({
                         <StatusBadge status={span.status} />
                         <span className="step-time">{formatDuration(spanDuration(span, now))}</span>
                       </button>
+                      {agent.failure && agent.status === 'FAILED' && (
+                        <p className="muted small agent-origin">
+                          Falló: {FAILURE_LABEL[agent.failure]}
+                        </p>
+                      )}
                       {agent.provider === 'command' && agent.exitCode != null && (
                         <p className="muted small agent-origin">
                           Código de salida {agent.exitCode}
@@ -189,10 +221,51 @@ export function RunProgress({
           </div>
         )}
       </nav>
-      {run.stages.every((s) => s.agents.length === 0) && (
+      {stages.every((s) => s.agents.length === 0) && (
         <p className="muted small">Esta ejecución aún no tiene agentes.</p>
       )}
     </section>
+  )
+}
+
+/**
+ * Los intentos que fallaron antes del que se ve, con por qué fallaron y sus agentes, que siguen
+ * abriéndose en la conversación y el inspector.
+ */
+function EarlierAttempts({
+  attempts,
+  selectedAgentId,
+  onSelectAgent,
+}: {
+  attempts: StageRun[]
+  selectedAgentId: string | undefined
+  onSelectAgent: (agentId: string) => void
+}) {
+  return (
+    <div className="stage-attempts small">
+      <p className="muted">Intentos anteriores</p>
+      <ul>
+        {attempts.map((attempt) => (
+          <li key={attempt.id}>
+            Intento {attempt.attempt} <StatusBadge status={attempt.status} />
+            {failureOf(attempt) && <span className="muted"> · {failureOf(attempt)}</span>}
+            {attempt.agents.map((agent) => (
+              <span key={agent.id}>
+                {' · '}
+                <button
+                  type="button"
+                  className="btn-link"
+                  aria-current={agent.id === selectedAgentId ? 'true' : undefined}
+                  onClick={() => onSelectAgent(agent.id)}
+                >
+                  ver {agent.childKey ?? 'el agente'}
+                </button>
+              </span>
+            ))}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -271,13 +344,14 @@ function StageChecks({ checks }: { checks: CheckState[] }) {
 
 /** «Fase review · intento 2» mientras corre; al terminar, cuántas fases acabaron de cada forma. */
 function progressSummary(run: Run): string {
-  const current = run.stages.filter((s) => [...ACTIVE, ...WAITING].includes(s.status))
+  const stages = latestAttempts(run)
+  const current = stages.filter((s) => [...ACTIVE, ...WAITING].includes(s.status))
   if (current.length > 0) {
     const names = current.map((s) => s.name ?? s.stageKey).join(', ')
     const attempt =
       current.length === 1 && current[0].attempt > 1 ? ` · intento ${current[0].attempt}` : ''
     return `${current.length === 1 ? 'Fase' : 'Fases'} ${names}${attempt}`
   }
-  const done = run.stages.filter((s) => s.status === 'SUCCEEDED').length
-  return `${done} de ${run.stages.length} ${run.stages.length === 1 ? 'fase completada' : 'fases completadas'}`
+  const done = stages.filter((s) => s.status === 'SUCCEEDED').length
+  return `${done} de ${stages.length} ${stages.length === 1 ? 'fase completada' : 'fases completadas'}`
 }

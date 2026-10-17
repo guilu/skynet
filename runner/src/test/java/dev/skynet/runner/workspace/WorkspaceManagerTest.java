@@ -114,6 +114,45 @@ class WorkspaceManagerTest {
   }
 
   @Test
+  void aRetryRestoresTheWorktreeAsTheFailedAttemptFoundIt() throws Exception {
+    Path repo = TestRepos.create(dir.resolve("repo"));
+    WorkspaceManager manager = new WorkspaceManager(dir.resolve("workspaces"));
+    Workspace created = manager.create(repo, "main", UUID.randomUUID(), "TKM-1", UUID.randomUUID());
+    Path path = created.path();
+    // Lo que dejó la fase anterior: un cambio sin confirmar, un fichero nuevo y otro borrado.
+    Files.writeString(
+        path.resolve("calc.py"), "# de la fase anterior\n", StandardOpenOption.APPEND);
+    Files.writeString(path.resolve("nuevo.txt"), "nuevo\n");
+    Files.writeString(path.resolve(".gitignore"), "*.log\n");
+    String before = Files.readString(path.resolve("calc.py"));
+
+    UUID attempt = UUID.randomUUID();
+    Workspace first = manager.continued(path, null, attempt);
+    assertThat(first.snapshot()).isNotBlank();
+    assertThat(TestRepos.git(path, "rev-parse", "refs/skynet/snapshots/" + attempt))
+        .isEqualTo(first.snapshot());
+    // El intento falla a medias: confirma algo, cambia ficheros y deja otros nuevos.
+    Files.writeString(path.resolve("calc.py"), "roto\n");
+    TestRepos.git(path, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "a medias");
+    Files.delete(path.resolve("nuevo.txt"));
+    Files.writeString(path.resolve("basura.py"), "basura\n");
+    Files.writeString(path.resolve("salida.log"), "ignorado\n");
+
+    Workspace retry = manager.continued(path, first.snapshot(), UUID.randomUUID());
+
+    assertThat(retry.baseCommit()).isEqualTo(first.baseCommit());
+    assertThat(Files.readString(path.resolve("calc.py"))).isEqualTo(before);
+    assertThat(path.resolve("nuevo.txt")).hasContent("nuevo");
+    assertThat(path.resolve("basura.py")).doesNotExist();
+    assertThat(path.resolve("salida.log")).exists();
+    // Los cambios vuelven a estar sin confirmar, como los dejó la fase anterior.
+    assertThat(TestRepos.git(path, "status", "--porcelain"))
+        .contains("M calc.py")
+        .contains("?? nuevo.txt");
+    assertThat(retry.snapshot()).isNotEqualTo(first.snapshot());
+  }
+
+  @Test
   void onlyReusesWorktreesUnderItsRoot() throws Exception {
     Path repo = TestRepos.create(dir.resolve("repo"));
     WorkspaceManager manager = new WorkspaceManager(dir.resolve("workspaces"));

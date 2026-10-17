@@ -6,6 +6,7 @@ import dev.skynet.controlplane.definition.WorkflowDefinition;
 import dev.skynet.controlplane.workflow.RunSteps.StageState;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -20,9 +21,12 @@ import java.util.Map;
  *       dependencia opcional ({@code plan?}) también vale si se omitió. Si se omitió una que no es
  *       opcional, la fase también se omite.
  *   <li>Una fase lista sin agente se arranca.
- *   <li>Si una fase falla o se cancela, se cancelan las demás (fail-fast) y la ejecución termina
- *       fallida o cancelada cuando todas han terminado. Un hijo de una fase {@code parallel} que
- *       falla o se cancela cuenta igual: se cancelan sus hermanos y las demás fases.
+ *   <li>Si una fase falla y su {@code retry} lo cubre, se programa otro intento (W6): mientras
+ *       tanto las demás siguen. Un intento programado no empieza antes de su hora.
+ *   <li>Si una fase falla sin reintento o se cancela, se cancelan las demás (fail-fast) y la
+ *       ejecución termina fallida o cancelada cuando todas han terminado. Un hijo de una fase
+ *       {@code parallel} que falla (sin reintento) o se cancela cuenta igual: se cancelan sus
+ *       hermanos y las demás fases.
  *   <li>Si todas terminan bien (u omitidas), la ejecución termina bien.
  * </ul>
  */
@@ -30,7 +34,7 @@ final class Planner {
 
   private Planner() {}
 
-  sealed interface Step permits Ready, Skip, Start, Cancel, Finish {}
+  sealed interface Step permits Ready, Skip, Start, Cancel, Retry, Wake, Finish {}
 
   record Ready(String stage) implements Step {}
 
@@ -40,12 +44,28 @@ final class Planner {
 
   record Cancel(String stage, String reason) implements Step {}
 
+  /** Programar el intento siguiente de una fase que ha fallado. */
+  record Retry(String stage) implements Step {}
+
+  /**
+   * Nada que hacer hasta {@code at}, cuando un reintento puede empezar: hay que volver entonces.
+   */
+  record Wake(Instant at) implements Step {}
+
   record Finish(WorkflowRunStatus status, String reason) implements Step {}
 
-  static List<Step> plan(WorkflowDefinition definition, Map<String, StageState> stages) {
+  static List<Step> plan(
+      WorkflowDefinition definition, Map<String, StageState> stages, Instant now) {
     List<Step> steps = new ArrayList<>();
-    boolean failed = has(stages, StageStatus.FAILED);
+    boolean failed =
+        stages.values().stream()
+            .anyMatch(
+                s ->
+                    (s.status() == StageStatus.FAILED && !s.retries())
+                        || s.ending() == StageStatus.FAILED);
     if (failed || has(stages, StageStatus.CANCELLED)) {
+      // Un reintento que no ha empezado no se programa: la ejecución acaba igual.
+      failed |= has(stages, StageStatus.FAILED);
       String reason = failed ? "stage-failed" : "stage-cancelled";
       stages.values().stream()
           .filter(s -> !s.status().isTerminal())
@@ -57,6 +77,15 @@ final class Planner {
       return steps;
     }
 
+    boolean retrying = false;
+    for (StageState state : stages.values()) {
+      if (state.status() == StageStatus.FAILED && state.retries()) {
+        steps.add(new Retry(state.key()));
+        retrying = true;
+      }
+    }
+    Instant wake = null;
+
     // Estados tras aplicar lo que se decide aquí, para que una omisión se propague en la misma
     // pasada.
     Map<String, StageStatus> next = new HashMap<>();
@@ -66,6 +95,11 @@ final class Planner {
       changed = false;
       for (StageDefinition stage : definition.stages()) {
         if (next.get(stage.id()) != StageStatus.PENDING) {
+          continue;
+        }
+        Instant notBefore = stages.get(stage.id()).notBefore();
+        if (notBefore != null && notBefore.isAfter(now)) {
+          wake = wake == null || notBefore.isBefore(wake) ? notBefore : wake;
           continue;
         }
         Readiness readiness = readiness(stage, next);
@@ -86,7 +120,10 @@ final class Planner {
         steps.add(new Start(stage.id()));
       }
     }
-    if (next.values().stream().allMatch(StageStatus::isTerminal)) {
+    if (wake != null) {
+      steps.add(new Wake(wake));
+    }
+    if (!retrying && next.values().stream().allMatch(StageStatus::isTerminal)) {
       steps.add(new Finish(WorkflowRunStatus.SUCCEEDED, "all-stages-finished"));
     }
     return steps;

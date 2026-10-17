@@ -3161,6 +3161,26 @@
     color: var(--bad-ink);
   }
 
+  .stage-attempts {
+    margin: 0 0 var(--space-2);
+  }
+
+  .stage-attempts p {
+    margin: 0 0 2px;
+  }
+
+  .stage-attempts ul {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .stage-attempts [aria-current='true'] {
+    color: var(--fg);
+  }
+
   .step-agents {
     display: flex;
     flex-wrap: wrap;
