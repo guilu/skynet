@@ -122,6 +122,7 @@
     "timeoutSeconds" : null,
     "deadline" : null,
     "timedOutAt" : null,
-    "cancelling" : false
+    "cancelling" : false,
+    "retriedBy" : null
   } ]
 }

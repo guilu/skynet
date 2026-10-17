@@ -170,7 +170,9 @@ export function RunHeader({
           </ul>
         </div>
         <div className="hero-actions">
-          {agent && <AgentActions agent={agent} />}
+          {agent && (
+            <AgentActions agent={agent} retry={!run.workflow || run.workflow.key === 'adhoc'} />
+          )}
           {cancellable &&
             (confirming ? (
               <span className="confirm" role="group" aria-label="Confirmar la cancelación">

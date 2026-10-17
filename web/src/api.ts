@@ -232,6 +232,8 @@ export interface StageRun {
   timedOutAt: string | null
   /** Se ha pedido parar alguno de sus agentes y el runner aún no lo ha confirmado. */
   cancelling: boolean
+  /** Quién pidió este intento con «Reintentar fase»; null si lo programó el motor. */
+  retriedBy: string | null
 }
 
 export type ApprovalRisk = 'LOW' | 'MEDIUM' | 'HIGH'
@@ -993,6 +995,9 @@ export const api = {
   agent: (id: string) => request<AgentRunDetail>('GET', `/api/agent-runs/${id}`),
   /** Cancela la ejecución: sus fases sin empezar y sus agentes en marcha. */
   cancelRun: (id: string) => request<Run>('POST', `/api/workflow-runs/${id}/cancel`),
+  /** «Reintentar fase»: la ejecución fallida o cancelada sigue desde `stageKey`. */
+  retryStage: (id: string, stageKey: string) =>
+    request<Run>('POST', `/api/workflow-runs/${id}/stages/${encodeURIComponent(stageKey)}/retry`),
   cancelAgent: (id: string) => request<AgentRunDetail>('POST', `/api/agent-runs/${id}/cancel`),
   cleanupWorkspace: (id: string) =>
     request<AgentRunDetail>('POST', `/api/agent-runs/${id}/workspace/cleanup`),

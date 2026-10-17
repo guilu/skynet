@@ -19,11 +19,15 @@ import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
 import dev.skynet.protocol.runner.AgentLimits;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -475,7 +479,8 @@ public class RunSteps {
       if (stage.getAttempt() > 1) {
         WorkspaceView continued = source;
         invocations.replaceAll(
-            (child, invocation) -> retrying(runId, stageKey, child, invocation, continued));
+            (child, invocation) ->
+                retrying(runId, stageKey, child, invocation, continued, definition));
       }
       invocations.forEach(
           (child, invocation) ->
@@ -493,13 +498,49 @@ public class RunSteps {
    * partir de lo que dejó a medias.
    */
   private Invocation retrying(
-      UUID runId, String stageKey, String child, Invocation invocation, WorkspaceView source) {
+      UUID runId,
+      String stageKey,
+      String child,
+      Invocation invocation,
+      WorkspaceView source,
+      WorkflowDefinition definition) {
     Retries retries = attempts(runId).get(stageKey);
-    String restore =
+    AgentRun snapshot =
         source != null && invocation.workspace() != null && !invocation.workspace().copy()
-            ? retries.snapshotOf(source.id())
+            ? retries.snapshotAgent(source.id())
             : null;
+    String restore =
+        snapshot == null || rerunUpstream(snapshot, stageKey, definition)
+            ? null
+            : snapshot.getBaseSnapshot();
     return invocation.retrying(retries.previousAgent(child), restore);
+  }
+
+  /**
+   * Si después de tomar la instantánea trabajó en el worktree una fase de la que depende {@code
+   * stageKey} («Reintentar fase» de una fase anterior, W6-C): entonces la instantánea ya no es cómo
+   * lo dejaron sus dependencias y el intento sigue desde como está. Los agentes de las fases que
+   * dependen de ella no cuentan: lo que dejaron se deshace.
+   */
+  private boolean rerunUpstream(AgentRun snapshot, String stageKey, WorkflowDefinition definition) {
+    Set<String> downstream = new HashSet<>();
+    Deque<String> pending = new ArrayDeque<>(List.of(stageKey));
+    while (!pending.isEmpty()) {
+      for (String dependent : definition.dependents(pending.pop())) {
+        if (downstream.add(dependent)) {
+          pending.push(dependent);
+        }
+      }
+    }
+    return jdbc
+        .sql(
+            "SELECT s.stage_key FROM agent_run a JOIN stage_run s ON s.id = a.stage_run_id"
+                + " WHERE a.workspace_id = ? AND a.created_at > ?")
+        .params(snapshot.getWorkspaceId(), Timestamp.from(snapshot.getCreatedAt()))
+        .query(String.class)
+        .list()
+        .stream()
+        .anyMatch(key -> !key.equals(stageKey) && !downstream.contains(key));
   }
 
   /**

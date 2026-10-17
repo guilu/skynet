@@ -32,10 +32,13 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -678,6 +681,119 @@ public class RunService {
       publisher.publishEvent(new AgentCancelRequested(agent.getId(), agent.getRunnerId()));
     }
     return agent;
+  }
+
+  /**
+   * «Reintentar fase» (W6-C): vuelve a poner en marcha una ejecución fallida o cancelada desde la
+   * fase {@code stageKey}. La misma ejecución pasa a «En curso» con {@code run.resumed} y reciben
+   * un intento nuevo esa fase, las que dependen de ella y las demás que fallaron o se cancelaron
+   * (las que canceló el fail-fast vuelven a planificarse). Lo terminado no se toca: los intentos
+   * anteriores, sus agentes y sus peticiones de aprobación siguen como estaban, y una fase que
+   * terminó bien y no depende de {@code stageKey} no se repite. El intento lo pide una persona, así
+   * que no cuenta para {@code maxAttempts}.
+   *
+   * <p>Una puerta rechazada o caducada no se reintenta así: se reintenta una fase de la que dependa
+   * (aunque terminara bien, p. ej. el plan que se rechazó), y entonces vuelve a preguntar.
+   */
+  @Transactional
+  public RunView retryStage(UUID workflowRunId, String stageKey, String actor) {
+    lockRun(workflowRunId);
+    WorkflowRun run = runEntity(workflowRunId);
+    if (run.getArchivedAt() != null) {
+      throw new ConflictException("La ejecución está archivada: restáurala para reintentar");
+    }
+    if (run.getStatus() != WorkflowRunStatus.FAILED
+        && run.getStatus() != WorkflowRunStatus.CANCELLED) {
+      throw new ConflictException(
+          "Solo se reintenta una fase de una ejecución fallida o cancelada; esta está "
+              + run.getStatus());
+    }
+    WorkflowDefinition definition = definitions.published(run.getDefinitionId()).definition();
+    StageDefinition stage =
+        definition.stage(stageKey).orElseThrow(() -> new NotFoundException("Fase", stageKey));
+    Map<String, StageRun> latest = new LinkedHashMap<>();
+    stageRuns.findByWorkflowRunIdInOrderByCreatedAtAsc(List.of(workflowRunId)).stream()
+        .sorted(Comparator.comparing(StageRun::getAttempt))
+        .forEach(st -> latest.put(st.getStageKey(), st));
+    StageRun target = latest.get(stageKey);
+    if (target == null
+        || !target.getStatus().isTerminal()
+        || target.getStatus() == StageStatus.SKIPPED) {
+      throw new ConflictException("La fase " + stageKey + " no ha llegado a ejecutarse");
+    }
+    if (stage.type() == StageType.HUMAN_APPROVAL) {
+      throw new ConflictException(
+          "Una puerta no se reintenta así: reintenta una fase de la que dependa y volverá a"
+              + " preguntar");
+    }
+    Set<String> downstream = downstreamOf(definition, stageKey);
+    for (StageRun other : latest.values()) {
+      boolean gate =
+          definition
+              .stage(other.getStageKey())
+              .map(d -> d.type() == StageType.HUMAN_APPROVAL)
+              .orElse(false);
+      if (gate
+          && other.getStatus() == StageStatus.FAILED
+          && !downstream.contains(other.getStageKey())) {
+        throw new ConflictException(
+            "La puerta "
+                + other.getStageKey()
+                + " falló y no depende de "
+                + stageKey
+                + ": reintenta una fase de la que dependa");
+      }
+    }
+    Instant now = time.now();
+    List<String> reopened = new ArrayList<>();
+    StageRun retried = null;
+    for (StageRun previous : latest.values()) {
+      String key = previous.getStageKey();
+      if (!key.equals(stageKey) && !downstream.contains(key) && !reopens(previous)) {
+        continue;
+      }
+      StageRun next = stageRuns.save(StageRun.retriedBy(previous, actor, now));
+      reopened.add(next.getStageKey());
+      if (next.getStageKey().equals(stageKey)) {
+        retried = next;
+      }
+    }
+    WorkflowRunStatus previous = run.resume();
+    run = workflowRuns.save(run);
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("stageKey", stageKey);
+    payload.put("attempt", retried.getAttempt());
+    payload.put("stages", reopened);
+    payload.put("actor", actor);
+    append("workflow_run", run.getId(), "run.resumed", run.getId(), payload, now);
+    append(
+        "workflow_run",
+        run.getId(),
+        "workflow.status.changed",
+        run.getId(),
+        RunTransitions.statusChange(previous, WorkflowRunStatus.RUNNING, "stage-retried"),
+        now);
+    publisher.publishEvent(new WorkflowRunChanged(run.getId()));
+    return run(workflowRunId);
+  }
+
+  /** Si «Reintentar fase» le da un intento nuevo: falló o se canceló. */
+  private static boolean reopens(StageRun stage) {
+    return stage.getStatus() == StageStatus.FAILED || stage.getStatus() == StageStatus.CANCELLED;
+  }
+
+  /** Las fases que dependen de {@code stageKey}, directa o indirectamente. */
+  private static Set<String> downstreamOf(WorkflowDefinition definition, String stageKey) {
+    Set<String> found = new LinkedHashSet<>();
+    Deque<String> pending = new ArrayDeque<>(List.of(stageKey));
+    while (!pending.isEmpty()) {
+      for (String dependent : definition.dependents(pending.pop())) {
+        if (found.add(dependent)) {
+          pending.push(dependent);
+        }
+      }
+    }
+    return found;
   }
 
   /**

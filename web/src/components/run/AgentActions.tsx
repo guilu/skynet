@@ -15,13 +15,14 @@ type Action = 'retry' | 'fork' | 'cleanup'
  * otro agente con coste propio, así que antes de confirmar explican su alcance: qué worktree usa,
  * de qué sesión parte y qué repite (ADR-0001 §3.8). Cada una lleva a la ejecución nueva.
  */
-export function AgentActions({ agent }: { agent: AgentRun }) {
+export function AgentActions({ agent, retry = true }: { agent: AgentRun; retry?: boolean }) {
   const [open, setOpen] = useState<Action | null>(null)
   const providers = useProviders()
   if (!isTerminal(agent.status)) return null
   const usable = workspaceUsable(agent.workspace)
   // Un reintento repite el lanzamiento: solo tiene sentido sobre uno (o sobre otro reintento).
-  const canRetry = agent.kind === 'START' || agent.kind === 'RETRY'
+  // En una ejecución de workflow se reintenta la fase desde el progreso, no el agente suelto.
+  const canRetry = retry && (agent.kind === 'START' || agent.kind === 'RETRY')
   const canFork = !!agent.providerSessionId && usable
   // El proveedor que no bifurca enseña el botón desactivado con el motivo.
   const forkBlocked = canFork ? unsupportedReason(providers.data, agent.provider, 'FORK') : null

@@ -330,7 +330,8 @@ class ContractIT extends IntegrationTest {
               null,
               null,
               null,
-              false),
+              false,
+              null),
           agent);
     }
 
@@ -458,7 +459,8 @@ class ContractIT extends IntegrationTest {
               null,
               null,
               null,
-              false),
+              false,
+              null),
           agent);
     }
 

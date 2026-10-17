@@ -900,6 +900,113 @@ class WorkflowEngineIT extends IntegrationTest {
   }
 
   @Test
+  void retryingAStageResumesTheSameRunAndItsAutomaticRetriesCountAgain() {
+    String definitionId = publish(RETRIED);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    String retry = "/api/workflow-runs/" + runId + "/stages/";
+    // Solo en una ejecución que ha terminado.
+    assertConflict(() -> post(retry + "implement/retry", Map.of()));
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    for (int attempt = 1; attempt <= 2; attempt++) {
+      lose(runner, attempt == 1 ? runner.claim().getFirst() : awaitCommand(runner));
+    }
+    await(() -> "FAILED".equals(get("/api/workflow-runs/" + runId).path("status").asString()));
+
+    assertThatThrownBy(() -> post(retry + "deploy/retry", Map.of()))
+        .isInstanceOfSatisfying(
+            HttpClientErrorException.class,
+            e -> assertThat(e.getStatusCode().value()).isEqualTo(404));
+
+    JsonNode resumed = post(retry + "fix/retry", Map.of());
+
+    assertThat(resumed.path("status").asString()).isEqualTo("RUNNING");
+    assertThat(resumed.path("finishedAt").isNull()).isTrue();
+    List<JsonNode> fix = stagesOf(resumed, "fix");
+    assertThat(fix).extracting(f -> f.path("attempt").asInt()).containsExactly(1, 2, 3);
+    assertThat(fix.get(2).path("retriedBy").asString()).isNotBlank();
+    assertThat(fix.get(1).path("retriedBy").isNull()).isTrue();
+    // tests, que canceló el fail-fast, vuelve a planificarse; implement no se repite.
+    assertThat(stagesOf(resumed, "tests"))
+        .extracting(f -> f.path("status").asString())
+        .containsExactly("CANCELLED", "PENDING");
+    assertThat(stagesOf(resumed, "implement")).hasSize(1);
+    assertThat(eventTypes(runId)).contains("run.resumed");
+    assertConflict(() -> post(retry + "fix/retry", Map.of()));
+
+    // El intento 3 parte del worktree de implement y, al fallar, aún tiene su reintento automático.
+    JsonNode third = awaitCommand(runner);
+    assertThat(third.path("start").path("prompt").asString()).isEqualTo("Corrige");
+    lose(runner, third);
+    complete(runner, awaitCommand(runner), "/w/eng/implement");
+    complete(runner, awaitCommand(runner), "/w/eng/implement");
+
+    JsonNode run = get("/api/workflow-runs/" + runId);
+    assertThat(run.path("status").asString()).isEqualTo("SUCCEEDED");
+    assertThat(stagesOf(run, "fix"))
+        .extracting(f -> f.path("status").asString())
+        .containsExactly("FAILED", "FAILED", "FAILED", "SUCCEEDED");
+  }
+
+  @Test
+  void retryingAStageThatSucceededRedoesItAndTheStagesThatDependOnIt() {
+    String definitionId = publish(RETRIED);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    snapshotted(runner, runner.claim().getFirst(), "snap-fix", 0);
+    snapshotted(runner, runner.claim().getFirst(), "snap-tests", 2);
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("FAILED");
+
+    post("/api/workflow-runs/" + runId + "/stages/fix/retry", Map.of());
+
+    // fix vuelve a como lo dejó implement; tests sigue desde lo que deje el fix nuevo.
+    JsonNode fix = awaitCommand(runner);
+    assertThat(fix.path("start").path("workspace").path("restore").asString())
+        .isEqualTo("snap-fix");
+    complete(runner, fix, "/w/eng/implement");
+    JsonNode tests = awaitCommand(runner);
+    assertThat(
+            tests.path("start").path("workspace").path("restore").isMissingNode()
+                || tests.path("start").path("workspace").path("restore").isNull())
+        .isTrue();
+    complete(runner, tests, "/w/eng/implement");
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("SUCCEEDED");
+    assertThat(stagesOf(get("/api/workflow-runs/" + runId), "implement")).hasSize(1);
+  }
+
+  @Test
+  void aRejectedGateIsRetriedFromTheStageItDependsOn() {
+    String definitionId = publish(GATE);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/plan", Map.of("summary", "Hacer X"));
+    String approvalId = get("/api/approvals?status=PENDING").get(0).path("id").asString();
+    post(
+        "/api/approvals/" + approvalId + "/decisions",
+        Map.of("action", "REJECT", "comment", "No es lo que pedí"));
+    String retry = "/api/workflow-runs/" + runId + "/stages/";
+
+    // La puerta no se reintenta sola: se repite el plan que se rechazó, aunque terminó bien.
+    assertConflict(() -> post(retry + "aprobar-plan/retry", Map.of()));
+
+    JsonNode resumed = post(retry + "plan/retry", Map.of());
+
+    assertThat(stagesOf(resumed, "plan")).hasSize(2);
+    assertThat(stagesOf(resumed, "tests"))
+        .extracting(f -> f.path("status").asString())
+        .containsExactly("CANCELLED", "PENDING");
+
+    complete(runner, awaitCommand(runner), "/w/eng/plan", Map.of("summary", "Hacer Y"));
+    assertThat(stagesOf(get("/api/workflow-runs/" + runId), "aprobar-plan"))
+        .extracting(f -> f.path("status").asString())
+        .containsExactly("FAILED", "WAITING_FOR_APPROVAL");
+    // La petición rechazada sigue como estaba; hay una nueva.
+    assertThat(get("/api/approvals?status=REJECTED")).hasSize(1);
+    assertThat(get("/api/approvals?status=PENDING")).hasSize(1);
+  }
+
+  @Test
   void cancellingARunWhileARetryWaitsCancelsIt() {
     String definitionId = publish(RETRIED.replace("delay: 1s\n", "delay: 1h\n"));
     Runner runner = register("laptop");
@@ -2061,6 +2168,36 @@ class WorkflowEngineIT extends IntegrationTest {
   }
 
   /** Espera a que el runner reciba una orden (un reintento, pasada su espera). */
+  /**
+   * El agente de {@code command} toma la instantánea {@code snapshot} del worktree de implement al
+   * empezar y termina con {@code exitCode}.
+   */
+  private static void snapshotted(Runner runner, JsonNode command, String snapshot, int exitCode) {
+    Events events = new Events(UUID.fromString(command.path("agentRunId").asString()));
+    events.add(
+        AgentEventType.WORKSPACE_READY,
+        Map.of(
+            "path", "/w/eng/implement",
+            "branch", "skynet/implement",
+            "baseCommit", "abc",
+            "snapshot", snapshot));
+    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", snapshot));
+    if (exitCode == 0) {
+      events.add(AgentEventType.RESULT, Map.of("subtype", "success", "isError", false));
+    }
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", exitCode));
+    runner.send(events);
+  }
+
+  /** El runner se cae a mitad del agente: un fallo {@code lost}, que se reintenta. */
+  private static void lose(Runner runner, JsonNode command) {
+    Events events = new Events(UUID.fromString(command.path("agentRunId").asString()));
+    events.add(
+        AgentEventType.PROCESS_EXITED,
+        Map.of("error", "El runner se detuvo durante la ejecución", "failure", "lost"));
+    runner.send(events);
+  }
+
   private static JsonNode awaitCommand(Runner runner) {
     List<JsonNode> claimed = new ArrayList<>();
     await(

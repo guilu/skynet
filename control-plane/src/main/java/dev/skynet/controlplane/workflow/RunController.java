@@ -13,6 +13,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.security.Principal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -137,6 +138,15 @@ class RunController {
   @PostMapping("/api/workflow-runs/{id}/cancel")
   RunView cancelRun(@PathVariable UUID id) {
     return service.cancelRun(id);
+  }
+
+  /**
+   * «Reintentar fase» (W6-C): la ejecución fallida o cancelada vuelve a «En curso» desde esa fase,
+   * con un intento nuevo para ella y para las que fallaron o se cancelaron.
+   */
+  @PostMapping("/api/workflow-runs/{id}/stages/{stageKey}/retry")
+  RunView retryStage(@PathVariable UUID id, @PathVariable String stageKey, Principal principal) {
+    return service.retryStage(id, stageKey, principal.getName());
   }
 
   @PostMapping("/api/workflow-runs/{id}/restore")

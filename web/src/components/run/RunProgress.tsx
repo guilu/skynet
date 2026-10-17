@@ -8,7 +8,9 @@ import { StatusBadge } from '../StatusBadge'
 import { outputSummary } from './agentOutput'
 import { spanDuration, type Span } from './runSpans'
 import { RISK_LABEL } from '../approval/approvalFormat'
+import { StageRetry } from './StageRetry'
 import {
+  attemptOf,
   checkStates,
   earlierAttempts,
   FAILURE_LABEL,
@@ -129,7 +131,8 @@ export function RunProgress({
                 <span className="muted small">
                   {' '}
                   intento {open.attempt}
-                  {open.retry && ` de ${open.retry.maxAttempts}`}
+                  {attemptOf(open)}
+                  {open.retriedBy && ` · lo pidió ${open.retriedBy}`}
                 </span>
               )}
               {open.agent && <span className="muted small"> · agente {open.agent}</span>}
@@ -147,6 +150,7 @@ export function RunProgress({
             {stageNote(open, run) && (
               <p className="step-detail-note muted small">{stageNote(open, run)}</p>
             )}
+            <StageRetry key={open.id} stage={open} run={run} />
             {open.reads.length > 0 && (
               <p className="muted small">
                 Recibe{' '}
