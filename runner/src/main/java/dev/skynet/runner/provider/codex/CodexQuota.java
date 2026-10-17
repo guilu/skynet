@@ -30,7 +30,7 @@ public final class CodexQuota {
   static final String PROVIDER = "codex";
   private static final ObjectMapper JSON = JsonMapper.builder().build();
   private static final long FIVE_HOURS = 300;
-  private static final long WEEK = 7 * 24 * 60;
+  private static final long WEEK = 7L * 24 * 60;
 
   private CodexQuota() {}
 

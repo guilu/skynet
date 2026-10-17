@@ -48,6 +48,8 @@ public final class ClaudeStreamParser implements dev.skynet.runner.provider.Even
   /** Longitud máxima del texto de salida de una herramienta que viaja en el evento. */
   static final int MAX_TOOL_OUTPUT = 16 * 1024;
 
+  private static final String RESETS_AT = "resetsAt";
+
   /** Herramientas cuyo resultado modifica un archivo. */
   private static final Set<String> FILE_TOOLS =
       Set.of("Edit", "MultiEdit", "Write", "NotebookEdit");
@@ -311,7 +313,7 @@ public final class ClaudeStreamParser implements dev.skynet.runner.provider.Even
               payload()
                   .put("status", status)
                   .put("limitType", text(info, "rateLimitType"))
-                  .put("resetsAt", longValue(info, "resetsAt"))));
+                  .put(RESETS_AT, longValue(info, RESETS_AT))));
     }
     return events;
   }
@@ -327,7 +329,7 @@ public final class ClaudeStreamParser implements dev.skynet.runner.provider.Even
       if (!w.path("utilization").isNumber()) {
         continue;
       }
-      Long resetsAt = longValue(w, "resetsAt");
+      Long resetsAt = longValue(w, RESETS_AT);
       samples.add(
           new QuotaSample(
               "claude-code",

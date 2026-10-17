@@ -3,7 +3,6 @@ package dev.skynet.runner;
 import dev.skynet.protocol.AgentProviderKind;
 import dev.skynet.protocol.runner.HeartbeatReply;
 import dev.skynet.protocol.runner.ProviderInfo;
-import dev.skynet.protocol.runner.QuotaSample;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
@@ -233,22 +232,24 @@ public final class RunnerDaemon implements AutoCloseable {
       // una invocación activa que deja de aparecer aquí.
       Set<UUID> agents = new LinkedHashSet<>(executor.running());
       agents.addAll(journal.agentsWithPendingEvents());
-      List<QuotaSample> samples = quotas.drain();
-      try {
-        HeartbeatReply reply =
-            client.heartbeat(
-                new RunnerHeartbeat(config.capacity(), List.copyOf(agents), providers, samples));
-        if (reply.refreshQuotas()) {
-          quotas.refresh();
-        }
-      } catch (IOException | RuntimeException e) {
-        quotas.restore(samples);
-        throw e;
-      }
+      send(new RunnerHeartbeat(config.capacity(), List.copyOf(agents), providers, quotas.drain()));
     } catch (IOException e) {
       LOG.log(Level.FINE, "No se pudo enviar el latido", e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+    }
+  }
+
+  /** Si el latido no llega, sus cuotas van en el siguiente. */
+  private void send(RunnerHeartbeat heartbeat) throws IOException, InterruptedException {
+    try {
+      HeartbeatReply reply = client.heartbeat(heartbeat);
+      if (reply.refreshQuotas()) {
+        quotas.refresh();
+      }
+    } catch (IOException | RuntimeException e) {
+      quotas.restore(heartbeat.quotas());
+      throw e;
     }
   }
 

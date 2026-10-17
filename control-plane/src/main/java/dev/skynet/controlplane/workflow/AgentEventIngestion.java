@@ -116,6 +116,17 @@ public class AgentEventIngestion {
     if (!isNew) {
       return Outcome.DUPLICATE;
     }
+    afterAppend(runnerId, agent, stage, event, redacted, verificationRunId);
+    return Outcome.ACCEPTED;
+  }
+
+  private void afterAppend(
+      UUID runnerId,
+      AgentRun agent,
+      StageRun stage,
+      NormalizedEvent event,
+      Map<String, Object> redacted,
+      UUID verificationRunId) {
     if (verificationRunId != null) {
       // La verificación llega cuando el agente ya ha terminado y no cambia su estado.
       verifications.apply(verificationRunId, event.type(), redacted, event.occurredAt());
@@ -138,7 +149,6 @@ public class AgentEventIngestion {
     } else if (!agent.getStatus().isTerminal()) {
       apply(agent, stage, event, redacted);
     }
-    return Outcome.ACCEPTED;
   }
 
   private void apply(AgentRun agent, StageRun stage, NormalizedEvent event, Map<String, Object> p) {

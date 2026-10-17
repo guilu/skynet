@@ -64,11 +64,12 @@ public final class CodexAppServerQuota implements QuotaSource {
         in.write("{\"id\":" + READ_ID + ",\"method\":\"account/rateLimits/read\"}\n");
         in.flush();
         JsonNode result = response.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-        return result == null
-            ? List.of()
-            : CodexQuota.fromRateLimits(
-                result.has("rateLimits") ? result.get("rateLimits") : result.get("rate_limits"),
-                Instant.now());
+        if (result == null) {
+          return List.of();
+        }
+        JsonNode limits =
+            result.has("rateLimits") ? result.get("rateLimits") : result.get("rate_limits");
+        return CodexQuota.fromRateLimits(limits, Instant.now());
       }
     } catch (ExecutionException | TimeoutException e) {
       throw new IOException("codex app-server no dio la cuota", e);
