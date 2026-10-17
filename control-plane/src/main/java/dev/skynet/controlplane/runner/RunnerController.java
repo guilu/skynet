@@ -3,12 +3,15 @@ package dev.skynet.controlplane.runner;
 import dev.skynet.controlplane.artifact.ArtifactService;
 import dev.skynet.controlplane.artifact.ArtifactTooLargeException;
 import dev.skynet.controlplane.artifact.InvalidArtifactException;
+import dev.skynet.controlplane.usage.QuotaRefresh;
+import dev.skynet.controlplane.usage.QuotaSnapshots;
 import dev.skynet.controlplane.workflow.AgentEventIngestion;
 import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.runner.ArtifactStored;
 import dev.skynet.protocol.runner.ArtifactUpload;
 import dev.skynet.protocol.runner.EventBatch;
 import dev.skynet.protocol.runner.EventBatchResult;
+import dev.skynet.protocol.runner.HeartbeatReply;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
@@ -52,6 +55,8 @@ class RunnerController {
   private final RunnerProperties properties;
   private final ArtifactService artifacts;
   private final LostInvocations lost;
+  private final QuotaSnapshots quotas;
+  private final QuotaRefresh refresh;
 
   RunnerController(
       RunnerRegistry registry,
@@ -60,7 +65,9 @@ class RunnerController {
       AgentEventIngestion ingestion,
       RunnerProperties properties,
       ArtifactService artifacts,
-      LostInvocations lost) {
+      LostInvocations lost,
+      QuotaSnapshots quotas,
+      QuotaRefresh refresh) {
     this.registry = registry;
     this.commands = commands;
     this.signal = signal;
@@ -68,6 +75,8 @@ class RunnerController {
     this.properties = properties;
     this.artifacts = artifacts;
     this.lost = lost;
+    this.quotas = quotas;
+    this.refresh = refresh;
   }
 
   @PostMapping("/register")
@@ -76,14 +85,16 @@ class RunnerController {
     return registry.register(registration);
   }
 
+  /** Latido; la respuesta dice si alguien ha pedido «Actualizar» las cuotas en la página Uso. */
   @PostMapping("/heartbeat")
-  @ResponseStatus(HttpStatus.NO_CONTENT)
-  void heartbeat(
+  HeartbeatReply heartbeat(
       @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
       @RequestBody RunnerHeartbeat heartbeat) {
     UUID runnerId = registry.authenticate(authorization);
     registry.heartbeat(runnerId, heartbeat);
     lost.reconcile(runnerId, heartbeat);
+    quotas.recordPolled(runnerId, heartbeat.quotas());
+    return new HeartbeatReply(refresh.consume(runnerId));
   }
 
   /**

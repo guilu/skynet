@@ -3,6 +3,7 @@ package dev.skynet.runner.provider.claude;
 import static dev.skynet.protocol.AgentEventType.FILE_CHANGED;
 import static dev.skynet.protocol.AgentEventType.MESSAGE_RECEIVED;
 import static dev.skynet.protocol.AgentEventType.PERMISSION_DENIED;
+import static dev.skynet.protocol.AgentEventType.QUOTA;
 import static dev.skynet.protocol.AgentEventType.RATE_LIMIT;
 import static dev.skynet.protocol.AgentEventType.RAW;
 import static dev.skynet.protocol.AgentEventType.RESULT;
@@ -34,7 +35,8 @@ class ClaudeStreamParserTest {
   void simpleText() {
     Parsed p = parse("01-simple-text");
 
-    assertThat(p.types()).containsExactly(SESSION_STARTED, MESSAGE_RECEIVED, RESULT);
+    // El rate_limit_event con estado allowed trae las dos ventanas de la cuota (CU-A).
+    assertThat(p.types()).containsExactly(SESSION_STARTED, MESSAGE_RECEIVED, QUOTA, RESULT);
     assertThat(p.first(SESSION_STARTED).payload())
         .containsEntry("sessionId", "e1e75e9c-2b3a-4287-ae55-186ae1babc98")
         .containsEntry("model", "claude-opus-5-5")
@@ -61,6 +63,7 @@ class ClaudeStreamParserTest {
         .containsExactly(
             SESSION_STARTED,
             TOOL_STARTED,
+            QUOTA,
             TOOL_COMPLETED,
             TOOL_STARTED,
             TOOL_COMPLETED,
@@ -111,7 +114,7 @@ class ClaudeStreamParserTest {
     assertThat(parse("03-resume").first(RESULT).payload())
         .containsEntry("costUsdCumulative", new BigDecimal("0.08147199999999999"));
     Parsed fork = parse("04-fork");
-    assertThat(fork.types()).containsExactly(SESSION_STARTED, MESSAGE_RECEIVED, RESULT);
+    assertThat(fork.types()).containsExactly(SESSION_STARTED, MESSAGE_RECEIVED, QUOTA, RESULT);
     assertThat((BigDecimal) fork.first(RESULT).payload().get("costUsdCumulative"))
         .isEqualTo(new BigDecimal("0.08665219999999998"));
   }
@@ -241,6 +244,52 @@ class ClaudeStreamParserTest {
                   .containsEntry("limitType", "five_hour")
                   .containsEntry("resetsAt", 1791046200L);
             });
+  }
+
+  @Test
+  void theUnifiedWindowsBecomeAQuotaEventOnlyWhenTheyChange() throws IOException {
+    ClaudeStreamParser parser = new ClaudeStreamParser();
+    String line;
+    try (InputStream in =
+        ClaudeStreamParserTest.class.getResourceAsStream(
+            "/quota/claude-rate-limit-allowed-warning.json")) {
+      line = new String(in.readAllBytes(), StandardCharsets.UTF_8).strip();
+    }
+
+    // Grabado con Claude Code 2.1.301: «allowed_warning» avisa, pero no limita.
+    assertThat(parser.parse(line))
+        .singleElement()
+        .satisfies(
+            e -> {
+              assertThat(e.type()).isEqualTo(QUOTA);
+              assertThat(e.payload()).containsEntry("provider", "claude-code");
+              assertThat(e.payload().get("windows"))
+                  .isEqualTo(
+                      List.of(
+                          Map.of(
+                              "bucket",
+                              "default",
+                              "window",
+                              "five_hour",
+                              "usedFraction",
+                              0.16,
+                              "resetsAt",
+                              1792275000L),
+                          Map.of(
+                              "bucket",
+                              "default",
+                              "window",
+                              "seven_day",
+                              "usedFraction",
+                              0.78,
+                              "resetsAt",
+                              1792267200L)));
+            });
+    // La misma cuota otra vez no se repite; un cambio, sí.
+    assertThat(parser.parse(line)).isEmpty();
+    assertThat(parser.parse(line.replace("\"utilization\":0.16", "\"utilization\":0.17")))
+        .extracting(ParsedEvent::type)
+        .containsExactly(QUOTA);
   }
 
   @Test

@@ -72,7 +72,7 @@ Todos los flags previstos en el plan existen y funcionan: `--session-id`, `--res
 | `user` con `tool_result` de `Edit`/`Write` | además `agent.file.changed` (ruta, patch) | — |
 | `system/permission_denied` | `agent.permission.denied` | — |
 | `system/vcs_state_changed` | `agent.vcs.changed` (pendiente de verificar con git) | — |
-| `rate_limit_event` | `agent.rate_limit` (solo si `status != "allowed"`) | — |
+| `rate_limit_event` | `agent.quota` con `unifiedWindows` si cambian (CU-A); `agent.rate_limit` si `status` no es `allowed` ni `allowed_warning` | — |
 | `result` | `agent.result` (subtype, terminal_reason, turnos, tokens, coste acumulado, structured_output, errors) | `COMPLETED` / `FAILED` |
 | fin de proceso | `agent.process.exited` (exit code, señal; `error` si el runner no llegó a lanzarlo, se agotó el tiempo o se reinició) | estado terminal; `CANCELLED` si lo cancelamos nosotros |
 | línea desconocida | `agent.raw` | — |

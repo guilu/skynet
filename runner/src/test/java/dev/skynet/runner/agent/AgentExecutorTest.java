@@ -200,6 +200,14 @@ class AgentExecutorTest {
         .singleElement()
         .satisfies(r -> assertThat(r.payload()).containsEntry("isError", false));
     assertThat(dir.resolve("codex/sessions").resolve(thread + ".jsonl")).exists();
+    // CU-A: la cuota no viaja en la salida de exec; el runner la lee del fichero de la sesión al
+    // terminar, antes del fin.
+    assertThat(events.get(events.size() - 2).type()).isEqualTo(AgentEventType.QUOTA);
+    Map<String, Object> quota = events.get(events.size() - 2).payload();
+    assertThat(quota).containsEntry("provider", "codex");
+    assertThat((List<?>) quota.get("windows"))
+        .extracting(w -> ((Map<?, ?>) w).get("window") + "=" + ((Map<?, ?>) w).get("usedFraction"))
+        .containsExactly("five_hour=0.23", "seven_day=0.13");
 
     Map<String, Object> ready = events.getFirst().payload();
     UUID resumed = UUID.randomUUID();

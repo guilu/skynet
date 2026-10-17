@@ -1,22 +1,30 @@
 package dev.skynet.runner;
 
+import dev.skynet.protocol.AgentProviderKind;
 import dev.skynet.runner.agent.AgentExecutor;
 import dev.skynet.runner.agent.ArtifactSender;
 import dev.skynet.runner.agent.ArtifactSpool;
 import dev.skynet.runner.agent.EventSender;
 import dev.skynet.runner.journal.Journal;
+import dev.skynet.runner.provider.CliVersion;
 import dev.skynet.runner.provider.ModelPrices;
 import dev.skynet.runner.provider.ProviderRegistry;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
 import dev.skynet.runner.provider.claude.ClaudeSessions;
+import dev.skynet.runner.provider.codex.CodexAppServerQuota;
 import dev.skynet.runner.provider.codex.CodexProvider;
 import dev.skynet.runner.provider.gemini.GeminiProvider;
+import dev.skynet.runner.quota.AgyQuota;
+import dev.skynet.runner.quota.QuotaPoller;
+import dev.skynet.runner.quota.QuotaSource;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.transport.ControlPlaneClient;
 import dev.skynet.runner.workspace.WorkspaceManager;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -97,7 +105,8 @@ public final class RunnerMain {
                 sender,
                 artifactSender,
                 supervisor,
-                providers.available())) {
+                providers.available(),
+                quotaPoller(config, providers, codex))) {
       daemon.start();
       System.out.println(
           "skynet-runner "
@@ -115,6 +124,25 @@ public final class RunnerMain {
               + ")");
       stopRequested.await();
     }
+  }
+
+  /**
+   * Las cuotas que se pueden consultar sin ejecutar nada: Codex ({@code app-server}) si el runner
+   * lo tiene, y Antigravity si responde a {@code --version}, aunque Skynet aún no lance agentes con
+   * él.
+   */
+  private static QuotaPoller quotaPoller(
+      RunnerConfig config, ProviderRegistry providers, CodexProvider codex) {
+    List<QuotaSource> sources = new ArrayList<>();
+    // Las variables básicas y las de Codex (CODEX_HOME): bastan también para agy.
+    Map<String, String> env = codex.environment(System.getenv(), null);
+    if (providers.get(AgentProviderKind.CODEX.id()).isPresent()) {
+      sources.add(new CodexAppServerQuota(config.codexExecutable(), env, version()));
+    }
+    if (CliVersion.of(config.agyExecutable(), env).isPresent()) {
+      sources.add(new AgyQuota(config.agyExecutable(), env));
+    }
+    return new QuotaPoller(sources, config.quotaPoll());
   }
 
   static String version() {

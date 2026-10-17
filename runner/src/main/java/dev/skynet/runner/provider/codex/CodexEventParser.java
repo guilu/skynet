@@ -58,6 +58,11 @@ public final class CodexEventParser implements EventParser {
     return sawResult;
   }
 
+  /** Sesión de Codex ({@code thread.started}), o {@code null} si aún no ha llegado. */
+  public String threadId() {
+    return threadId;
+  }
+
   @Override
   public List<ParsedEvent> parse(String line) {
     if (line == null || line.isBlank()) {
