@@ -1,7 +1,18 @@
 import { useQuery } from '@tanstack/react-query'
-import { CirclePlay, CircleX, Hourglass, Pause, Plug, Server, type LucideIcon } from 'lucide-react'
+import {
+  CirclePlay,
+  CircleX,
+  Hand,
+  Hourglass,
+  Pause,
+  Plug,
+  Server,
+  type LucideIcon,
+} from 'lucide-react'
 import { Link } from 'react-router'
-import { api, SESSION_KEY, type DashboardSummary, type Runner } from '../api'
+import { api, SESSION_KEY, type ApprovalSummary, type DashboardSummary, type Runner } from '../api'
+import { RISK_LABEL, approvalWork } from '../components/approval/approvalFormat'
+import { usePendingApprovals } from '../components/approval/usePendingApprovals'
 import { DashboardMetrics, PeriodSelector } from '../components/DashboardMetrics'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { RunsTable } from '../components/RunsTable'
@@ -28,9 +39,10 @@ export function DashboardPage() {
     refetchInterval: 15_000,
   })
   const session = useQuery({ queryKey: SESSION_KEY, queryFn: api.session })
+  const approvals = usePendingApprovals()
   const now = useNow(true)
   const data = summary.data
-  const alerts = data ? attentionItems(data) : []
+  const alerts = data ? attentionItems(data, approvals.data ?? []) : []
   const working = (runners.data ?? [])
     .filter((r) => r.status === 'ONLINE')
     .reduce((n, r) => n + r.activeAgents, 0)
@@ -143,11 +155,21 @@ interface Alert {
 }
 
 /**
- * Lo que requiere atención: fallidas en 24 h, agentes sin respuesta, runners sin latido y agentes
- * de un proveedor que no tiene ningún runner en línea.
+ * Lo que requiere atención: aprobaciones pendientes (primero las de más riesgo), fallidas en 24 h,
+ * agentes sin respuesta, runners sin latido y agentes de un proveedor que no tiene ningún runner en
+ * línea.
  */
-function attentionItems(data: DashboardSummary): Alert[] {
+function attentionItems(data: DashboardSummary, approvals: ApprovalSummary[]): Alert[] {
   return [
+    ...approvals.map((a) => ({
+      key: `approval-${a.id}`,
+      to: `/approvals/${a.id}`,
+      icon: Hand,
+      tone: 'warn' as const,
+      title: a.action,
+      detail: `${approvalWork(a)} · ${RISK_LABEL[a.risk]} · pedida el ${formatDateTime(a.createdAt)}`,
+      status: 'Esperando aprobación',
+    })),
     ...data.recentFailures.map((r) => ({
       key: `run-${r.id}`,
       to: `/runs/${r.id}`,

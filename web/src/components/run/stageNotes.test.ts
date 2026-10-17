@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Run, StageRun, StageStatus, VerificationResult } from '../../api'
-import { checkStates, joinNames, stageNote } from './stageNotes'
+import { checkStates, isCorrecting, joinNames, stageNote } from './stageNotes'
 
 function stage(
   stageKey: string,
@@ -46,6 +46,30 @@ describe('stageNote', () => {
     expect(stageNote(fix, run(plan, tests, fix))).toBe('Espera a tests')
     const pendingPlan = stage('plan', 'RUNNING', [], 1)
     expect(stageNote(fix, run(pendingPlan, tests, fix))).toBe('Espera a plan (opcional) y tests')
+  })
+
+  it('una puerta dice si espera una decisión o está corrigiendo', () => {
+    const plan = stage('plan', 'SUCCEEDED')
+    const approval = {
+      round: 2,
+      status: 'PENDING',
+      correctionAgentRunId: null,
+    } as unknown as StageRun['approval']
+    const gate = {
+      ...stage('aprobar-plan', 'WAITING_FOR_APPROVAL', ['plan']),
+      type: 'human-approval',
+      approval,
+    }
+    expect(stageNote(gate, run(plan, gate))).toBe('Espera una decisión · ronda 2')
+    const correcting = {
+      ...gate,
+      status: 'RUNNING' as StageStatus,
+      approval: { ...approval!, status: 'CHANGES_REQUESTED' as const, correctionAgentRunId: 'c' },
+    }
+    expect(isCorrecting(correcting)).toBe(true)
+    expect(stageNote(correcting, run(plan, correcting))).toBe(
+      'Corrigiendo con los cambios que se pidieron',
+    )
   })
 
   it('una opcional omitida no hace esperar', () => {

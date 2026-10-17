@@ -5,6 +5,7 @@ import type { ReactElement } from 'react'
 import { Link, NavLink } from 'react-router'
 import { api } from '../../api'
 import { HealthIndicator } from '../../HealthIndicator'
+import { PendingCount } from '../approval/PendingCount'
 import { BrandMark } from '../brand/Logo'
 import { NAV } from './nav'
 
@@ -28,6 +29,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                 <NavLink to={item.to} end={item.end}>
                   <item.icon size={26} strokeWidth={2.25} aria-hidden="true" />
                   <span className="nav-label">{item.label}</span>
+                  {item.pendingApprovals && <PendingCount />}
                 </NavLink>
               </Hint>
             </li>

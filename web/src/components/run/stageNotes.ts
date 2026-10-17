@@ -19,6 +19,15 @@ export function checkTarget(check: VerificationCheck): string | null {
   return check.paths.length > 0 ? check.paths.join(', ') : null
 }
 
+/** Si es una puerta que corrige: se pidieron cambios y la fase `revise` los está aplicando. */
+export function isCorrecting(stage: StageRun): boolean {
+  return (
+    stage.type === 'human-approval' &&
+    stage.status === 'RUNNING' &&
+    stage.approval?.status === 'CHANGES_REQUESTED'
+  )
+}
+
 /** Si la fase está comprobando su worktree: su agente terminó y su verificación sigue en curso. */
 export function isVerifying(stage: StageRun): boolean {
   return stage.status === 'RUNNING' && stage.verifications.some((v) => v.live)
@@ -70,6 +79,11 @@ export function stageNote(stage: StageRun, run: Run): string {
   const status = new Map(run.stages.map((s) => [s.stageKey, s.status]))
   const deps = stage.dependsOn
   if (isVerifying(stage)) return `Verificando: ${joinNames(stage.checks.map((c) => c.name))}`
+  if (isCorrecting(stage)) return 'Corrigiendo con los cambios que se pidieron'
+  if (stage.status === 'WAITING_FOR_APPROVAL')
+    return stage.approval && stage.approval.round > 1
+      ? `Espera una decisión · ronda ${stage.approval.round}`
+      : 'Espera una decisión'
   if (stage.status === 'FAILED' && failedChecks(stage).length > 0)
     return `No pasó ${failedChecks(stage).join('; ')}`
   switch (stage.status) {

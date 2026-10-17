@@ -3,6 +3,7 @@ import { Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink } from 'react-router'
 import { HealthIndicator } from '../../HealthIndicator'
+import { PendingCount } from '../approval/PendingCount'
 import { NAV } from './nav'
 import { RunnerSummary } from './Sidebar'
 
@@ -25,6 +26,7 @@ export function MobileNav() {
         <Dialog.Trigger className="mobile-more">
           <Menu size={26} strokeWidth={2.25} aria-hidden="true" />
           Más
+          {NAV.some((n) => n.pendingApprovals && !n.mobile) && <PendingCount />}
         </Dialog.Trigger>
         <Dialog.Portal>
           <Dialog.Overlay className="drawer-overlay" />
@@ -42,6 +44,7 @@ export function MobileNav() {
                     <NavLink to={n.to} end={n.end} onClick={close}>
                       <n.icon size={26} strokeWidth={2.25} aria-hidden="true" />
                       {n.label}
+                      {n.pendingApprovals && <PendingCount />}
                     </NavLink>
                   </li>
                 ))}
