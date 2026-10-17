@@ -5,6 +5,8 @@ import { AppShell } from './components/AppShell'
 import { AuthGate } from './components/AuthGate'
 import { ActivityPage } from './pages/ActivityPage'
 import { AgentRedirectPage } from './pages/AgentRedirectPage'
+import { ApprovalPage } from './pages/ApprovalPage'
+import { ApprovalsPage } from './pages/ApprovalsPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { ProjectPage } from './pages/ProjectPage'
 import { ProjectsPage } from './pages/ProjectsPage'
@@ -45,6 +47,8 @@ export default function App() {
               }
             />
             <Route path="/agent-runs/:agentId" element={<AgentRedirectPage />} />
+            <Route path="/approvals" element={<ApprovalsPage />} />
+            <Route path="/approvals/:approvalId" element={<ApprovalPage />} />
             <Route path="/runners" element={<RunnersPage />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/settings" element={<SettingsPage />} />

@@ -532,6 +532,21 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito W5 (human-in-the-loop), planificado el 2026-10-16:** W5-A puertas de aprobación en el motor, W5-B pedir cambios, W5-C centro de aprobaciones y E2E.
 
+**Implementado (W5-C), centro de aprobaciones y E2E:**
+
+- Menú **Aprobaciones** (`/approvals`) con el contador de pendientes, también en el cajón del móvil. La lista va primero con las pendientes (las de más riesgo y las más antiguas) y después el historial, con filtros de estado, riesgo y proyecto en la URL.
+- Página de una aprobación (`/approvals/{id}`): la acción, el riesgo y el estado; de dónde viene (proyecto, trabajo, ejecución, repositorio) y el coste; lo que dejaron sus dependencias (salida estructurada, comprobaciones, cambios del worktree y artefactos); lo que se permitirá al aprobar; qué pasa con cada decisión; y el historial. Desde la segunda ronda, también lo que se pidió en la anterior. Se decide con Aprobar, Rechazar, Pedir cambios y Comentar. Rechazar, pedir cambios y comentar exigen comentario, y aprobar con riesgo alto pide confirmarlo. Mientras se corrige, enlaza al agente que corrige y, cuando la puerta vuelve a preguntar, a la ronda nueva.
+- Progreso de la ejecución: la puerta en ámbar con «Esperando aprobación» o «Corrigiendo». Al abrirla se ven su acción, su riesgo y su ronda, con «Revisar» (o el enlace a la aprobación y su historial).
+- Dashboard: las aprobaciones pendientes, las primeras en «Necesita tu atención».
+- Resumen del workflow: «Pide aprobar …» con su riesgo; el aviso de publicar lista las puertas. El timeline describe los eventos `approval.*`.
+- La plantilla «Especificar, planificar e implementar» gana la puerta `aprobar-plan` (riesgo medio, `revise: plan`) entre `plan` e `implement`.
+- E2E de aceptación (`web/e2e/approvals.e2e.ts`):
+  - pedir cambios hace que `plan` reciba el comentario en su sesión y la puerta pregunte otra vez (ronda 2);
+  - aprobar arranca `implement` y la ejecución termina «Completada»;
+  - en otra ejecución, rechazar la hace fallar;
+  - axe en el centro, en la página de una aprobación (rondas 1 y 2) y en la puerta del progreso.
+- **Hito W5 terminado.**
+
 **Implementado (W5-B), pedir cambios:**
 
 - `REQUEST_CHANGES` (con comentario obligatorio) pone en cola, en la fase `revise` de la evidencia y en la misma ejecución, una invocación `RESUME` de la sesión de su último agente con el comentario (`RunService.queueCorrection`, con las mismas comprobaciones que enviar un mensaje). La petición se cierra `CHANGES_REQUESTED` con la invocación en `correction_agent_run_id` (migración `V20`) y la puerta pasa a `RUNNING` («changes-requested»). Sin `revise`, o si no se puede reanudar, 409 y la petición sigue pendiente.

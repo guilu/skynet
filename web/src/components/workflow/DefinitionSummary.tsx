@@ -1,5 +1,6 @@
 import type { VerificationCheck, WorkflowModel } from '../../api'
 import { providerName } from '../../format'
+import { RISK_LABEL } from '../approval/approvalFormat'
 
 const WORKSPACE = { INHERIT: 'Continúa el de su dependencia', ISOLATED: 'Uno nuevo' } as const
 const WITH_WORKSPACE = ['agent', 'command', 'parallel']
@@ -47,6 +48,14 @@ export function DefinitionSummary({ definition }: { definition: WorkflowModel })
                   ` · A la vez: ${s.children
                     .map((c) => (c.id === c.agent ? c.id : `${c.id} (${c.agent})`))
                     .join(', ')}`}
+                {s.approval && (
+                  <>
+                    {' · Pide aprobar '}
+                    <q>{s.approval.action}</q>
+                    {` · ${RISK_LABEL[s.approval.risk]}`}
+                    {s.approval.revise && ` · Corrige ${s.approval.revise}`}
+                  </>
+                )}
                 {s.outputSchema && (
                   <>
                     {' · Salida: '}

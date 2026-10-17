@@ -12,7 +12,8 @@ import { expectAccessible, login, publishWorkflowViaApi, workItemViaApi } from '
  * que una fase `command` previa, `preparar`, deja en el worktree lo que escribiría el analista: la
  * propuesta, si toca, y en `.revision.json` la salida estructurada que devuelve fake-claude. Como el
  * analista ya corrige `calc.py`, la implementación no tiene nada más que cambiar: aquí solo comprueba
- * `tests` (`diff` lo prueban los tests del motor).
+ * `tests` (`diff` lo prueban los tests del motor). La puerta `aprobar-plan` se quita: la prueba
+ * approvals.e2e.ts.
  */
 
 test.use({ baseURL: 'http://localhost:4173' })
@@ -21,7 +22,10 @@ const template = TEMPLATES.find((t) => t.id === 'especificar-planificar-implemen
 
 const OUTPUT = { summary: 'Que add() sume', risks: ['ninguno'] }
 
-/** La plantilla con otra clave, la fase `preparar` delante y solo `tests` en la implementación. */
+/**
+ * La plantilla con otra clave, la fase `preparar` delante, sin la puerta y solo `tests` en la
+ * implementación.
+ */
 function yaml(key: string, withProposal: boolean) {
   const proposal = withProposal
     ? `mkdir -p openspec && echo '# Propuesta' > openspec/proposal.md && `
@@ -38,6 +42,8 @@ function yaml(key: string, withProposal: boolean) {
     .replace('id: especificar-planificar-implementar', `id: ${key}`)
     .replace('  - id: spec\n    type: agent', prepare)
     .replace('checks: [tests, diff]', 'checks: [tests]')
+    .replace(/ {2}- id: aprobar-plan\n(?: {4}.*\n)+/, '')
+    .replace('dependsOn: [aprobar-plan]', 'dependsOn: [plan]')
 }
 
 interface RunStage {
@@ -104,9 +110,10 @@ test('la plantilla «Especificar, planificar e implementar» exige la propuesta'
       .getByRole('list')
       .first()
       .getByRole('listitem')
-    await expect(stages).toHaveCount(3)
+    await expect(stages).toHaveCount(4)
     await expect(stages.nth(0)).toContainText('Comprueba artifacts openspec/proposal.md')
-    await expect(stages.nth(2)).toContainText('Comprueba tests, diff')
+    await expect(stages.nth(2)).toContainText('Pide aprobar')
+    await expect(stages.nth(3)).toContainText('Comprueba tests, diff')
     await expectAccessible(page, 'plantilla «Especificar, planificar e implementar»')
   })
 

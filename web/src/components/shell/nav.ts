@@ -2,6 +2,7 @@ import {
   Activity,
   CirclePlay,
   Folder,
+  Hand,
   House,
   Monitor,
   Moon,
@@ -20,6 +21,8 @@ export interface NavItem {
   end?: boolean
   /** Aparece en la barra inferior del móvil; el resto va en «Más». */
   mobile?: boolean
+  /** Lleva el contador de aprobaciones pendientes. */
+  pendingApprovals?: boolean
 }
 
 /** Secciones de la web, en el orden de la barra lateral. */
@@ -28,6 +31,7 @@ export const NAV: NavItem[] = [
   { to: '/projects', label: 'Proyectos', icon: Folder, mobile: true },
   { to: '/workflows', label: 'Workflows', icon: Workflow },
   { to: '/runs', label: 'Ejecuciones', icon: CirclePlay, mobile: true },
+  { to: '/approvals', label: 'Aprobaciones', icon: Hand, pendingApprovals: true },
   { to: '/runners', label: 'Runners', icon: Server, mobile: true },
   { to: '/activity', label: 'Actividad', icon: Activity },
   { to: '/settings', label: 'Ajustes', icon: Settings },

@@ -19,6 +19,7 @@ export function Breadcrumbs() {
   const workItemId = matchPath('/work-items/:workItemId', pathname)?.params.workItemId
   const runId = matchPath('/runs/:runId', pathname)?.params.runId
   const workflowKey = matchPath('/workflows/:key', pathname)?.params.key
+  const approvalId = matchPath('/approvals/:approvalId', pathname)?.params.approvalId
 
   const item = useQuery({
     queryKey: ['work-item', workItemId],
@@ -55,6 +56,8 @@ export function Breadcrumbs() {
       { label: 'Ejecuciones', to: '/runs' },
       { label: run.data?.workItemKey ?? 'Ejecución' },
     ]
+  else if (approvalId)
+    crumbs = [{ label: 'Aprobaciones', to: '/approvals' }, { label: 'Aprobación' }]
   else if (workflowKey)
     crumbs = [
       { label: 'Workflows', to: '/workflows' },

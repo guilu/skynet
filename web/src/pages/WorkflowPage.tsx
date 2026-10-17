@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { RISK_LABEL } from '../components/approval/approvalFormat'
 import { FilePen, Rocket, Save, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
@@ -204,6 +205,7 @@ function VersionPanel({
     ...s.checks.filter((c) => c.command).map((c) => ({ stage: s.id, command: c.command! })),
   ])
   const testing = stages.filter((s) => s.checks.some((c) => c.name === 'tests')).map((s) => s.id)
+  const gates = stages.filter((s) => s.approval)
   const publishHint = !isDraft
     ? null
     : dirty
@@ -296,6 +298,22 @@ function VersionPanel({
               {testing.length === 1 ? 'pasa' : 'pasan'} el comando de verificación del repositorio,
               que tiene que estar configurado.
             </p>
+          )}
+          {gates.length > 0 && (
+            <section aria-labelledby="publish-gates">
+              <p id="publish-gates">
+                Se para {gates.length === 1 ? 'en esta puerta' : 'en estas puertas'} hasta que
+                alguien decide en Aprobaciones:
+              </p>
+              <ul className="definition-list">
+                {gates.map((g) => (
+                  <li key={g.id}>
+                    <code>{g.id}</code> {g.approval!.action}{' '}
+                    <span className="muted small">· {RISK_LABEL[g.approval!.risk]}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
           {saved.validation.problems.length > 0 && (
             <>

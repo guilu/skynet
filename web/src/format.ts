@@ -151,6 +151,24 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `Artefacto ${p('name')} (${formatBytes(Number(payload.size ?? 0))})${
         payload.truncated ? ', recortado' : ''
       }`
+    case 'approval.requested':
+      return `${p('stageKey')} pide aprobar «${p('action')}»${
+        Number(payload.round) > 1 ? ` (ronda ${p('round')})` : ''
+      }`
+    case 'approval.granted':
+      return `${p('actor')} aprobó ${p('stageKey')}`
+    case 'approval.rejected':
+      return `${p('actor')} rechazó ${p('stageKey')}: ${truncate(p('comment'), 120)}`
+    case 'approval.changes_requested':
+      return `${p('actor')} pidió cambios a ${p('reviseStageKey')}: ${truncate(p('comment'), 120)}`
+    case 'approval.commented':
+      return `${p('actor')} comentó ${p('stageKey')}: ${truncate(p('comment'), 120)}`
+    case 'approval.cancelled':
+      return `Aprobación de ${p('stageKey')} cancelada`
+    case 'approval.correction.failed':
+      return payload.cancelled
+        ? `La corrección de ${p('reviseStageKey')} se canceló`
+        : `La corrección de ${p('reviseStageKey')} falló: ${truncate(p('error'), 120)}`
     case 'agent.status.changed':
     case 'stage.status.changed':
     case 'workflow.status.changed':

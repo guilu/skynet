@@ -7,7 +7,8 @@ import { cn } from '../../lib/cn'
 import { StatusBadge } from '../StatusBadge'
 import { outputSummary } from './agentOutput'
 import { spanDuration, type Span } from './runSpans'
-import { checkStates, isVerifying, stageNote, type CheckState } from './stageNotes'
+import { RISK_LABEL } from '../approval/approvalFormat'
+import { checkStates, isCorrecting, isVerifying, stageNote, type CheckState } from './stageNotes'
 
 const ORIGIN: Record<Exclude<AgentRun['kind'], 'START'>, string> = {
   RESUME: 'reanudación del',
@@ -91,6 +92,8 @@ export function RunProgress({
                   <strong>{stage.name ?? stage.stageKey}</strong>
                   <small>
                     {(isVerifying(stage) ? 'Verificando' : null) ??
+                      (isCorrecting(stage) ? 'Corrigiendo' : null) ??
+                      (stage.status === 'WAITING_FOR_APPROVAL' ? 'Esperando aprobación' : null) ??
                       running?.currentTool ??
                       (span && span.start != null && stage.status !== 'SKIPPED'
                         ? formatDuration(spanDuration(span, now))
@@ -133,7 +136,9 @@ export function RunProgress({
               </p>
             )}
             {open.checks.length > 0 && <StageChecks checks={checkStates(open)} />}
-            {open.agents.length === 0 ? (
+            {open.type === 'human-approval' ? (
+              <GateDetail stage={open} />
+            ) : open.agents.length === 0 ? (
               <p className="muted small">
                 {open.type === 'conditional'
                   ? 'Esta fase solo evalúa su condición.'
@@ -188,6 +193,41 @@ export function RunProgress({
         <p className="muted small">Esta ejecución aún no tiene agentes.</p>
       )}
     </section>
+  )
+}
+
+/**
+ * Una puerta de aprobación: qué pide, con qué riesgo y en qué ronda, y el enlace a la petición para
+ * decidir o ver el historial. Mientras corrige, el agente que aplica los cambios.
+ */
+function GateDetail({ stage }: { stage: StageRun }) {
+  const approval = stage.approval
+  if (!approval) return <p className="muted small">Esta puerta aún no ha preguntado.</p>
+  return (
+    <div className="gate-detail">
+      <p>
+        <strong>{approval.action}</strong>{' '}
+        <span className="muted small">
+          · {RISK_LABEL[approval.risk]}
+          {approval.round > 1 && ` · ronda ${approval.round}`}
+        </span>
+      </p>
+      {isCorrecting(stage) && approval.correctionAgentRunId && (
+        <p className="muted small">
+          Se pidieron cambios:{' '}
+          <Link to={`/agent-runs/${approval.correctionAgentRunId}`}>ver el agente que corrige</Link>
+          . Al terminar, la puerta vuelve a preguntar.
+        </p>
+      )}
+      <p>
+        <Link
+          to={`/approvals/${approval.id}`}
+          className={approval.status === 'PENDING' ? 'btn btn-sm' : undefined}
+        >
+          {approval.status === 'PENDING' ? 'Revisar' : 'Ver la aprobación y su historial'}
+        </Link>
+      </p>
+    </div>
   )
 }
 

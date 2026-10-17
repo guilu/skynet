@@ -111,13 +111,14 @@ const MULTI_PROVIDER_REVIEW = PARALLEL_REVIEW.replace(
   .replaceAll('    tools: [Read, Grep, Glob]\n    permissionMode: plan', '    permissionMode: plan')
 
 /**
- * El tramo de especificación de §20 sin aprobación humana: la especificación deja su propuesta en
- * el repositorio y la resume, el plan la recibe en su prompt y la implementación solo termina bien
- * si pasan los tests y hay cambios. Lo comprueba Skynet en el worktree, no lo que diga el agente.
+ * El tramo de especificación de §20: la especificación deja su propuesta en el repositorio y la
+ * resume, el plan la recibe en su prompt, una persona aprueba el plan (o pide cambios, que corrige
+ * el propio plan en su sesión) y la implementación solo termina bien si pasan los tests y hay
+ * cambios. Lo comprueba Skynet en el worktree, no lo que diga el agente.
  */
 const SPEC_PLAN_IMPLEMENT = `id: especificar-planificar-implementar
 name: Especificar, planificar e implementar
-description: Especifica el trabajo en openspec/proposal.md, planifica a partir del resumen e implementa con los tests en verde.
+description: Especifica el trabajo en openspec/proposal.md, planifica a partir del resumen, espera a que apruebes el plan e implementa con los tests en verde.
 
 agents:
   analista:
@@ -154,10 +155,16 @@ stages:
       Riesgos: {{stages.spec.output.risks}}
 
       Escribe las tareas en openspec/tasks.md y confírmalas con un commit. No implementes nada todavía.
+  - id: aprobar-plan
+    type: human-approval
+    dependsOn: [plan]
+    action: "Aprobar el plan de {{workItem.key}} (openspec/tasks.md): {{stages.spec.output.summary}}"
+    risk: medium
+    revise: plan
   - id: implement
     type: agent
     agent: desarrollador
-    dependsOn: [plan]
+    dependsOn: [aprobar-plan]
     checks: [tests, diff]
 `
 
@@ -186,7 +193,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
     id: 'especificar-planificar-implementar',
     name: 'Especificar, planificar e implementar',
     description:
-      'Especifica en openspec/proposal.md, planifica a partir del resumen e implementa; Skynet comprueba que exista la propuesta y que pasen los tests.',
+      'Especifica en openspec/proposal.md, planifica a partir del resumen, aprueba el plan e implementa; Skynet comprueba que exista la propuesta y que pasen los tests.',
     yaml: SPEC_PLAN_IMPLEMENT,
   },
 ]
