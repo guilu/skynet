@@ -85,6 +85,7 @@ test('una puerta se aprueba, pide cambios y se rechaza desde el centro de aproba
   const key = `con-puerta-${Date.now().toString(36)}`
   await page.goto('/')
   await login(page)
+  await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible()
   await publishWorkflowViaApi(page, yaml(key))
   const { workItemId } = await workItemViaApi(page, { validationCommand: 'sh check.sh' })
 
