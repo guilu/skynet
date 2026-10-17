@@ -132,6 +132,7 @@ const STAGE_RUN: Keys<StageRun> = {
   deadline: true,
   timedOutAt: true,
   cancelling: true,
+  retriedBy: true,
   id: true,
   stageKey: true,
   name: true,

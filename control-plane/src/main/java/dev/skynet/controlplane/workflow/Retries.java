@@ -12,7 +12,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Si un intento fallido de una fase se reintenta (W6-A), con los datos de todos sus intentos. Sin
@@ -44,6 +46,23 @@ record Retries(
 
   StageRun latest() {
     return attempts.getLast();
+  }
+
+  /**
+   * El intento desde el que cuentan los reintentos automáticos: el último pedido con «Reintentar
+   * fase» (W6-C), que no cuenta para {@code maxAttempts}, o el primero.
+   */
+  int seriesStart() {
+    return attempts.stream()
+        .filter(a -> a.getRetriedBy() != null)
+        .mapToInt(StageRun::getAttempt)
+        .max()
+        .orElse(1);
+  }
+
+  /** Cuántos intentos van desde {@link #seriesStart}, incluido el último. */
+  int attemptsInSeries() {
+    return latest().getAttempt() - seriesStart() + 1;
   }
 
   List<AgentRun> agentsOf(StageRun attempt) {
@@ -103,9 +122,18 @@ record Retries(
     return latest;
   }
 
-  /** Cuántas veces ha corrido el hijo. */
+  /** Cuántas veces ha corrido el hijo desde {@link #seriesStart}. */
   int runsOf(String child) {
-    return (int) agents.stream().filter(a -> child.equals(a.getChildKey())).count();
+    int start = seriesStart();
+    Set<UUID> counted =
+        attempts.stream()
+            .filter(a -> a.getAttempt() >= start)
+            .map(StageRun::getId)
+            .collect(Collectors.toSet());
+    return (int)
+        agents.stream()
+            .filter(a -> child.equals(a.getChildKey()) && counted.contains(a.getStageRunId()))
+            .count();
   }
 
   /**
@@ -130,10 +158,11 @@ record Retries(
     }
     Retry retry = stage.retry();
     AgentFailure failure = failureOf(latest);
-    if (retry == null || !retry.retries(failure, latest.getAttempt())) {
+    int attempts = attemptsInSeries();
+    if (retry == null || !retry.retries(failure, attempts)) {
       return Plan.NONE;
     }
-    return new Plan(retry.delayAfter(latest.getAttempt()), failure, List.of());
+    return new Plan(retry.delayAfter(attempts), failure, List.of());
   }
 
   private Plan parallelPlan(StageDefinition stage) {
@@ -162,28 +191,48 @@ record Retries(
     return new Plan(delay, failed.getFirst().failure(), List.copyOf(failed));
   }
 
-  /** Los hijos que ya terminaron bien en algún intento: el siguiente no los repite. */
+  /**
+   * Los hijos que ya terminaron bien en algún intento: el siguiente no los repite. Si la fase
+   * entera terminó bien y se repite («Reintentar fase» de una fase anterior, W6-C), se repiten
+   * todos: solo cuentan los intentos posteriores.
+   */
   List<String> succeededChildren() {
-    return latestByChild().values().stream()
+    int after =
+        attempts.stream()
+            .filter(a -> a.getStatus() == StageStatus.SUCCEEDED)
+            .mapToInt(StageRun::getAttempt)
+            .max()
+            .orElse(0);
+    Set<UUID> counted =
+        attempts.stream()
+            .filter(a -> a.getAttempt() > after)
+            .map(StageRun::getId)
+            .collect(Collectors.toSet());
+    Map<String, AgentRun> latest = new LinkedHashMap<>();
+    agents.stream()
+        .filter(a -> a.getChildKey() != null && counted.contains(a.getStageRunId()))
+        .forEach(a -> latest.put(a.getChildKey(), a));
+    return latest.values().stream()
         .filter(a -> a.getStatus() == AgentObservableStatus.COMPLETED && !failed(a))
         .map(AgentRun::getChildKey)
         .toList();
   }
 
   /**
-   * La instantánea del worktree {@code workspaceId} de la que partió un intento anterior: a ella
-   * vuelve el siguiente. {@code null} si ninguno llegó a tomarla (no llegaron a tocarlo).
+   * El agente de un intento anterior que tomó la última instantánea del worktree {@code
+   * workspaceId}: a ella vuelve el siguiente. {@code null} si ninguno llegó a tomarla (no llegaron
+   * a tocarlo).
    */
-  String snapshotOf(UUID workspaceId) {
-    String snapshot = null;
+  AgentRun snapshotAgent(UUID workspaceId) {
+    AgentRun found = null;
     for (AgentRun agent : agents) {
       if (!agent.getStageRunId().equals(latest().getId())
           && workspaceId.equals(agent.getWorkspaceId())
           && agent.getBaseSnapshot() != null) {
-        snapshot = agent.getBaseSnapshot();
+        found = agent;
       }
     }
-    return snapshot;
+    return found;
   }
 
   /** El último agente de los intentos anteriores (del hijo {@code child}, si no es nulo). */

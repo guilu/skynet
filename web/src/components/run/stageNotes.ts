@@ -37,7 +37,7 @@ export function failureOf(stage: StageRun): string | null {
 function retryNote(stage: StageRun): string | null {
   if (stage.status !== 'PENDING' || !stage.notBefore) return null
   const at = new Date(stage.notBefore).toLocaleTimeString('es-ES')
-  const of = stage.retry ? ` de ${stage.retry.maxAttempts}` : ''
+  const of = attemptOf(stage)
   return `Reintenta a las ${at} (intento ${stage.attempt}${of})`
 }
 
@@ -54,6 +54,61 @@ export function formatSeconds(seconds: number): string {
   if (seconds % 3600 === 0) return `${seconds / 3600} h`
   if (seconds % 60 === 0) return `${seconds / 60} min`
   return `${seconds} s`
+}
+
+/**
+ * « de 3» detrás del número de intento. Nada si la fase no se reintenta sola o ya pasó de ese
+ * número: «Reintentar fase» no cuenta para `maxAttempts`.
+ */
+export function attemptOf(stage: StageRun): string {
+  return stage.retry && stage.attempt <= stage.retry.maxAttempts
+    ? ` de ${stage.retry.maxAttempts}`
+    : ''
+}
+
+/** Las fases que dependen de `stageKey`, directa o indirectamente, en el orden de la ejecución. */
+export function downstreamOf(stageKey: string, run: Run): string[] {
+  const stages = latestAttempts(run)
+  const found = new Set<string>()
+  const pending = [stageKey]
+  while (pending.length > 0) {
+    const key = pending.pop()!
+    for (const s of stages)
+      if (s.dependsOn.some((d) => d.stage === key) && !found.has(s.stageKey)) {
+        found.add(s.stageKey)
+        pending.push(s.stageKey)
+      }
+  }
+  return stages.map((s) => s.stageKey).filter((k) => found.has(k))
+}
+
+/**
+ * «Reintentar fase» en una ejecución fallida o cancelada: qué fases vuelven a lanzarse después de
+ * `stage` (las que dependen de ella y las demás que fallaron o se cancelaron), o null si no se
+ * puede reintentar. Una puerta no se reintenta así, sino la fase de la que depende: también una que
+ * terminó bien, si la puerta que va detrás falló.
+ */
+export function retryScope(stage: StageRun, run: Run): { then: string[] } | null {
+  if (!['FAILED', 'CANCELLED'].includes(run.status) || run.archivedAt) return null
+  if (stage.type === 'human-approval') return null
+  const stages = latestAttempts(run)
+  const downstream = downstreamOf(stage.stageKey, run)
+  const failedGate = stages.some(
+    (s) => s.type === 'human-approval' && s.status === 'FAILED' && downstream.includes(s.stageKey),
+  )
+  if (
+    !['FAILED', 'CANCELLED'].includes(stage.status) &&
+    !(stage.status === 'SUCCEEDED' && failedGate)
+  )
+    return null
+  const then = stages
+    .filter(
+      (s) =>
+        s.stageKey !== stage.stageKey &&
+        (downstream.includes(s.stageKey) || ['FAILED', 'CANCELLED'].includes(s.status)),
+    )
+    .map((s) => s.stageKey)
+  return { then }
 }
 
 /** «a», «a y b», «a, b y c». */

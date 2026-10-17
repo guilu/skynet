@@ -33,6 +33,8 @@ import java.util.UUID;
  * @param timedOutAt cuándo llegó a su límite, o {@code null}
  * @param cancelling se ha pedido parar alguno de sus agentes y el runner aún no lo ha confirmado:
  *     «Cancelando»
+ * @param retriedBy quién pidió este intento con «Reintentar fase» (W6-C), o {@code null} si lo
+ *     programó el motor
  */
 public record StageRunView(
     UUID id,
@@ -57,7 +59,8 @@ public record StageRunView(
     Long timeoutSeconds,
     Instant deadline,
     Instant timedOutAt,
-    boolean cancelling) {
+    boolean cancelling,
+    String retriedBy) {
 
   /**
    * El {@code retry} de una fase: intentos en total, qué fallos ({@code lost}, {@code error}…) y la
@@ -109,6 +112,7 @@ public record StageRunView(
         definition == null ? null : definition.timeoutSeconds(),
         s.getDeadline(),
         s.getTimedOutAt(),
-        agents.stream().anyMatch(a -> a.cancelRequestedAt() != null && !a.status().isTerminal()));
+        agents.stream().anyMatch(a -> a.cancelRequestedAt() != null && !a.status().isTerminal()),
+        s.getRetriedBy());
   }
 }

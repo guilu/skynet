@@ -30,6 +30,11 @@ public class StageRun {
   /** Llegó a su {@code deadline} y se le pararon los agentes. */
   private Instant timedOutAt;
 
+  /**
+   * Quién pidió este intento con «Reintentar fase» (W6-C); {@code null} si lo programó el motor.
+   */
+  private String retriedBy;
+
   @Version private Long version;
 
   @PersistenceCreator
@@ -76,6 +81,16 @@ public class StageRun {
             null,
             null);
     next.notBefore = notBefore;
+    return next;
+  }
+
+  /**
+   * El intento siguiente de una fase que ha terminado, pedido por {@code actor} con «Reintentar
+   * fase»: pendiente y sin espera.
+   */
+  static StageRun retriedBy(StageRun previous, String actor, Instant now) {
+    StageRun next = retry(previous, null, now);
+    next.retriedBy = actor;
     return next;
   }
 
@@ -138,6 +153,10 @@ public class StageRun {
 
   public Instant getTimedOutAt() {
     return timedOutAt;
+  }
+
+  public String getRetriedBy() {
+    return retriedBy;
   }
 
   /** Fija hasta cuándo puede durar el intento, al pasar a lista. */

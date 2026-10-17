@@ -6,6 +6,7 @@ import {
   isCorrecting,
   joinNames,
   latestAttempts,
+  retryScope,
   stageNote,
   timeLimitNote,
 } from './stageNotes'
@@ -41,6 +42,7 @@ function stage(
     deadline: null,
     timedOutAt: null,
     cancelling: false,
+    retriedBy: null,
   }
 }
 
@@ -221,5 +223,24 @@ describe('stageNote', () => {
     expect(stageNote(timedOut, run(timedOut))).toBe('Falló: se acabó el tiempo')
     const gate = { ...timedOut, type: 'human-approval', agents: [] }
     expect(stageNote(gate, run(gate))).toBe('Caducó sin decisión')
+  })
+
+  it('«Reintentar fase» dice qué vuelve a lanzarse y no sale en una puerta', () => {
+    const plan = stage('plan', 'SUCCEEDED', [], 1)
+    const gate = { ...stage('aprobar', 'FAILED', ['plan']), type: 'human-approval' }
+    const implement = stage('implement', 'CANCELLED', ['aprobar'])
+    const lint = stage('lint', 'SUCCEEDED', [], 1)
+    const failed = { ...run(plan, gate, implement, lint), status: 'FAILED' } as Run
+    // El plan que rechazó la puerta se repite, con la puerta y lo que depende de ella.
+    expect(retryScope(plan, failed)).toEqual({ then: ['aprobar', 'implement'] })
+    expect(retryScope(gate, failed)).toBeNull()
+    // Una fase que terminó bien sin una puerta fallida detrás no se ofrece.
+    expect(retryScope(lint, failed)).toBeNull()
+    // Solo en una ejecución que ha terminado mal.
+    expect(retryScope(plan, { ...failed, status: 'RUNNING' } as Run)).toBeNull()
+    const broken = { ...stage('tests', 'FAILED', [], 1) }
+    expect(retryScope(broken, { ...run(broken, implement), status: 'FAILED' } as Run)).toEqual({
+      then: ['implement'],
+    })
   })
 })

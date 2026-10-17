@@ -102,10 +102,12 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `Condición de ${p('stageKey')}: ${p('condition')} es ${
         payload.result ? 'verdadera' : 'falsa'
       }`
+    case 'run.resumed':
+      return `${p('actor')} reintentó la fase ${p('stageKey')} (intento ${p('attempt')})`
     case 'stage.retry.scheduled':
-      return `Fase ${p('stageKey')}: se reintenta (intento ${p('attempt')} de ${p('maxAttempts')}) en ${formatDuration(
-        Number(payload.delaySeconds ?? 0) * 1000,
-      )}`
+      return `Fase ${p('stageKey')}: se reintenta (intento ${p('attempt')}${
+        Number(payload.attempt) <= Number(payload.maxAttempts) ? ` de ${p('maxAttempts')}` : ''
+      }) en ${formatDuration(Number(payload.delaySeconds ?? 0) * 1000)}`
     case 'stage.timed.out':
       return `Fase ${p('stageKey')}: se acabó su tiempo (intento ${p('attempt')})`
     case 'workflow.cancel.requested':

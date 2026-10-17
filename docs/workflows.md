@@ -302,6 +302,16 @@ stages:
 - Es independiente de `limits.timeoutMinutes`, que limita cada proceso del agente y lo aplica el runner.
 - La API enseña `timeoutSeconds`, `deadline` (la hora límite del intento en curso) y `timedOutAt` en cada fase.
 
+**Reintentar fase.** En una ejecución **fallida o cancelada**, el detalle de la fase que falló (o se canceló) en el progreso tiene **Reintentar fase**. Antes de confirmar dice el alcance: «Se reintenta implement (intento 2). Después vuelven a lanzarse tests y review.». Al confirmar (`POST /api/workflow-runs/{id}/stages/{key}/retry`):
+
+- La **misma ejecución** vuelve a «En curso» (`run.resumed`, con quién lo pidió, y `workflow.status.changed` con `reason: stage-retried`).
+- Reciben un intento nuevo la fase, las que dependen de ella y las demás que fallaron o se cancelaron: las que canceló el fail-fast vuelven a planificarse. Lo que terminó bien y no depende de ella no se repite; en una `parallel`, tampoco los hijos que terminaron bien.
+- No se toca nada terminado: los intentos anteriores, sus agentes y sus peticiones de aprobación siguen como estaban.
+- El intento parte del worktree como lo dejaron sus dependencias, como un reintento automático. Si se repite una fase anterior, las que dependen de ella siguen desde lo que deje esa, sin volver a su foto.
+- Lo pide una persona, así que **no cuenta para `maxAttempts`**: los reintentos automáticos vuelven a contar desde ese intento. La API lo marca con `retriedBy` y el detalle de la fase dice «lo pidió admin».
+- Una puerta rechazada o caducada no se reintenta así: se reintenta la fase de la que depende (aunque terminara bien, p. ej. el plan que se rechazó) y la puerta vuelve a preguntar.
+- En una ejecución de workflow, el «Reintentar…» del agente deja de salir: se reintenta la fase. En una ejecución ad hoc (un agente suelto) sigue como siempre, lanzando otra ejecución.
+
 **Cancelar.** Cancelar una ejecución (`POST /api/workflow-runs/{id}/cancel`) la deja en «Cancelando» (`cancelRequestedAt` en la API, evento `workflow.cancel.requested`) mientras sus agentes paran; termina `CANCELLED` cuando han parado todos. También:
 
 - Cancela los reintentos programados y las ejecuciones lanzadas desde sus agentes que no han terminado (con `reason: parent-cancelled`), y las de estas, en cascada.
@@ -382,6 +392,7 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `POST` | `/api/work-items/{id}/runs` | Lanza una versión publicada (`definitionId`, `inputs`; ver arriba) |
 | `GET` | `/api/workflow-versions/{id}/effective-policy?repositoryId=` | Lo que se permitirá al agente de cada fase en ese repositorio (los límites que no fija el agente, `null`, salen del lanzamiento) |
 | `POST` | `/api/workflow-runs/{id}/cancel` | Cancela una ejecución y sus agentes |
+| `POST` | `/api/workflow-runs/{id}/stages/{key}/retry` | «Reintentar fase»: la ejecución fallida o cancelada vuelve a «En curso» desde esa fase; 409 si no ha terminado, está archivada o la fase es una puerta |
 | `GET` | `/api/approvals?status=&projectId=&risk=` | Las peticiones de aprobación: primero las pendientes (las de más riesgo y las más antiguas), luego las decididas. `status` admite varios separados por comas (`PENDING`, `APPROVED`, `REJECTED`, `CHANGES_REQUESTED`, `CANCELLED`, `EXPIRED`) |
 | `GET` | `/api/approvals/{id}` | Una petición con su evidencia y sus decisiones |
 | `POST` | `/api/approvals/{id}/decisions` | Decide (`{action: APPROVE \| REJECT \| REQUEST_CHANGES \| COMMENT, comment}`) |

@@ -534,6 +534,15 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito W6 (reintentos y cancelación), planificado el 2026-10-17:** W6-A reintentos automáticos, W6-B límites de tiempo y cancelación, W6-C «Reintentar fase», web y E2E.
 
+**Implementado (W6-C), «Reintentar fase», web y E2E:**
+
+- `POST /api/workflow-runs/{id}/stages/{key}/retry` (`RunService.retryStage`): la ejecución fallida o cancelada vuelve a `RUNNING` (`WorkflowRun.resume`, sin `finishedAt` ni cancelación pedida) con `run.resumed`. Reciben un intento nuevo la fase, sus dependientes y las demás fallidas o canceladas; una puerta fallida que no depende de ella da 409.
+- `stage_run.retried_by` (migración `V23`, `retriedBy` en la API): el intento lo pidió una persona y los reintentos automáticos vuelven a contar desde él (`Retries.seriesStart`).
+- Worktree: una fase que se repite porque se repitió otra anterior no vuelve a su foto (`RunSteps.rerunUpstream`); una `parallel` que había terminado bien repite todos sus hijos.
+- Web: «Reintentar fase» con su confirmación en el detalle de la fase, «lo pidió …», «intento N de M» solo mientras cuenta para `maxAttempts`, `run.resumed` en el timeline y el «Reintentar…» del agente solo en las ejecuciones ad hoc.
+- E2E `cancel-retry.e2e.ts`: cancelar una `parallel` con dos agentes no deja procesos de fake-claude, y «Reintentar fase» termina «Completada» una ejecución fallida (con axe en la confirmación). Con `retries.e2e.ts`, el criterio de aceptación de W6.
+- **Hito W6 terminado.**
+
 **Implementado (W6-B), límites de tiempo y cancelación:**
 
 - YAML: `timeout` por fase (`s`, `m` o `h`, hasta 168 h; `StageDefinition.timeout`), en todas salvo `conditional`. Sale de los problemas `UNSUPPORTED`.
@@ -552,7 +561,7 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 - `parallel`: se reintentan solo los hijos que fallaron; las salidas y los worktrees de los demás se buscan en todos los intentos.
 - Web: el progreso enseña el último intento de cada fase, «Reintenta a las … (intento N de M)», «Falló: …» y los intentos anteriores al abrir la fase; el resumen del workflow, «Reintenta: hasta N intentos…»; el timeline, `stage.retry.scheduled`.
 - fake-claude: `FAKE_CLAUDE_FAIL_ONCE=<fichero>` falla la primera vez (código 1) y funciona las siguientes.
-- Llegan en W6-C: «Reintentar fase» y el E2E de aceptación (el `timeout` por fase y la cancelación forzada llegaron en W6-B).
+- «Reintentar fase» y el E2E de aceptación llegaron en W6-C; el `timeout` por fase y la cancelación forzada, en W6-B.
 
 **Implementado (W5-C), centro de aprobaciones y E2E:**
 

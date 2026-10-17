@@ -3138,6 +3138,16 @@
     margin: calc(-1 * var(--space-1)) 0 var(--space-2);
   }
 
+  /* «Reintentar fase» y su confirmación, en el detalle de la fase. */
+  .stage-retry {
+    margin: 0 0 var(--space-3);
+  }
+
+  .stage-retry p {
+    flex-basis: 100%;
+    margin: 0;
+  }
+
   .stage-checks {
     display: grid;
     gap: 2px;

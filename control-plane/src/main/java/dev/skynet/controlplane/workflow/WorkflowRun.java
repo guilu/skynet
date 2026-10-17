@@ -104,6 +104,22 @@ public class WorkflowRun {
   }
 
   /** Marca la cancelación pedida. Devuelve {@code false} si ya estaba pedida. */
+  /**
+   * Vuelve a poner en marcha una ejecución fallida o cancelada (W6-C, «Reintentar fase»): en curso,
+   * sin fin ni cancelación pedida. Devuelve el estado anterior.
+   */
+  WorkflowRunStatus resume() {
+    if (status != WorkflowRunStatus.FAILED && status != WorkflowRunStatus.CANCELLED) {
+      throw new ConflictException(
+          "Solo se reintenta una fase de una ejecución fallida o cancelada; esta está " + status);
+    }
+    WorkflowRunStatus previous = status;
+    status = WorkflowRunStatus.RUNNING;
+    finishedAt = null;
+    cancelRequestedAt = null;
+    return previous;
+  }
+
   boolean requestCancel(Instant now) {
     if (cancelRequestedAt != null) {
       return false;
