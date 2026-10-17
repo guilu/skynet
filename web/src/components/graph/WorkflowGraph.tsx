@@ -77,6 +77,12 @@ export default function WorkflowGraph({
         width: box.width,
         height: box.height,
         data: { content: content.stage(box.id), handles: true },
+        // Los puntos de las flechas, dados: si React Flow tuviera que medirlos, los perdería cada
+        // vez que la ejecución trae nodos nuevos (con la misma medida no vuelve a medir).
+        handles: [
+          { type: 'target', position: Position.Left, x: 0, y: box.height / 2 },
+          { type: 'source', position: Position.Right, x: box.width, y: box.height / 2 },
+        ],
         className: cn('graph-node', group && 'graph-group', content.stageClass?.(box.id)),
         draggable: false,
         connectable: false,

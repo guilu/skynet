@@ -701,6 +701,9 @@ describe('App', () => {
     expect(within(graph).getByText('Espera a plan')).toBeInTheDocument()
     expect(within(graph).getByText('Omitida porque se omitió gate')).toBeInTheDocument()
     expect(within(graph).getByRole('button', { name: '2. fix: Pendiente' })).toBeInTheDocument()
+    // plan→fix y gate→ship; la que sale de una fase omitida va apagada.
+    expect(graph.querySelectorAll('.react-flow__edge')).toHaveLength(2)
+    expect(graph.querySelectorAll('.graph-edge-dim')).toHaveLength(1)
 
     fireEvent.click(screen.getByRole('button', { name: 'Lista' }))
     expect(within(tree).queryByRole('group', { name: 'Fases de la ejecución' })).toBeNull()
