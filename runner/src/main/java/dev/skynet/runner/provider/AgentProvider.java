@@ -54,6 +54,17 @@ public interface AgentProvider {
     return true;
   }
 
+  /**
+   * Eventos que el runner añade cuando termina el proceso, con lo que el CLI no dice en su salida:
+   * p. ej. la cuota de Codex, que está en el fichero de su sesión ({@code agent.quota}). Nunca
+   * falla: lo que no pueda leer, lo omite.
+   *
+   * @param parser el traductor de esta invocación, con lo que vio de su salida
+   */
+  default List<ParsedEvent> afterExit(EventParser parser, Map<String, String> runnerEnv) {
+    return List.of();
+  }
+
   /** Versión del CLI instalado ({@code --version}), si responde. */
   Optional<String> version(Map<String, String> runnerEnv);
 }

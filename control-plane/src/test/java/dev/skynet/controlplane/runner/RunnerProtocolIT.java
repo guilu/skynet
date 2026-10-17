@@ -7,7 +7,9 @@ import dev.skynet.controlplane.support.IntegrationTest;
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.runner.EventBatch;
+import dev.skynet.protocol.runner.HeartbeatReply;
 import dev.skynet.protocol.runner.ProviderInfo;
+import dev.skynet.protocol.runner.QuotaSample;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistration;
 import java.math.BigDecimal;
@@ -481,6 +483,94 @@ class RunnerProtocolIT extends IntegrationTest {
         .extracting(p -> p.path("id").asString() + " " + p.path("version").asString())
         .containsExactly("claude-code 2.1.300", "codex 0.50.0");
     assertThat(eventTypesOf("runner")).containsOnlyOnce("runner.providers.changed");
+  }
+
+  @Test
+  void theQuotasOfTheClisArriveWithTheEventsAndTheHeartbeat() {
+    Runner runner = register("laptop", 1);
+    Launched run = launch("x");
+    ack(runner, poll(runner, 0).getFirst());
+
+    // Claude Code: la ve el agente en su salida (agent.quota); no cambia su estado.
+    Events events = new Events(run.agentId());
+    events.add(
+        AgentEventType.QUOTA,
+        Map.of(
+            "provider",
+            "claude-code",
+            "windows",
+            List.of(
+                Map.of(
+                    "bucket",
+                    "default",
+                    "window",
+                    "five_hour",
+                    "usedFraction",
+                    0.16,
+                    "resetsAt",
+                    1792275000L),
+                Map.of("bucket", "default", "window", "seven_day", "usedFraction", 0.78))));
+    assertThat(send(runner, events.batch()).path("accepted").asInt()).isEqualTo(1);
+    assertThat(agent(run).path("status").asString()).isEqualTo("STARTING");
+    // Codex: la consulta el runner y la lleva el latido.
+    Instant observed = Instant.now().minusSeconds(60);
+    HeartbeatReply reply =
+        http.post()
+            .uri("/api/runner/heartbeat")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + runner.token())
+            .body(
+                new RunnerHeartbeat(
+                    1,
+                    List.of(run.agentId()),
+                    null,
+                    List.of(
+                        new QuotaSample(
+                            "codex", null, null, "five_hour", 0.2, null, "plus", observed),
+                        new QuotaSample(
+                            "codex", null, null, "five_hour", 0.23, null, "plus", Instant.now()))))
+            .retrieve()
+            .body(HeartbeatReply.class);
+    assertThat(reply.refreshQuotas()).isFalse();
+
+    JsonNode windows = get("/api/usage/windows").path("runners").get(0);
+    assertThat(windows.path("name").asString()).isEqualTo("laptop");
+    assertThat(windows.path("windows"))
+        .extracting(
+            w ->
+                w.path("provider").asString()
+                    + " "
+                    + w.path("window").asString()
+                    + " "
+                    + w.path("usedFraction").asDouble()
+                    + " "
+                    + w.path("source").asString())
+        .containsExactly(
+            "claude-code five_hour 0.16 invocation",
+            "claude-code seven_day 0.78 invocation",
+            "codex five_hour 0.23 poll");
+    assertThat(windows.path("windows").get(0).path("resetsAt").asString())
+        .isEqualTo("2026-10-17T22:10:00Z");
+    assertThat(windows.path("windows").get(2).path("providerName").asString()).isEqualTo("Codex");
+    assertThat(
+            jdbc.sql("SELECT count(*) FROM quota_snapshot WHERE agent_run_id = ?")
+                .param(run.agentId())
+                .query(Long.class)
+                .single())
+        .isEqualTo(2);
+
+    // «Actualizar»: el runner se entera en la respuesta a su siguiente latido, una vez.
+    assertThat(post("/api/usage/refresh", Map.of()).path("runners").asInt()).isEqualTo(1);
+    assertThat(heartbeatReply(runner).refreshQuotas()).isTrue();
+    assertThat(heartbeatReply(runner).refreshQuotas()).isFalse();
+  }
+
+  private HeartbeatReply heartbeatReply(Runner runner) {
+    return http.post()
+        .uri("/api/runner/heartbeat")
+        .header(HttpHeaders.AUTHORIZATION, "Bearer " + runner.token())
+        .body(new RunnerHeartbeat(1, List.of()))
+        .retrieve()
+        .body(HeartbeatReply.class);
   }
 
   private JsonNode runnerView(String name) {

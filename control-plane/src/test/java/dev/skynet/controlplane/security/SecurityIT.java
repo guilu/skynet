@@ -115,7 +115,7 @@ class SecurityIT extends IntegrationTest {
             .body(JsonNode.class);
     UUID runnerId = UUID.fromString(registered.path("runnerId").asString());
     String token = registered.path("token").asString();
-    assertThat(heartbeat(token)).isEqualTo(204);
+    assertThat(heartbeat(token)).isEqualTo(200);
 
     http.post().uri("/api/runners/{id}/revoke", runnerId).retrieve().toBodilessEntity();
     assertThat(heartbeat(token)).isEqualTo(401);
@@ -135,7 +135,7 @@ class SecurityIT extends IntegrationTest {
             .retrieve()
             .body(JsonNode.class);
     assertThat(again.path("runnerId").asString()).isEqualTo(runnerId.toString());
-    assertThat(heartbeat(again.path("token").asString())).isEqualTo(204);
+    assertThat(heartbeat(again.path("token").asString())).isEqualTo(200);
 
     send("GET", "/api/auth/session", null, false);
     assertThat(

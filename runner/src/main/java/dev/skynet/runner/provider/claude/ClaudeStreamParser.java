@@ -1,7 +1,10 @@
 package dev.skynet.runner.provider.claude;
 
 import dev.skynet.protocol.AgentEventType;
+import dev.skynet.protocol.runner.QuotaSample;
 import dev.skynet.runner.provider.ParsedEvent;
+import dev.skynet.runner.provider.QuotaEvents;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -28,8 +31,11 @@ import tools.jackson.databind.json.JsonMapper;
  *       {@code messageId}, que es lo que usa el timeline para agruparlos. Los bloques {@code
  *       thinking} se omiten. El primer evento de cada mensaje lleva su {@code usage}, de modo que
  *       el control plane puede mostrar los tokens en vivo antes del {@code result}.
- *   <li>{@code system/status}, {@code system/thinking_tokens} y los {@code rate_limit_event} con
- *       estado {@code allowed} no producen eventos.
+ *   <li>{@code system/status} y {@code system/thinking_tokens} no producen eventos.
+ *   <li>Cada {@code rate_limit_event} con {@code unifiedWindows} produce un {@link
+ *       AgentEventType#QUOTA} con las ventanas de 5 h y semanal, solo si cambian respecto al
+ *       anterior de la invocación (CU-A). Si su estado no es {@code allowed} ni {@code
+ *       allowed_warning}, produce además un {@link AgentEventType#RATE_LIMIT}.
  *   <li>Todo lo que no se reconoce (tipo, subtipo, bloque o JSON inválido) se conserva como {@link
  *       AgentEventType#RAW}: el parser nunca falla por una línea.
  * </ul>
@@ -41,6 +47,8 @@ public final class ClaudeStreamParser implements dev.skynet.runner.provider.Even
 
   /** Longitud máxima del texto de salida de una herramienta que viaja en el evento. */
   static final int MAX_TOOL_OUTPUT = 16 * 1024;
+
+  private static final String RESETS_AT = "resetsAt";
 
   /** Herramientas cuyo resultado modifica un archivo. */
   private static final Set<String> FILE_TOOLS =
@@ -54,6 +62,7 @@ public final class ClaudeStreamParser implements dev.skynet.runner.provider.Even
   private final Set<String> usageSeen = new HashSet<>();
   private String sessionId;
   private boolean sawResult;
+  private List<QuotaSample> lastQuota;
 
   /** Id de sesión anunciado en {@code system/init}, o {@code null} si aún no ha llegado. */
   public String sessionId() {
@@ -290,17 +299,49 @@ public final class ClaudeStreamParser implements dev.skynet.runner.provider.Even
 
   private List<ParsedEvent> rateLimit(JsonNode node) {
     JsonNode info = node.path("rate_limit_info");
-    String status = text(info, "status");
-    if ("allowed".equals(status)) {
-      return List.of();
+    List<ParsedEvent> events = new ArrayList<>();
+    List<QuotaSample> quota = quota(info.path("unifiedWindows"));
+    if (!quota.isEmpty() && !quota.equals(lastQuota)) {
+      lastQuota = quota;
+      events.add(QuotaEvents.of(quota));
     }
-    return List.of(
-        event(
-            AgentEventType.RATE_LIMIT,
-            payload()
-                .put("status", status)
-                .put("limitType", text(info, "rateLimitType"))
-                .put("resetsAt", longValue(info, "resetsAt"))));
+    String status = text(info, "status");
+    if (!"allowed".equals(status) && !"allowed_warning".equals(status)) {
+      events.add(
+          event(
+              AgentEventType.RATE_LIMIT,
+              payload()
+                  .put("status", status)
+                  .put("limitType", text(info, "rateLimitType"))
+                  .put(RESETS_AT, longValue(info, RESETS_AT))));
+    }
+    return events;
+  }
+
+  /**
+   * Las ventanas de {@code unifiedWindows} ({@code five_hour} y {@code seven_day}). La hora de la
+   * muestra no cuenta al comparar con la anterior: se pone a la época.
+   */
+  private static List<QuotaSample> quota(JsonNode windows) {
+    List<QuotaSample> samples = new ArrayList<>();
+    for (String window : List.of(QuotaSample.FIVE_HOUR, QuotaSample.SEVEN_DAY)) {
+      JsonNode w = windows.path(window);
+      if (!w.path("utilization").isNumber()) {
+        continue;
+      }
+      Long resetsAt = longValue(w, RESETS_AT);
+      samples.add(
+          new QuotaSample(
+              "claude-code",
+              QuotaSample.DEFAULT_BUCKET,
+              null,
+              window,
+              w.get("utilization").asDouble(),
+              resetsAt == null ? null : Instant.ofEpochSecond(resetsAt),
+              null,
+              Instant.EPOCH));
+    }
+    return samples;
   }
 
   /** Texto de un {@code tool_result}: una cadena o una lista de bloques de texto. */

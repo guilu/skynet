@@ -29,6 +29,7 @@ sourceSets {
         resources {
             include("codex/**")
             include("gemini/**")
+            include("agy/**")
         }
     }
 }
@@ -47,11 +48,19 @@ val fakeGeminiScripts by tasks.registering(CreateStartScripts::class) {
     classpath = tasks.named<CreateStartScripts>("startScripts").get().classpath
 }
 
+val fakeAgyScripts by tasks.registering(CreateStartScripts::class) {
+    mainClass = "dev.skynet.fakeclaude.FakeAgy"
+    applicationName = "fake-agy"
+    outputDir = layout.buildDirectory.dir("fake-agy-scripts").get().asFile
+    classpath = tasks.named<CreateStartScripts>("startScripts").get().classpath
+}
+
 distributions {
     main {
         contents {
             from(fakeCodexScripts) { into("bin") }
             from(fakeGeminiScripts) { into("bin") }
+            from(fakeAgyScripts) { into("bin") }
         }
     }
 }

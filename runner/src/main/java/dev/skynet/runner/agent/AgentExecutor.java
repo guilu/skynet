@@ -396,6 +396,8 @@ public final class AgentExecutor implements AutoCloseable {
     if (deadline != null) {
       deadline.cancel(false);
     }
+    // Lo que el CLI no dice en su salida (la cuota de Codex), antes del fin.
+    provider.afterExit(parser, runnerEnv).forEach(e -> emit(id, e));
     // Antes del fin: así el agente termina con sus artefactos ya en cola.
     collectArtifacts(id, start, workspace, logs.resolve(id + ".ndjson"));
 

@@ -79,6 +79,7 @@ export function kindOf(type: string): EventKind {
     case 'agent.workspace.removed':
     case 'agent.process.exited':
     case 'agent.rate_limit':
+    case 'agent.quota':
     case 'agent.permission.denied':
     case 'agent.verification.started':
     case 'agent.verification.completed':

@@ -1,6 +1,7 @@
 package dev.skynet.runner.provider.codex;
 
 import dev.skynet.protocol.AgentProviderKind;
+import dev.skynet.protocol.runner.QuotaSample;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.StartAgent;
 import dev.skynet.runner.provider.AgentEnvironment;
@@ -9,6 +10,8 @@ import dev.skynet.runner.provider.CliVersion;
 import dev.skynet.runner.provider.CostMeter;
 import dev.skynet.runner.provider.EventParser;
 import dev.skynet.runner.provider.ModelPrices;
+import dev.skynet.runner.provider.ParsedEvent;
+import dev.skynet.runner.provider.QuotaEvents;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,6 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -39,6 +44,7 @@ public class CodexProvider implements AgentProvider {
       Set.of("CODEX_HOME", "OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL");
 
   private static final ObjectMapper JSON = JsonMapper.builder().build();
+  private static final Logger LOG = Logger.getLogger(CodexProvider.class.getName());
 
   private final String executable;
   private final AgentEnvironment env;
@@ -142,6 +148,22 @@ public class CodexProvider implements AgentProvider {
   @Override
   public List<String> refusedEnvironment(StartAgent start) {
     return env.refused(start.environment());
+  }
+
+  /** La cuota de la cuenta, del último {@code token_count} del fichero de la sesión. */
+  @Override
+  public List<ParsedEvent> afterExit(EventParser parser, Map<String, String> runnerEnv) {
+    if (!(parser instanceof CodexEventParser codex) || codex.threadId() == null) {
+      return List.of();
+    }
+    try {
+      List<QuotaSample> quota =
+          CodexQuota.fromSession(CodexQuota.home(environment(runnerEnv, null)), codex.threadId());
+      return quota.isEmpty() ? List.of() : List.of(QuotaEvents.of(quota));
+    } catch (IOException e) {
+      LOG.log(Level.FINE, "No se pudo leer la cuota de la sesión " + codex.threadId(), e);
+      return List.of();
+    }
   }
 
   @Override
