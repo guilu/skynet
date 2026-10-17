@@ -534,6 +534,16 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito W6 (reintentos y cancelación), planificado el 2026-10-17:** W6-A reintentos automáticos, W6-B límites de tiempo y cancelación, W6-C «Reintentar fase», web y E2E.
 
+**Hito W7 (grafo del workflow), planificado el 2026-10-17:** W7-A grafo del workflow, W7-B grafo de la ejecución, W7-C carriles por macrofase (`phase`), accesibilidad y E2E.
+
+**Implementado (W7-A), grafo del workflow:**
+
+- `@xyflow/react` 12 y `@dagrejs/dagre` en un trozo aparte que solo se descarga al abrir el grafo (`web/src/components/graph/`).
+- `layoutStages`: coloca las fases de izquierda a derecha con dagre; una `parallel` es un grupo con sus hijos apilados dentro; no dibuja dependencias a fases que no existen.
+- `WorkflowGraph`: el lienzo de solo lectura (zoom, ajustar a pantalla, minimapa con más de 8 fases, flechas discontinuas para las dependencias opcionales). Lo que va en cada caja lo decide quien lo usa, para que W7-B ponga encima el estado de la ejecución.
+- `DefinitionGraph`: icono por tipo, nombre, tipo y una línea con lo que hace cada fase; pestaña **Grafo** (`?view=graph`) en el editor de la definición, también para un borrador.
+- vitest de la colocación y de los nodos; E2E en `workflows.e2e.ts`: la plantilla «Revisión en paralelo» en el grafo, con axe.
+
 **Implementado (W6-C), «Reintentar fase», web y E2E:**
 
 - `POST /api/workflow-runs/{id}/stages/{key}/retry` (`RunService.retryStage`): la ejecución fallida o cancelada vuelve a `RUNNING` (`WorkflowRun.resume`, sin `finishedAt` ni cancelación pedida) con `run.resumed`. Reciben un intento nuevo la fase, sus dependientes y las demás fallidas o canceladas; una puerta fallida que no depende de ella da 409.

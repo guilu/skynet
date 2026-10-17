@@ -33,7 +33,7 @@ function workspaceLabel(stage: WorkflowModel['stages'][number]): string {
 
 /**
  * Lo que dice el YAML, en listas: fases con sus dependencias, datos que se piden al lanzar y
- * agentes. El grafo llega en W7.
+ * agentes. El grafo está en la pestaña «Grafo» (W7-A).
  */
 export function DefinitionSummary({ definition }: { definition: WorkflowModel }) {
   return (

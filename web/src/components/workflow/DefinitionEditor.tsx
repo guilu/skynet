@@ -1,7 +1,11 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { Code, Network } from 'lucide-react'
 import { lazy, Suspense, useRef, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router'
 import { api, type Validation, type WorkflowModel } from '../../api'
+import { cn } from '../../lib/cn'
 import { LinesSkeleton } from '../ui/Skeleton'
+import { TabList, TabPanel } from '../ui/Tabs'
 import { DefinitionSummary } from './DefinitionSummary'
 import { ProblemList } from './ProblemList'
 import { problemSummary } from './problems'
@@ -11,6 +15,14 @@ import PlainYamlEditor from './PlainYamlEditor'
 import type { YamlEditorHandle } from './YamlEditor'
 
 const YamlEditor = lazy(() => import('./YamlEditor'))
+// React Flow y dagre van en su propio trozo: solo se descargan al abrir el grafo.
+const DefinitionGraph = lazy(() => import('../graph/DefinitionGraph'))
+
+const VIEWS = [
+  { id: 'yaml', label: 'YAML', icon: Code },
+  { id: 'graph', label: 'Grafo', icon: Network },
+] as const
+type View = (typeof VIEWS)[number]['id']
 
 interface Props {
   text: string
@@ -28,7 +40,8 @@ interface Props {
 
 /**
  * El YAML en el editor, con sus problemas y lo que define. Mientras se escribe, el control plane lo
- * valida (con los mismos mensajes que al guardar) y los problemas se marcan en su línea.
+ * valida (con los mismos mensajes que al guardar) y los problemas se marcan en su línea. La
+ * pestaña «Grafo» (`?view=graph`) dibuja las fases de lo último que se pudo leer.
  */
 export function DefinitionEditor({
   text,
@@ -41,6 +54,18 @@ export function DefinitionEditor({
   actions,
 }: Props) {
   const editor = useRef<YamlEditorHandle>(null)
+  const [params, setParams] = useSearchParams()
+  const view: View = params.get('view') === 'graph' ? 'graph' : 'yaml'
+  const selectView = (next: View) =>
+    setParams(
+      (prev) => {
+        const p = new URLSearchParams(prev)
+        if (next === 'graph') p.set('view', 'graph')
+        else p.delete('view')
+        return p
+      },
+      { replace: true },
+    )
   // En un móvil, Monaco no deja seleccionar, copiar ni pegar: se usa un campo de texto normal.
   const touchOnly = useTouchOnly()
   const schema = useQuery({
@@ -63,31 +88,69 @@ export function DefinitionEditor({
   return (
     <>
       {actions && <div className="definition-actions">{actions}</div>}
-      <div className="definition-editor">
-        <section className="definition-source" aria-label="YAML">
-          {touchOnly ? (
-            <PlainYamlEditor
-              ref={editor}
-              value={text}
-              onChange={onChange}
-              readOnly={readOnly}
-              label={label}
-              onSave={onSave}
-            />
-          ) : (
-            <Suspense fallback={<LinesSkeleton label="el editor" lines={12} />}>
-              <YamlEditor
+      <div className={cn('definition-editor', view === 'graph' && 'definition-editor-graph')}>
+        <section className="definition-source" aria-label="Definición">
+          <TabList
+            label="Vista de la definición"
+            tabs={VIEWS}
+            selected={view}
+            onSelect={selectView}
+            idPrefix="definition-view"
+            panelId="definition-view-panel"
+          />
+          {view === 'graph' && (
+            <TabPanel
+              id="definition-view-panel"
+              labelledBy="definition-view-graph"
+              className="definition-graph"
+            >
+              {definition ? (
+                <Suspense fallback={<LinesSkeleton label="el grafo" lines={6} />}>
+                  <DefinitionGraph definition={definition} />
+                </Suspense>
+              ) : (
+                <p className="muted">
+                  {current
+                    ? 'El YAML no se puede leer: corrige los problemas para ver el grafo.'
+                    : 'Validando…'}
+                </p>
+              )}
+            </TabPanel>
+          )}
+          {/* El editor sigue montado en el grafo, para no perder el cursor ni el deshacer. */}
+          <div
+            className="definition-yaml"
+            hidden={view !== 'yaml'}
+            {...(view === 'yaml' && {
+              role: 'tabpanel',
+              id: 'definition-view-panel',
+              'aria-labelledby': 'definition-view-yaml',
+            })}
+          >
+            {touchOnly ? (
+              <PlainYamlEditor
                 ref={editor}
                 value={text}
                 onChange={onChange}
                 readOnly={readOnly}
-                problems={problems}
-                schema={schema.data}
                 label={label}
                 onSave={onSave}
               />
-            </Suspense>
-          )}
+            ) : (
+              <Suspense fallback={<LinesSkeleton label="el editor" lines={12} />}>
+                <YamlEditor
+                  ref={editor}
+                  value={text}
+                  onChange={onChange}
+                  readOnly={readOnly}
+                  problems={problems}
+                  schema={schema.data}
+                  label={label}
+                  onSave={onSave}
+                />
+              </Suspense>
+            )}
+          </div>
         </section>
         <aside className="definition-aside">
           <section className="card" aria-labelledby="problems-title">

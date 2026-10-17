@@ -4896,4 +4896,178 @@
       margin-bottom: 8px;
     }
   }
+
+  /* ---------- Grafo del workflow (W7): React Flow con los colores de la web ---------- */
+  /* En el grafo, todo el ancho para el lienzo; los problemas y el resumen, debajo. */
+  .definition-editor-graph {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .definition-yaml {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .definition-yaml[hidden] {
+    display: none;
+  }
+
+  .definition-source .tabs {
+    margin: 0;
+  }
+
+  .workflow-graph {
+    --xy-edge-stroke: var(--border-strong);
+    --xy-edge-stroke-width: 2;
+    --xy-background-pattern-dots-color: var(--border);
+    --xy-minimap-background-color: var(--surface);
+    --xy-minimap-node-background-color: var(--surface-2);
+    --xy-minimap-mask-background-color: color-mix(in srgb, var(--surface-2) 60%, transparent);
+    --xy-attribution-background-color: transparent;
+    width: 100%;
+    min-height: 200px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--r-md);
+    overflow: hidden;
+  }
+
+  .workflow-graph .react-flow__attribution a {
+    color: var(--muted);
+  }
+
+  .workflow-graph .react-flow__handle {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .graph-node {
+    display: flex;
+    background: var(--surface);
+    color: var(--fg);
+    border: 2px solid var(--border-strong);
+    border-radius: var(--r-md);
+    box-shadow: 0 3px 0 var(--border);
+    font-size: 0.8125rem;
+    cursor: default;
+  }
+
+  .graph-group {
+    background: var(--surface-2);
+    border-style: dashed;
+    align-items: flex-start;
+  }
+
+  .graph-child {
+    background: var(--surface);
+    border-width: 2px;
+    box-shadow: none;
+  }
+
+  .graph-type-human-approval {
+    border-color: var(--warn);
+  }
+
+  .graph-box {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+    padding: 8px 10px;
+  }
+
+  .graph-group > .graph-box {
+    height: 52px;
+  }
+
+  .graph-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-weight: 800;
+  }
+
+  .graph-title svg {
+    flex: none;
+    color: var(--primary);
+  }
+
+  .graph-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .graph-index {
+    color: var(--muted);
+  }
+
+  .graph-title .tag {
+    padding: 0 6px;
+    font-size: 0.6875rem;
+  }
+
+  .graph-detail {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  .graph-edge-optional .react-flow__edge-path {
+    stroke-dasharray: 6 5;
+  }
+
+  .graph-edge-dim {
+    opacity: 0.35;
+  }
+
+  .workflow-graph .react-flow__controls {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--r-sm);
+  }
+
+  .workflow-graph .react-flow__controls-button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--fg);
+    cursor: pointer;
+  }
+
+  .workflow-graph .react-flow__controls-button:hover {
+    background: var(--surface-2);
+  }
+
+  .workflow-graph .react-flow__controls-button:disabled {
+    color: var(--muted);
+    cursor: default;
+  }
+
+  .workflow-graph .react-flow__controls-button svg {
+    width: 12px;
+    height: 12px;
+    fill: currentColor;
+  }
+
+  .workflow-graph .react-flow__minimap {
+    border: 2px solid var(--border);
+    border-radius: var(--r-sm);
+  }
 }
