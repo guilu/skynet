@@ -123,6 +123,7 @@
     "deadline" : null,
     "timedOutAt" : null,
     "cancelling" : false,
-    "retriedBy" : null
+    "retriedBy" : null,
+    "children" : [ ]
   } ]
 }

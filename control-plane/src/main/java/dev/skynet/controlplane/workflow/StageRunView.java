@@ -35,6 +35,8 @@ import java.util.UUID;
  *     «Cancelando»
  * @param retriedBy quién pidió este intento con «Reintentar fase» (W6-C), o {@code null} si lo
  *     programó el motor
+ * @param children los hijos de una fase {@code parallel} en el orden del YAML, para dibujarlos
+ *     antes de que tengan agente (W7-B); vacío en las demás
  */
 public record StageRunView(
     UUID id,
@@ -60,7 +62,8 @@ public record StageRunView(
     Instant deadline,
     Instant timedOutAt,
     boolean cancelling,
-    String retriedBy) {
+    String retriedBy,
+    List<String> children) {
 
   /**
    * El {@code retry} de una fase: intentos en total, qué fallos ({@code lost}, {@code error}…) y la
@@ -113,6 +116,9 @@ public record StageRunView(
         s.getDeadline(),
         s.getTimedOutAt(),
         agents.stream().anyMatch(a -> a.cancelRequestedAt() != null && !a.status().isTerminal()),
-        s.getRetriedBy());
+        s.getRetriedBy(),
+        definition == null
+            ? List.of()
+            : definition.children().stream().map(StageDefinition.ChildDefinition::id).toList());
   }
 }

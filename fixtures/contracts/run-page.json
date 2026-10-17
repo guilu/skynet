@@ -90,7 +90,8 @@
       "deadline" : null,
       "timedOutAt" : null,
       "cancelling" : false,
-      "retriedBy" : null
+      "retriedBy" : null,
+      "children" : [ ]
     } ]
   } ],
   "page" : 0,

@@ -43,6 +43,7 @@ function stage(
     timedOutAt: null,
     cancelling: false,
     retriedBy: null,
+    children: [],
   }
 }
 

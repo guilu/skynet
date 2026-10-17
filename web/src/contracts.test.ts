@@ -126,6 +126,7 @@ const CONVERSATION_MESSAGE: Keys<ConversationMessage> = {
   text: true,
 }
 const STAGE_RUN: Keys<StageRun> = {
+  children: true,
   retry: true,
   notBefore: true,
   timeoutSeconds: true,

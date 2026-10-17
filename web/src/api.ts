@@ -234,6 +234,8 @@ export interface StageRun {
   cancelling: boolean
   /** Quién pidió este intento con «Reintentar fase»; null si lo programó el motor. */
   retriedBy: string | null
+  /** Hijos de una fase `parallel`, en el orden del YAML; vacío en las demás. */
+  children: string[]
 }
 
 export type ApprovalRisk = 'LOW' | 'MEDIUM' | 'HIGH'
