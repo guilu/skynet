@@ -935,6 +935,14 @@ export function targetPath(target: ArchiveTarget): string {
 const archivedQuery = (archived?: ArchivedFilter) =>
   archived && archived !== 'false' ? `?archived=${archived}` : ''
 
+/** `?a=1&b=2` con los parámetros que tienen valor; nada si no tiene ninguno. */
+const query = (params: Record<string, string | undefined>) => {
+  const p = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) if (v != null) p.set(k, v)
+  const s = p.toString()
+  return s ? `?${s}` : ''
+}
+
 export class ApiError extends Error {
   readonly status: number
   /** Problemas de un YAML rechazado (p. ej. al publicar un borrador con errores). */
@@ -1164,6 +1172,20 @@ export const api = {
       'GET',
       `/api/dashboard/metrics?period=${period}&tz=${encodeURIComponent(tz)}`,
     ),
+  usageWindows: (runner?: string) =>
+    request<UsageWindows>('GET', `/api/usage/windows${query({ runner })}`),
+  usageHistory: (provider: string, bucket: string, window: QuotaWindowKind, runner?: string) =>
+    request<UsageHistory>(
+      'GET',
+      `/api/usage/history${query({ provider, bucket, window, runner })}`,
+    ),
+  usageAgents: (period: MetricsPeriod, runner?: string) =>
+    request<AgentUsage[]>('GET', `/api/usage/agents${query({ period, runner })}`),
+  usageRuns: (period: MetricsPeriod, limit: number, runner?: string) =>
+    request<RunUsage[]>('GET', `/api/usage/runs${query({ period, limit: String(limit), runner })}`),
+  /** «Actualizar»: los runners consultan sus cuotas tras su siguiente latido. */
+  refreshUsage: (runner?: string) =>
+    request<{ runners: number }>('POST', `/api/usage/refresh${query({ runner })}`),
   workflowDefinitions: () => request<WorkflowDefinition[]>('GET', '/api/workflow-definitions'),
   workflows: (archived?: ArchivedFilter) =>
     request<WorkflowSummary[]>('GET', `/api/workflows${archivedQuery(archived)}`),
