@@ -108,3 +108,16 @@ export async function expectAccessible(page: Page, what: string) {
   )
   expect(summary, `${what}: problemas de accesibilidad`).toEqual([])
 }
+
+/** Abre una pestaña de la ejecución, también si el detalle del agente la tiene en su menú «Más». */
+export async function openTab(page: Page, name: string) {
+  const inspector = page.getByRole('region', { name: 'Inspector del agente' })
+  await expect(inspector.getByRole('tab').first()).toBeVisible()
+  const tab = page.getByRole('tab', { name, exact: true })
+  if (await tab.count()) {
+    if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click()
+    return
+  }
+  await inspector.locator('[role=tab][aria-haspopup=menu]').click()
+  await page.getByRole('menuitemradio', { name, exact: true }).click()
+}

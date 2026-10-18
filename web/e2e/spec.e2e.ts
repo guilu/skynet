@@ -1,6 +1,12 @@
 import { expect, test, type Page } from '@playwright/test'
 import { TEMPLATES } from '../src/components/workflow/templates.ts'
-import { expectAccessible, login, publishWorkflowViaApi, workItemViaApi } from './helpers.ts'
+import {
+  expectAccessible,
+  login,
+  publishWorkflowViaApi,
+  workItemViaApi,
+  openTab,
+} from './helpers.ts'
 
 /**
  * Resultado estructurado (W4-C), criterio de aceptación del hito: con la plantilla «Especificar,
@@ -138,7 +144,7 @@ test('la plantilla «Especificar, planificar e implementar» exige la propuesta'
     ])
     await expectAccessible(page, 'fase que no pasó sus comprobaciones')
 
-    await page.getByRole('tab', { name: 'Verificación' }).click()
+    await openTab(page, 'Verificación')
     const verified = page
       .getByRole('heading', { name: 'Verificado por Skynet' })
       .locator('xpath=ancestor::section[1]')

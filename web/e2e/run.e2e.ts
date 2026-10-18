@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { startCuttableProxy } from './cuttableProxy.ts'
-import { fakeClaudeProcesses, launchViaApi, login, repoPath, service } from './helpers.ts'
+import { fakeClaudeProcesses, launchViaApi, login, repoPath, service, openTab } from './helpers.ts'
 
 /**
  * Recorrido completo (issue #6): crear proyecto, repositorio y trabajo → lanzar un agente → ver
@@ -102,7 +102,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     await expect(conversation.getByText(/Fixed `add\(\)`/)).toBeVisible()
     await expect(conversation.locator('.tool-card')).toHaveCount(3)
 
-    await page.getByRole('tab', { name: 'Herramientas' }).click()
+    await openTab(page, 'Herramientas')
     await expect(inspector.locator('.tool-calls > li')).toHaveCount(3)
     await expect(inspector.getByText('Hecha')).toHaveCount(3)
 
@@ -117,7 +117,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
   })
 
   await test.step('artefactos: archivo modificado, su diff y el commit', async () => {
-    await page.getByRole('tab', { name: 'Artefactos' }).click()
+    await openTab(page, 'Artefactos')
     const panel = inspector
     await expect(
       panel.getByRole('list', { name: 'Archivos modificados' }).getByRole('button', {
@@ -136,7 +136,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
   })
 
   await test.step('verificación independiente y reejecución', async () => {
-    await page.getByRole('tab', { name: 'Verificación' }).click()
+    await openTab(page, 'Verificación')
     const panel = inspector
     const verified = panel.getByRole('region', { name: 'Verificado por Skynet' })
     await expect(verified.getByText('Pasa')).toBeVisible({ timeout: 60_000 })

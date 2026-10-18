@@ -1425,9 +1425,9 @@
   .tabs {
     display: flex;
     gap: 4px;
-    flex-wrap: wrap;
     width: fit-content;
     max-width: 100%;
+    overflow-x: auto;
     padding: 4px;
     margin: var(--space-3) 0;
     background: var(--surface-2);
@@ -1450,6 +1450,23 @@
 
   .tabs [role='tab']:hover {
     color: var(--fg);
+  }
+
+  .tabs [role='tab'][data-state='open'] {
+    color: var(--fg);
+  }
+
+  /* Copia invisible de una lista de pestañas con menú «Más»: solo sirve para medirlas. */
+  .tabs-measure {
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+  }
+
+  .tabs-measure > .tabs {
+    width: max-content;
+    max-width: none;
+    margin: 0;
   }
 
   .tabs [role='tab'][aria-selected='true'] {
@@ -2668,8 +2685,8 @@
     margin-top: 0;
   }
 
-  /* El detalle tiene muchas pestañas: más compactas, y si no caben pasan a otra fila. */
-  .run-inspector > .tabs [role='tab'] {
+  /* El detalle tiene muchas pestañas: más compactas, y las que no caben van al menú «Más». */
+  .run-inspector .tabs [role='tab'] {
     padding: 6px 10px;
   }
 

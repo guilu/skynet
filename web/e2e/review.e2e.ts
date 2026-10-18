@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { csrf, expectAccessible, launchViaApi, login } from './helpers.ts'
+import { csrf, expectAccessible, launchViaApi, login, openTab } from './helpers.ts'
 
 /**
  * Revisión de la web (M6-D): accesibilidad con axe en las páginas principales y ningún secreto en
@@ -28,7 +28,7 @@ async function completedRun(page: Page): Promise<string> {
   await expect(header.locator('.hero-top').getByText('Completada')).toBeVisible({
     timeout: 90_000,
   })
-  await page.getByRole('tab', { name: 'Verificación' }).click()
+  await openTab(page, 'Verificación')
   await expect(
     page.getByRole('region', { name: 'Verificado por Skynet' }).getByText('Pasa'),
   ).toBeVisible({ timeout: 60_000 })
@@ -51,11 +51,11 @@ test('ningún secreto llega al DOM', async ({ page }) => {
 
   await expectNoSecrets(page, 'Verificación')
   for (const tab of ['Resumen', 'Prompt', 'Conversación', 'Herramientas']) {
-    await page.getByRole('tab', { name: tab }).click()
+    await openTab(page, tab)
     await expectNoSecrets(page, tab)
   }
 
-  await page.getByRole('tab', { name: 'Artefactos' }).click()
+  await openTab(page, 'Artefactos')
   // El diff de calc.py lleva la línea del token como contexto.
   // Se busca el texto pintado y no el elemento con la etiqueta: mientras Monaco se descarga, la
   // etiqueta está en un bloque de texto, y después en el campo de edición de Monaco, que va vacío.
@@ -86,7 +86,7 @@ test('las páginas principales pasan axe', async ({ page }) => {
   const runId = await completedRun(page)
   await expectAccessible(page, 'ejecución · Verificación')
   for (const tab of ['Resumen', 'Prompt', 'Herramientas', 'Coste', 'Artefactos']) {
-    await page.getByRole('tab', { name: tab }).click()
+    await openTab(page, tab)
     await expect(page.getByRole('tabpanel', { name: tab })).toBeVisible()
     await expectAccessible(page, `ejecución · ${tab}`)
   }
@@ -169,7 +169,7 @@ test('en tema oscuro las páginas también pasan axe', async ({ page }) => {
   const runId = await completedRun(page)
   await expectAccessible(page, 'oscuro · ejecución')
   for (const tab of ['Artefactos', 'Resumen']) {
-    await page.getByRole('tab', { name: tab }).click()
+    await openTab(page, tab)
     await expect(page.getByRole('tabpanel', { name: tab })).toBeVisible()
     await expectAccessible(page, `oscuro · ejecución · ${tab}`)
   }
