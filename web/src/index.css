@@ -5282,11 +5282,18 @@
     background: var(--fg);
   }
 
+  /* Un tercio del ancho por CLI; en pantallas estrechas, una columna. */
   .provs {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: start;
     gap: var(--space-4);
+  }
+
+  @media (max-width: 1100px) {
+    .provs {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
   .prov {
