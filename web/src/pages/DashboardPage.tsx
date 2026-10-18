@@ -1,5 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
-import { CirclePlay, CircleX, Hand, Hourglass, Pause, Plug, Server } from 'lucide-react'
+import {
+  CirclePlay,
+  CircleX,
+  FlaskConical,
+  Hand,
+  Hourglass,
+  Pause,
+  Plug,
+  Server,
+} from 'lucide-react'
 import { Link } from 'react-router'
 import { api, SESSION_KEY, type ApprovalSummary, type DashboardSummary, type Runner } from '../api'
 import { RISK_LABEL, approvalWork } from '../components/approval/approvalFormat'
@@ -9,8 +18,9 @@ import { DashboardMetrics, PeriodSelector } from '../components/DashboardMetrics
 import { ErrorMessage } from '../components/ErrorMessage'
 import { RunsTable } from '../components/RunsTable'
 import { Pill } from '../components/ui/Pill'
+import { SimulatedPill } from '../components/ui/SimulatedPill'
 import { quotaAlerts } from '../components/usage/quotaFormat'
-import { formatDateTime, formatProviders } from '../format'
+import { formatDateTime, formatProviders, simulatedProviders } from '../format'
 import { cn } from '../lib/cn'
 import { useNow } from '../useNow'
 import { TableSkeleton } from '../components/ui/Skeleton'
@@ -35,7 +45,9 @@ export function DashboardPage() {
   const approvals = usePendingApprovals()
   const now = useNow(true)
   const data = summary.data
-  const alerts = data ? attentionItems(data, approvals.data ?? [], now) : []
+  const alerts = data
+    ? [...attentionItems(data, approvals.data ?? [], now), ...simulatedAlerts(runners.data ?? [])]
+    : []
   const working = (runners.data ?? [])
     .filter((r) => r.status === 'ONLINE')
     .reduce((n, r) => n + r.activeAgents, 0)
@@ -173,6 +185,30 @@ function attentionItems(
   ]
 }
 
+/**
+ * Runners en línea con algún CLI simulado (AR-A): sus agentes reproducen sesiones grabadas en vez
+ * de ejecutar el agente real.
+ */
+function simulatedAlerts(runners: Runner[]): Alert[] {
+  return runners
+    .filter((r) => r.status === 'ONLINE' && r.archivedAt == null)
+    .flatMap((r) => {
+      const names = simulatedProviders(r.providers)
+      if (names.length === 0) return []
+      return [
+        {
+          key: `simulated-${r.id}`,
+          to: '/runners',
+          icon: FlaskConical,
+          tone: 'warn' as const,
+          title: `Runner «${r.name}»`,
+          detail: `Usa ${names.join(' y ')} simulado${names.length > 1 ? 's' : ''}: sus agentes reproducen sesiones grabadas`,
+          status: 'CLI simulado',
+        },
+      ]
+    })
+}
+
 function workTitle(key: string | null, title: string | null, fallback: string) {
   if (key && title) return `${key} · ${title}`
   return key ?? title ?? fallback
@@ -195,6 +231,11 @@ function RunnerCard({ runner }: { runner: Runner }) {
         </Pill>
       </span>
       <span className="kpi-sub">
+        {online && runner.providers.some((p) => p.simulated) && (
+          <>
+            <SimulatedPill />{' '}
+          </>
+        )}
         {online
           ? [version, agents].filter(Boolean).join(' · ')
           : `Último latido ${formatDateTime(runner.lastHeartbeatAt)}`}

@@ -297,6 +297,11 @@ export function providerName(id: string): string {
 }
 
 /** Proveedores de un runner: «Claude Code 2.1.288 · Codex». */
+/** Nombres de los proveedores de un runner que usan un CLI simulado (AR-A). */
+export function simulatedProviders(providers: { id: string; simulated: boolean }[]): string[] {
+  return providers.filter((p) => p.simulated).map((p) => providerName(p.id))
+}
+
 export function formatProviders(providers: { id: string; version: string | null }[]): string {
   return providers
     .map((p) => (p.version ? `${providerName(p.id)} ${p.version}` : providerName(p.id)))

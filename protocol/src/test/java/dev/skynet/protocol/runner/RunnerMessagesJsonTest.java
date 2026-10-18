@@ -296,4 +296,17 @@ class RunnerMessagesJsonTest {
   private static <T> T roundTrip(T value, Class<T> type) {
     return JSON.readValue(JSON.writeValueAsString(value), type);
   }
+
+  @Test
+  void providerInfoMarksSimulatedClisFromTheirVersion() {
+    assertThat(new ProviderInfo("claude-code", "2.1.301 (Claude Code)").simulated()).isFalse();
+    assertThat(new ProviderInfo("claude-code", "2.1.0 (fake-claude)").simulated()).isTrue();
+    assertThat(new ProviderInfo("codex", null).simulated()).isFalse();
+    // Un runner anterior a AR-A no declara simulated: se deduce igual de su versión.
+    ProviderInfo old =
+        JSON.readValue(
+            "{\"id\":\"codex\",\"version\":\"0.163.0 (fake-codex)\"}", ProviderInfo.class);
+    assertThat(old.simulated()).isTrue();
+    assertThat(JSON.writeValueAsString(old)).contains("\"simulated\":true");
+  }
 }

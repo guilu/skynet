@@ -62,4 +62,6 @@ Un agente solo se entrega a un runner que tiene su proveedor. Si ningún runner 
 
 ## Probar sin cuentas
 
+Los simuladores anuncian `(fake-…)` en `--version` (`2.1.0 (fake-claude)`). El runner marca esos proveedores como simulados, y la web lo enseña con la píldora «Simulado» en **Runners**, en la barra lateral, en «Necesita tu atención» del Dashboard y en cada agente que se ejecutó con uno (la cabecera de la ejecución y el Resumen). Así no se confunde una respuesta grabada con la del agente real.
+
 `tools/fake-claude` instala lanzadores que imitan cada CLI con fixtures: `fake-claude`, `fake-codex` y `fake-gemini` (ver el README), y `fake-agy`, que solo responde a `/usage`. `fake-codex` escribe su cuota en el fichero de la sesión y responde a `app-server` (`FAKE_CODEX_QUOTA=23,13`). Las E2E (`scripts/e2e.sh`) arrancan el runner con los tres, y `web/e2e/providers.e2e.ts` comprueba la plantilla «Revisión con Codex y Gemini» y un agente suelto lanzado con Gemini.

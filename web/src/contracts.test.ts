@@ -85,6 +85,7 @@ type Keys<T> = Record<keyof T, true>
 const AGENT_RUN: Keys<AgentRun> = {
   failure: true,
   quota: true,
+  simulated: true,
   id: true,
   stageRunId: true,
   parentAgentRunId: true,
@@ -295,7 +296,7 @@ const RUNNER: Keys<Runner> = {
   archivedAt: true,
   providers: true,
 }
-const PROVIDER_INFO: Keys<ProviderInfo> = { id: true, version: true }
+const PROVIDER_INFO: Keys<ProviderInfo> = { id: true, version: true, simulated: true }
 const PROVIDER_KIND: Keys<ProviderKind> = {
   id: true,
   displayName: true,

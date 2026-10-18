@@ -95,6 +95,8 @@ class RunnerEndToEndIT extends IntegrationTest {
     assertThat(agent.path("providerSessionId").asString()).isNotBlank();
     assertThat(agent.path("exitCode").asInt()).isZero();
     assertThat(agent.path("costUsd").decimalValue()).isPositive();
+    // El runner de la prueba usa fake-claude: la invocación queda marcada como simulada (AR-A).
+    assertThat(agent.path("simulated").asBoolean()).isTrue();
     assertThat(get("/api/workflow-runs/" + run.runId()).path("status").asString())
         .isEqualTo("SUCCEEDED");
 

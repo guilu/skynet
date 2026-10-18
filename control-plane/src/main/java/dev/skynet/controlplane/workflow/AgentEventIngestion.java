@@ -11,6 +11,7 @@ import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.StageStatus;
+import dev.skynet.protocol.runner.ProviderInfo;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
@@ -54,6 +56,7 @@ public class AgentEventIngestion {
   private final QuotaSnapshots quotas;
   private final QuotaAttributor attributor;
   private final TimeSource time;
+  private final JdbcClient jdbc;
 
   AgentEventIngestion(
       AgentRunRepository agentRuns,
@@ -67,7 +70,8 @@ public class AgentEventIngestion {
       StageVerifications stageVerifications,
       QuotaSnapshots quotas,
       QuotaAttributor attributor,
-      TimeSource time) {
+      TimeSource time,
+      JdbcClient jdbc) {
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
     this.publisher = publisher;
@@ -80,6 +84,7 @@ public class AgentEventIngestion {
     this.quotas = quotas;
     this.attributor = attributor;
     this.time = time;
+    this.jdbc = jdbc;
   }
 
   @Transactional
@@ -189,7 +194,8 @@ public class AgentEventIngestion {
         }
       }
       case SESSION_STARTED -> {
-        agent.startSession(string(p, "sessionId"), string(p, "model"), event.occurredAt());
+        agent.startSession(
+            string(p, "sessionId"), string(p, "model"), simulated(agent), event.occurredAt());
         agent = active(agent, stage, AgentObservableStatus.THINKING, "session-started", now);
       }
       case MESSAGE_RECEIVED -> {
@@ -296,5 +302,21 @@ public class AgentEventIngestion {
       case String s -> new BigDecimal(s);
       case null, default -> null;
     };
+  }
+
+  /**
+   * Si el runner del agente tiene su CLI simulado (fake-claude, fake-codex…), según la versión que
+   * declaró en su último latido (AR-A).
+   */
+  private boolean simulated(AgentRun agent) {
+    if (agent.getRunnerId() == null) {
+      return false;
+    }
+    return jdbc.sql("SELECT version FROM runner_provider WHERE runner_id = ? AND provider = ?")
+        .params(agent.getRunnerId(), agent.getProvider())
+        .query(String.class)
+        .optional()
+        .map(ProviderInfo::isSimulated)
+        .orElse(false);
   }
 }

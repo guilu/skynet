@@ -71,8 +71,13 @@ export function RunnerSummary() {
   const online = runners.data.filter((r) => r.status === 'ONLINE')
   const agents = online.reduce((sum, r) => sum + r.activeAgents, 0)
   const stale = runners.data.length - online.length
+  const simulated = online.filter((r) => r.providers.some((p) => p.simulated)).length
   return (
-    <NavLink to="/runners" className="runner-mini" data-state={stale > 0 ? 'warn' : 'ok'}>
+    <NavLink
+      to="/runners"
+      className="runner-mini"
+      data-state={stale > 0 || simulated > 0 ? 'warn' : 'ok'}
+    >
       <span className="runner-mini-dot" aria-hidden="true" />
       <span className="runner-mini-text">
         <b>
@@ -81,6 +86,7 @@ export function RunnerSummary() {
         <span className="muted small">
           {agents} {agents === 1 ? 'agente' : 'agentes'}
           {stale > 0 && ` · ${stale} sin latido`}
+          {simulated > 0 && ` · ${simulated} con CLI simulado`}
         </span>
       </span>
     </NavLink>

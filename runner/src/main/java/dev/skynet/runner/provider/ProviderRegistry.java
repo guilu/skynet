@@ -47,7 +47,16 @@ public final class ProviderRegistry {
       }
       Optional<String> version = provider.version(runnerEnv);
       if (version.isPresent() || only != null) {
-        registry.available.put(id, new ProviderInfo(id, version.orElse(null)));
+        ProviderInfo info = new ProviderInfo(id, version.orElse(null));
+        registry.available.put(id, info);
+        if (info.simulated()) {
+          LOG.warning(
+              () ->
+                  provider.kind().displayName()
+                      + " es un CLI simulado ("
+                      + provider.executable()
+                      + "): sus agentes reproducen sesiones grabadas");
+        }
       } else {
         LOG.info(
             () ->

@@ -14,6 +14,7 @@ import {
 import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
 import { Pill } from '../ui/Pill'
+import { SimulatedPill } from '../ui/SimulatedPill'
 import { ArtifactsTab } from './ArtifactsTab'
 import { agentOutcome, toolCallsOf, type ToolCall } from './agentEvents'
 import { JsonView } from './JsonView'
@@ -72,7 +73,16 @@ function Summary({ agent, events }: { agent: AgentRun; events: StoredEvent[] }) 
   const { branch, result } = agentOutcome(events)
   const facts: [string, ReactNode][] = [
     ['Estado', <StatusBadge key="s" status={agent.status} />],
-    ['Proveedor', `${providerName(agent.provider)} · ${agent.kind}`],
+    [
+      'Proveedor',
+      agent.simulated ? (
+        <span key="p">
+          {providerName(agent.provider)} · {agent.kind} <SimulatedPill />
+        </span>
+      ) : (
+        `${providerName(agent.provider)} · ${agent.kind}`
+      ),
+    ],
     ['Modelo', agent.model ?? '—'],
     ['Sesión', agent.providerSessionId ? <code key="c">{agent.providerSessionId}</code> : '—'],
     ['Rama', branch ? <code key="b">{branch}</code> : '—'],

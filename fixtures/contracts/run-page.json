@@ -82,7 +82,8 @@
         "childKey" : null,
         "structuredOutput" : null,
         "failure" : null,
-        "quota" : [ ]
+        "quota" : [ ],
+        "simulated" : false
       } ],
       "verifications" : [ ],
       "approval" : null,
