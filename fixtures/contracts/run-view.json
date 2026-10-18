@@ -113,7 +113,8 @@
         "window" : "seven_day",
         "share" : 0.004,
         "method" : "measured"
-      } ]
+      } ],
+      "simulated" : false
     } ],
     "verifications" : [ {
       "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a20",

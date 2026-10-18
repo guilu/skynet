@@ -134,6 +134,8 @@ export interface AgentRun {
   failure: AgentFailure | null
   /** Parte de las ventanas de cuota de su CLI que se le atribuye (CU-B). */
   quota: QuotaShare[]
+  /** Se ejecutó con un CLI simulado (fake-claude, fake-codex…), no con el real (AR-A). */
+  simulated: boolean
   /** Tipo del último evento del agente, p. ej. `agent.tool.started`. */
   lastEventType: string | null
   /** Herramienta en curso, o null si no hay ninguna. */
@@ -513,6 +515,8 @@ export interface ProviderInfo {
   id: string
   /** Versión de su CLI; null si no respondió a --version. */
   version: string | null
+  /** El CLI es un simulador de pruebas (fake-claude, fake-codex…), no el real (AR-A). */
+  simulated: boolean
 }
 
 export interface Runner {

@@ -25,6 +25,7 @@ import tools.jackson.databind.json.JsonMapper;
  *     se sabe (W6)
  * @param quota parte de las ventanas de cuota de su CLI que se le atribuye (CU-B); vacía si no hay
  *     muestras de cuota en el tiempo en que corrió
+ * @param simulated se ejecutó con un CLI simulado (fake-claude, fake-codex…), no con el real (AR-A)
  */
 public record AgentRunView(
     UUID id,
@@ -58,7 +59,8 @@ public record AgentRunView(
     String childKey,
     JsonNode structuredOutput,
     String failure,
-    List<QuotaShare> quota) {
+    List<QuotaShare> quota,
+    boolean simulated) {
 
   static AgentRunView of(AgentRun a, WorkspaceView workspace, List<QuotaShare> quota) {
     return new AgentRunView(
@@ -95,6 +97,7 @@ public record AgentRunView(
             ? null
             : JsonMapper.shared().readTree(a.getStructuredOutput()),
         a.getFailure() == null ? null : a.getFailure().id(),
-        quota == null ? List.of() : quota);
+        quota == null ? List.of() : quota,
+        a.isSimulated());
   }
 }

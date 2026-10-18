@@ -34,6 +34,7 @@ import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
 import { Button } from '../ui/Button'
 import { Pill } from '../ui/Pill'
+import { SimulatedPill } from '../ui/SimulatedPill'
 import { statusIcon } from '../ui/statusIcons'
 import { headlineShare, sharesByProvider, sharesLine } from '../usage/quotaFormat'
 import { AgentActions } from './AgentActions'
@@ -68,6 +69,8 @@ export function RunHeader({
   const runnerId = pick((a) => a.runnerId)
   const model = pick((a) => a.model)
   const provider = pick((a) => (a.provider === 'command' ? null : a.provider))
+  // Del agente elegido; sin él, si alguno de la ejecución usó un CLI simulado.
+  const simulated = agent ? agent.simulated : agents.some((a) => a?.simulated)
   const branch = pick((a) => a.workspace?.branch)
   const runners = useQuery({
     // También los olvidados: la ejecución puede ser de uno que ya no está.
@@ -158,6 +161,12 @@ export function RunHeader({
             {provider && (
               <Chip icon={Bot} label="Proveedor">
                 {providerName(provider)}
+                {simulated && (
+                  <>
+                    {' '}
+                    <SimulatedPill />
+                  </>
+                )}
               </Chip>
             )}
             {model && (

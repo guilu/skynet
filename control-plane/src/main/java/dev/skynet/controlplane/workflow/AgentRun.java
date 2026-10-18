@@ -89,6 +89,9 @@ public class AgentRun {
    */
   private Instant timedOutAt;
 
+  /** Se ejecutó con un CLI simulado (fake-claude, fake-codex…), no con el real (AR-A). */
+  private boolean simulated;
+
   @Version private Long version;
 
   @PersistenceCreator
@@ -293,7 +296,8 @@ public class AgentRun {
   }
 
   /** El proveedor ha confirmado la sesión. */
-  void startSession(String sessionId, String model, Instant at) {
+  void startSession(String sessionId, String model, boolean simulated, Instant at) {
+    this.simulated = simulated;
     if (sessionId != null) {
       providerSessionId = sessionId;
     }
@@ -508,6 +512,10 @@ public class AgentRun {
   /** La salida estructurada del resultado, en JSON. */
   void recordStructuredOutput(String json) {
     this.structuredOutput = json;
+  }
+
+  public boolean isSimulated() {
+    return simulated;
   }
 
   /** La invocación es el hijo {@code childKey} de una fase {@code parallel}. */

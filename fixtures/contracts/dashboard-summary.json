@@ -82,7 +82,8 @@
         "childKey" : null,
         "structuredOutput" : null,
         "failure" : null,
-        "quota" : [ ]
+        "quota" : [ ],
+        "simulated" : false
       } ],
       "verifications" : [ ],
       "approval" : null,
@@ -118,7 +119,8 @@
     "archivedAt" : null,
     "providers" : [ {
       "id" : "claude-code",
-      "version" : "2.1.288"
+      "version" : "2.1.288",
+      "simulated" : false
     } ]
   } ],
   "providerShortages" : [ {

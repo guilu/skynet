@@ -50,7 +50,7 @@ class FakeGeminiTest {
     Result r = run(Map.of(), "--version");
 
     assertThat(r.exitCode).isZero();
-    assertThat(r.out.strip()).isEqualTo(FakeGemini.VERSION);
+    assertThat(r.out.strip()).isEqualTo(FakeGemini.VERSION + " (fake-gemini)");
   }
 
   @Test

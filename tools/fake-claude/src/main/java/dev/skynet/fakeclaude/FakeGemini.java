@@ -59,7 +59,7 @@ public final class FakeGemini {
       throws IOException, InterruptedException {
     Invocation inv = Invocation.parse(args);
     if (inv.version()) {
-      out.println(VERSION);
+      out.println(VERSION + " (fake-gemini)");
       return 0;
     }
     if (!"stream-json".equals(inv.outputFormat()) || inv.prompt() == null) {
