@@ -2,6 +2,7 @@ import {
   Activity,
   CirclePlay,
   Folder,
+  Gauge,
   Hand,
   House,
   Monitor,
@@ -32,7 +33,8 @@ export const NAV: NavItem[] = [
   { to: '/workflows', label: 'Workflows', icon: Workflow },
   { to: '/runs', label: 'Ejecuciones', icon: CirclePlay, mobile: true },
   { to: '/approvals', label: 'Aprobaciones', icon: Hand, pendingApprovals: true },
-  { to: '/runners', label: 'Runners', icon: Server, mobile: true },
+  { to: '/runners', label: 'Runners', icon: Server },
+  { to: '/usage', label: 'Uso', icon: Gauge, mobile: true },
   { to: '/activity', label: 'Actividad', icon: Activity },
   { to: '/settings', label: 'Ajustes', icon: Settings },
 ]

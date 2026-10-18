@@ -1,23 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
-import {
-  CirclePlay,
-  CircleX,
-  Hand,
-  Hourglass,
-  Pause,
-  Plug,
-  Server,
-  type LucideIcon,
-} from 'lucide-react'
+import { CirclePlay, CircleX, Hand, Hourglass, Pause, Plug, Server } from 'lucide-react'
 import { Link } from 'react-router'
 import { api, SESSION_KEY, type ApprovalSummary, type DashboardSummary, type Runner } from '../api'
 import { RISK_LABEL, approvalWork } from '../components/approval/approvalFormat'
 import { usePendingApprovals } from '../components/approval/usePendingApprovals'
+import { AttentionList, type Alert } from '../components/AttentionList'
 import { DashboardMetrics, PeriodSelector } from '../components/DashboardMetrics'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { RunsTable } from '../components/RunsTable'
 import { Pill } from '../components/ui/Pill'
-import { formatDateTime, formatProviders, type StatusTone } from '../format'
+import { quotaAlerts } from '../components/usage/quotaFormat'
+import { formatDateTime, formatProviders } from '../format'
 import { cn } from '../lib/cn'
 import { useNow } from '../useNow'
 import { TableSkeleton } from '../components/ui/Skeleton'
@@ -42,7 +35,7 @@ export function DashboardPage() {
   const approvals = usePendingApprovals()
   const now = useNow(true)
   const data = summary.data
-  const alerts = data ? attentionItems(data, approvals.data ?? []) : []
+  const alerts = data ? attentionItems(data, approvals.data ?? [], now) : []
   const working = (runners.data ?? [])
     .filter((r) => r.status === 'ONLINE')
     .reduce((n, r) => n + r.activeAgents, 0)
@@ -69,33 +62,7 @@ export function DashboardPage() {
       </div>
       <ErrorMessage error={summary.error} />
       {summary.isPending && <TableSkeleton label="lo que requiere atención" columns={5} rows={3} />}
-      {alerts.length > 0 && (
-        <section className="dash-section" aria-labelledby="attention-title">
-          <h2 id="attention-title">Necesita tu atención ({alerts.length})</h2>
-          <ul className="attn-list">
-            {alerts.map((a) => (
-              <li key={a.key}>
-                <Link to={a.to} className="attn-item">
-                  <span className={cn('attn-icon', `attn-${a.tone}`)} aria-hidden="true">
-                    <a.icon
-                      size={24}
-                      strokeWidth={2.75}
-                      fill={a.filled ? 'currentColor' : 'none'}
-                    />
-                  </span>
-                  <span className="attn-text">
-                    <strong>{a.title}</strong>
-                    <small>{a.detail}</small>
-                  </span>
-                  <Pill tone={a.tone} icon={a.filled ? undefined : a.icon}>
-                    {a.status}
-                  </Pill>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <AttentionList alerts={alerts} className="dash-section" />
       <DashboardMetrics />
       {data && data.activeRunsTotal > 0 && (
         <section className="dash-section">
@@ -142,24 +109,16 @@ function summaryLine(working: number, alerts: number) {
   return `${agents} y ${alerts} ${alerts === 1 ? 'cosa que necesita' : 'cosas que necesitan'} tu atención.`
 }
 
-interface Alert {
-  key: string
-  to: string
-  icon: LucideIcon
-  tone: StatusTone
-  title: string
-  detail: string
-  status: string
-  /** Iconos de barras (pausa) que se ven mejor rellenos. */
-  filled?: boolean
-}
-
 /**
  * Lo que requiere atención: aprobaciones pendientes (primero las de más riesgo), fallidas en 24 h,
- * agentes sin respuesta, runners sin latido y agentes de un proveedor que no tiene ningún runner en
- * línea.
+ * agentes sin respuesta, runners sin latido, agentes de un proveedor que no tiene ningún runner en
+ * línea y cuotas de los CLIs casi agotadas o por encima de su ritmo.
  */
-function attentionItems(data: DashboardSummary, approvals: ApprovalSummary[]): Alert[] {
+function attentionItems(
+  data: DashboardSummary,
+  approvals: ApprovalSummary[],
+  now: number,
+): Alert[] {
   return [
     ...approvals.map((a) => ({
       key: `approval-${a.id}`,
@@ -210,6 +169,7 @@ function attentionItems(data: DashboardSummary, approvals: ApprovalSummary[]): A
           : `${p.queuedAgents} agentes esperan: ningún runner en línea tiene ${p.displayName}`,
       status: 'Sin runner',
     })),
+    ...quotaAlerts(data.quotaWarnings, now),
   ]
 }
 

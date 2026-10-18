@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { api, type AgentRun } from '../../api'
-import { formatCost, formatNumber } from '../../format'
+import { formatCost, formatNumber, isTerminal, providerName } from '../../format'
 import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
+import { formatPercent, windowLabel } from '../usage/quotaFormat'
 
 const KIND_LABELS: Record<AgentRun['kind'], string> = {
   START: 'Inicio',
@@ -38,6 +39,7 @@ export function CostTab({ agent }: { agent: AgentRun }) {
       {agent.costUsd == null && (
         <p className="muted small">El coste llega con el resultado final de la invocación.</p>
       )}
+      {agent.provider !== 'command' && <QuotaSection agent={agent} />}
       <ErrorMessage error={conversation.error} />
       {turns.length > 1 && (
         <>
@@ -84,6 +86,38 @@ export function CostTab({ agent }: { agent: AgentRun }) {
             </tfoot>
           </table>
         </>
+      )}
+    </>
+  )
+}
+
+/** La parte de las ventanas de cuota de su CLI que se atribuye a esta invocación. */
+function QuotaSection({ agent }: { agent: AgentRun }) {
+  return (
+    <>
+      <h3>Cuota</h3>
+      {agent.quota.length > 0 ? (
+        <>
+          <dl className="agent-facts small">
+            {agent.quota.map((q) => (
+              <Fact
+                key={`${q.provider}-${q.bucket}-${q.window}`}
+                label={`${providerName(q.provider)} · ${windowLabel(q.window)}`}
+                value={`${formatPercent(q.share)} (${q.method === 'measured' ? 'medido' : 'repartido'})`}
+              />
+            ))}
+          </dl>
+          <p className="muted small">
+            «Medido»: el agente corrió solo y la subida de la cuota es suya. «Repartido»: corrió a
+            la vez que otros y la subida se reparte según el coste de cada uno.
+          </p>
+        </>
+      ) : (
+        <p className="muted small">
+          {isTerminal(agent.status)
+            ? 'Sin cuota atribuida: su CLI no informó de ninguna subida mientras corría.'
+            : 'La cuota se atribuye cuando termina la invocación.'}
+        </p>
       )}
     </>
   )

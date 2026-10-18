@@ -538,6 +538,17 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito CU (cuotas de uso de los CLIs), aprobado el 2026-10-17:** CU-A lectura de cuotas, CU-B atribución, CU-C página Uso y E2E. Ver [`usage-windows.md`](usage-windows.md).
 
+**Hito CU terminado con CU-C.**
+
+**Implementado (CU-C), página Uso y E2E:**
+
+- Página `/usage` («Uso» en la navegación, entre Runners y Actividad; en el móvil ocupa el sitio de Runners): una tarjeta por CLI con un medidor por ventana (Skynet, fuera de Skynet rayado y la marca del ritmo uniforme), su estado (Disponible, Justa desde el 75 %, Casi agotada desde el 90 %), versión, plan y de cuándo es el dato; agy por grupos de modelos y en solo lectura. Selector de runner si hay varios y «Actualizar».
+- «Evolución de la ventana»: área apilada en escalera por CLI y ventana (recharts, cargado aparte), con la línea de «ahora».
+- «Qué cuesta cada agente» por periodo: tabla por agente (% semanal, por ejecución y por éxito) y las ejecuciones que más han gastado.
+- KPI «Cuota» en la cabecera de la ejecución (la ventana de 5 h del CLI que más ha gastado y una línea por CLI) y sección «Cuota» en la pestaña Coste del agente (medido o repartido).
+- Los `quotaWarnings` salen en «Necesita tu atención» del Dashboard y de la página Uso, y llevan a `/usage`.
+- vitest de la página, del formato y de la cabecera; E2E `usage.e2e.ts` (fake-codex gasta 3 puntos por sesión con `FAKE_CODEX_QUOTA_STEP`): atribución medida, medidores, aviso del 90 %, cabecera, pestaña Coste, Dashboard y axe.
+
 **Implementado (CU-B), atribución:**
 
 - `QuotaAttributor`: entre dos muestras seguidas de una ventana, la subida va a los agentes de ese CLI que corrieron en el runner, en proporción a su coste dentro del intervalo (si no, tokens; si no, tiempo); sin agentes, a «Fuera de Skynet». Renovación de la ventana (pasó `resetsAt` o bajó más que el redondeo): cuenta desde 0. La primera muestra de un agente de Claude Code es su punto de partida; la de Codex, su final. Se recalcula con cada muestra (también desordenada) y cuando termina o se pierde un agente.

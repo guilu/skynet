@@ -167,6 +167,7 @@ describe('App', () => {
       'Workflows',
       'Ejecuciones',
       'Runners',
+      'Uso',
       'Actividad',
     ]) {
       expect(within(nav).getByRole('link', { name })).toBeInTheDocument()
@@ -189,7 +190,7 @@ describe('App', () => {
     stubApi({ '/api/dashboard': dashboardSummary, '/api/runners': runners })
     renderAt('/', <App />)
     expect(await screen.findByRole('heading', { level: 1, name: /^Buen.*, admin$/ })).toBeVisible()
-    const attention = await screen.findByRole('region', { name: 'Necesita tu atención (3)' })
+    const attention = await screen.findByRole('region', { name: 'Necesita tu atención (4)' })
     const stuck = dashboardSummary.unresponsiveAgents[0]
     expect(within(attention).getByRole('link', { name: /TKM-1/ })).toHaveAttribute(
       'href',
@@ -205,8 +206,14 @@ describe('App', () => {
         name: /Gemini CLI.*2 agentes esperan: ningún runner en línea tiene Gemini CLI/,
       }),
     ).toHaveAttribute('href', '/runners')
+    // Una cuota por encima de su ritmo lleva a la página Uso.
     expect(
-      await screen.findByText('1 agente trabajando y 3 cosas que necesitan tu atención.'),
+      within(attention).getByRole('link', {
+        name: /Claude Code al 78 % de la semana.*Va por delante del ritmo \(55 %\).*Por encima del ritmo/,
+      }),
+    ).toHaveAttribute('href', '/usage')
+    expect(
+      await screen.findByText('1 agente trabajando y 4 cosas que necesitan tu atención.'),
     ).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Ejecuciones activas (1)' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Ver todas las activas' })).toHaveAttribute(
@@ -235,6 +242,7 @@ describe('App', () => {
         unresponsiveAgents: [],
         staleRunners: [],
         providerShortages: [],
+        quotaWarnings: [],
         generatedAt: '2026-10-05T09:10:00Z',
       },
       '/api/runners': [],
@@ -452,6 +460,10 @@ describe('App', () => {
     expect(screen.getAllByText('0,0574 US$').length).toBeGreaterThan(0)
     expect(screen.getByText('42 s')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Cancelar agente' })).not.toBeInTheDocument()
+    // La cuota que se atribuye a la ejecución: la ventana de 5 h y, debajo, cada CLI.
+    const quota = screen.getByText('Cuota', { selector: 'dt' }).parentElement!
+    expect(quota).toHaveTextContent('2 % de 5 h')
+    expect(quota).toHaveTextContent('Claude: 2 % de 5 h · 0,4 % semanal')
   })
 
   it('el formulario de lanzar envía solo los límites rellenados', async () => {
@@ -1017,6 +1029,18 @@ describe('App', () => {
         'true',
       )
       expect(await screen.findByText('“agent.tool.completed”')).toBeInTheDocument()
+    })
+
+    it('la pestaña Coste enseña la cuota atribuida al agente', async () => {
+      openRun(`?agent=${agent.id}&tab=cost`)
+      const inspector = within(await screen.findByRole('region', { name: 'Inspector del agente' }))
+      expect(await inspector.findByRole('heading', { name: 'Cuota' })).toBeInTheDocument()
+      expect(
+        inspector.getByText('Claude Code · Ventana de 5 h').nextElementSibling,
+      ).toHaveTextContent('2 % (medido)')
+      expect(inspector.getByText('Claude Code · Semana').nextElementSibling).toHaveTextContent(
+        '0,4 % (medido)',
+      )
     })
 
     it('el progreso abre los agentes de la fase y elige uno', async () => {
