@@ -225,7 +225,7 @@ export function RunPage() {
             </div>
           ) : (
             <Group
-              className="run-panels card"
+              className="run-panels"
               orientation="horizontal"
               defaultLayout={panels.defaultLayout}
               onLayoutChanged={panels.onLayoutChanged}
