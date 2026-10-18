@@ -1,6 +1,7 @@
 package dev.skynet.runner;
 
 import dev.skynet.protocol.AgentProviderKind;
+import dev.skynet.protocol.runner.HeartbeatReply;
 import dev.skynet.protocol.runner.ProviderInfo;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
@@ -10,6 +11,7 @@ import dev.skynet.runner.agent.AgentExecutor;
 import dev.skynet.runner.agent.ArtifactSender;
 import dev.skynet.runner.agent.EventSender;
 import dev.skynet.runner.journal.Journal;
+import dev.skynet.runner.quota.QuotaPoller;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.transport.ControlPlaneClient;
 import dev.skynet.runner.transport.UnauthorizedException;
@@ -45,6 +47,7 @@ public final class RunnerDaemon implements AutoCloseable {
   private final ArtifactSender artifactSender;
   private final ProcessSupervisor supervisor;
   private final List<ProviderInfo> providers;
+  private final QuotaPoller quotas;
   private final ScheduledExecutorService heartbeats =
       Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon().factory());
   private volatile boolean running;
@@ -59,6 +62,29 @@ public final class RunnerDaemon implements AutoCloseable {
       ArtifactSender artifactSender,
       ProcessSupervisor supervisor,
       List<ProviderInfo> providers) {
+    this(
+        config,
+        client,
+        journal,
+        executor,
+        sender,
+        artifactSender,
+        supervisor,
+        providers,
+        new QuotaPoller(List.of(), null));
+  }
+
+  public RunnerDaemon(
+      RunnerConfig config,
+      ControlPlaneClient client,
+      Journal journal,
+      AgentExecutor executor,
+      EventSender sender,
+      ArtifactSender artifactSender,
+      ProcessSupervisor supervisor,
+      List<ProviderInfo> providers,
+      QuotaPoller quotas) {
+    this.quotas = quotas;
     this.config = config;
     this.client = client;
     this.journal = journal;
@@ -75,6 +101,7 @@ public final class RunnerDaemon implements AutoCloseable {
     sender.start();
     artifactSender.start();
     running = true;
+    quotas.start();
     heartbeats.scheduleWithFixedDelay(
         this::heartbeat, 0, config.heartbeatInterval().toMillis(), TimeUnit.MILLISECONDS);
     heartbeats.scheduleWithFixedDelay(this::purgeLogs, 0, 1, TimeUnit.HOURS);
@@ -205,11 +232,24 @@ public final class RunnerDaemon implements AutoCloseable {
       // una invocación activa que deja de aparecer aquí.
       Set<UUID> agents = new LinkedHashSet<>(executor.running());
       agents.addAll(journal.agentsWithPendingEvents());
-      client.heartbeat(new RunnerHeartbeat(config.capacity(), List.copyOf(agents), providers));
+      send(new RunnerHeartbeat(config.capacity(), List.copyOf(agents), providers, quotas.drain()));
     } catch (IOException e) {
       LOG.log(Level.FINE, "No se pudo enviar el latido", e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+    }
+  }
+
+  /** Si el latido no llega, sus cuotas van en el siguiente. */
+  private void send(RunnerHeartbeat heartbeat) throws IOException, InterruptedException {
+    try {
+      HeartbeatReply reply = client.heartbeat(heartbeat);
+      if (reply.refreshQuotas()) {
+        quotas.refresh();
+      }
+    } catch (IOException | RuntimeException e) {
+      quotas.restore(heartbeat.quotas());
+      throw e;
     }
   }
 
@@ -243,6 +283,7 @@ public final class RunnerDaemon implements AutoCloseable {
       poller.interrupt();
     }
     heartbeats.shutdownNow();
+    quotas.close();
     executor.close();
     sender.flush();
     artifactSender.flush();

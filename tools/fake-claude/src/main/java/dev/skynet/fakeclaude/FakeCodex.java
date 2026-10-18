@@ -1,14 +1,21 @@
 package dev.skynet.fakeclaude;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -33,8 +40,14 @@ import tools.jackson.databind.node.ObjectNode;
  *       trabajo. Sin ella el mensaje se queda en texto, como un agente que no cumple el schema.
  *   <li>{@code CODEX_HOME}: si está definida, guarda cada sesión en {@code
  *       <dir>/sessions/<sesión>.jsonl}, y reanudar o bifurcar falla si no la encuentra. Sin ella no
- *       comprueba nada.
+ *       comprueba nada. Al final de la sesión añade un {@code token_count} con la cuota de la
+ *       cuenta, como el CLI (que no la escribe en su salida).
+ *   <li>{@code FAKE_CODEX_QUOTA}: la cuota que da, {@code <% de 5 h>,<% semanal>}. Por defecto
+ *       {@code 23,13}, como la grabada en {@code fixtures/quota/codex-rollout-token-count.jsonl}.
  * </ul>
+ *
+ * <p>{@code fake-codex app-server} responde por JSON-RPC a {@code initialize} y a {@code
+ * account/rateLimits/read} con esa cuota.
  */
 public final class FakeCodex {
 
@@ -47,15 +60,30 @@ public final class FakeCodex {
   private FakeCodex() {}
 
   public static void main(String[] args) throws Exception {
-    int code = run(args, System.getenv(), Path.of("").toAbsolutePath(), System.out, System.err);
+    int code =
+        run(args, System.getenv(), Path.of("").toAbsolutePath(), System.in, System.out, System.err);
     FakeCli.exit(code, "FAKE_CODEX_HANG");
   }
 
   static int run(String[] args, Map<String, String> env, Path cwd, PrintStream out, PrintStream err)
       throws IOException, InterruptedException {
+    return run(args, env, cwd, InputStream.nullInputStream(), out, err);
+  }
+
+  static int run(
+      String[] args,
+      Map<String, String> env,
+      Path cwd,
+      InputStream in,
+      PrintStream out,
+      PrintStream err)
+      throws IOException, InterruptedException {
     if (args.length == 1 && "--version".equals(args[0])) {
       out.println(VERSION + " (fake-codex)");
       return 0;
+    }
+    if (args.length == 1 && "app-server".equals(args[0])) {
+      return appServer(env, in, out);
     }
     Invocation inv = Invocation.parse(args);
     if (!inv.exec() || !inv.json()) {
@@ -115,7 +143,82 @@ public final class FakeCodex {
     if (!finished) {
       return FakeClaude.EXIT_KILLED;
     }
+    if (sessionFile != null) {
+      // Solo en el fichero de la sesión, como el CLI.
+      Files.writeString(
+          sessionFile,
+          tokenCount(env) + "\n",
+          StandardCharsets.UTF_8,
+          StandardOpenOption.CREATE,
+          StandardOpenOption.APPEND);
+    }
     return failed ? 1 : 0;
+  }
+
+  /** Porcentajes de la cuota: {@code FAKE_CODEX_QUOTA} ({@code 5h,semana}). */
+  static double[] quota(Map<String, String> env) {
+    String[] parts = env.getOrDefault("FAKE_CODEX_QUOTA", "23,13").split(",");
+    return new double[] {Double.parseDouble(parts[0].trim()), Double.parseDouble(parts[1].trim())};
+  }
+
+  /** El {@code token_count} del fichero de la sesión, con la forma de Codex 0.163. */
+  static String tokenCount(Map<String, String> env) {
+    double[] quota = quota(env);
+    long now = Instant.now().getEpochSecond();
+    return "{\"timestamp\":\""
+        + Instant.now()
+        + "\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":null,"
+        + "\"rate_limits\":{\"limit_id\":\"codex\",\"primary\":{\"used_percent\":"
+        + quota[0]
+        + ",\"window_minutes\":300,\"resets_at\":"
+        + (now + 3 * 3600)
+        + "},\"secondary\":{\"used_percent\":"
+        + quota[1]
+        + ",\"window_minutes\":10080,\"resets_at\":"
+        + (now + 5 * 86400)
+        + "},\"plan_type\":\"plus\"}}}";
+  }
+
+  /** JSON-RPC por la entrada y la salida, una línea por mensaje, hasta que se cierre la entrada. */
+  static int appServer(Map<String, String> env, InputStream in, PrintStream out)
+      throws IOException {
+    double[] quota = quota(env);
+    long now = Instant.now().getEpochSecond();
+    BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
+    String line;
+    while ((line = reader.readLine()) != null) {
+      if (line.isBlank()) {
+        continue;
+      }
+      JsonNode request = JSON.readTree(line);
+      if (!request.has("id")) {
+        continue; // Una notificación (initialized).
+      }
+      ObjectNode response = JSON.createObjectNode();
+      response.set("id", request.get("id"));
+      switch (request.path("method").asString("")) {
+        case "initialize" -> response.putObject("result").put("userAgent", "fake-codex");
+        case "account/rateLimits/read" -> {
+          ObjectNode limits = response.putObject("result").putObject("rateLimits");
+          limits
+              .putObject("primary")
+              .put("usedPercent", quota[0])
+              .put("windowDurationMins", 300)
+              .put("resetsAt", now + 3 * 3600);
+          limits
+              .putObject("secondary")
+              .put("usedPercent", quota[1])
+              .put("windowDurationMins", 10080)
+              .put("resetsAt", now + 5 * 86400);
+          limits.put("planType", "plus");
+        }
+        default ->
+            response.putObject("error").put("code", -32601).put("message", "method not found");
+      }
+      out.println(JSON.writeValueAsString(response));
+      out.flush();
+    }
+    return 0;
   }
 
   /** Fichero de la sesión; {@code null} sin {@code CODEX_HOME}. */

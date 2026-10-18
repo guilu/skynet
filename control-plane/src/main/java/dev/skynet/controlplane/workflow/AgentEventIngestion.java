@@ -4,6 +4,7 @@ import dev.skynet.controlplane.event.EventDraft;
 import dev.skynet.controlplane.event.EventStore;
 import dev.skynet.controlplane.shared.PayloadRedactor;
 import dev.skynet.controlplane.shared.TimeSource;
+import dev.skynet.controlplane.usage.QuotaSnapshots;
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.AgentObservableStatus;
@@ -49,6 +50,7 @@ public class AgentEventIngestion {
   private final Workspaces workspaces;
   private final VerificationService verifications;
   private final StageVerifications stageVerifications;
+  private final QuotaSnapshots quotas;
   private final TimeSource time;
 
   AgentEventIngestion(
@@ -61,6 +63,7 @@ public class AgentEventIngestion {
       Workspaces workspaces,
       VerificationService verifications,
       StageVerifications stageVerifications,
+      QuotaSnapshots quotas,
       TimeSource time) {
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
@@ -71,6 +74,7 @@ public class AgentEventIngestion {
     this.workspaces = workspaces;
     this.verifications = verifications;
     this.stageVerifications = stageVerifications;
+    this.quotas = quotas;
     this.time = time;
   }
 
@@ -112,6 +116,17 @@ public class AgentEventIngestion {
     if (!isNew) {
       return Outcome.DUPLICATE;
     }
+    afterAppend(runnerId, agent, stage, event, redacted, verificationRunId);
+    return Outcome.ACCEPTED;
+  }
+
+  private void afterAppend(
+      UUID runnerId,
+      AgentRun agent,
+      StageRun stage,
+      NormalizedEvent event,
+      Map<String, Object> redacted,
+      UUID verificationRunId) {
     if (verificationRunId != null) {
       // La verificación llega cuando el agente ya ha terminado y no cambia su estado.
       verifications.apply(verificationRunId, event.type(), redacted, event.occurredAt());
@@ -121,6 +136,10 @@ public class AgentEventIngestion {
         // Libera el worktree: la fase que lo continúa puede arrancar.
         publisher.publishEvent(new WorkflowRunChanged(stage.getWorkflowRunId()));
       }
+    } else if (event.type() == AgentEventType.QUOTA) {
+      // La cuota es de la cuenta, no del agente: no cambia su estado ni cuenta como actividad. La
+      // de Codex llega justo antes del fin.
+      quotas.recordInvocation(runnerId, agent.getId(), redacted, event.occurredAt());
     } else if (event.type() == AgentEventType.WORKSPACE_REMOVED) {
       // También llega con el agente terminado: solo cambia el worktree.
       UUID workspaceId = uuid(redacted.get("workspaceId"));
@@ -130,7 +149,6 @@ public class AgentEventIngestion {
     } else if (!agent.getStatus().isTerminal()) {
       apply(agent, stage, event, redacted);
     }
-    return Outcome.ACCEPTED;
   }
 
   private void apply(AgentRun agent, StageRun stage, NormalizedEvent event, Map<String, Object> p) {

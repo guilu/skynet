@@ -2,6 +2,21 @@ import { describe, expect, it } from 'vitest'
 import { describeEvent, formatCompact, formatDuration, statusTone } from './format'
 
 describe('describeEvent', () => {
+  it('describe la cuota y el límite de uso de la cuenta', () => {
+    expect(
+      describeEvent('agent.quota', {
+        provider: 'codex',
+        windows: [
+          { bucket: 'default', window: 'five_hour', usedFraction: 0.23 },
+          { bucket: 'default', window: 'seven_day', usedFraction: 0.13 },
+        ],
+      }),
+    ).toBe('Cuota de Codex: 23 % de 5 h, 13 % semanal')
+    expect(describeEvent('agent.rate_limit', { status: 'rejected' })).toBe(
+      'Límite de uso: rejected',
+    )
+  })
+
   it('describe las fases que mueve el motor', () => {
     expect(
       describeEvent('stage.retry.scheduled', {

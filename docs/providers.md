@@ -56,8 +56,10 @@ Además, todos heredan las variables básicas (`PATH`, `HOME`, idioma y proxy) y
 3. Si no está en el `PATH`, apúntalo con `SKYNET_CLAUDE_BIN`, `SKYNET_CODEX_BIN` o `SKYNET_GEMINI_BIN`.
 4. Reinicia el runner. Al conectarse escribe `proveedores: …` con los que ha encontrado, y en **Runners** salen con su versión.
 
+El runner también lee las ventanas de uso (5 h y semanal) de Claude Code, Codex y Antigravity (`agy`): ver [`usage-windows.md`](usage-windows.md).
+
 Un agente solo se entrega a un runner que tiene su proveedor. Si ningún runner en línea lo tiene, se queda en cola y el Dashboard lo avisa en «Necesita tu atención». `SKYNET_PROVIDERS=claude-code,codex` limita a mano lo que declara un runner, por ejemplo si tiene un CLI instalado pero sin cuenta.
 
 ## Probar sin cuentas
 
-`tools/fake-claude` instala tres lanzadores que imitan cada CLI con fixtures: `fake-claude`, `fake-codex` y `fake-gemini` (ver el README). Las E2E (`scripts/e2e.sh`) arrancan el runner con los tres, y `web/e2e/providers.e2e.ts` comprueba la plantilla «Revisión con Codex y Gemini» y un agente suelto lanzado con Gemini.
+`tools/fake-claude` instala lanzadores que imitan cada CLI con fixtures: `fake-claude`, `fake-codex` y `fake-gemini` (ver el README), y `fake-agy`, que solo responde a `/usage`. `fake-codex` escribe su cuota en el fichero de la sesión y responde a `app-server` (`FAKE_CODEX_QUOTA=23,13`). Las E2E (`scripts/e2e.sh`) arrancan el runner con los tres, y `web/e2e/providers.e2e.ts` comprueba la plantilla «Revisión con Codex y Gemini» y un agente suelto lanzado con Gemini.

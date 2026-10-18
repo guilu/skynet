@@ -536,6 +536,15 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito W7 (grafo del workflow), planificado el 2026-10-17:** W7-A grafo del workflow, W7-B grafo de la ejecución, W7-C carriles por macrofase (`phase`), accesibilidad y E2E.
 
+**Hito CU (cuotas de uso de los CLIs), aprobado el 2026-10-17:** CU-A lectura de cuotas, CU-B atribución, CU-C página Uso y E2E. Ver [`usage-windows.md`](usage-windows.md).
+
+**Implementado (CU-A), lectura de cuotas:**
+
+- Evento `agent.quota` y `QuotaSample` en el protocolo. `ClaudeStreamParser` lo emite con las `unifiedWindows` de cada `rate_limit_event` (cualquier estado) cuando cambian; `CodexProvider.afterExit` lo emite al terminar, con el último `token_count` del fichero de la sesión.
+- `QuotaPoller` en el runner: `codex app-server` (`account/rateLimits/read`) y `agy -p /usage` cada `SKYNET_QUOTA_POLL` (10 min; `off` lo apaga); las muestras viajan en `RunnerHeartbeat.quotas`. El latido responde `HeartbeatReply` con `refreshQuotas`.
+- `quota_snapshot` (migración `V24`, se borra a los 35 días), `GET /api/usage/windows` y `POST /api/usage/refresh`.
+- Fixtures reales de la máquina de Diego (`fixtures/quota/`, `fixtures/agy/usage.json`); `fake-codex` escribe la cuota en su sesión y responde a `app-server`, y `fake-agy` responde a `/usage`.
+
 **Implementado (W7-C), carriles, accesibilidad y E2E:**
 
 - Clave `phase` en las fases (`spec`, `plan`, `implement`, `test`, `review`, `deliver`; validada con sugerencia), en el schema y en `StageDefinition`/`StageRunView`; las plantillas «Revisión en paralelo», «Revisión con Codex y Gemini» y «Especificar, planificar e implementar» la usan.

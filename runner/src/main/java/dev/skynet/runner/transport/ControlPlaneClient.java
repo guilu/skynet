@@ -4,6 +4,7 @@ import dev.skynet.protocol.runner.ArtifactStored;
 import dev.skynet.protocol.runner.ArtifactUpload;
 import dev.skynet.protocol.runner.EventBatch;
 import dev.skynet.protocol.runner.EventBatchResult;
+import dev.skynet.protocol.runner.HeartbeatReply;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
@@ -51,8 +52,13 @@ public class ControlPlaneClient {
     return send(post("/api/runner/register", registration, false), RunnerRegistered.class, TIMEOUT);
   }
 
-  public void heartbeat(RunnerHeartbeat heartbeat) throws IOException, InterruptedException {
-    send(post("/api/runner/heartbeat", heartbeat, true), Void.class, TIMEOUT);
+  /** Envía el latido; un control plane anterior a CU responde sin cuerpo. */
+  public HeartbeatReply heartbeat(RunnerHeartbeat heartbeat)
+      throws IOException, InterruptedException {
+    String body = send(post("/api/runner/heartbeat", heartbeat, true), String.class, TIMEOUT);
+    return body == null || body.isBlank()
+        ? new HeartbeatReply(false)
+        : JSON.readValue(body, HeartbeatReply.class);
   }
 
   /** Long-poll de órdenes: vuelve en cuanto hay alguna o al agotar {@code wait}. */

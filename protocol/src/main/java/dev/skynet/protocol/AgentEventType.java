@@ -28,6 +28,13 @@ public enum AgentEventType {
   VCS_CHANGED("agent.vcs.changed"),
   /** La cuenta del proveedor está limitada. */
   RATE_LIMIT("agent.rate_limit"),
+  /**
+   * Cuota de uso de la cuenta del proveedor vista durante la invocación: {@code provider} y {@code
+   * windows}, cada una con {@code bucket}, {@code window} ({@code five_hour} o {@code seven_day}),
+   * {@code usedFraction} (0–1) y, si se sabe, {@code resetsAt} (epoch en segundos) y {@code plan}.
+   * Ver {@code docs/usage-windows.md}. No cambia el estado del agente.
+   */
+  QUOTA("agent.quota"),
   /** Resultado final de la invocación: turnos, tokens, coste acumulado y salida estructurada. */
   RESULT("agent.result"),
   /**

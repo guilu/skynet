@@ -148,8 +148,10 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `Permiso denegado: ${p('toolName')}`
     case 'agent.vcs.changed':
       return `Git: ${p('kind')}${payload.branch ? ` (${p('branch')})` : ''}`
-    case 'agent.rate.limit':
+    case 'agent.rate_limit':
       return `Límite de uso: ${p('status')}`
+    case 'agent.quota':
+      return describeQuota(payload)
     case 'agent.result':
       return `Resultado ${p('subtype')} · ${p('numTurns')} turnos${
         payload.costUsdCumulative != null
@@ -224,6 +226,26 @@ function describeVerification(payload: Record<string, unknown>): string {
 }
 
 /** Tamaño legible: «512 B», «3,4 KB», «12,1 MB». */
+const QUOTA_WINDOW: Record<string, string> = { five_hour: 'de 5 h', seven_day: 'semanal' }
+
+/** «Cuota de Codex: 23 % de 5 h, 13 % semanal». */
+function describeQuota(payload: Record<string, unknown>): string {
+  const windows = Array.isArray(payload.windows)
+    ? (payload.windows as { window?: string; usedFraction?: number; label?: string }[])
+    : []
+  const parts = windows
+    .filter((w) => typeof w.usedFraction === 'number' && w.window)
+    .map(
+      (w) =>
+        `${w.label ? `${w.label} ` : ''}${Math.round(w.usedFraction! * 100)} % ${
+          QUOTA_WINDOW[w.window!] ?? w.window
+        }`,
+    )
+  return `Cuota de ${providerName(String(payload.provider ?? ''))}${
+    parts.length > 0 ? `: ${parts.join(', ')}` : ''
+  }`
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   const units = ['KB', 'MB', 'GB']
@@ -266,6 +288,7 @@ const PROVIDER_NAMES: Record<string, string> = {
   'claude-code': 'Claude Code',
   codex: 'Codex',
   gemini: 'Gemini CLI',
+  antigravity: 'Antigravity CLI',
 }
 
 /** Nombre para mostrar de un proveedor de agentes (el id si no se conoce). */

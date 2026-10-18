@@ -30,6 +30,10 @@ import java.util.stream.Collectors;
  *     SKYNET_LOG_RETENTION_DAYS}, 7 días por defecto)
  * @param providers proveedores que declara el runner ({@code SKYNET_PROVIDERS}, separados por
  *     comas), o {@code null} para los que respondan a {@code --version}
+ * @param agyExecutable ejecutable de Antigravity CLI ({@code SKYNET_AGY_BIN}); el runner solo lee
+ *     su cuota, no lanza agentes con él
+ * @param quotaPoll cada cuánto pregunta su cuota a Codex y Antigravity ({@code SKYNET_QUOTA_POLL}:
+ *     {@code 10m} por defecto, {@code 30s}, {@code 1h}…; {@code off} lo apaga), o {@code null}
  */
 public record RunnerConfig(
     URI controlPlane,
@@ -46,7 +50,9 @@ public record RunnerConfig(
     Duration cancelGrace,
     Path modelPrices,
     Duration logRetention,
-    Set<String> providers) {
+    Set<String> providers,
+    String agyExecutable,
+    Duration quotaPoll) {
 
   public Path journalFile() {
     return home.resolve("journal.db");
@@ -87,7 +93,27 @@ public record RunnerConfig(
         Duration.ofSeconds(10),
         env.containsKey("SKYNET_MODEL_PRICES") ? Path.of(env.get("SKYNET_MODEL_PRICES")) : null,
         Duration.ofDays(Long.parseLong(env.getOrDefault("SKYNET_LOG_RETENTION_DAYS", "7"))),
-        providers(env.get("SKYNET_PROVIDERS")));
+        providers(env.get("SKYNET_PROVIDERS")),
+        env.getOrDefault("SKYNET_AGY_BIN", "agy"),
+        interval(env.getOrDefault("SKYNET_QUOTA_POLL", "10m")));
+  }
+
+  /** {@code 30s}, {@code 10m} o {@code 2h}; {@code off} (o {@code 0}) es {@code null}. */
+  static Duration interval(String value) {
+    String v = value.trim().toLowerCase(java.util.Locale.ROOT);
+    if (v.equals("off") || v.equals("0")) {
+      return null;
+    }
+    if (!v.matches("\\d+[smh]")) {
+      throw new IllegalArgumentException(
+          "SKYNET_QUOTA_POLL: " + value + " no es un intervalo (p. ej. 10m, 30s, 1h u off)");
+    }
+    long n = Long.parseLong(v.substring(0, v.length() - 1));
+    return switch (v.charAt(v.length() - 1)) {
+      case 's' -> Duration.ofSeconds(n);
+      case 'm' -> Duration.ofMinutes(n);
+      default -> Duration.ofHours(n);
+    };
   }
 
   private static Set<String> providers(String value) {

@@ -88,6 +88,8 @@ class RunnerDaemonTest {
             Duration.ofSeconds(2),
             null,
             Duration.ofDays(7),
+            null,
+            null,
             null);
     ControlPlaneClient client = new ControlPlaneClient(config.controlPlane());
     EventSender sender =
