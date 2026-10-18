@@ -510,7 +510,7 @@ export interface RunPage {
   total: number
 }
 
-/** Un proveedor de agentes que tiene un runner (Claude Code, Codex, Gemini…). */
+/** Un proveedor de agentes que tiene un runner (Claude Code, Codex, Antigravity…). */
 export interface ProviderInfo {
   id: string
   /** Versión de su CLI; null si no respondió a --version. */

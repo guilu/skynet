@@ -124,8 +124,8 @@
     } ]
   } ],
   "providerShortages" : [ {
-    "provider" : "gemini",
-    "displayName" : "Gemini CLI",
+    "provider" : "antigravity",
+    "displayName" : "Antigravity CLI",
     "queuedAgents" : 2
   } ],
   "quotaWarnings" : [ {

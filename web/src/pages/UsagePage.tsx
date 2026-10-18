@@ -16,7 +16,6 @@ import {
   formatReset,
   quotaAlerts,
   QUOTA_PROVIDERS,
-  READ_ONLY_PROVIDERS,
   renewed,
   sharesByProvider,
   shortProvider,
@@ -28,7 +27,7 @@ import { useNow } from '../useNow'
 const UsageChart = lazy(() => import('../components/usage/UsageChart'))
 
 /** Orden de las tarjetas: los CLIs que lanzan agentes primero. */
-const ORDER = ['claude-code', 'codex', 'gemini', 'antigravity']
+const ORDER = ['claude-code', 'codex', 'antigravity']
 const order = (p: string) => (ORDER.includes(p) ? ORDER.indexOf(p) : ORDER.length)
 
 /**
@@ -173,7 +172,7 @@ export function UsagePage() {
 
 /** Una línea con lo más importante: la ventana más gastada y cuándo se renueva. */
 function summaryLine(windows: UsageWindow[], now: number): string {
-  const live = windows.filter((w) => !renewed(w, now) && !READ_ONLY_PROVIDERS.includes(w.provider))
+  const live = windows.filter((w) => !renewed(w, now))
   if (live.length === 0) return 'Aún no hay datos de cuota de este runner.'
   const top = live.reduce((a, b) => (b.usedFraction > a.usedFraction ? b : a))
   const where = top.window === 'five_hour' ? 'su ventana de 5 h' : 'su semana'

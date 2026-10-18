@@ -203,7 +203,7 @@ describe('App', () => {
     // Agentes de un proveedor que no tiene ningún runner en línea.
     expect(
       within(attention).getByRole('link', {
-        name: /Gemini CLI.*2 agentes esperan: ningún runner en línea tiene Gemini CLI/,
+        name: /Antigravity CLI.*2 agentes esperan: ningún runner en línea tiene Antigravity CLI/,
       }),
     ).toHaveAttribute('href', '/runners')
     // Una cuota por encima de su ritmo lleva a la página Uso.
@@ -519,7 +519,7 @@ describe('App', () => {
     // Los proveedores sin runners en línea no se pueden elegir.
     const provider = screen.getByLabelText('Proveedor')
     await waitFor(() =>
-      expect(within(provider).getByRole('option', { name: /Gemini CLI/ })).toBeDisabled(),
+      expect(within(provider).getByRole('option', { name: /Antigravity CLI/ })).toBeDisabled(),
     )
     expect(within(provider).getByRole('option', { name: 'Codex' })).toBeEnabled()
     fireEvent.change(provider, { target: { value: 'codex' } })

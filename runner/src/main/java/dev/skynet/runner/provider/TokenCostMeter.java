@@ -12,6 +12,7 @@ import tools.jackson.databind.JsonNode;
  */
 public abstract class TokenCostMeter implements CostMeter {
 
+  private final String field;
   private final String type;
   private final Set<String> unpriced = new TreeSet<>();
   private BigDecimal total = BigDecimal.ZERO;
@@ -20,6 +21,15 @@ public abstract class TokenCostMeter implements CostMeter {
    * @param type el {@code type} de los eventos que llevan los tokens
    */
   protected TokenCostMeter(String type) {
+    this("type", type);
+  }
+
+  /**
+   * @param field el campo que dice el tipo de cada evento ({@code type}; {@code event} en agy)
+   * @param type el valor de ese campo en los eventos que llevan los tokens
+   */
+  protected TokenCostMeter(String field, String type) {
+    this.field = field;
     this.type = type;
   }
 
@@ -40,7 +50,7 @@ public abstract class TokenCostMeter implements CostMeter {
       return;
     }
     JsonNode node = EventJson.object(line);
-    if (node != null && type.equals(node.path("type").asString(null))) {
+    if (node != null && type.equals(node.path(field).asString(null))) {
       count(node);
     }
   }

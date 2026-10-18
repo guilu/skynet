@@ -96,10 +96,9 @@ class AgentExecutorTest {
     return executor;
   }
 
-  /** Ejecutor con los tres proveedores, que reproduce el fixture de Gemini {@code fixture}. */
-  private AgentExecutor geminiExecutor(String fixture, Map<String, String> extraEnv) {
-    Map<String, String> env =
-        new HashMap<>(TestAgents.fakeGeminiEnv(fixture, dir.resolve("gemini")));
+  /** Ejecutor con los tres proveedores, que reproduce el fixture de agy {@code fixture}. */
+  private AgentExecutor agyExecutor(String fixture, Map<String, String> extraEnv) {
+    Map<String, String> env = new HashMap<>(TestAgents.fakeAgyEnv(fixture, dir.resolve("agy")));
     env.putAll(extraEnv);
     executor =
         new AgentExecutor(
@@ -229,24 +228,29 @@ class AgentExecutorTest {
   }
 
   @Test
-  void aGeminiAgentKeepsItsSessionAndReturnsItsStructuredOutput() throws Exception {
+  void anAntigravityAgentKeepsItsConversationAndReturnsItsStructuredOutput() throws Exception {
     String schema = "{\"type\":\"object\",\"properties\":{\"fixed\":{\"type\":\"boolean\"}}}";
     UUID first = UUID.randomUUID();
     RunnerCommand start =
-        TestAgents.withProvider(TestAgents.start(first, repo.toString(), null), "gemini", schema);
-    geminiExecutor("02-tools", Map.of("FAKE_GEMINI_STRUCTURED_OUTPUT", "{\"fixed\": true}"))
-        .start(start);
+        TestAgents.withProvider(
+            TestAgents.start(first, repo.toString(), null), "antigravity", schema);
+    agyExecutor("02-tools", Map.of("FAKE_AGY_STRUCTURED_OUTPUT", "{\"fixed\": true}")).start(start);
 
     NormalizedEvent exit = awaitExit(first);
     assertThat(exit.payload()).containsEntry("exitCode", 0).doesNotContainKey("error");
     List<NormalizedEvent> events = eventsOf(first);
-    assertThat(events.get(1).payload())
-        .containsEntry("provider", "gemini")
-        .containsEntry("sessionId", start.start().sessionId().toString());
+    assertThat(events.get(1).payload()).containsEntry("provider", "antigravity");
+    String conversation = (String) events.get(1).payload().get("sessionId");
+    assertThat(dir.resolve("agy/conversations").resolve(conversation + ".jsonl")).exists();
     assertThat(events)
         .filteredOn(e -> e.type() == AgentEventType.TOOL_STARTED)
         .extracting(e -> e.payload().get("name"))
-        .containsExactly("read_file", "replace", "Bash", "Bash");
+        .containsExactly("view_file", "replace_file_content");
+    Map<String, Object> ready = events.getFirst().payload();
+    assertThat(events)
+        .filteredOn(e -> e.type() == AgentEventType.FILE_CHANGED)
+        .extracting(e -> e.payload().get("path"))
+        .containsExactly(Path.of((String) ready.get("path"), "calc.py").toString());
     assertThat(events)
         .filteredOn(e -> e.type() == AgentEventType.RESULT)
         .singleElement()
@@ -254,27 +258,23 @@ class AgentExecutorTest {
             r ->
                 assertThat(r.payload())
                     .containsEntry("isError", false)
+                    .containsEntry("sessionId", conversation)
                     .containsEntry("structuredOutput", Map.of("fixed", true)));
 
-    Map<String, Object> ready = events.getFirst().payload();
     UUID resumed = UUID.randomUUID();
-    UUID session = start.start().sessionId();
     executor.start(
         TestAgents.withProvider(
             TestAgents.resume(
                 resumed,
                 repo.toString(),
-                session,
+                UUID.randomUUID(),
                 new ResumeFrom(
-                    session.toString(),
-                    false,
-                    (String) ready.get("path"),
-                    (String) ready.get("branch"))),
-            "gemini"));
+                    conversation, false, (String) ready.get("path"), (String) ready.get("branch"))),
+            "antigravity"));
     exit = awaitExit(resumed);
 
     assertThat(exit.payload()).containsEntry("exitCode", 0).doesNotContainKey("error");
-    assertThat(eventsOf(resumed).get(1).payload()).containsEntry("sessionId", session.toString());
+    assertThat(eventsOf(resumed).get(1).payload()).containsEntry("sessionId", conversation);
   }
 
   @Test
@@ -286,11 +286,11 @@ class AgentExecutorTest {
     TestRepos.git(repo, "add", ".");
     TestRepos.git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "s");
     UUID id = UUID.randomUUID();
-    geminiExecutor("02-tools", Map.of("FAKE_GEMINI_STRUCTURED_OUTPUT", "{\"summary\": \"hecho\"}"))
+    agyExecutor("04-schema", Map.of("FAKE_AGY_STRUCTURED_OUTPUT", "{\"summary\": \"hecho\"}"))
         .start(
             TestAgents.withProvider(
                 TestAgents.start(id, repo.toString(), null),
-                "gemini",
+                "antigravity",
                 "{\"$ref\":\"schemas/spec.json\"}"));
 
     NormalizedEvent exit = awaitExit(id);
@@ -324,17 +324,17 @@ class AgentExecutorTest {
   }
 
   @Test
-  void aGeminiAgentThatReachesItsTurnLimitFails() throws Exception {
+  void anAntigravityCommandWithoutPermissionIsReportedAsDenied() throws Exception {
     UUID id = UUID.randomUUID();
-    geminiExecutor("04-turn-limit", Map.of())
-        .start(TestAgents.withProvider(TestAgents.start(id, repo.toString(), null), "gemini"));
+    agyExecutor("05-denied", Map.of())
+        .start(TestAgents.withProvider(TestAgents.start(id, repo.toString(), null), "antigravity"));
 
     NormalizedEvent exit = awaitExit(id);
-    assertThat(exit.payload()).containsEntry("exitCode", 53);
+    assertThat(exit.payload()).containsEntry("exitCode", 0);
     assertThat(eventsOf(id))
-        .filteredOn(e -> e.type() == AgentEventType.RESULT)
+        .filteredOn(e -> e.type() == AgentEventType.PERMISSION_DENIED)
         .singleElement()
-        .satisfies(r -> assertThat(r.payload()).containsEntry("isError", true));
+        .satisfies(d -> assertThat(d.payload()).containsEntry("toolName", "RunCommand"));
   }
 
   @Test

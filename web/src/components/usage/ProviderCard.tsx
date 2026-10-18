@@ -1,4 +1,4 @@
-import { Clock, Eye } from 'lucide-react'
+import { Clock } from 'lucide-react'
 import type { UsageWindow } from '../../api'
 import { providerName } from '../../format'
 import { cn } from '../../lib/cn'
@@ -8,7 +8,6 @@ import {
   freshness,
   quotaStatus,
   quotaTone,
-  READ_ONLY_PROVIDERS,
   renewed,
   renewsText,
   windowLabel,
@@ -17,7 +16,6 @@ import {
 const LOGOS: Record<string, string> = {
   'claude-code': 'C',
   codex: 'X',
-  gemini: 'G',
   antigravity: 'A',
 }
 
@@ -37,7 +35,6 @@ export function ProviderCard({
   now: number
 }) {
   if (windows.length === 0) return <EmptyCard provider={provider} version={version} />
-  const readOnly = READ_ONLY_PROVIDERS.includes(provider)
   const name = windows[0].providerName
   const plan = windows.find((w) => w.plan)?.plan
   const latest = windows.reduce((a, b) => (a.observedAt > b.observedAt ? a : b))
@@ -55,13 +52,7 @@ export function ProviderCard({
           <h3>{name}</h3>
           <small>{[version, plan && `plan ${capitalize(plan)}`].filter(Boolean).join(' · ')}</small>
         </div>
-        {readOnly ? (
-          <Pill tone="neutral" icon={Eye}>
-            Solo lectura
-          </Pill>
-        ) : (
-          <Pill tone={stale ? 'neutral' : status.tone}>{status.label}</Pill>
-        )}
+        <Pill tone={stale ? 'neutral' : status.tone}>{status.label}</Pill>
       </div>
       {buckets.map((bucket) => {
         const of = windows
@@ -88,12 +79,6 @@ export function ProviderCard({
         {freshness(latest, now)}
         {stale && ': puede estar desfasado'}
       </p>
-      {readOnly && (
-        <p className="prov-note">
-          Skynet aún no lanza agentes con <b>{name}</b>: se ve la cuota, pero no se puede atribuir a
-          ningún agente.
-        </p>
-      )}
     </section>
   )
 }

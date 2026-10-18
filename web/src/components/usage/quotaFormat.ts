@@ -3,19 +3,15 @@ import type { QuotaShare, QuotaWarning, QuotaWindowKind, UsageWindow } from '../
 import type { StatusTone } from '../../format'
 import type { Alert } from '../AttentionList'
 
-/** Proveedores cuya cuota se ve pero cuyos agentes Skynet aún no lanza. */
-export const READ_ONLY_PROVIDERS = ['antigravity']
-
 /**
  * Proveedores con alguna fuente de cuota: la tarjeta sale aunque aún no haya muestras si el runner
- * los tiene. Gemini CLI no informa de su cuota.
+ * los tiene.
  */
 export const QUOTA_PROVIDERS = ['claude-code', 'codex', 'antigravity']
 
 const SHORT_NAMES: Record<string, string> = {
   'claude-code': 'Claude',
   codex: 'Codex',
-  gemini: 'Gemini',
   antigravity: 'agy',
 }
 

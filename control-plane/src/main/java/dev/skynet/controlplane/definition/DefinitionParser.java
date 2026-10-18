@@ -130,7 +130,7 @@ public final class DefinitionParser {
   static final Set<String> FUTURE_PROVIDERS = Set.of("opencode");
 
   /** Proveedores que el motor ya ejecuta además de Claude Code. */
-  static final Set<String> PROVIDERS = Set.of(AgentDefinition.CODEX, AgentDefinition.GEMINI);
+  static final Set<String> PROVIDERS = Set.of(AgentDefinition.CODEX, AgentDefinition.ANTIGRAVITY);
 
   private static final Pattern VARIABLE = Pattern.compile("\\{\\{([^{}]*)}}");
 
@@ -632,6 +632,16 @@ public final class DefinitionParser {
       if (PROVIDERS.contains(provider)) {
         return provider;
       }
+      if (provider.equals(AgentDefinition.GEMINI)) {
+        error(
+            entry.value(),
+            path,
+            "Gemini CLI se ha retirado: usa `"
+                + AgentDefinition.ANTIGRAVITY
+                + "` (Antigravity CLI), que lo sustituye");
+        // Las versiones publicadas antes de retirarlo se siguen leyendo: el motor no las lanza.
+        return provider;
+      }
       if (FUTURE_PROVIDERS.contains(provider)) {
         add(
             Severity.UNSUPPORTED,
@@ -644,7 +654,7 @@ public final class DefinitionParser {
                 + "`, `"
                 + AgentDefinition.CODEX
                 + "` y `"
-                + AgentDefinition.GEMINI
+                + AgentDefinition.ANTIGRAVITY
                 + "`");
         return provider;
       }

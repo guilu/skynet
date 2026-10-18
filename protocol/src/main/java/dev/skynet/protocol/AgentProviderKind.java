@@ -2,6 +2,7 @@ package dev.skynet.protocol;
 
 import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -23,10 +24,18 @@ public enum AgentProviderKind {
       "Codex",
       EnumSet.of(Capability.RESUME, Capability.FORK, Capability.STRUCTURED_OUTPUT)),
   /**
-   * Gemini CLI de Google ({@code gemini -p --output-format stream-json}): reanuda pero no bifurca;
-   * la salida estructurada la valida el runner.
+   * Antigravity CLI de Google ({@code agy -p --output-format stream-json}): reanuda pero no
+   * bifurca; la salida estructurada la valida el propio CLI ({@code --json-schema}).
    */
-  GEMINI("gemini", "Gemini CLI", EnumSet.of(Capability.RESUME, Capability.STRUCTURED_OUTPUT));
+  ANTIGRAVITY(
+      "antigravity",
+      "Antigravity CLI",
+      EnumSet.of(Capability.RESUME, Capability.STRUCTURED_OUTPUT)),
+  /**
+   * Gemini CLI de Google, retirado en AR-B: Antigravity CLI lo sustituye. Solo sigue aquí para leer
+   * el histórico: no se lanza, no se continúa y no lo declara ningún runner.
+   */
+  GEMINI("gemini", "Gemini CLI", EnumSet.noneOf(Capability.class), true);
 
   /** Lo que un proveedor puede hacer además de arrancar una sesión. */
   public enum Capability {
@@ -43,11 +52,17 @@ public enum AgentProviderKind {
   private final String id;
   private final String displayName;
   private final Set<Capability> capabilities;
+  private final boolean retired;
 
   AgentProviderKind(String id, String displayName, Set<Capability> capabilities) {
+    this(id, displayName, capabilities, false);
+  }
+
+  AgentProviderKind(String id, String displayName, Set<Capability> capabilities, boolean retired) {
     this.id = id;
     this.displayName = displayName;
     this.capabilities = Set.copyOf(capabilities);
+    this.retired = retired;
   }
 
   /** Identificador en el YAML, en {@code agent_run.provider} y en el protocolo. */
@@ -66,6 +81,16 @@ public enum AgentProviderKind {
 
   public Set<Capability> capabilities() {
     return capabilities;
+  }
+
+  /** Retirado: solo se conserva para el histórico, no se puede lanzar ni continuar. */
+  public boolean retired() {
+    return retired;
+  }
+
+  /** Los proveedores que se pueden lanzar, sin los retirados. */
+  public static List<AgentProviderKind> active() {
+    return Arrays.stream(values()).filter(k -> !k.retired).toList();
   }
 
   /** Proveedor con ese identificador, si Skynet lo conoce. */

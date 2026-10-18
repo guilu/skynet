@@ -52,7 +52,8 @@ describe('página Uso', () => {
         name: 'Uso',
       }),
     ).toHaveAttribute('aria-current', 'page')
-    expect(await screen.findByText(/^Claude Code va al 16 % de su ventana de 5 h/)).toBeVisible()
+    // La ventana más gastada del runner, también la de agy desde que lanza agentes (AR-B).
+    expect(await screen.findByText(/^Antigravity CLI va al 40 % de su semana/)).toBeVisible()
     expect(screen.getByText('Runner: laptop')).toBeVisible()
 
     const claude = screen.getByRole('region', { name: 'Claude Code' })
@@ -68,14 +69,13 @@ describe('página Uso', () => {
     expect(within(claude).getByText(/Se renueva a las \d\d:30 \(en 2 h 25 min\)/)).toBeVisible()
     expect(within(claude).getByText('Dato de hace 4 min, de la última ejecución')).toBeVisible()
 
-    // agy se ve por grupos de modelos y no se atribuye a ningún agente.
+    // agy se ve por grupos de modelos.
     const agy = screen.getByRole('region', { name: 'Antigravity CLI' })
-    expect(within(agy).getByText('Solo lectura')).toBeVisible()
     expect(within(agy).getByRole('heading', { name: 'Gemini Models' })).toBeVisible()
     expect(
       within(agy).getByRole('meter', { name: 'Antigravity CLI (Gemini Models), semana' }),
     ).toHaveAttribute('aria-valuenow', '40')
-    expect(within(agy).getByText(/Skynet aún no lanza agentes/)).toBeVisible()
+    expect(within(agy).queryByText('Solo lectura')).toBeNull()
 
     // El aviso del Dashboard también sale aquí.
     const attention = screen.getByRole('region', { name: 'Necesita tu atención (1)' })

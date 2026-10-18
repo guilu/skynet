@@ -5382,7 +5382,6 @@
     color: var(--warn-ink);
   }
 
-  .prov-logo-gemini,
   .prov-logo-antigravity {
     background: var(--primary-soft);
     color: var(--primary-ink);

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# E2E de la aplicación real: control plane + runner con fake-claude, fake-codex y fake-gemini + web (vite preview) + Playwright.
+# E2E de la aplicación real: control plane + runner con fake-claude, fake-codex y fake-agy + web (vite preview) + Playwright.
 #
 # Necesita un PostgreSQL vacío o de pruebas en SKYNET_DB_URL (por defecto el de docker compose) y
 # los navegadores de Playwright (`npx playwright install chromium`). Deja los logs en build/e2e.
@@ -31,7 +31,7 @@ if [[ "${E2E_SKIP_BUILD:-}" != 1 ]]; then
 fi
 
 # Repositorio de juguete para el worktree del agente.
-rm -rf "$E2E_REPO_PATH" "$OUT/runner-home" "$OUT/claude" "$OUT/codex" "$OUT/gemini" "$OUT"/*.log
+rm -rf "$E2E_REPO_PATH" "$OUT/runner-home" "$OUT/claude" "$OUT/codex" "$OUT/agy" "$OUT"/*.log
 mkdir -p "$E2E_REPO_PATH"
 git -C "$E2E_REPO_PATH" init -q -b main
 # Secretos falsos que no deben llegar nunca a la web (web/e2e/review.e2e.ts): uno en calc.py, que

@@ -287,8 +287,9 @@ export function formatCompact(n: number | null): string {
 const PROVIDER_NAMES: Record<string, string> = {
   'claude-code': 'Claude Code',
   codex: 'Codex',
-  gemini: 'Gemini CLI',
   antigravity: 'Antigravity CLI',
+  // Retirado en AR-B: solo sale en el histórico.
+  gemini: 'Gemini CLI (retirado)',
 }
 
 /** Nombre para mostrar de un proveedor de agentes (el id si no se conoce). */

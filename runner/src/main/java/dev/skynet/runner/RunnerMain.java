@@ -9,11 +9,11 @@ import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.provider.CliVersion;
 import dev.skynet.runner.provider.ModelPrices;
 import dev.skynet.runner.provider.ProviderRegistry;
+import dev.skynet.runner.provider.antigravity.AntigravityProvider;
 import dev.skynet.runner.provider.claude.ClaudeCodeProvider;
 import dev.skynet.runner.provider.claude.ClaudeSessions;
 import dev.skynet.runner.provider.codex.CodexAppServerQuota;
 import dev.skynet.runner.provider.codex.CodexProvider;
-import dev.skynet.runner.provider.gemini.GeminiProvider;
 import dev.skynet.runner.quota.AgyQuota;
 import dev.skynet.runner.quota.QuotaPoller;
 import dev.skynet.runner.quota.QuotaSource;
@@ -76,11 +76,11 @@ public final class RunnerMain {
             prices,
             ClaudeSessions.of(System.getenv()).orElse(null));
     CodexProvider codex = new CodexProvider(config.codexExecutable(), config.extraEnv(), prices);
-    GeminiProvider gemini =
-        new GeminiProvider(config.geminiExecutable(), config.extraEnv(), prices);
+    AntigravityProvider antigravity =
+        new AntigravityProvider(config.agyExecutable(), config.extraEnv(), prices);
     ProviderRegistry providers =
         ProviderRegistry.detect(
-            List.of(claude, codex, gemini), config.providers(), System.getenv());
+            List.of(claude, codex, antigravity), config.providers(), System.getenv());
     try (EventSender sender =
             new EventSender(journal, client, Duration.ofMillis(500), Duration.ofSeconds(2));
         ArtifactSender artifactSender =
@@ -128,8 +128,8 @@ public final class RunnerMain {
 
   /**
    * Las cuotas que se pueden consultar sin ejecutar nada: Codex ({@code app-server}) si el runner
-   * lo tiene, y Antigravity si responde a {@code --version}, aunque Skynet aún no lance agentes con
-   * él.
+   * lo tiene, y Antigravity si responde a {@code --version}, aunque el runner no lo declare como
+   * proveedor.
    */
   private static QuotaPoller quotaPoller(
       RunnerConfig config, ProviderRegistry providers, CodexProvider codex) {

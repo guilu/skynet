@@ -102,15 +102,15 @@ stages:
 
 /**
  * La misma revisión en paralelo con una segunda opinión de otros modelos: Codex revisa la calidad
- * y Gemini la seguridad. Ninguno de los dos admite una lista de herramientas, así que sus revisores
+ * y Antigravity la seguridad. Ninguno de los dos admite una lista de herramientas, así que sus revisores
  * no la llevan; siguen en solo lectura con `permissionMode: plan`.
  */
 const MULTI_PROVIDER_REVIEW = PARALLEL_REVIEW.replace(
   'id: revision-en-paralelo\nname: Revisión en paralelo\n',
-  'id: revision-con-codex-y-gemini\nname: Revisión con Codex y Gemini\n',
+  'id: revision-con-codex-y-antigravity\nname: Revisión con Codex y Antigravity\n',
 )
   .replace(/( {2}calidad:\n)/, '$1    provider: codex\n')
-  .replace(/( {2}seguridad:\n)/, '$1    provider: gemini\n')
+  .replace(/( {2}seguridad:\n)/, '$1    provider: antigravity\n')
   .replaceAll('    tools: [Read, Grep, Glob]\n    permissionMode: plan', '    permissionMode: plan')
 
 /**
@@ -189,10 +189,10 @@ export const TEMPLATES: WorkflowTemplate[] = [
     yaml: PARALLEL_REVIEW,
   },
   {
-    id: 'revision-con-codex-y-gemini',
-    name: 'Revisión con Codex y Gemini',
+    id: 'revision-con-codex-y-antigravity',
+    name: 'Revisión con Codex y Antigravity',
     description:
-      'La revisión en paralelo con otros modelos: Codex revisa la calidad y Gemini la seguridad; el resto lo hace Claude Code.',
+      'La revisión en paralelo con otros modelos: Codex revisa la calidad y Antigravity la seguridad; el resto lo hace Claude Code.',
     yaml: MULTI_PROVIDER_REVIEW,
   },
   {

@@ -10,7 +10,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Map;
 
-/** Lo que comparten fake-codex y fake-gemini: fixtures, salida, sesiones y salida estructurada. */
+/** Lo que comparten fake-codex y fake-agy: fixtures, salida, sesiones y salida estructurada. */
 final class FakeCli {
 
   private FakeCli() {}

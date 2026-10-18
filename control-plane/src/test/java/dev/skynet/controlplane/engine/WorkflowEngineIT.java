@@ -293,14 +293,14 @@ class WorkflowEngineIT extends IntegrationTest {
           agent: worker
       """;
 
-  /** Un revisor de Gemini con salida estructurada. */
-  static final String GEMINI =
+  /** Un revisor de Antigravity con salida estructurada. */
+  static final String ANTIGRAVITY =
       """
-      id: gemini
+      id: antigravity
       version: 1
       agents:
         revisor:
-          provider: gemini
+          provider: antigravity
           permissionMode: plan
           prompt: Revisa la seguridad
           output:
@@ -1375,28 +1375,28 @@ class WorkflowEngineIT extends IntegrationTest {
   }
 
   @Test
-  void aGeminiAgentRunsOnARunnerWithGeminiAndCanBeContinuedButNotForked() {
-    String definitionId = publish(GEMINI);
+  void anAntigravityAgentRunsOnARunnerWithAgyAndCanBeContinuedButNotForked() {
+    String definitionId = publish(ANTIGRAVITY);
     Runner claude = register("laptop");
-    Runner gemini = register("servidor", List.of(new ProviderInfo("gemini", "0.65.0")));
+    Runner agy = register("servidor", List.of(new ProviderInfo("antigravity", "1.4.2")));
     String runId = launch(definitionId, Map.of()).path("id").asString();
 
     assertThat(claude.claim()).isEmpty();
-    JsonNode start = gemini.claim().getFirst();
-    assertThat(start.path("start").path("provider").asString()).isEqualTo("gemini");
+    JsonNode start = agy.claim().getFirst();
+    assertThat(start.path("start").path("provider").asString()).isEqualTo("antigravity");
     assertThat(start.path("start").path("permissionMode").asString()).isEqualTo("plan");
     assertThat(start.path("start").path("outputSchema").asString())
         .contains("\"hasBlockingFindings\"");
     String session = start.path("start").path("sessionId").asString();
-    complete(gemini, start, "/w/eng/review", Map.of("hasBlockingFindings", false), session);
+    complete(agy, start, "/w/eng/review", Map.of("hasBlockingFindings", false), session);
     assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("SUCCEEDED");
 
     String agentId = start.path("agentRunId").asString();
     assertConflict(() -> post("/api/agent-runs/" + agentId + "/fork", Map.of("text", "otra")));
     post("/api/agent-runs/" + agentId + "/messages", Map.of("text", "Mira también el login"));
-    JsonNode resume = gemini.claim().getFirst();
+    JsonNode resume = agy.claim().getFirst();
     assertThat(resume.path("type").asString()).isEqualTo("RESUME");
-    assertThat(resume.path("start").path("provider").asString()).isEqualTo("gemini");
+    assertThat(resume.path("start").path("provider").asString()).isEqualTo("antigravity");
     assertThat(resume.path("start").path("resume").path("sessionId").asString()).isEqualTo(session);
     assertThat(resume.path("start").path("outputSchema").asString())
         .contains("\"hasBlockingFindings\"");
@@ -1408,7 +1408,7 @@ class WorkflowEngineIT extends IntegrationTest {
     Runner codex = register("servidor", List.of(new ProviderInfo("codex", "0.160.0")));
     JsonNode providers = get("/api/providers");
     assertThat(providers.findValuesAsString("id"))
-        .containsExactly("claude-code", "codex", "gemini");
+        .containsExactly("claude-code", "codex", "antigravity");
     assertThat(providers.get(1).path("onlineRunners").asInt()).isEqualTo(1);
     assertThat(providers.get(2).path("capabilities").toString()).doesNotContain("FORK");
 
@@ -1465,9 +1465,15 @@ class WorkflowEngineIT extends IntegrationTest {
         () ->
             post(
                 "/api/work-items/" + workItemId + "/runs",
+                Map.of("repositoryId", repositoryId, "prompt", "x", "provider", "gemini")),
+        "Gemini CLI se ha retirado");
+    assertBadRequest(
+        () ->
+            post(
+                "/api/work-items/" + workItemId + "/runs",
                 Map.of("repositoryId", repositoryId, "prompt", "x", "model", "gpt 5; rm -rf")),
         "no es válido");
-    String definitionId = publish(GEMINI);
+    String definitionId = publish(ANTIGRAVITY);
     assertBadRequest(
         () ->
             post(
@@ -1479,7 +1485,7 @@ class WorkflowEngineIT extends IntegrationTest {
                     definitionId,
                     "provider",
                     "codex")),
-        "En gemini cada fase fija su agente");
+        "En antigravity cada fase fija su agente");
 
     JsonNode policy =
         get("/api/workflow-versions/"
@@ -1487,8 +1493,29 @@ class WorkflowEngineIT extends IntegrationTest {
                 + "/effective-policy?repositoryId="
                 + repositoryId)
             .get(0);
-    assertThat(policy.path("provider").asString()).isEqualTo("gemini");
+    assertThat(policy.path("provider").asString()).isEqualTo("antigravity");
     assertThat(policy.path("unsupported").toString()).contains("allowedTools", "maxTurns");
+  }
+
+  @Test
+  void aVersionPublishedWithGeminiCliIsStillReadableButCannotBeLaunched() {
+    // Publicada antes de AR-B: hoy un borrador con Gemini CLI ya no se puede publicar.
+    String definitionId =
+        post(
+                "/api/workflows",
+                Map.of(
+                    "sourceYaml", ANTIGRAVITY.replace("provider: antigravity", "provider: gemini")))
+            .path("id")
+            .asString();
+    jdbc.sql(
+            "UPDATE workflow_definition SET status = 'PUBLISHED', published_at = now()"
+                + " WHERE id = ?::uuid")
+        .param(definitionId)
+        .update();
+
+    assertBadRequest(() -> launch(definitionId, Map.of()), "usa Gemini CLI, que se ha retirado");
+    assertThat(get("/api/workflow-versions/" + definitionId).path("sourceYaml").asString())
+        .contains("provider: gemini");
   }
 
   private static void assertKeepsTheAgent(JsonNode command) {

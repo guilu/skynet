@@ -7,7 +7,6 @@ import dev.skynet.protocol.runner.ProviderInfo;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -118,7 +117,7 @@ public class RunnerDirectory {
             rs -> {
               online.put(rs.getString("provider"), rs.getInt("runners"));
             });
-    return Arrays.stream(AgentProviderKind.values())
+    return AgentProviderKind.active().stream()
         .map(
             k ->
                 new ProviderView(

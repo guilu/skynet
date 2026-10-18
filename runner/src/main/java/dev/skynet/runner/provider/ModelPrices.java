@@ -52,7 +52,8 @@ public final class ModelPrices {
     DEFAULTS.put("gpt-5.1-codex", price("1.25", "10", "0.125"));
     DEFAULTS.put("gpt-5-codex", price("1.25", "10", "0.125"));
     DEFAULTS.put("gpt-5", price("1.25", "10", "0.125"));
-    // Google (Gemini CLI), según agregadores de precios (octubre de 2026), sin el recargo de los
+    // Google (Antigravity CLI), según agregadores de precios (octubre de 2026), sin el recargo de
+    // los
     // prompts de más de 200k tokens: conviene comprobarlos en la página de precios de la API de
     // Gemini y corregirlos con SKYNET_MODEL_PRICES si han cambiado.
     DEFAULTS.put("gemini-3.1-pro", price("2", "12", "0.20"));

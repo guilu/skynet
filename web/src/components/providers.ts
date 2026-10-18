@@ -29,7 +29,7 @@ const CAPABILITY_TEXT: Record<ProviderCapability, string> = {
   MAX_TURNS: 'limitar los turnos',
 }
 
-/** «no lo admite Gemini CLI», para lo que la política efectiva ignora. */
+/** «no lo admite Antigravity CLI», para lo que la política efectiva ignora. */
 export function ignoredBy(provider: string): string {
   return `no lo admite ${providerName(provider)}`
 }
