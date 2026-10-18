@@ -38,6 +38,12 @@ Detalles:
 
 Se guarda en `quota_interval` (cada subida, con la parte de Skynet) y `agent_run_quota` (la parte de cada agente, `measured` si era el único y `prorated` si se repartió), migración `V25`. Los intervalos se borran a los 35 días con sus muestras; lo atribuido a cada agente se queda.
 
+## En la web (CU-C)
+
+- **Uso** (`/usage`): una tarjeta por CLI con un medidor por ventana. Azul es lo de Skynet; gris rayado, lo de fuera; la raya vertical, el ritmo uniforme (dónde estaría gastando igual toda la ventana). Si la ventana se ha renovado después del último dato, sale a 0 hasta que llega uno nuevo; si el dato tiene más de 5 h, la tarjeta sale en gris.
+- Debajo, la evolución de la ventana actual de cada CLI y lo que cuesta cada agente: «Por éxito» es el % semanal gastado entre las ejecuciones completadas.
+- En la ejecución, el KPI «Cuota» y la sección «Cuota» de la pestaña Coste. En el Dashboard, los avisos de cuota llevan a Uso.
+
 ## Configuración del runner
 
 - `SKYNET_QUOTA_POLL`: cada cuánto pregunta a Codex y a agy (`10m` por defecto; `30s`, `1h`…; `off` lo apaga). Con `off`, «Actualizar» sigue funcionando.

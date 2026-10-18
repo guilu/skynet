@@ -31,13 +31,14 @@ start() {
       SKYNET_RUNNER_HOME=$OUT/runner-home \
       SKYNET_RUNNER_NAME=${E2E_RUNNER_NAME:-e2e} \
       # Los tres proveedores con sus fakes; cada revisor devuelve lo que dejó en .revision.json la
-      # fase anterior del worktree (web/e2e/nodes.e2e.ts y providers.e2e.ts).
+      # fase anterior del worktree (web/e2e/nodes.e2e.ts y providers.e2e.ts). Cada sesión de
+      # fake-codex gasta cuota de la cuenta, como la de verdad (web/e2e/usage.e2e.ts).
       SKYNET_CLAUDE_BIN=$FAKE/fake-claude SKYNET_CODEX_BIN=$FAKE/fake-codex \
       SKYNET_GEMINI_BIN=$FAKE/fake-gemini SKYNET_AGY_BIN=$FAKE/fake-agy \
-      SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE,FAKE_CLAUDE_DELAY_MS,FAKE_CLAUDE_APPLY,FAKE_CLAUDE_STRUCTURED_OUTPUT,FAKE_CODEX_FIXTURE,FAKE_CODEX_DELAY_MS,FAKE_CODEX_STRUCTURED_OUTPUT,FAKE_GEMINI_FIXTURE,FAKE_GEMINI_DELAY_MS,FAKE_GEMINI_STRUCTURED_OUTPUT \
+      SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE,FAKE_CLAUDE_DELAY_MS,FAKE_CLAUDE_APPLY,FAKE_CLAUDE_STRUCTURED_OUTPUT,FAKE_CODEX_FIXTURE,FAKE_CODEX_DELAY_MS,FAKE_CODEX_STRUCTURED_OUTPUT,FAKE_GEMINI_FIXTURE,FAKE_GEMINI_DELAY_MS,FAKE_GEMINI_STRUCTURED_OUTPUT,FAKE_CODEX_QUOTA_STEP \
       FAKE_CLAUDE_FIXTURE=02-tools FAKE_CLAUDE_DELAY_MS=${FAKE_CLAUDE_DELAY_MS:-500} FAKE_CLAUDE_APPLY=1 \
       FAKE_CLAUDE_STRUCTURED_OUTPUT=@.revision.json \
-      FAKE_CODEX_DELAY_MS=200 FAKE_CODEX_STRUCTURED_OUTPUT=@.revision.json \
+      FAKE_CODEX_DELAY_MS=200 FAKE_CODEX_STRUCTURED_OUTPUT=@.revision.json FAKE_CODEX_QUOTA_STEP=3,1 \
       FAKE_GEMINI_DELAY_MS=200 FAKE_GEMINI_STRUCTURED_OUTPUT=@.revision.json \
       CLAUDE_CONFIG_DIR=$OUT/claude CODEX_HOME=$OUT/codex GEMINI_CLI_HOME=$OUT/gemini \
         "$ROOT/runner/build/install/skynet-runner/bin/skynet-runner" >> "$OUT/runner.log" 2>&1 &

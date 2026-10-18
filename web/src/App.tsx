@@ -11,6 +11,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { ProjectPage } from './pages/ProjectPage'
 import { ProjectsPage } from './pages/ProjectsPage'
 import { RunnersPage } from './pages/RunnersPage'
+import { UsagePage } from './pages/UsagePage'
 import { RunsPage } from './pages/RunsPage'
 import { WorkflowsPage } from './pages/WorkflowsPage'
 import { NewWorkflowPage } from './pages/NewWorkflowPage'
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="/approvals" element={<ApprovalsPage />} />
             <Route path="/approvals/:approvalId" element={<ApprovalPage />} />
             <Route path="/runners" element={<RunnersPage />} />
+            <Route path="/usage" element={<UsagePage />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFound />} />

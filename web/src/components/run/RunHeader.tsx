@@ -5,6 +5,7 @@ import {
   Coins,
   Cpu,
   FlaskConical,
+  Gauge,
   GitBranch,
   Server,
   Sparkles,
@@ -34,6 +35,7 @@ import { StatusBadge } from '../StatusBadge'
 import { Button } from '../ui/Button'
 import { Pill } from '../ui/Pill'
 import { statusIcon } from '../ui/statusIcons'
+import { headlineShare, sharesByProvider, sharesLine } from '../usage/quotaFormat'
 import { AgentActions } from './AgentActions'
 import { headlineAgent } from './headlineAgent'
 
@@ -108,6 +110,7 @@ export function RunHeader({
   const connection = STREAM[stream]
   const tone = statusTone(run.status)
   const tests = verification?.tests
+  const quota = headlineShare(totals.quota)
 
   return (
     <header className="run-header">
@@ -250,6 +253,28 @@ export function RunHeader({
           sub={totals.costUsd == null && running && 'Llega al terminar'}
         >
           {formatCost(totals.costUsd)}
+        </Kpi>
+        <Kpi
+          icon={Gauge}
+          tone="warn"
+          label="Cuota"
+          sub={
+            quota
+              ? sharesByProvider(totals.quota).map((p) => (
+                  <span key={p.provider} className="kpi-line">
+                    {sharesLine(p)}
+                  </span>
+                ))
+              : running && 'Se atribuye al terminar cada agente'
+          }
+        >
+          {quota ? (
+            <>
+              {quota.value} <small className="kpi-unit">{quota.suffix}</small>
+            </>
+          ) : (
+            '—'
+          )}
         </Kpi>
         {/* Sin verificación, los tests no aplican: el hueco se queda vacío. */}
         {verification ? (
