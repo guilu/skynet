@@ -44,6 +44,10 @@ import tools.jackson.databind.node.ObjectNode;
  *       cuenta, como el CLI (que no la escribe en su salida).
  *   <li>{@code FAKE_CODEX_QUOTA}: la cuota que da, {@code <% de 5 h>,<% semanal>}. Por defecto
  *       {@code 23,13}, como la grabada en {@code fixtures/quota/codex-rollout-token-count.jsonl}.
+ *   <li>{@code FAKE_CODEX_QUOTA_STEP}: con {@code CODEX_HOME}, cuánto sube la cuota con cada
+ *       sesión, {@code <puntos de 5 h>,<puntos semanales>}: la cuenta va gastando como la de
+ *       verdad. Lo que lleva se guarda en {@code <dir>/fake-quota}, que también lee {@code
+ *       app-server}.
  * </ul>
  *
  * <p>{@code fake-codex app-server} responde por JSON-RPC a {@code initialize} y a {@code
@@ -144,6 +148,7 @@ public final class FakeCodex {
       return FakeClaude.EXIT_KILLED;
     }
     if (sessionFile != null) {
+      spend(env);
       // Solo en el fichero de la sesión, como el CLI.
       Files.writeString(
           sessionFile,
@@ -155,14 +160,45 @@ public final class FakeCodex {
     return failed ? 1 : 0;
   }
 
-  /** Porcentajes de la cuota: {@code FAKE_CODEX_QUOTA} ({@code 5h,semana}). */
-  static double[] quota(Map<String, String> env) {
-    String[] parts = env.getOrDefault("FAKE_CODEX_QUOTA", "23,13").split(",");
+  /**
+   * Porcentajes de la cuota ({@code 5h,semana}): lo que lleva gastado la cuenta ({@code
+   * <CODEX_HOME>/fake-quota}) o, si aún no ha gastado, {@code FAKE_CODEX_QUOTA}.
+   */
+  static double[] quota(Map<String, String> env) throws IOException {
+    Path spent = spentFile(env);
+    if (spent != null && Files.exists(spent)) {
+      return percentages(Files.readString(spent, StandardCharsets.UTF_8));
+    }
+    return percentages(env.getOrDefault("FAKE_CODEX_QUOTA", "23,13"));
+  }
+
+  /** Con {@code FAKE_CODEX_QUOTA_STEP}, la sesión gasta cuota de la cuenta. */
+  private static void spend(Map<String, String> env) throws IOException {
+    Path spent = spentFile(env);
+    String step = env.get("FAKE_CODEX_QUOTA_STEP");
+    if (spent == null || step == null || step.isBlank()) {
+      return;
+    }
+    double[] now = quota(env);
+    double[] add = percentages(step);
+    Files.writeString(
+        spent,
+        Math.min(100, now[0] + add[0]) + "," + Math.min(100, now[1] + add[1]),
+        StandardCharsets.UTF_8);
+  }
+
+  private static Path spentFile(Map<String, String> env) {
+    String home = env.get("CODEX_HOME");
+    return home == null || home.isBlank() ? null : Path.of(home, "fake-quota");
+  }
+
+  private static double[] percentages(String text) {
+    String[] parts = text.trim().split(",");
     return new double[] {Double.parseDouble(parts[0].trim()), Double.parseDouble(parts[1].trim())};
   }
 
   /** El {@code token_count} del fichero de la sesión, con la forma de Codex 0.163. */
-  static String tokenCount(Map<String, String> env) {
+  static String tokenCount(Map<String, String> env) throws IOException {
     double[] quota = quota(env);
     long now = Instant.now().getEpochSecond();
     return "{\"timestamp\":\""

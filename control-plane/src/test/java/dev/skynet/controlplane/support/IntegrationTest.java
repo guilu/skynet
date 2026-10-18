@@ -62,7 +62,7 @@ public abstract class IntegrationTest {
     // TRUNCATE no dispara el trigger append-only de event (es por fila). La secuencia de
     // eventos no se reinicia: igual que en producción, nunca retrocede.
     jdbc.sql(
-            "TRUNCATE app_setting, quota_snapshot, event, approval_decision, approval_request, runner_command, artifact, verification_run, prompt, agent_run, workspace, runner_provider, runner, stage_run, workflow_job, workflow_run, work_item, repository,"
+            "TRUNCATE app_setting, agent_run_quota, quota_interval, quota_snapshot, event, approval_decision, approval_request, runner_command, artifact, verification_run, prompt, agent_run, workspace, runner_provider, runner, stage_run, workflow_job, workflow_run, work_item, repository,"
                 + " project")
         .update();
     // Los workflows de los tests; adhoc viene de las migraciones y se queda. Las versiones

@@ -18,7 +18,8 @@
       "outputTokens" : 32,
       "cacheReadTokens" : 28437,
       "cacheCreationTokens" : 4256,
-      "costUsd" : null
+      "costUsd" : null,
+      "quota" : [ ]
     },
     "workflow" : {
       "key" : "adhoc",
@@ -80,7 +81,8 @@
         },
         "childKey" : null,
         "structuredOutput" : null,
-        "failure" : null
+        "failure" : null,
+        "quota" : [ ]
       } ],
       "verifications" : [ ],
       "approval" : null,

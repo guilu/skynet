@@ -132,6 +132,8 @@ export interface AgentRun {
   error: string | null
   /** Por qué falló (W6), o null si no falló. Decide si la fase se reintenta. */
   failure: AgentFailure | null
+  /** Parte de las ventanas de cuota de su CLI que se le atribuye (CU-B). */
+  quota: QuotaShare[]
   /** Tipo del último evento del agente, p. ej. `agent.tool.started`. */
   lastEventType: string | null
   /** Herramienta en curso, o null si no hay ninguna. */
@@ -344,6 +346,105 @@ export interface RunTotals {
   cacheReadTokens: number | null
   cacheCreationTokens: number | null
   costUsd: number | null
+  /** Suma de la cuota atribuida a sus agentes, por CLI y ventana. */
+  quota: QuotaShare[]
+}
+
+export type QuotaWindowKind = 'five_hour' | 'seven_day'
+
+/** Parte de una ventana de cuota atribuida a un agente o a una ejecución (de 0 a 1). */
+export interface QuotaShare {
+  provider: string
+  bucket: string
+  window: QuotaWindowKind
+  share: number
+  /** `measured`: medido con el agente solo; `prorated`: repartido con otros o con lo de fuera. */
+  method: 'measured' | 'prorated'
+}
+
+/** Una ventana que pasa del 90 % (`limit`) o, la semanal, va por encima de su ritmo (`pace`). */
+export interface QuotaWarning {
+  runnerId: string
+  runnerName: string
+  provider: string
+  providerName: string
+  bucket: string
+  label: string | null
+  window: QuotaWindowKind
+  usedFraction: number
+  pace: number | null
+  resetsAt: string | null
+  reason: 'limit' | 'pace'
+}
+
+/** La última muestra de una ventana de la cuota de un CLI (GET /api/usage/windows). */
+export interface UsageWindow {
+  provider: string
+  providerName: string
+  bucket: string
+  label: string | null
+  window: QuotaWindowKind
+  usedFraction: number
+  resetsAt: string | null
+  plan: string | null
+  source: 'invocation' | 'poll'
+  observedAt: string
+  stale: boolean
+  /** Dónde estaría gastando igual toda la ventana, de 0 a 1. */
+  pace: number | null
+  /** De lo gastado en la ventana, lo atribuido a agentes de Skynet. */
+  skynet: number
+}
+
+export interface UsageWindows {
+  runners: { id: string; name: string; windows: UsageWindow[] }[]
+}
+
+/** La evolución de la ventana actual de un CLI (GET /api/usage/history). */
+export interface UsageHistory {
+  runnerId: string
+  provider: string
+  bucket: string
+  window: QuotaWindowKind
+  windowStart: string
+  resetsAt: string | null
+  points: UsagePoint[]
+}
+
+export interface UsagePoint {
+  at: string
+  usedFraction: number
+  skynet: number
+  source: 'invocation' | 'poll'
+}
+
+/** Lo que cuesta un agente en la cuota de su CLI (GET /api/usage/agents). */
+export interface AgentUsage {
+  workflowKey: string
+  workflowName: string | null
+  agent: string
+  provider: string
+  providerName: string
+  runs: number
+  succeeded: number
+  fiveHour: number
+  sevenDay: number
+  sevenDayPerRun: number
+  sevenDayPerSuccess: number | null
+  inputTokens: number | null
+  outputTokens: number | null
+}
+
+/** Una de las ejecuciones que más cuota han gastado (GET /api/usage/runs). */
+export interface RunUsage {
+  id: string
+  workItemKey: string | null
+  workItemTitle: string | null
+  workflowKey: string
+  workflowName: string | null
+  status: RunStatus
+  createdAt: string
+  quota: QuotaShare[]
 }
 
 export interface Run {
@@ -464,6 +565,7 @@ export interface DashboardSummary {
   unresponsiveAgents: UnresponsiveAgent[]
   staleRunners: Runner[]
   providerShortages: ProviderShortage[]
+  quotaWarnings: QuotaWarning[]
   generatedAt: string
 }
 

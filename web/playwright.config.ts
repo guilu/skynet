@@ -10,7 +10,9 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 15_000 },
   retries: 0,
-  // Las pruebas de reinicio paran el control plane y el runner que comparten todas.
+  // En CI permite repartir tests individuales entre shards aislados. Cada shard sigue ejecutándolos
+  // en serie porque las pruebas de reinicio comparten su control plane y runner dentro de la VM.
+  fullyParallel: true,
   workers: 1,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {

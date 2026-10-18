@@ -1,0 +1,19 @@
+{
+  "runnerId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a07",
+  "provider" : "claude-code",
+  "bucket" : "default",
+  "window" : "five_hour",
+  "windowStart" : "2026-10-05T06:30:00Z",
+  "resetsAt" : "2026-10-05T11:30:00Z",
+  "points" : [ {
+    "at" : "2026-10-05T08:00:00Z",
+    "usedFraction" : 0.12,
+    "skynet" : 0.0,
+    "source" : "invocation"
+  }, {
+    "at" : "2026-10-05T09:00:42Z",
+    "usedFraction" : 0.16,
+    "skynet" : 0.02,
+    "source" : "invocation"
+  } ]
+}

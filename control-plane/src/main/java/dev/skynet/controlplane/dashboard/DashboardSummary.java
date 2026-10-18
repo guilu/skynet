@@ -2,6 +2,7 @@ package dev.skynet.controlplane.dashboard;
 
 import dev.skynet.controlplane.runner.ProviderShortage;
 import dev.skynet.controlplane.runner.RunnerView;
+import dev.skynet.controlplane.usage.QuotaWarning;
 import dev.skynet.controlplane.workflow.RunView;
 import dev.skynet.controlplane.workflow.UnresponsiveAgent;
 import java.time.Instant;
@@ -16,6 +17,8 @@ import java.util.List;
  * @param unresponsiveAgents agentes que han dejado de dar señales de actividad
  * @param staleRunners runners sin latido reciente
  * @param providerShortages proveedores con agentes en cola y ningún runner en línea que los tenga
+ * @param quotaWarnings ventanas de cuota de los CLIs que pasan del 90 % o van por encima de su
+ *     ritmo
  */
 public record DashboardSummary(
     List<RunView> activeRuns,
@@ -24,4 +27,5 @@ public record DashboardSummary(
     List<UnresponsiveAgent> unresponsiveAgents,
     List<RunnerView> staleRunners,
     List<ProviderShortage> providerShortages,
+    List<QuotaWarning> quotaWarnings,
     Instant generatedAt) {}
