@@ -48,10 +48,14 @@ jobs:
       - run: npm run build
 
   e2e:
-    name: E2E (Playwright)
+    name: E2E (Playwright) ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     env:
-      # Ejercita la configuración: las E2E no deben depender de que :8080 esté libre.
+      # Cada shard corre en su propia VM; dentro de ella ejercita que las E2E no dependan de :8080.
       E2E_API_PORT: 18084
     services:
       postgres:
@@ -81,12 +85,12 @@ jobs:
         working-directory: web
       - run: npx playwright install --with-deps chromium
         working-directory: web
-      # Control plane + runner con fake-claude + vite preview + Playwright.
-      - run: ./scripts/e2e.sh
+      # Control plane + runner con fake-claude + vite preview + un tercio de la suite Playwright.
+      - run: ./scripts/e2e.sh --shard=${{ matrix.shard }}/3
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-report
+          name: e2e-report-shard-${{ matrix.shard }}
           path: |
             web/playwright-report/
             web/test-results/
