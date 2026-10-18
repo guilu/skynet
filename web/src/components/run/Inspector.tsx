@@ -51,6 +51,7 @@ export function Inspector({ agent, events, tab, sequence, toolUseId, onTab, onSh
         onSelect={onTab}
         idPrefix="tab"
         panelId="inspector-panel"
+        overflowMenu
       />
       <TabPanel id="inspector-panel" labelledBy={`tab-${tab}`}>
         {tab === 'summary' && <Summary agent={agent} events={events} />}

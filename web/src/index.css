@@ -1456,6 +1456,23 @@
     color: var(--fg);
   }
 
+  .tabs [role='tab'][data-state='open'] {
+    color: var(--fg);
+  }
+
+  /* Copia invisible de una lista de pestañas con menú «Más»: solo sirve para medirlas. */
+  .tabs-measure {
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+  }
+
+  .tabs-measure > .tabs {
+    width: max-content;
+    max-width: none;
+    margin: 0;
+  }
+
   .tabs [role='tab'][aria-selected='true'] {
     background: var(--surface);
     color: var(--fg);
@@ -2635,12 +2652,12 @@
   }
 
   /* ---------- Vista de ejecución ---------- */
+  /* Actividad y detalle son dos tarjetas; el hueco entre ellas es el tirador que cambia su ancho. */
   .run-panels {
     display: flex;
     height: max(560px, calc(100dvh - 9rem));
-    margin-top: var(--space-4);
-    padding: 0;
-    overflow: hidden;
+    margin-top: 20px;
+    padding-bottom: var(--lift-card);
   }
 
   .run-panel,
@@ -2652,6 +2669,10 @@
     min-width: 0;
     overflow: auto;
     overscroll-behavior: contain;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: 0 var(--lift-card) 0 var(--border);
   }
 
   .run-pane {
@@ -2663,21 +2684,39 @@
     padding: var(--space-3) var(--space-4) var(--space-4);
   }
 
-  .run-activity > .tabs {
+  .run-activity > .tabs,
+  .run-inspector > .tabs {
     margin-top: 0;
+  }
+
+  /* El detalle tiene muchas pestañas: más compactas, y las que no caben van al menú «Más». */
+  .run-inspector .tabs [role='tab'] {
+    padding: 6px 10px;
   }
 
   .run-separator {
     flex: none;
-    width: 6px;
-    background: var(--border);
+    position: relative;
+    width: 20px;
+    background: transparent;
+  }
+
+  .run-separator::after {
+    content: '';
+    position: absolute;
+    inset: 20% 8px;
+    border-radius: 999px;
+    background: transparent;
     transition: background-color 120ms;
   }
 
-  .run-separator:hover,
-  .run-separator[data-separator='active'],
-  .run-separator:focus-visible {
+  .run-separator:hover::after,
+  .run-separator[data-separator='active']::after,
+  .run-separator:focus-visible::after {
     background: var(--primary);
+  }
+
+  .run-separator:focus-visible {
     outline: none;
   }
 

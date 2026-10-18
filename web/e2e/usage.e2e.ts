@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { expectAccessible, login, postApi, workItemViaApi } from './helpers.ts'
+import { expectAccessible, login, openTab, postApi, workItemViaApi } from './helpers.ts'
 
 /**
  * Uso de los CLIs (CU-C), criterio de aceptación del hito: con la cuenta de Codex al 88 %, un
@@ -145,7 +145,7 @@ test('la página Uso reparte la cuota de Codex y avisa al pasar del 90 %', async
     const kpi = page.locator('.run-kpis .kpi').filter({ hasText: 'Cuota' })
     await expect(kpi).toContainText('3 % de 5 h')
     await expect(kpi).toContainText('Codex: 3 % de 5 h · 1 % semanal')
-    await page.getByRole('tab', { name: 'Coste' }).click()
+    await openTab(page, 'Coste')
     const inspector = page.getByRole('region', { name: 'Inspector del agente' })
     await expect(inspector.getByRole('heading', { name: 'Cuota' })).toBeVisible()
     await expect(inspector.getByText('3 % (medido)')).toBeVisible()

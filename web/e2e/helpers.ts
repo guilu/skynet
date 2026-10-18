@@ -39,6 +39,8 @@ export async function postApi(page: Page, path: string, data: unknown) {
   return response.json()
 }
 
+let projectsCreated = 0
+
 /**
  * Crea proyecto, repositorio (con comando de verificación si se pide) y trabajo. Devuelve los ids
  * del trabajo y del repositorio.
@@ -47,7 +49,9 @@ export async function workItemViaApi(
   page: Page,
   options: { validationCommand?: string } = {},
 ): Promise<{ workItemId: string; repositoryId: string }> {
-  const key = `C${Date.now().toString(36).toUpperCase().slice(-6)}`
+  // La hora no basta: dos llamadas en paralelo (usage.e2e.ts) caen en el mismo milisegundo.
+  const seq = (projectsCreated++ % 36).toString(36)
+  const key = `C${Date.now().toString(36).slice(-6)}${seq}`.toUpperCase()
   const project = await postApi(page, '/api/projects', { key, name: 'E2E por API' })
   const repo = await postApi(page, `/api/projects/${project.id}/repositories`, {
     name: 'demo',
@@ -107,4 +111,17 @@ export async function expectAccessible(page: Page, what: string) {
       `${v.id} (${v.impact}): ${v.help} → ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`,
   )
   expect(summary, `${what}: problemas de accesibilidad`).toEqual([])
+}
+
+/** Abre una pestaña de la ejecución, también si el detalle del agente la tiene en su menú «Más». */
+export async function openTab(page: Page, name: string) {
+  const inspector = page.getByRole('region', { name: 'Inspector del agente' })
+  await expect(inspector.getByRole('tab').first()).toBeVisible()
+  const tab = page.getByRole('tab', { name, exact: true })
+  if (await tab.count()) {
+    if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click()
+    return
+  }
+  await inspector.locator('[role=tab][aria-haspopup=menu]').click()
+  await page.getByRole('menuitemradio', { name, exact: true }).click()
 }
