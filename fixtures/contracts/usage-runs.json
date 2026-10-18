@@ -1,0 +1,22 @@
+[ {
+  "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04",
+  "workItemKey" : "TKM-1",
+  "workItemTitle" : "Add model pricing importer",
+  "workflowKey" : "adhoc",
+  "workflowName" : "Agente suelto",
+  "status" : "SUCCEEDED",
+  "createdAt" : "2026-10-05T09:00:00Z",
+  "quota" : [ {
+    "provider" : "claude-code",
+    "bucket" : "default",
+    "window" : "five_hour",
+    "share" : 0.02,
+    "method" : "measured"
+  }, {
+    "provider" : "claude-code",
+    "bucket" : "default",
+    "window" : "seven_day",
+    "share" : 0.004,
+    "method" : "measured"
+  } ]
+} ]

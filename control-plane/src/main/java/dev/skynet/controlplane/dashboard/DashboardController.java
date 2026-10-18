@@ -4,6 +4,7 @@ import dev.skynet.controlplane.runner.RunnerDirectory;
 import dev.skynet.controlplane.shared.Archived;
 import dev.skynet.controlplane.shared.InvalidRequestException;
 import dev.skynet.controlplane.shared.TimeSource;
+import dev.skynet.controlplane.usage.QuotaSnapshots;
 import dev.skynet.controlplane.workflow.RunMetrics;
 import dev.skynet.controlplane.workflow.RunPage;
 import dev.skynet.controlplane.workflow.RunService;
@@ -28,11 +29,14 @@ class DashboardController {
   private final RunService runs;
   private final RunnerDirectory runners;
   private final TimeSource time;
+  private final QuotaSnapshots quotas;
 
-  DashboardController(RunService runs, RunnerDirectory runners, TimeSource time) {
+  DashboardController(
+      RunService runs, RunnerDirectory runners, TimeSource time, QuotaSnapshots quotas) {
     this.runs = runs;
     this.runners = runners;
     this.time = time;
+    this.quotas = quotas;
   }
 
   @GetMapping("/api/dashboard")
@@ -63,6 +67,7 @@ class DashboardController {
         runs.unresponsiveAgents(),
         runners.stale(),
         runners.shortages(),
+        quotas.warnings(),
         now);
   }
 

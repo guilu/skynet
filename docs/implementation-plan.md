@@ -538,6 +538,13 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito CU (cuotas de uso de los CLIs), aprobado el 2026-10-17:** CU-A lectura de cuotas, CU-B atribución, CU-C página Uso y E2E. Ver [`usage-windows.md`](usage-windows.md).
 
+**Implementado (CU-B), atribución:**
+
+- `QuotaAttributor`: entre dos muestras seguidas de una ventana, la subida va a los agentes de ese CLI que corrieron en el runner, en proporción a su coste dentro del intervalo (si no, tokens; si no, tiempo); sin agentes, a «Fuera de Skynet». Renovación de la ventana (pasó `resetsAt` o bajó más que el redondeo): cuenta desde 0. La primera muestra de un agente de Claude Code es su punto de partida; la de Codex, su final. Se recalcula con cada muestra (también desordenada) y cuando termina o se pierde un agente.
+- `quota_interval` y `agent_run_quota` (migración `V25`); `quota` en cada agente y en `totals` de la ejecución; `pace` y `skynet` en `GET /api/usage/windows`.
+- `GET /api/usage/history`, `GET /api/usage/agents` y `GET /api/usage/runs`; `quotaWarnings` en `GET /api/dashboard` (más del 90 %, o la semana 15 puntos por encima del ritmo).
+- Contratos `usage-*.json`; `QuotaAttributionIT` (intervalos solapados, muestra tardía, renovación, redondeo, recálculo al terminar, Codex). `fake-codex` gasta cuota con cada sesión (`FAKE_CODEX_QUOTA_STEP`).
+
 **Implementado (CU-A), lectura de cuotas:**
 
 - Evento `agent.quota` y `QuotaSample` en el protocolo. `ClaudeStreamParser` lo emite con las `unifiedWindows` de cada `rate_limit_event` (cualquier estado) cuando cambian; `CodexProvider.afterExit` lo emite al terminar, con el último `token_count` del fichero de la sesión.

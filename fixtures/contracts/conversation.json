@@ -41,7 +41,20 @@
       },
       "childKey" : null,
       "structuredOutput" : null,
-      "failure" : null
+      "failure" : null,
+      "quota" : [ {
+        "provider" : "claude-code",
+        "bucket" : "default",
+        "window" : "five_hour",
+        "share" : 0.02,
+        "method" : "measured"
+      }, {
+        "provider" : "claude-code",
+        "bucket" : "default",
+        "window" : "seven_day",
+        "share" : 0.004,
+        "method" : "measured"
+      } ]
     },
     "prompt" : "Implementa el importador de precios de modelos",
     "messages" : [ {
@@ -91,7 +104,8 @@
       },
       "childKey" : null,
       "structuredOutput" : null,
-      "failure" : null
+      "failure" : null,
+      "quota" : [ ]
     },
     "prompt" : "Añade también los precios de caché",
     "messages" : [ {

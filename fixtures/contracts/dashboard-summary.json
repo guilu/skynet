@@ -18,7 +18,8 @@
       "outputTokens" : 32,
       "cacheReadTokens" : 28437,
       "cacheCreationTokens" : 4256,
-      "costUsd" : null
+      "costUsd" : null,
+      "quota" : [ ]
     },
     "workflow" : {
       "key" : "adhoc",
@@ -80,7 +81,8 @@
         },
         "childKey" : null,
         "structuredOutput" : null,
-        "failure" : null
+        "failure" : null,
+        "quota" : [ ]
       } ],
       "verifications" : [ ],
       "approval" : null,
@@ -123,6 +125,19 @@
     "provider" : "gemini",
     "displayName" : "Gemini CLI",
     "queuedAgents" : 2
+  } ],
+  "quotaWarnings" : [ {
+    "runnerId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a07",
+    "runnerName" : "laptop",
+    "provider" : "claude-code",
+    "providerName" : "Claude Code",
+    "bucket" : "default",
+    "label" : null,
+    "window" : "seven_day",
+    "usedFraction" : 0.78,
+    "pace" : 0.55,
+    "resetsAt" : "2026-10-09T09:00:00Z",
+    "reason" : "pace"
   } ],
   "generatedAt" : "2026-10-05T09:10:00Z"
 }

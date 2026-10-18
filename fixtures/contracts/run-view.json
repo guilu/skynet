@@ -17,7 +17,20 @@
     "outputTokens" : 1260,
     "cacheReadTokens" : 48520,
     "cacheCreationTokens" : 4830,
-    "costUsd" : 0.0574210000
+    "costUsd" : 0.0574210000,
+    "quota" : [ {
+      "provider" : "claude-code",
+      "bucket" : "default",
+      "window" : "five_hour",
+      "share" : 0.02,
+      "method" : "measured"
+    }, {
+      "provider" : "claude-code",
+      "bucket" : "default",
+      "window" : "seven_day",
+      "share" : 0.004,
+      "method" : "measured"
+    } ]
   },
   "workflow" : {
     "key" : "adhoc",
@@ -87,7 +100,20 @@
       },
       "childKey" : null,
       "structuredOutput" : null,
-      "failure" : null
+      "failure" : null,
+      "quota" : [ {
+        "provider" : "claude-code",
+        "bucket" : "default",
+        "window" : "five_hour",
+        "share" : 0.02,
+        "method" : "measured"
+      }, {
+        "provider" : "claude-code",
+        "bucket" : "default",
+        "window" : "seven_day",
+        "share" : 0.004,
+        "method" : "measured"
+      } ]
     } ],
     "verifications" : [ {
       "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a20",

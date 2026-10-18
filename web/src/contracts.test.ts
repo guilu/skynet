@@ -15,6 +15,10 @@ import runView from '../../fixtures/contracts/run-view.json'
 import providers from '../../fixtures/contracts/providers.json'
 import runners from '../../fixtures/contracts/runners.json'
 import storedEvent from '../../fixtures/contracts/stored-event.json'
+import usageAgents from '../../fixtures/contracts/usage-agents.json'
+import usageHistory from '../../fixtures/contracts/usage-history.json'
+import usageRuns from '../../fixtures/contracts/usage-runs.json'
+import usageWindows from '../../fixtures/contracts/usage-windows.json'
 import verifications from '../../fixtures/contracts/verifications.json'
 import workflowDefinitions from '../../fixtures/contracts/workflow-definitions.json'
 import workflowVersion from '../../fixtures/contracts/workflow-version.json'
@@ -22,6 +26,14 @@ import workflow from '../../fixtures/contracts/workflow.json'
 import workflows from '../../fixtures/contracts/workflows.json'
 import type {
   AgentDefinition,
+  AgentUsage,
+  QuotaShare,
+  QuotaWarning,
+  RunUsage,
+  UsageHistory,
+  UsagePoint,
+  UsageWindow,
+  UsageWindows,
   ApprovalDecision,
   ApprovalEvidence,
   ApprovalEvidenceAgent,
@@ -72,6 +84,7 @@ type Keys<T> = Record<keyof T, true>
 
 const AGENT_RUN: Keys<AgentRun> = {
   failure: true,
+  quota: true,
   id: true,
   stageRunId: true,
   parentAgentRunId: true,
@@ -159,6 +172,77 @@ const RUN_TOTALS: Keys<RunTotals> = {
   cacheReadTokens: true,
   cacheCreationTokens: true,
   costUsd: true,
+  quota: true,
+}
+const QUOTA_SHARE: Keys<QuotaShare> = {
+  provider: true,
+  bucket: true,
+  window: true,
+  share: true,
+  method: true,
+}
+const QUOTA_WARNING: Keys<QuotaWarning> = {
+  runnerId: true,
+  runnerName: true,
+  provider: true,
+  providerName: true,
+  bucket: true,
+  label: true,
+  window: true,
+  usedFraction: true,
+  pace: true,
+  resetsAt: true,
+  reason: true,
+}
+const USAGE_WINDOW: Keys<UsageWindow> = {
+  provider: true,
+  providerName: true,
+  bucket: true,
+  label: true,
+  window: true,
+  usedFraction: true,
+  resetsAt: true,
+  plan: true,
+  source: true,
+  observedAt: true,
+  stale: true,
+  pace: true,
+  skynet: true,
+}
+const USAGE_HISTORY: Keys<UsageHistory> = {
+  runnerId: true,
+  provider: true,
+  bucket: true,
+  window: true,
+  windowStart: true,
+  resetsAt: true,
+  points: true,
+}
+const USAGE_POINT: Keys<UsagePoint> = { at: true, usedFraction: true, skynet: true, source: true }
+const AGENT_USAGE: Keys<AgentUsage> = {
+  workflowKey: true,
+  workflowName: true,
+  agent: true,
+  provider: true,
+  providerName: true,
+  runs: true,
+  succeeded: true,
+  fiveHour: true,
+  sevenDay: true,
+  sevenDayPerRun: true,
+  sevenDayPerSuccess: true,
+  inputTokens: true,
+  outputTokens: true,
+}
+const RUN_USAGE: Keys<RunUsage> = {
+  id: true,
+  workItemKey: true,
+  workItemTitle: true,
+  workflowKey: true,
+  workflowName: true,
+  status: true,
+  createdAt: true,
+  quota: true,
 }
 const RUN: Keys<Run> = {
   id: true,
@@ -259,6 +343,7 @@ const DASHBOARD: Keys<DashboardSummary> = {
   unresponsiveAgents: true,
   staleRunners: true,
   providerShortages: true,
+  quotaWarnings: true,
   generatedAt: true,
 }
 const STORED_EVENT: Keys<StoredEvent> = {
@@ -480,12 +565,14 @@ const expectShape = (value: object, shape: object) => expect(keysOf(value)).toEq
 
 function expectAgent(agent: AgentRun) {
   expectShape(agent, AGENT_RUN)
+  agent.quota.forEach((q) => expectShape(q, QUOTA_SHARE))
   if (agent.workspace) expectShape(agent.workspace, WORKSPACE)
 }
 
 function expectRun(run: Run) {
   expectShape(run, RUN)
   expectShape(run.totals, RUN_TOTALS)
+  run.totals.quota.forEach((q) => expectShape(q, QUOTA_SHARE))
   if (run.workflow) expectShape(run.workflow, WORKFLOW_REF)
   for (const stage of run.stages) {
     expectShape(stage, STAGE_RUN)
@@ -533,8 +620,25 @@ describe('contratos con el backend', () => {
     runners.forEach((r) => r.providers.forEach((p) => expectShape(p, PROVIDER_INFO)))
   })
 
+  it('cuotas de uso', () => {
+    const windows = usageWindows as UsageWindows
+    windows.runners.forEach((r) => {
+      expect(keysOf(r)).toEqual(['id', 'name', 'windows'])
+      r.windows.forEach((w) => expectShape(w, USAGE_WINDOW))
+    })
+    expectShape(usageHistory, USAGE_HISTORY)
+    usageHistory.points.forEach((p) => expectShape(p, USAGE_POINT))
+    ;(usageAgents as AgentUsage[]).forEach((a) => expectShape(a, AGENT_USAGE))
+    ;(usageRuns as RunUsage[]).forEach((r) => {
+      expectShape(r, RUN_USAGE)
+      r.quota.forEach((q) => expectShape(q, QUOTA_SHARE))
+    })
+    expect((runView as Run).totals.quota.map((q) => q.window)).toEqual(['five_hour', 'seven_day'])
+  })
+
   it('dashboard', () => {
     expectShape(dashboardSummary, DASHBOARD)
+    dashboardSummary.quotaWarnings.forEach((w) => expectShape(w, QUOTA_WARNING))
     ;(dashboardSummary.activeRuns as Run[]).forEach(expectRun)
     dashboardSummary.unresponsiveAgents.forEach((a) => expectShape(a, UNRESPONSIVE_AGENT))
     dashboardSummary.staleRunners.forEach((r) => expectShape(r, RUNNER))

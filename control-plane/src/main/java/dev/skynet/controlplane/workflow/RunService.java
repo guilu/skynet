@@ -17,6 +17,8 @@ import dev.skynet.controlplane.shared.ConflictException;
 import dev.skynet.controlplane.shared.InvalidRequestException;
 import dev.skynet.controlplane.shared.NotFoundException;
 import dev.skynet.controlplane.shared.TimeSource;
+import dev.skynet.controlplane.usage.QuotaShare;
+import dev.skynet.controlplane.usage.QuotaShares;
 import dev.skynet.controlplane.workitem.WorkItem;
 import dev.skynet.controlplane.workitem.WorkItemService;
 import dev.skynet.protocol.AgentFailure;
@@ -77,6 +79,7 @@ public class RunService {
   private final ApplicationEventPublisher publisher;
   private final Verifications verifications;
   private final Approvals approvals;
+  private final QuotaShares quotaShares;
 
   RunService(
       WorkflowRunRepository workflowRuns,
@@ -94,7 +97,8 @@ public class RunService {
       ObjectMapper json,
       ApplicationEventPublisher publisher,
       Verifications verifications,
-      Approvals approvals) {
+      Approvals approvals,
+      QuotaShares quotaShares) {
     this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
     this.agentRuns = agentRuns;
@@ -111,6 +115,7 @@ public class RunService {
     this.publisher = publisher;
     this.verifications = verifications;
     this.approvals = approvals;
+    this.quotaShares = quotaShares;
   }
 
   /**
@@ -1163,7 +1168,10 @@ public class RunService {
     AgentRun agent = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
     StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
     return new AgentRunDetail(
-        AgentRunView.of(agent, workspaces.find(agent.getWorkspaceId()).orElse(null)),
+        AgentRunView.of(
+            agent,
+            workspaces.find(agent.getWorkspaceId()).orElse(null),
+            quotaShares.ofAgent(agent.getId())),
         stage.getWorkflowRunId(),
         prompts.findByAgentRunIdOrderByCreatedAtAsc(agentRunId).stream()
             .map(PromptView::of)
@@ -1199,6 +1207,8 @@ public class RunService {
                 .distinct()
                 .toList())
         .forEach(w -> worktrees.put(w.id(), w));
+    Map<UUID, List<QuotaShare>> quota =
+        quotaShares.ofAgents(chain.stream().map(AgentRun::getId).toList());
     return new ConversationView(
         chain.stream()
             .map(
@@ -1213,7 +1223,7 @@ public class RunService {
                           .orElse(null);
                   return new ConversationView.Turn(
                       runId,
-                      AgentRunView.of(a, worktrees.get(a.getWorkspaceId())),
+                      AgentRunView.of(a, worktrees.get(a.getWorkspaceId()), quota.get(a.getId())),
                       promptText,
                       messages(runId, a.getId()));
                 })
@@ -1482,6 +1492,8 @@ public class RunService {
         verifications.latestOfStages(stages.stream().map(StageRun::getId).toList());
     Map<UUID, ApprovalSummary> stageApprovals =
         approvals.latestOfStages(stages.stream().map(StageRun::getId).toList());
+    Map<UUID, List<QuotaShare>> quota =
+        quotaShares.ofAgents(agents.stream().map(AgentRun::getId).toList());
     Map<UUID, PublishedDefinition> published = new HashMap<>();
     runs.stream()
         .map(WorkflowRun::getDefinitionId)
@@ -1510,7 +1522,10 @@ public class RunService {
                                       .filter(a -> a.getStageRunId().equals(s.getId()))
                                       .map(
                                           a ->
-                                              AgentRunView.of(a, worktrees.get(a.getWorkspaceId())))
+                                              AgentRunView.of(
+                                                  a,
+                                                  worktrees.get(a.getWorkspaceId()),
+                                                  quota.get(a.getId())))
                                       .toList(),
                                   stageChecks.getOrDefault(s.getId(), List.of()),
                                   stageApprovals.get(s.getId())))

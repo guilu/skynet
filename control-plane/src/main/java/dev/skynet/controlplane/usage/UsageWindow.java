@@ -13,6 +13,10 @@ import java.time.Instant;
  * @param resetsAt cuándo se renueva, o {@code null} si el CLI no lo dice
  * @param source {@code invocation} (la vio un agente) o {@code poll} (la consultó el runner)
  * @param stale si el dato tiene más de 5 h: puede no parecerse a la cuota de ahora
+ * @param pace ritmo uniforme: dónde estaría gastando igual toda la ventana, de 0 a 1, o {@code
+ *     null} si no se sabe cuándo se renueva o ya se ha renovado
+ * @param skynet de lo gastado en la ventana, lo que se atribuye a agentes de Skynet; el resto es de
+ *     fuera
  */
 public record UsageWindow(
     String provider,
@@ -25,4 +29,6 @@ public record UsageWindow(
     String plan,
     String source,
     Instant observedAt,
-    boolean stale) {}
+    boolean stale,
+    Double pace,
+    double skynet) {}

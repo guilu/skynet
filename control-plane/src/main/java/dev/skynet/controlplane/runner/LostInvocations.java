@@ -1,5 +1,6 @@
 package dev.skynet.controlplane.runner;
 
+import dev.skynet.controlplane.usage.QuotaAttributor;
 import dev.skynet.controlplane.workflow.RunService;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import java.util.List;
@@ -22,11 +23,14 @@ class LostInvocations {
   private final CommandQueue commands;
   private final RunService runs;
   private final RunnerProperties properties;
+  private final QuotaAttributor quotas;
 
-  LostInvocations(CommandQueue commands, RunService runs, RunnerProperties properties) {
+  LostInvocations(
+      CommandQueue commands, RunService runs, RunnerProperties properties, QuotaAttributor quotas) {
     this.commands = commands;
     this.runs = runs;
     this.properties = properties;
+    this.quotas = quotas;
   }
 
   /** Aplica un latido; devuelve los agentes que ha dado por perdidos. */
@@ -41,6 +45,8 @@ class LostInvocations {
     try {
       boolean failed = runs.failLost(agentRunId);
       if (failed) {
+        // Ya tiene fin: cambia su parte de la cuota.
+        quotas.agentChanged(agentRunId);
         log.warn(
             "El runner {} ya no ejecuta el agente {}: se da por perdido", runnerId, agentRunId);
       }

@@ -16,6 +16,13 @@ import dev.skynet.controlplane.runner.ProviderShortage;
 import dev.skynet.controlplane.runner.ProviderView;
 import dev.skynet.controlplane.runner.RunnerView;
 import dev.skynet.controlplane.support.IntegrationTest;
+import dev.skynet.controlplane.usage.AgentUsage;
+import dev.skynet.controlplane.usage.QuotaShare;
+import dev.skynet.controlplane.usage.QuotaWarning;
+import dev.skynet.controlplane.usage.RunUsage;
+import dev.skynet.controlplane.usage.UsageHistory;
+import dev.skynet.controlplane.usage.UsageWindow;
+import dev.skynet.controlplane.usage.UsageWindows;
 import dev.skynet.controlplane.workflow.AgentRunDetail;
 import dev.skynet.controlplane.workflow.AgentRunKind;
 import dev.skynet.controlplane.workflow.AgentRunView;
@@ -95,7 +102,11 @@ class ContractIT extends IntegrationTest {
         Arguments.of("effective-policy", Samples.effectivePolicy()),
         Arguments.of("providers", Samples.providers()),
         Arguments.of("approvals", List.of(Samples.pendingApproval())),
-        Arguments.of("approval", Samples.approval()));
+        Arguments.of("approval", Samples.approval()),
+        Arguments.of("usage-windows", Samples.usageWindows()),
+        Arguments.of("usage-history", Samples.usageHistory()),
+        Arguments.of("usage-agents", List.of(Samples.agentUsage())),
+        Arguments.of("usage-runs", List.of(Samples.runUsage())));
   }
 
   @ParameterizedTest(name = "{0}")
@@ -175,7 +186,10 @@ class ContractIT extends IntegrationTest {
           worktree(),
           null,
           null,
-          null);
+          null,
+          List.of(
+              new QuotaShare("claude-code", "default", "five_hour", 0.02, "measured"),
+              new QuotaShare("claude-code", "default", "seven_day", 0.004, "measured")));
     }
 
     static AgentRunView workingAgent() {
@@ -210,7 +224,8 @@ class ContractIT extends IntegrationTest {
           worktree(),
           null,
           null,
-          null);
+          null,
+          List.of());
     }
 
     static WorkspaceView worktree() {
@@ -258,7 +273,8 @@ class ContractIT extends IntegrationTest {
           worktree(),
           null,
           null,
-          null);
+          null,
+          List.of());
     }
 
     static ConversationView conversation() {
@@ -494,7 +510,8 @@ class ContractIT extends IntegrationTest {
               agent.outputTokens(),
               agent.cacheReadTokens(),
               agent.cacheCreationTokens(),
-              agent.costUsd()),
+              agent.costUsd(),
+              QuotaShare.sum(agent.quota())),
           new RunView.WorkflowRef("adhoc", 1, "Agente suelto"),
           List.of(stage));
     }
@@ -629,6 +646,87 @@ class ContractIT extends IntegrationTest {
           List.of(new ProviderInfo("claude-code", "2.1.288")));
     }
 
+    static UsageWindows usageWindows() {
+      return new UsageWindows(
+          List.of(
+              new UsageWindows.Runner(
+                  RUNNER,
+                  "laptop",
+                  List.of(
+                      new UsageWindow(
+                          "claude-code",
+                          "Claude Code",
+                          "default",
+                          null,
+                          "five_hour",
+                          0.16,
+                          at(9_000),
+                          null,
+                          "invocation",
+                          at(42),
+                          false,
+                          0.5,
+                          0.02),
+                      new UsageWindow(
+                          "antigravity",
+                          "Antigravity CLI",
+                          "gemini",
+                          "Gemini Models",
+                          "seven_day",
+                          0.4,
+                          at(345_600),
+                          null,
+                          "poll",
+                          at(30),
+                          false,
+                          0.43,
+                          0)))));
+    }
+
+    static UsageHistory usageHistory() {
+      return new UsageHistory(
+          RUNNER,
+          "claude-code",
+          "default",
+          "five_hour",
+          at(-9_000),
+          at(9_000),
+          List.of(
+              new UsageHistory.Point(at(-3_600), 0.12, 0, "invocation"),
+              new UsageHistory.Point(at(42), 0.16, 0.02, "invocation")));
+    }
+
+    static AgentUsage agentUsage() {
+      return new AgentUsage(
+          "revisar-y-corregir",
+          "Revisar y corregir",
+          "revisor",
+          "claude-code",
+          "Claude Code",
+          4,
+          3,
+          0.12,
+          0.024,
+          0.006,
+          0.008,
+          420L,
+          9_870L);
+    }
+
+    static RunUsage runUsage() {
+      return new RunUsage(
+          RUN,
+          "TKM-1",
+          "Add model pricing importer",
+          "adhoc",
+          "Agente suelto",
+          "SUCCEEDED",
+          at(0),
+          List.of(
+              new QuotaShare("claude-code", "default", "five_hour", 0.02, "measured"),
+              new QuotaShare("claude-code", "default", "seven_day", 0.004, "measured")));
+    }
+
     static DashboardSummary dashboard() {
       return new DashboardSummary(
           List.of(runningRun()),
@@ -637,6 +735,19 @@ class ContractIT extends IntegrationTest {
           List.of(new UnresponsiveAgent(AGENT, RUN, "TKM-1", at(17))),
           List.of(staleRunner()),
           List.of(new ProviderShortage("gemini", "Gemini CLI", 2)),
+          List.of(
+              new QuotaWarning(
+                  RUNNER,
+                  "laptop",
+                  "claude-code",
+                  "Claude Code",
+                  "default",
+                  null,
+                  "seven_day",
+                  0.78,
+                  0.55,
+                  at(345_600),
+                  "pace")),
           at(600));
     }
 

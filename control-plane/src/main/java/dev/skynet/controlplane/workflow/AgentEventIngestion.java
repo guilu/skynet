@@ -4,6 +4,7 @@ import dev.skynet.controlplane.event.EventDraft;
 import dev.skynet.controlplane.event.EventStore;
 import dev.skynet.controlplane.shared.PayloadRedactor;
 import dev.skynet.controlplane.shared.TimeSource;
+import dev.skynet.controlplane.usage.QuotaAttributor;
 import dev.skynet.controlplane.usage.QuotaSnapshots;
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.AgentFailure;
@@ -51,6 +52,7 @@ public class AgentEventIngestion {
   private final VerificationService verifications;
   private final StageVerifications stageVerifications;
   private final QuotaSnapshots quotas;
+  private final QuotaAttributor attributor;
   private final TimeSource time;
 
   AgentEventIngestion(
@@ -64,6 +66,7 @@ public class AgentEventIngestion {
       VerificationService verifications,
       StageVerifications stageVerifications,
       QuotaSnapshots quotas,
+      QuotaAttributor attributor,
       TimeSource time) {
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
@@ -75,6 +78,7 @@ public class AgentEventIngestion {
     this.verifications = verifications;
     this.stageVerifications = stageVerifications;
     this.quotas = quotas;
+    this.attributor = attributor;
     this.time = time;
   }
 
@@ -148,6 +152,10 @@ public class AgentEventIngestion {
       }
     } else if (!agent.getStatus().isTerminal()) {
       apply(agent, stage, event, redacted);
+      if (event.type() == AgentEventType.RESULT || event.type() == AgentEventType.PROCESS_EXITED) {
+        // Ya se sabe su coste y cuándo terminó: cambia su parte de la cuota.
+        attributor.agentChanged(agent.getId());
+      }
     }
   }
 

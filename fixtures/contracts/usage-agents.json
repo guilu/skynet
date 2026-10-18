@@ -1,0 +1,15 @@
+[ {
+  "workflowKey" : "revisar-y-corregir",
+  "workflowName" : "Revisar y corregir",
+  "agent" : "revisor",
+  "provider" : "claude-code",
+  "providerName" : "Claude Code",
+  "runs" : 4,
+  "succeeded" : 3,
+  "fiveHour" : 0.12,
+  "sevenDay" : 0.024,
+  "sevenDayPerRun" : 0.006,
+  "sevenDayPerSuccess" : 0.008,
+  "inputTokens" : 420,
+  "outputTokens" : 9870
+} ]
