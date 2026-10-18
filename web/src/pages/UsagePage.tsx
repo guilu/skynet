@@ -15,6 +15,7 @@ import {
   formatPercent,
   formatReset,
   quotaAlerts,
+  QUOTA_PROVIDERS,
   READ_ONLY_PROVIDERS,
   renewed,
   sharesByProvider,
@@ -66,8 +67,15 @@ export function UsagePage() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['usage'] }),
   })
   const own = runner?.windows ?? []
-  const providers = [...new Set(own.map((w) => w.provider))].sort((a, b) => order(a) - order(b))
   const versions = runnerList.data?.find((r) => r.id === runner?.id)?.providers ?? []
+  const sampled = [...new Set(own.map((w) => w.provider))]
+  // También los CLIs del runner sin muestras aún (Claude Code solo informa al ejecutar un agente).
+  const providers = [
+    ...new Set([
+      ...sampled,
+      ...versions.map((v) => v.id).filter((id) => QUOTA_PROVIDERS.includes(id)),
+    ]),
+  ].sort((a, b) => order(a) - order(b))
   const warnings = (summary.data?.quotaWarnings ?? []).filter((w) => w.runnerId === runner?.id)
   const alerts = quotaAlerts(warnings, now)
 
@@ -149,8 +157,13 @@ export function UsagePage() {
         )}
       </section>
 
-      {runner && providers.length > 0 && (
-        <Evolution runnerId={runner.id} windows={own} providers={providers} now={now} />
+      {runner && sampled.length > 0 && (
+        <Evolution
+          runnerId={runner.id}
+          windows={own}
+          providers={providers.filter((p) => sampled.includes(p))}
+          now={now}
+        />
       )}
 
       <Costs runnerId={runner?.id} />

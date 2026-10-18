@@ -1,5 +1,6 @@
 import { Clock, Eye } from 'lucide-react'
 import type { UsageWindow } from '../../api'
+import { providerName } from '../../format'
 import { cn } from '../../lib/cn'
 import { Pill } from '../ui/Pill'
 import {
@@ -35,6 +36,7 @@ export function ProviderCard({
   version: string | null
   now: number
 }) {
+  if (windows.length === 0) return <EmptyCard provider={provider} version={version} />
   const readOnly = READ_ONLY_PROVIDERS.includes(provider)
   const name = windows[0].providerName
   const plan = windows.find((w) => w.plan)?.plan
@@ -92,6 +94,30 @@ export function ProviderCard({
           ningún agente.
         </p>
       )}
+    </section>
+  )
+}
+
+/** Un CLI del runner del que aún no hay ninguna muestra de cuota. */
+function EmptyCard({ provider, version }: { provider: string; version: string | null }) {
+  const name = providerName(provider)
+  return (
+    <section className="card prov prov-stale" aria-label={name}>
+      <div className="prov-head">
+        <span className={cn('prov-logo', `prov-logo-${provider}`)} aria-hidden="true">
+          {LOGOS[provider] ?? name.charAt(0)}
+        </span>
+        <div>
+          <h3>{name}</h3>
+          {version && <small>{version}</small>}
+        </div>
+        <Pill tone="neutral">Sin datos</Pill>
+      </div>
+      <p className="prov-note">
+        {provider === 'claude-code'
+          ? 'Claude Code solo informa de su cuota mientras ejecuta un agente: sale en cuanto corra el próximo.'
+          : 'Aún no ha llegado ninguna consulta de su cuota. Pulsa «Actualizar» para pedirla ahora.'}
+      </p>
     </section>
   )
 }

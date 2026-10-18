@@ -56,6 +56,10 @@ describe('página Uso', () => {
     expect(screen.getByText('Runner: laptop')).toBeVisible()
 
     const claude = screen.getByRole('region', { name: 'Claude Code' })
+    // El runner tiene Codex pero aún no hay ninguna muestra: la tarjeta sale igual, sin medidores.
+    const codex = screen.getByRole('region', { name: 'Codex' })
+    expect(within(codex).getByText('Sin datos')).toBeVisible()
+    expect(within(codex).queryByRole('meter')).toBeNull()
     expect(within(claude).getByText('Disponible')).toBeVisible()
     const meter = within(claude).getByRole('meter', { name: 'Claude Code, ventana de 5 h' })
     expect(meter).toHaveAttribute('aria-valuenow', '16')
@@ -109,10 +113,24 @@ describe('página Uso', () => {
     ).toBe(true)
   })
 
-  it('sin muestras explica de dónde salen los datos', async () => {
+  it('sin muestras enseña igual los CLIs del runner y explica de dónde salen los datos', async () => {
     stubApi({ '/api/usage/windows': { runners: [{ id: runner, name: 'laptop', windows: [] }] } })
     renderAt('/usage', <App />)
-    expect(await screen.findByText('Aún no hay datos de cuota.')).toBeVisible()
+    const claude = await screen.findByRole('region', { name: 'Claude Code' })
+    expect(within(claude).getByText('Sin datos')).toBeVisible()
+    expect(
+      within(claude).getByText(/solo informa de su cuota mientras ejecuta un agente/),
+    ).toBeVisible()
+    expect(screen.getByRole('region', { name: 'Codex' })).toBeVisible()
     expect(screen.getByText('Aún no hay datos de cuota de este runner.')).toBeVisible()
+  })
+
+  it('sin muestras ni CLIs con cuota explica de dónde salen los datos', async () => {
+    stubApi({
+      '/api/usage/windows': { runners: [{ id: runner, name: 'laptop', windows: [] }] },
+      '/api/runners': runners.map((r) => ({ ...r, providers: [] })),
+    })
+    renderAt('/usage', <App />)
+    expect(await screen.findByText('Aún no hay datos de cuota.')).toBeVisible()
   })
 })

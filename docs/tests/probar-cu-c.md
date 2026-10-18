@@ -28,13 +28,14 @@ cd web && npm run dev
 ```
 
 1. Entra en **Uso** (barra lateral, entre Runners y Actividad; en el móvil, en la barra de abajo).
+   - Tarjeta de Claude Code con «Sin datos» y la nota de que solo informa al ejecutar un agente (aún no ha corrido ninguno).
    - Tarjetas de Codex y Antigravity. Codex: 88 % en la ventana de 5 h, «Justa», «Skynet 0 %», «Consultado hace…». Antigravity: «Solo lectura», sus grupos de modelos y la nota de que no se atribuye.
    - La raya vertical de cada medidor es el ritmo uniforme.
 2. Lanza un agente suelto con **Codex** (Lanzar workflow → Proveedor «Codex»). Al terminar:
    - En Uso, Codex sube a 91 %, «Casi agotada», con «Skynet 3 %» y un trozo azul en el medidor. Arriba sale «Necesita tu atención (1)»: «Codex al 91 % de la ventana de 5 h».
    - El Dashboard trae el mismo aviso; al pulsarlo lleva a Uso.
    - En la ejecución, el KPI «Cuota» dice «3 % de 5 h» y debajo «Codex: 3 % de 5 h · 1 % semanal». En la pestaña **Coste** del agente, la sección «Cuota»: «Codex · Ventana de 5 h: 3 % (medido)».
-3. Lanza un agente con **Claude Code**. Aparece la tarjeta de Claude Code con «Dato de hace…, de la última ejecución» (el fake da una cuota grabada con ventanas ya renovadas: sale a 0 % con «Se ha renovado; falta un dato nuevo»).
+3. Lanza un agente con **Claude Code**. La tarjeta de Claude Code pasa de «Sin datos» a sus medidores, con «Dato de hace…, de la última ejecución» (el fake da una cuota grabada con ventanas ya renovadas: sale a 0 % con «Se ha renovado; falta un dato nuevo»).
 4. **Evolución de la ventana**: elige Codex y «5 h». Se ve la escalera (azul abajo, rayado encima) y la línea «ahora»; al pasar el ratón, el tooltip con Skynet, fuera y total. Con «Semana», la ventana semanal.
    - Con los fakes, `resetsAt` se mueve con cada muestra, así que todo sale junto cerca de «ahora». Con los CLIs de verdad la ventana es fija.
 5. **Qué cuesta cada agente**: cambia entre 24 horas, 7 días y 30 días. Una fila por agente y CLI (`agent`, Agente suelto · Codex…) y, a la derecha, las ejecuciones que más han gastado, que enlazan a su página.
