@@ -39,6 +39,8 @@ export async function postApi(page: Page, path: string, data: unknown) {
   return response.json()
 }
 
+let projectsCreated = 0
+
 /**
  * Crea proyecto, repositorio (con comando de verificación si se pide) y trabajo. Devuelve los ids
  * del trabajo y del repositorio.
@@ -47,7 +49,9 @@ export async function workItemViaApi(
   page: Page,
   options: { validationCommand?: string } = {},
 ): Promise<{ workItemId: string; repositoryId: string }> {
-  const key = `C${Date.now().toString(36).toUpperCase().slice(-6)}`
+  // La hora no basta: dos llamadas en paralelo (usage.e2e.ts) caen en el mismo milisegundo.
+  const seq = (projectsCreated++ % 36).toString(36)
+  const key = `C${Date.now().toString(36).slice(-6)}${seq}`.toUpperCase()
   const project = await postApi(page, '/api/projects', { key, name: 'E2E por API' })
   const repo = await postApi(page, `/api/projects/${project.id}/repositories`, {
     name: 'demo',
