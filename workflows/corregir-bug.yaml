@@ -1,0 +1,78 @@
+id: corregir-bug
+name: Corregir un bug
+description: Codex reproduce el fallo con un test que falla, Claude Code lo corrige con los tests en verde y Antigravity busca regresiones; si encuentra alguna, Claude Code la arregla.
+
+agents:
+  reproductor:
+    provider: codex
+    model: ${CODEX_FUERTE}
+    permissionMode: acceptEdits
+    prompt: |
+      Reproduce el bug de {{workItem.key}}: {{workItem.title}}.
+
+      {{workItem.description}}
+
+      Escribe un test automático que falle por culpa del bug y ejecútalo para comprobarlo. No corrijas el bug.
+      Devuelve si lo has reproducido, la ruta del test y la causa más probable.
+    output:
+      type: object
+      properties:
+        reproduced: {type: boolean}
+        test: {type: string}
+        cause: {type: string}
+  desarrollador:
+    model: ${CLAUDE_GENERAL}
+    permissionMode: acceptEdits
+    prompt: Corrige el bug de {{workItem.key}} y confirma los cambios con un commit.
+  vigia:
+    provider: antigravity
+    model: ${AGY_RAPIDO}
+    permissionMode: plan
+    prompt: |
+      Revisa la corrección de {{workItem.key}} ({{workItem.title}}) respecto a la rama por defecto.
+      Busca regresiones: otros sitios que usen lo que ha cambiado y casos que el test no cubre.
+      Pon hasBlockingFindings a true solo si la corrección rompe algo o no resuelve el bug.
+    output:
+      type: object
+      properties:
+        hasBlockingFindings: {type: boolean}
+        summary: {type: string}
+
+stages:
+  - id: reproducir
+    type: agent
+    agent: reproductor
+    phase: test
+  - id: corregir
+    type: agent
+    agent: desarrollador
+    dependsOn: [reproducir]
+    phase: implement
+    prompt: |
+      Corrige el bug de {{workItem.key}}: {{workItem.title}}.
+
+      {{workItem.description}}
+
+      Reproducción (Codex): ¿reproducido? {{stages.reproducir.output.reproduced}}. Test: {{stages.reproducir.output.test}}.
+      Causa probable: {{stages.reproducir.output.cause}}
+
+      Si no hay test que lo reproduzca, escribe uno primero. Corrige la causa, no el síntoma, deja todos los tests en verde y confirma los cambios con un commit.
+    checks: [tests, diff]
+  - id: revisar
+    type: agent
+    agent: vigia
+    dependsOn: [corregir]
+    phase: review
+  - id: ajustar
+    type: agent
+    agent: desarrollador
+    dependsOn: [revisar]
+    phase: implement
+    condition: revisar.hasBlockingFindings
+    prompt: |
+      La revisión de la corrección de {{workItem.key}} ha encontrado esto:
+
+      {{stages.revisar.output.summary}}
+
+      Arréglalo, deja todos los tests en verde y confirma los cambios con un commit.
+    checks: [tests]

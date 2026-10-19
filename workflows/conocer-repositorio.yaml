@@ -1,0 +1,48 @@
+id: conocer-repositorio
+name: Conocer un repositorio
+description: Para empezar con un proyecto nuevo. Codex averigua cómo se compila y se prueban los tests, y Antigravity escribe un mapa del repositorio en docs/skynet/mapa.md con ese dato.
+
+agents:
+  comandos:
+    provider: codex
+    model: ${CODEX_RAPIDO}
+    permissionMode: acceptEdits
+    prompt: |
+      Averigua cómo se compila este repositorio y cómo se pasan sus tests, y compruébalo ejecutándolos. No cambies ningún fichero del repositorio.
+      Devuelve el comando de compilar, el de los tests (el que pondrías como comando de verificación en Skynet), si los tests pasan y lo que haga falta saber (versiones, variables, servicios).
+    output:
+      type: object
+      properties:
+        buildCommand: {type: string}
+        testCommand: {type: string}
+        testsPass: {type: boolean}
+        notes: {type: string}
+  cartografo:
+    provider: antigravity
+    model: ${AGY_FUERTE}
+    permissionMode: acceptEdits
+    prompt: Escribe el mapa del repositorio en docs/skynet/mapa.md.
+
+stages:
+  - id: comandos
+    type: agent
+    agent: comandos
+    phase: test
+  - id: mapa
+    type: agent
+    agent: cartografo
+    dependsOn: [comandos]
+    phase: deliver
+    prompt: |
+      Lee el repositorio entero y escribe docs/skynet/mapa.md, pensado para quien (persona o agente) vaya a trabajar en él por primera vez:
+      - qué es y para qué sirve;
+      - módulos y carpetas, con lo que hace cada uno y cómo se relacionan;
+      - el flujo principal de punta a punta;
+      - convenciones (estilo, tests, nombres, commits);
+      - dónde tocar para los cambios más habituales;
+      - riesgos y deuda técnica que veas.
+
+      Para compilar: {{stages.comandos.output.buildCommand}}
+      Para los tests: {{stages.comandos.output.testCommand}} (¿pasan? {{stages.comandos.output.testsPass}})
+      Notas: {{stages.comandos.output.notes}}
+    artifacts: [docs/skynet/mapa.md]

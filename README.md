@@ -10,6 +10,7 @@ La definición funcional y técnica inicial se encuentra en:
 - [`docs/implementation-plan.md`](docs/implementation-plan.md): plan por hitos y lo implementado en cada uno.
 - [`docs/mvp-checklist.md`](docs/mvp-checklist.md): los 12 criterios del MVP y cómo comprobarlos con Claude.
 - [`docs/ui.md`](docs/ui.md): guía de estilo de la interfaz (tokens, componentes, movimiento, accesibilidad y capturas).
+- [`docs/arranque-local.md`](docs/arranque-local.md): empezar de cero en local y los workflows iniciales, con qué proveedor y modelo hace cada fase.
 
 ## Arquitectura prevista
 
@@ -125,6 +126,10 @@ Con la aplicación levantada, abre la web. La navegación lateral da acceso al *
 
    El agente, la pestaña, el evento elegido y los filtros van en la URL (`?agent=…&tab=tools&seq=123&f.kind=tool`), así que se puede compartir el enlace o recargar sin perder la vista. Los secretos reconocibles (claves de API, tokens, contraseñas) se guardan como `[REDACTED]`.
 5. **Actividad** muestra todos los eventos del sistema en tiempo real; los de una ejecución abren su inspector. Si recargas o se corta la conexión, el stream continúa desde el último evento recibido. Cada cliente del stream tiene su propia cola (`skynet.events.subscriber-queue`, 1000 eventos): si se queda atrás, el servidor cierra su conexión y el navegador se pone al día desde el histórico, sin frenar a los demás.
+
+### Empezar de cero
+
+`scripts/reset-local.sh` borra la base de datos y los artefactos (con `--runner`, también los worktrees y las ramas `skynet/*` que dejó el runner), vuelve a levantar Skynet y publica los **workflows iniciales** de [`workflows/`](workflows). Pide escribir «borrar»; `--dry-run` solo dice lo que borraría. Para publicar los workflows sin borrar nada: `scripts/seed-workflows.sh`. Reparten el trabajo entre Claude Code, Codex y Antigravity CLI, con los modelos de `workflows/modelos.env`: ver [`docs/arranque-local.md`](docs/arranque-local.md).
 
 ### Un workflow de ejemplo
 

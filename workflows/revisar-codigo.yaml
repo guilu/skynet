@@ -1,0 +1,80 @@
+id: revisar-codigo
+name: Revisar código
+description: Tres revisores de solo lectura a la vez, uno por proveedor (arquitectura con Claude Code, tests con Codex, seguridad con Antigravity), y un informe único con los hallazgos por prioridad. No cambia nada.
+
+inputs:
+  foco:
+    type: string
+    required: false
+    description: Qué revisar (una carpeta, un módulo o un tema). Vacío, todo el repositorio.
+
+agents:
+  arquitectura:
+    model: ${CLAUDE_FUERTE}
+    permissionMode: plan
+    prompt: |
+      Revisa la arquitectura y el diseño del repositorio para {{workItem.key}} ({{workItem.title}}). Foco: {{inputs.foco}}.
+      Busca acoplamientos, responsabilidades mal repartidas, duplicación y código difícil de cambiar. No cambies nada.
+      Devuelve un resumen y los hallazgos, cada uno con su fichero, su gravedad (alta, media o baja) y qué harías.
+    output:
+      type: object
+      properties:
+        summary: {type: string}
+        findings: {type: array}
+  tests:
+    provider: codex
+    model: ${CODEX_FUERTE}
+    permissionMode: plan
+    prompt: |
+      Revisa los tests del repositorio para {{workItem.key}} ({{workItem.title}}). Foco: {{inputs.foco}}.
+      Busca lo que no está probado, casos límite que faltan, tests frágiles y errores que los tests no verían. No cambies nada.
+      Devuelve un resumen y los hallazgos, cada uno con su fichero, su gravedad (alta, media o baja) y qué harías.
+    output:
+      type: object
+      properties:
+        summary: {type: string}
+        findings: {type: array}
+  seguridad:
+    provider: antigravity
+    model: ${AGY_FUERTE}
+    permissionMode: plan
+    prompt: |
+      Revisa la seguridad del repositorio para {{workItem.key}} ({{workItem.title}}). Foco: {{inputs.foco}}.
+      Busca entradas sin validar, secretos en el código, permisos, inyecciones y dependencias vulnerables. No cambies nada.
+      Devuelve un resumen y los hallazgos, cada uno con su fichero, su gravedad (alta, media o baja) y qué harías.
+    output:
+      type: object
+      properties:
+        summary: {type: string}
+        findings: {type: array}
+  redactor:
+    model: ${CLAUDE_GENERAL}
+    permissionMode: plan
+    prompt: Redacta el informe de la revisión de {{workItem.key}}.
+
+stages:
+  - id: revisar
+    type: parallel
+    phase: review
+    children:
+      - agent: arquitectura
+      - agent: tests
+      - agent: seguridad
+  - id: informe
+    type: agent
+    agent: redactor
+    dependsOn: [revisar]
+    phase: deliver
+    prompt: |
+      Junta en un solo informe la revisión de {{workItem.key}} ({{workItem.title}}). Foco: {{inputs.foco}}.
+
+      Arquitectura (Claude Code): {{stages.revisar.arquitectura.output.summary}}
+      {{stages.revisar.arquitectura.output.findings}}
+
+      Tests (Codex): {{stages.revisar.tests.output.summary}}
+      {{stages.revisar.tests.output.findings}}
+
+      Seguridad (Antigravity): {{stages.revisar.seguridad.output.summary}}
+      {{stages.revisar.seguridad.output.findings}}
+
+      Quita los duplicados, comprueba en el código los hallazgos dudosos y ordénalos por prioridad: primero lo que hay que arreglar ya. No cambies nada.
