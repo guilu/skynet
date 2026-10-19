@@ -77,7 +77,12 @@ export function DefinitionEditor({
   const unchanged = saved != null && debounced === saved.text
   const live = useQuery({
     queryKey: ['workflow-validate', validateAs?.key, validateAs?.version, debounced],
-    queryFn: () => api.validateWorkflow({ sourceYaml: debounced, ...validateAs }),
+    // Con el texto validado: mientras llega la validación nueva se enseña la anterior, y los
+    // problemas dicen su fase por posición en ese texto.
+    queryFn: async () => ({
+      ...(await api.validateWorkflow({ sourceYaml: debounced, ...validateAs })),
+      text: debounced,
+    }),
     enabled: !readOnly && !unchanged,
     placeholderData: keepPreviousData,
   })
@@ -106,7 +111,11 @@ export function DefinitionEditor({
             >
               {definition ? (
                 <Suspense fallback={<LinesSkeleton label="el grafo" lines={6} />}>
-                  <DefinitionGraph definition={definition} />
+                  <DefinitionGraph
+                    definition={definition}
+                    problems={problems}
+                    source={current?.text ?? text}
+                  />
                 </Suspense>
               ) : (
                 <p className="muted">
