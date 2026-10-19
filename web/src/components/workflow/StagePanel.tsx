@@ -20,6 +20,7 @@ import {
   setStageField,
   type StageField,
 } from './definitionEdits'
+import { str } from './fieldValues'
 import { ProblemList } from './ProblemList'
 
 /** Aplica un cambio al texto; si no se puede, lo dice y devuelve false. */
@@ -37,8 +38,6 @@ const PHASES = [
 /** Los tipos con worktree propio: los que pueden llevar `workspace`, `retry`… */
 const WITH_WORKTREE = new Set(['agent', 'command', 'parallel'])
 
-const str = (value: unknown) => (typeof value === 'string' ? value : '')
-
 /** Los mensajes de los problemas de un campo de la fase (`stages.<id>.<campo>…`). */
 function fieldMessages(problems: Problem[], id: string, field: string): string[] {
   const prefix = `stages.${id}.${field}`
@@ -51,7 +50,7 @@ function fieldMessages(problems: Problem[], id: string, field: string): string[]
 }
 
 /** Etiqueta, control y, si los hay, los problemas del campo debajo. */
-function Field({
+export function Field({
   label,
   errors = [],
   hint,
@@ -92,7 +91,7 @@ function Field({
  * Un texto que se aplica al salir del campo (o con Intro, si es de una línea): así cada cambio es
  * una sola edición del YAML, que se deshace de una vez.
  */
-function TextInput({
+export function TextInput({
   value,
   onCommit,
   multiline = false,
@@ -103,6 +102,7 @@ function TextInput({
   multiline?: boolean
   id: string
   placeholder?: string
+  inputMode?: 'numeric' | 'decimal'
   'aria-invalid'?: true
   'aria-describedby'?: string
 }) {

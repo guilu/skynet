@@ -1,7 +1,9 @@
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 import {
+  addAgent,
   addChild,
+  addInput,
   addDependency,
   addStage,
   dependencyPath,
@@ -9,17 +11,29 @@ import {
   EditError,
   keepUntouchedLines,
   readAgentNames,
+  readAgents,
+  readInputs,
+  readRoot,
   readChildIds,
   readStage,
   readStages,
+  removeAgent,
   removeChild,
+  removeInput,
   removeDependency,
   removeStage,
+  renameAgent,
+  renameInput,
   renameStage,
+  setAgentField,
+  setAgentLimit,
+  setAgentTools,
   setChildField,
+  setInputField,
   setDependencyOptional,
   setNamedChecks,
   setRetryAttempts,
+  setRootField,
   setStageField,
   STAGE_TYPES,
   stageLine,
@@ -333,5 +347,97 @@ describe('para el panel de propiedades', () => {
     expect(stageLine(BASE, 'review', 'dependsOn')).toEqual({ line: 17, column: 5 })
     expect(stageLine(BASE, 'review', 'nada')).toEqual({ line: 14, column: 5 })
     expect(stageLine(BASE, 'nada')).toBeNull()
+  })
+})
+
+describe('agentes, entradas y raíz', () => {
+  const WITH_INPUTS = BASE.replace(
+    '# Un comentario arriba\n',
+    '# Un comentario arriba\ninputs:\n  foco:\n    type: string\n',
+  ).replace('Implementa {{workItem.key}}.', 'Implementa {{workItem.key}} con {{ inputs.foco }}.')
+
+  it('añade un agente delante de stages y lo quita si nadie lo usa', () => {
+    const noAgents = 'id: x\nstages:\n  - id: a\n    type: agent\n'
+    const added = addAgent(noAgents)
+    expect(added.name).toBe('agente')
+    expect(added.text).toBe(
+      'id: x\nagents:\n  agente:\n    prompt: ""\nstages:\n  - id: a\n    type: agent\n',
+    )
+    expect(addAgent(added.text).name).toBe('agente-2')
+    expect(removeAgent(added.text, 'agente')).toBe(noAgents)
+    expect(() => removeAgent(BASE, 'dev')).toThrow('No se puede quitar `dev`: lo usa implement')
+  })
+
+  it('renombra un agente en las fases y fija el id de los hijos que se llamaban como él', () => {
+    const parallel = addChild(addStage(BASE, 'parallel').text, 'parallel', 'revisor').text
+    const renamed = renameAgent(parallel, 'revisor', 'critico')
+    expect(readAgentNames(renamed)).toEqual(['dev', 'critico'])
+    expect(stageOf(renamed, 'review').agent).toBe('critico')
+    expect(stageOf(renamed, 'parallel').children).toEqual([{ id: 'revisor', agent: 'critico' }])
+    expect(renamed).toContain('# Un comentario arriba')
+    expect(() => renameAgent(BASE, 'dev', 'revisor')).toThrow(/Ya hay un agente/)
+  })
+
+  it('cambia los campos, las herramientas y los límites de un agente', () => {
+    let text = setAgentField(BASE, 'revisor', 'provider', 'codex')
+    text = setAgentField(text, 'revisor', 'permissionMode', 'plan')
+    text = setAgentTools(text, 'revisor', ['Read', 'Grep'])
+    text = setAgentLimit(text, 'revisor', 'maxTurns', 20)
+    text = setAgentLimit(text, 'revisor', 'timeoutMinutes', 15)
+    expect(readAgents(text).find((a) => a.name === 'revisor')!.fields).toEqual({
+      prompt: 'Revisa {{stages.implement.output.summary}}',
+      provider: 'codex',
+      permissionMode: 'plan',
+      tools: ['Read', 'Grep'],
+      limits: { maxTurns: 20, timeoutMinutes: 15 },
+    })
+    expect(text).toContain('    tools: [Read, Grep]\n')
+    text = setAgentLimit(
+      setAgentLimit(text, 'revisor', 'maxTurns', null),
+      'revisor',
+      'timeoutMinutes',
+      null,
+    )
+    text = setAgentTools(setAgentField(text, 'revisor', 'provider', null), 'revisor', [])
+    expect(readAgents(text).find((a) => a.name === 'revisor')!.fields).toEqual({
+      prompt: 'Revisa {{stages.implement.output.summary}}',
+      permissionMode: 'plan',
+    })
+  })
+
+  it('añade, renombra (con sus usos) y quita entradas', () => {
+    const added = addInput(BASE)
+    expect(added.name).toBe('dato')
+    expect(readInputs(added.text)).toEqual([{ name: 'dato', fields: { type: 'string' } }])
+    const renamed = renameInput(WITH_INPUTS, 'foco', 'tema')
+    expect(renamed).toContain('Implementa {{workItem.key}} con {{ inputs.tema }}.')
+    expect(readInputs(renamed).map((i) => i.name)).toEqual(['tema'])
+    expect(() => renameInput(WITH_INPUTS, 'foco', '1x')).toThrow(EditError)
+    expect(removeInput(WITH_INPUTS, 'foco')).not.toContain('inputs:')
+  })
+
+  it('escribe el valor por defecto con el tipo de la entrada', () => {
+    let text = setInputField(WITH_INPUTS, 'foco', 'type', 'number')
+    text = setInputField(text, 'foco', 'default', '3')
+    text = setInputField(text, 'foco', 'required', true)
+    expect(readInputs(text)[0].fields).toEqual({ type: 'number', default: 3, required: true })
+    text = setInputField(setInputField(text, 'foco', 'type', 'boolean'), 'foco', 'default', 'true')
+    expect(readInputs(text)[0].fields.default).toBe(true)
+    expect(
+      readInputs(setInputField(text, 'foco', 'required', false))[0].fields.required,
+    ).toBeUndefined()
+  })
+
+  it('lee y cambia el id, el nombre y la descripción del workflow', () => {
+    expect(readRoot(BASE)).toEqual({ id: 'demo', name: '', description: '' })
+    const named = setRootField(setRootField(BASE, 'name', 'Demo'), 'id', 'otro-demo')
+    expect(named.startsWith('id: otro-demo\nname: Demo\n# Un comentario arriba\nagents:')).toBe(
+      true,
+    )
+    expect(setRootField(named, 'description', 'Hace algo')).toContain(
+      'name: Demo\ndescription: Hace algo\n',
+    )
+    expect(readRoot(named)).toEqual({ id: 'otro-demo', name: 'Demo', description: '' })
+    expect(() => setRootField(BASE, 'id', 'X')).toThrow(EditError)
   })
 })

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save } from 'lucide-react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { api, ApiError } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { Button } from '../components/ui/Button'
@@ -14,6 +14,7 @@ import { TEMPLATES } from '../components/workflow/templates'
 export function NewWorkflowPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [, setParams] = useSearchParams()
   const [template, setTemplate] = useState(TEMPLATES[0])
   const [text, setText] = useState(template.yaml)
   const chooseTemplate = (id: string) => {
@@ -24,6 +25,16 @@ export function NewWorkflowPage() {
       return
     setTemplate(next)
     setText(next.yaml)
+    // «Desde cero» es para montarlo en el grafo: se abre esa pestaña.
+    if (next.id === 'desde-cero')
+      setParams(
+        (prev) => {
+          const p = new URLSearchParams(prev)
+          p.set('view', 'graph')
+          return p
+        },
+        { replace: true },
+      )
   }
   const create = useMutation({
     mutationFn: () => api.createWorkflow(text),
