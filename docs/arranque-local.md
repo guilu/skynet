@@ -19,7 +19,21 @@ Después vuelve a levantar lo que estaba en marcha (el perfil `app` o solo Postg
 - su journal, sus logs, sus artefactos pendientes y sus worktrees (en `SKYNET_RUNNER_HOME`, por defecto `~/.skynet-runner`);
 - en cada repositorio registrado, los worktrees, las ramas `skynet/*` y las referencias `refs/skynet/*`.
 
+**Rutas que ya no son repositorios.** La base de datos guarda la ruta de cada repositorio que registraste. Si una ya no existe, no es un repositorio Git (o su `.git` está roto) o es una subcarpeta de otro repositorio, el script la avisa con «Aviso: se omite … : motivo», no la toca y sigue con las demás. Con solo rutas así, `--dry-run` también termina bien (código 0).
+
 Si el runner es el servicio de systemd `skynet-runner`, el script lo para antes y lo arranca al final. Se vuelve a registrar solo con su `SKYNET_RUNNER_REGISTRATION_TOKEN`. Con launchd (macOS), o si lo arrancas a mano, páralo tú antes.
+
+**Confirmación.** Hay que escribir exactamente `borrar`. Cualquier otra respuesta (`Borrar`, `borrar ` con un espacio, `sí`, nada) no borra nada y termina con código 1. `--yes` se la salta, solo para scripts.
+
+**Qué borra y qué no.** Nunca toca:
+- otros volúmenes de Docker;
+- otros ficheros del home del runner;
+- las demás ramas y referencias de tus repositorios, ni lo que tengas sin confirmar;
+- las rutas omitidas.
+
+`--dry-run` no cambia nada: no para ni levanta Docker, no toca el servicio del runner ni ningún fichero.
+
+`scripts/tests/reset-local.test.sh` lo comprueba en la CI, con Docker y systemd simulados.
 
 Ojo:
 - Las ramas `skynet/*` son el trabajo de los agentes. Si quieres conservar alguna, fusiónala o renómbrala antes.

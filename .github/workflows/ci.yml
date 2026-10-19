@@ -22,6 +22,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
       # spotlessCheck forma parte de `check`; los tests con Testcontainers usan el Docker del runner.
       - run: ./gradlew build
+      # reset-local.sh con Docker y systemctl simulados: no borra nada fuera de una carpeta temporal.
+      - name: Pruebas de scripts/reset-local.sh
+        run: scripts/tests/reset-local.test.sh
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

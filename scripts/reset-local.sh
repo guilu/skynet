@@ -9,9 +9,10 @@
 # Opciones:
 #   --runner [dir]  También el runner: su journal, logs, artefactos y worktrees (en dir, por defecto
 #                   SKYNET_RUNNER_HOME o ~/.skynet-runner), y en cada repositorio registrado los
-#                   worktrees, las ramas skynet/* y las referencias refs/skynet/* que dejó. Para el
-#                   servicio skynet-runner si está en marcha y lo vuelve a arrancar al final; se
-#                   registra solo con su SKYNET_RUNNER_REGISTRATION_TOKEN.
+#                   worktrees, las ramas skynet/* y las referencias refs/skynet/* que dejó. Una ruta
+#                   que ya no existe, no es un repositorio Git o no es su raíz se avisa y se omite.
+#                   Para el servicio skynet-runner si está en marcha y lo vuelve a arrancar al
+#                   final; se registra solo con su SKYNET_RUNNER_REGISTRATION_TOKEN.
 #   --artifacts dir Carpeta de artefactos del control plane si lo arrancas con bootRun (por defecto
 #                   data/artifacts). Con Docker Compose los artefactos van en su volumen.
 #   --no-seed       No publica los workflows iniciales.
@@ -73,6 +74,26 @@ if $runner; then
   fi
 fi
 
+# Solo se tocan las rutas que siguen siendo la raíz de un repositorio Git en este equipo. Las demás
+# (repositorios borrados o movidos, carpetas que ya no son Git, o un .git roto) se avisan y se omiten.
+repo_problem() { # ruta: vacío si es la raíz de un repositorio Git, o por qué no
+  local top
+  [[ -d $1 ]] || { echo "no existe en este equipo"; return; }
+  if ! top=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null); then
+    echo "no es un repositorio Git"; return
+  fi
+  [[ $(cd "$top" && pwd -P) == $(cd "$1" && pwd -P) ]] || echo "no es la raíz de su repositorio ($top)"
+}
+valid_repos=()
+for repo in "${repos[@]+"${repos[@]}"}"; do
+  problem=$(repo_problem "$repo")
+  if [[ -n $problem ]]; then
+    echo "Aviso: se omite $repo: $problem." >&2
+  else
+    valid_repos+=("$repo")
+  fi
+done
+
 volumes=()
 for volume in postgres-data artifacts-data; do
   docker volume inspect "${PROJECT}_$volume" >/dev/null 2>&1 && volumes+=("${PROJECT}_$volume")
@@ -83,15 +104,13 @@ echo "  - los volúmenes de Docker: ${volumes[*]:-(ninguno existe)}"
 [[ -d $artifacts_dir ]] && echo "  - los artefactos de bootRun: $artifacts_dir"
 if $runner; then
   echo "  - lo del runner en $runner_home (journal, logs, artefactos y worktrees)"
-  for repo in "${repos[@]}"; do
-    if [[ -d $repo/.git || -f $repo/.git ]]; then
-      branches=$(git -C "$repo" for-each-ref --format='%(refname:short)' 'refs/heads/skynet/' | wc -l)
-      refs=$(git -C "$repo" for-each-ref --format='%(refname)' 'refs/skynet/' | wc -l)
-      echo "  - en $repo: worktrees de Skynet, $branches ramas skynet/* y $refs referencias refs/skynet/*"
-    else
-      echo "  - $repo: no existe en este equipo, se deja como está"
-    fi
+  for repo in "${valid_repos[@]+"${valid_repos[@]}"}"; do
+    branches=$(git -C "$repo" for-each-ref --format='%(refname)' 'refs/heads/skynet/' 2>/dev/null | wc -l | tr -d ' ')
+    refs=$(git -C "$repo" for-each-ref --format='%(refname)' 'refs/skynet/' 2>/dev/null | wc -l | tr -d ' ')
+    echo "  - en $repo: worktrees de Skynet, $branches ramas skynet/* y $refs referencias refs/skynet/*"
   done
+  skipped=$((${#repos[@]} - ${#valid_repos[@]}))
+  ((skipped == 0)) || echo "  (se omiten $skipped rutas que no son repositorios en este equipo: mira los avisos)"
 fi
 $seed && echo "Y después se publican los workflows iniciales de workflows/."
 
@@ -100,7 +119,7 @@ if $dry_run; then
   exit 0
 fi
 if ! $yes; then
-  read -r -p "Esto no se puede deshacer. Escribe «borrar» para seguir: " answer
+  IFS= read -r -p "Esto no se puede deshacer. Escribe «borrar» para seguir: " answer || answer=
   [[ $answer == borrar ]] || { echo "No se ha borrado nada."; exit 1; }
 fi
 
@@ -119,12 +138,15 @@ echo "→ Parando Skynet"
 if $runner; then
   echo "→ Limpiando el runner"
   rm -rf "$runner_home/journal.db" "$runner_home/logs" "$runner_home/artifacts" "$runner_home/workspaces"
-  for repo in "${repos[@]}"; do
-    [[ -d $repo/.git || -f $repo/.git ]] || continue
-    git -C "$repo" worktree prune
-    git -C "$repo" for-each-ref --format='%(refname)' 'refs/heads/skynet/' 'refs/skynet/' \
-      | while read -r ref; do git -C "$repo" update-ref -d "$ref"; done
-    echo "  $repo limpio"
+  for repo in "${valid_repos[@]+"${valid_repos[@]}"}"; do
+    # Un repositorio que falla no para el resto: la base de datos ya está borrada.
+    if git -C "$repo" worktree prune \
+      && git -C "$repo" for-each-ref --format='%(refname)' 'refs/heads/skynet/' 'refs/skynet/' \
+        | while read -r ref; do git -C "$repo" update-ref -d "$ref" || exit 1; done; then
+      echo "  $repo limpio"
+    else
+      echo "Aviso: no se pudo limpiar del todo $repo; revísalo con git worktree list y git branch." >&2
+    fi
   done
 fi
 

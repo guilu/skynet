@@ -9,7 +9,7 @@ Por qué cada proveedor y cada modelo: [`docs/arranque-local.md`](../arranque-lo
 
 No hay migraciones ni cambios en el control plane, el runner o la web.
 
-> **Para despliegues automáticos:** el paso 2 borra datos y **no** se ejecuta solo (pide escribir «borrar»). Haz solo los pasos 1 y 3: `seed-workflows.sh` no borra nada y se salta los workflows que ya existen.
+> **Para despliegues automáticos:** el paso 2 borra datos y **no** se ejecuta solo (pide escribir «borrar»). Haz solo los pasos 1 y 3: el paso 1 (`--dry-run` y `scripts/tests/reset-local.test.sh`) no cambia nada, y `seed-workflows.sh` no borra nada y se salta los workflows que ya existen.
 
 ## 1. Ver qué borraría
 
@@ -19,7 +19,26 @@ Con Skynet levantado con Docker Compose:
 scripts/reset-local.sh --dry-run --runner
 ```
 
-Lista los volúmenes `skynet_postgres-data` y `skynet_artifacts-data`, la carpeta del runner (`~/.skynet-runner`) y, por cada repositorio registrado, cuántas ramas `skynet/*` y referencias `refs/skynet/*` tiene. Termina con «(--dry-run: no se ha borrado nada)».
+Lista:
+- los volúmenes `skynet_postgres-data` y `skynet_artifacts-data`;
+- la carpeta del runner (`~/.skynet-runner`);
+- por cada repositorio registrado, cuántas ramas `skynet/*` y referencias `refs/skynet/*` tiene.
+
+Termina con «(--dry-run: no se ha borrado nada)» y código 0 (`echo $?`).
+
+**Rutas antiguas.** Si la base de datos tiene repositorios que ya no están en este equipo, no son Git o tienen el `.git` roto, salen como «Aviso: se omite <ruta>: <motivo>». Las demás se listan igual, y al final dice «(se omiten N rutas…)». El script no aborta y no cambia nada.
+
+Para comprobarlo sin tocar tu instalación:
+
+```bash
+scripts/tests/reset-local.test.sh
+```
+
+Termina con «reset-local.sh: N comprobaciones bien, 0 mal.». Usa Docker y systemctl simulados y repositorios de juguete en una carpeta temporal. Prueba:
+- rutas inexistentes, sin Git, con `.git` roto, subcarpetas, válidas y mezcladas;
+- que `--dry-run` no cambia nada;
+- que solo `borrar`, exacto, borra;
+- que el borrado real solo toca lo suyo.
 
 ## 2. Borrar de verdad (a mano)
 
@@ -41,7 +60,7 @@ Lista los volúmenes `skynet_postgres-data` y `skynet_artifacts-data`, la carpet
    - en **Runners**, tu runner vuelve a estar en línea, registrado de nuevo;
    - en tus repositorios, `git worktree list` solo enseña el principal y `git branch --list 'skynet/*'` no da nada.
 
-Si escribes otra cosa, dice «No se ha borrado nada.» y no toca nada.
+Si escribes otra cosa (también `Borrar` o `borrar ` con un espacio), dice «No se ha borrado nada.», termina con código 1 y no toca nada. Las rutas que se omitieron en el paso 1 se quedan como estaban.
 
 ## 3. Los workflows iniciales
 
