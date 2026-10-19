@@ -587,9 +587,12 @@ class DefinitionParserTest {
                 provider: opencode
               google:
                 prompt: hola
-                provider: gemini
+                provider: antigravity
                 limits:
                   maxTurns: 3
+              viejo:
+                prompt: hola
+                provider: gemini
               raro:
                 prompt: hola
                 provider: gpt
@@ -613,6 +616,9 @@ class DefinitionParserTest {
               - id: f
                 type: agent
                 agent: google
+              - id: g
+                type: agent
+                agent: viejo
             """);
     WorkflowDefinition definition = parsed.definition();
     assertThat(definition.agent("rapido").orElseThrow().model()).isEqualTo("claude-haiku-4-5");
@@ -628,15 +634,16 @@ class DefinitionParserTest {
                 + " `permissionMode` (`plan` es solo lectura)",
             "Codex no admite `maxTurns`: se ignora. Acota el agente con `maxBudgetUsd` o"
                 + " `timeoutMinutes`",
-            "Gemini CLI no admite `maxTurns`: se ignora. Acota el agente con `maxBudgetUsd` o"
+            "Antigravity CLI no admite `maxTurns`: se ignora. Acota el agente con `maxBudgetUsd` o"
                 + " `timeoutMinutes`");
     assertThat(messages(parsed, Severity.UNSUPPORTED))
         .containsExactly(
             "El proveedor `opencode` todavía no se ejecuta. Por ahora solo `claude-code`, `codex`"
-                + " y `gemini`");
+                + " y `antigravity`");
     assertThat(messages(parsed, Severity.ERROR))
         .containsExactly(
-            "Proveedor `gpt` desconocido. Admite: claude-code, codex, gemini, opencode",
+            "Gemini CLI se ha retirado: usa `antigravity` (Antigravity CLI), que lo sustituye",
+            "Proveedor `gpt` desconocido. Admite: claude-code, antigravity, codex, opencode",
             "`con espacios` no vale como modelo: escribe su nombre o su alias, p. ej."
                 + " `claude-sonnet-4-5` o `opus`");
   }

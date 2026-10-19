@@ -21,7 +21,6 @@ import java.util.stream.Collectors;
  * @param home directorio de datos: journal, logs y worktrees ({@code SKYNET_RUNNER_HOME})
  * @param claudeExecutable ejecutable de Claude Code ({@code SKYNET_CLAUDE_BIN})
  * @param codexExecutable ejecutable de Codex ({@code SKYNET_CODEX_BIN})
- * @param geminiExecutable ejecutable de Gemini CLI ({@code SKYNET_GEMINI_BIN})
  * @param extraEnv variables de entorno adicionales que se pasan al agente ({@code
  *     SKYNET_AGENT_ENV}, separadas por comas)
  * @param modelPrices fichero de precios por modelo que amplía o corrige la tabla con la que se
@@ -30,8 +29,7 @@ import java.util.stream.Collectors;
  *     SKYNET_LOG_RETENTION_DAYS}, 7 días por defecto)
  * @param providers proveedores que declara el runner ({@code SKYNET_PROVIDERS}, separados por
  *     comas), o {@code null} para los que respondan a {@code --version}
- * @param agyExecutable ejecutable de Antigravity CLI ({@code SKYNET_AGY_BIN}); el runner solo lee
- *     su cuota, no lanza agentes con él
+ * @param agyExecutable ejecutable de Antigravity CLI ({@code SKYNET_AGY_BIN})
  * @param quotaPoll cada cuánto pregunta su cuota a Codex y Antigravity ({@code SKYNET_QUOTA_POLL}:
  *     {@code 10m} por defecto, {@code 30s}, {@code 1h}…; {@code off} lo apaga), o {@code null}
  */
@@ -43,7 +41,6 @@ public record RunnerConfig(
     Path home,
     String claudeExecutable,
     String codexExecutable,
-    String geminiExecutable,
     List<String> extraEnv,
     Duration pollWait,
     Duration heartbeatInterval,
@@ -83,7 +80,6 @@ public record RunnerConfig(
                 Path.of(System.getProperty("user.home"), ".skynet-runner").toString())),
         env.getOrDefault("SKYNET_CLAUDE_BIN", "claude"),
         env.getOrDefault("SKYNET_CODEX_BIN", "codex"),
-        env.getOrDefault("SKYNET_GEMINI_BIN", "gemini"),
         Arrays.stream(env.getOrDefault("SKYNET_AGENT_ENV", "").split(","))
             .map(String::trim)
             .filter(s -> !s.isEmpty())

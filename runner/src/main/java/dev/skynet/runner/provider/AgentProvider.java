@@ -9,8 +9,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Adaptador de un proveedor de agentes (Claude Code, Codex, Gemini…). Solo traduce: cómo se llama a
- * su CLI, qué entorno recibe, qué significa su salida y cuánto cuesta. Lanzar, supervisar,
+ * Adaptador de un proveedor de agentes (Claude Code, Codex, Antigravity…). Solo traduce: cómo se
+ * llama a su CLI, qué entorno recibe, qué significa su salida y cuánto cuesta. Lanzar, supervisar,
  * cancelar, limitar el tiempo y recoger los artefactos lo hace el runner igual para todos ({@link
  * dev.skynet.runner.agent.AgentExecutor}).
  */

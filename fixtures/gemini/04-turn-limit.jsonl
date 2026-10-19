@@ -1,5 +1,0 @@
-{"type":"init","timestamp":"2026-10-12T10:00:00.000Z","session_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","model":"auto"}
-{"type":"message","timestamp":"2026-10-12T10:00:00.000Z","role":"user","content":"Arregla add()"}
-{"type":"message","timestamp":"2026-10-12T10:00:00.000Z","role":"assistant","content":"Empiezo por leer el código.","delta":true}
-{"type":"error","timestamp":"2026-10-12T10:00:00.000Z","severity":"error","message":"Maximum session turns exceeded"}
-{"type":"result","timestamp":"2026-10-12T10:00:00.000Z","status":"error","error":{"type":"FatalTurnLimitedError","message":"Reached max session turns for this session. Increase the number of turns by specifying maxSessionTurns in settings.json."},"stats":{"total_tokens":0,"input_tokens":0,"output_tokens":0,"cached":0,"input":0,"duration_ms":0,"tool_calls":0,"models":{}}}

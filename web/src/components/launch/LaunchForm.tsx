@@ -414,7 +414,7 @@ function PolicyText({
   }
   const ignored = new Set(p.unsupported)
   if (provider && provider !== CLAUDE_CODE && p.provider == null) {
-    // Sin agente con nombre, lo que ignora el proveedor elegido al lanzar (Codex y Gemini).
+    // Sin agente con nombre, lo que ignora el proveedor elegido al lanzar (Codex y Antigravity).
     ignored.add('allowedTools')
     ignored.add('maxTurns')
   }

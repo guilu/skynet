@@ -540,6 +540,14 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito CU terminado con CU-C.**
 
+**Hito AR (agentes reales), aprobado el 2026-10-18:** AR-A ver si un runner usa un CLI simulado, AR-B Antigravity CLI sustituye a Gemini CLI, AR-C los tres reales de punta a punta.
+
+**Implementado (AR-B), Antigravity sustituye a Gemini CLI:**
+
+- `runner/provider/antigravity`: `AntigravityProvider` lanza `agy --output-format stream-json --print=<prompt>` con `--mode plan` o `accept-edits` (o `--dangerously-skip-permissions`), `--model`, `--json-schema <fichero>` y `--conversation <id>` para continuar; bifurcar falla. `AntigravityEventParser` y `AntigravityCostMeter` salen de las sesiones grabadas con agy 1.4.2 (`fixtures/agy`): pasos `step_update`, acciones denegadas sin terminal como `PERMISSION_DENIED`, salida estructurada validada por agy y coste solo con `model`. Formato en [`antigravity-stream-json.md`](antigravity-stream-json.md).
+- Gemini CLI se retira: fuera su adaptador, fake-gemini, sus fixtures y `SKYNET_GEMINI_BIN`. `AgentProviderKind.GEMINI` queda como retirado para leer el histórico («Gemini CLI (retirado)»): `provider: gemini` es un error al publicar, las versiones ya publicadas con él no se lanzan (400) y sus agentes no se reintentan ni continúan (409). `StructuredOutput` se queda solo con `resolve`: los tres CLIs validan su salida.
+- fake-agy reproduce las sesiones grabadas además de `/usage`. La plantilla pasa a «Revisión con Codex y Antigravity» y `providers.e2e.ts` la prueba con fake-agy; la tarjeta de agy en **Uso** deja de ser de solo lectura.
+
 **Implementado (CU-C), página Uso y E2E:**
 
 - Página `/usage` («Uso» en la navegación, entre Runners y Actividad; en el móvil ocupa el sitio de Runners): una tarjeta por CLI con un medidor por ventana (Skynet, fuera de Skynet rayado y la marca del ritmo uniforme), su estado (Disponible, Justa desde el 75 %, Casi agotada desde el 90 %), versión, plan y de cuándo es el dato; agy por grupos de modelos y en solo lectura. Selector de runner si hay varios y «Actualizar».

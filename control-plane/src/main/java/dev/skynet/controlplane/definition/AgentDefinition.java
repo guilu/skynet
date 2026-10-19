@@ -36,7 +36,10 @@ public record AgentDefinition(
   /** Codex de OpenAI ({@code codex exec --json}). */
   public static final String CODEX = "codex";
 
-  /** Gemini CLI de Google ({@code gemini --output-format stream-json}). */
+  /** Antigravity CLI de Google ({@code agy --output-format stream-json}). */
+  public static final String ANTIGRAVITY = "antigravity";
+
+  /** Gemini CLI de Google, retirado en AR-B: publicar con él es un error. */
   public static final String GEMINI = "gemini";
 
   public AgentDefinition {

@@ -185,6 +185,7 @@ public class RunService {
       }
       given.putIfAbsent("prompt", launch.prompt());
     }
+    requireActiveProviders(definition.key(), definition.definition());
     Map<String, Object> inputs = LaunchInputs.resolve(definition.definition().inputs(), given);
     LaunchAgent launchAgent = LaunchAgent.of(launch.provider(), launch.model());
     if (!launchAgent.isDefault() && !hasUnnamedAgents(definition.definition())) {
@@ -228,6 +229,30 @@ public class RunService {
     }
     publisher.publishEvent(new WorkflowRunChanged(run.getId()));
     return run;
+  }
+
+  /**
+   * Una versión publicada antes de retirar un proveedor (Gemini CLI) sigue en el histórico, pero no
+   * se puede lanzar: sus agentes no tendrían runner.
+   */
+  static void requireActiveProviders(String key, WorkflowDefinition definition) {
+    for (AgentDefinition agent : definition.agents()) {
+      AgentProviderKind.byId(agent.provider() == null ? "" : agent.provider())
+          .filter(AgentProviderKind::retired)
+          .ifPresent(
+              kind -> {
+                throw new InvalidRequestException(
+                    "El agente `"
+                        + agent.name()
+                        + "` de "
+                        + key
+                        + " usa "
+                        + kind.displayName()
+                        + ", que se ha retirado: publica una versión con `provider: "
+                        + AgentDefinition.ANTIGRAVITY
+                        + "`");
+              });
+    }
   }
 
   /** Si alguna fase (o hijo de una {@code parallel}) usa un agente sin nombre. */
@@ -400,6 +425,7 @@ public class RunService {
       throw new ConflictException(
           "Solo se puede reintentar un lanzamiento; para repetir un mensaje, envíalo de nuevo");
     }
+    requireNotRetired(parent);
     String promptText =
         prompts.findByAgentRunIdOrderByCreatedAtAsc(agentRunId).stream()
             .filter(p -> Prompt.ROLE_USER.equals(p.getRole()))
@@ -503,8 +529,20 @@ public class RunService {
         parent.getRunnerId());
   }
 
+  /** Un agente de un proveedor retirado se queda como está: ni se reintenta ni se continúa. */
+  private static void requireNotRetired(AgentRun agent) {
+    AgentProviderKind.byId(agent.getProvider() == null ? "" : agent.getProvider())
+        .filter(AgentProviderKind::retired)
+        .ifPresent(
+            kind -> {
+              throw new ConflictException(
+                  kind.displayName() + " se ha retirado: este agente ya no se puede relanzar");
+            });
+  }
+
   /** El proveedor del agente tiene que permitir continuar (o bifurcar) su sesión. */
   private static void requireCapability(AgentRun agent, Capability capability) {
+    requireNotRetired(agent);
     AgentProviderKind kind = AgentProviderKind.byId(agent.getProvider()).orElse(null);
     if (kind == null || !kind.supports(capability)) {
       String name = kind == null ? agent.getProvider() : kind.displayName();
@@ -713,7 +751,9 @@ public class RunService {
           "Solo se reintenta una fase de una ejecución fallida o cancelada; esta está "
               + run.getStatus());
     }
-    WorkflowDefinition definition = definitions.published(run.getDefinitionId()).definition();
+    PublishedDefinition published = definitions.published(run.getDefinitionId());
+    WorkflowDefinition definition = published.definition();
+    requireActiveProviders(published.key(), definition);
     StageDefinition stage =
         definition.stage(stageKey).orElseThrow(() -> new NotFoundException("Fase", stageKey));
     Map<String, StageRun> latest = new LinkedHashMap<>();

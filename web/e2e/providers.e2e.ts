@@ -3,24 +3,25 @@ import { TEMPLATES } from '../src/components/workflow/templates.ts'
 import { expectAccessible, login, publishWorkflowViaApi, workItemViaApi } from './helpers.ts'
 
 /**
- * Proveedores (PV-D), criterio de aceptación del hito: la plantilla «Revisión con Codex y Gemini»
- * (calidad con Codex, seguridad con Gemini y el resto con Claude Code) termina «Completada» con
+ * Proveedores (PV-D, con Antigravity desde AR-B), criterio de aceptación del hito: la plantilla
+ * «Revisión con Codex y Antigravity» (calidad con Codex, seguridad con Antigravity y el resto con
+ * Claude Code) termina «Completada» con
  * hallazgos (corrige) y sin ellos (omite la corrección). Y un agente suelto se lanza con otro
  * proveedor y modelo desde «Lanzar workflow».
  *
- * El runner de las E2E tiene fake-claude, fake-codex y fake-gemini, y los tres revisores devuelven
+ * El runner de las E2E tiene fake-claude, fake-codex y fake-agy, y los tres revisores devuelven
  * lo que la fase `tests` dejó en `.revision.json`.
  */
 
 test.use({ baseURL: 'http://localhost:4173' })
 
-const template = TEMPLATES.find((t) => t.id === 'revision-con-codex-y-gemini')!
+const template = TEMPLATES.find((t) => t.id === 'revision-con-codex-y-antigravity')!
 
 /** La plantilla con otra clave y comandos que valen en el repositorio de las E2E. */
 function yaml(key: string, blocking: boolean) {
   const output = JSON.stringify({ hasBlockingFindings: blocking, summary: 'revisado' })
   return template.yaml
-    .replace('id: revision-con-codex-y-gemini', `id: ${key}`)
+    .replace('id: revision-con-codex-y-antigravity', `id: ${key}`)
     .replace(/command: \.\/gradlew test .*\n/, `command: printf '${output}' > .revision.json\n`)
     .replace(
       /command: \.\/gradlew test .*\n/,
@@ -45,13 +46,13 @@ async function launch(page: Page, workItemId: string, key: string): Promise<stri
   const sheet = page.getByRole('dialog', { name: 'Lanzar workflow' })
   await sheet.getByLabel('Workflow').selectOption(key)
   const policies = sheet.getByRole('region', { name: 'Política de cada fase' })
-  // Lo que Codex y Gemini no admiten sale tachado.
+  // Lo que Codex y Antigravity no admiten sale tachado.
   await expect(policies.getByRole('listitem').filter({ hasText: 'review.calidad' })).toContainText(
     'Codex',
   )
   await expect(
     policies.getByRole('listitem').filter({ hasText: 'review.seguridad' }),
-  ).toContainText('no lo admite Gemini CLI')
+  ).toContainText('no lo admite Antigravity CLI')
   // Todas las fases fijan su agente: no hay selector de proveedor.
   await expect(sheet.getByLabel('Proveedor')).toHaveCount(0)
   await sheet.getByRole('button', { name: 'Lanzar', exact: true }).click()
@@ -76,7 +77,7 @@ async function finished(page: Page, runId: string): Promise<RunStage[]> {
 
 const statuses = (stages: RunStage[]) => stages.map((s) => [s.stageKey, s.status])
 
-test('la revisión con Codex y Gemini corrige solo cuando hay hallazgos', async ({ page }) => {
+test('la revisión con Codex y Antigravity corrige solo cuando hay hallazgos', async ({ page }) => {
   test.setTimeout(480_000)
   const suffix = Date.now().toString(36)
   const withFindings = `multi-con-hallazgos-${suffix}`
@@ -92,15 +93,15 @@ test('la revisión con Codex y Gemini corrige solo cuando hay hallazgos', async 
     ).toEqual([
       ['claude-code', true],
       ['codex', true],
-      ['gemini', true],
+      ['antigravity', true],
     ])
   })
 
   await test.step('elegir la plantilla en Nuevo workflow', async () => {
     await page.goto('/workflows/new')
-    await page.getByLabel('Plantilla').selectOption({ label: 'Revisión con Codex y Gemini' })
+    await page.getByLabel('Plantilla').selectOption({ label: 'Revisión con Codex y Antigravity' })
     await expect(
-      page.locator('.monaco-editor').getByText('id: revision-con-codex-y-gemini'),
+      page.locator('.monaco-editor').getByText('id: revision-con-codex-y-antigravity'),
     ).toBeVisible()
     const summary = page.getByRole('region', { name: 'Qué define' })
     await expect(summary.getByRole('listitem').filter({ hasText: 'calidad' }).last()).toContainText(
@@ -108,8 +109,8 @@ test('la revisión con Codex y Gemini corrige solo cuando hay hallazgos', async 
     )
     await expect(
       summary.getByRole('listitem').filter({ hasText: 'seguridad' }).last(),
-    ).toContainText('Gemini CLI')
-    await expectAccessible(page, 'plantilla «Revisión con Codex y Gemini»')
+    ).toContainText('Antigravity CLI')
+    await expectAccessible(page, 'plantilla «Revisión con Codex y Antigravity»')
   })
 
   await publishWorkflowViaApi(page, yaml(withFindings, true))
@@ -132,18 +133,18 @@ test('la revisión con Codex y Gemini corrige solo cuando hay hallazgos', async 
     ).toEqual(
       expect.arrayContaining([
         ['calidad', 'codex', true],
-        ['seguridad', 'gemini', true],
+        ['seguridad', 'antigravity', true],
       ]),
     )
 
-    // El agente de Gemini: su proveedor en la cabecera y bifurcar desactivado con el motivo.
-    const gemini = review.agents.find((a) => a.provider === 'gemini')!
-    await page.goto(`/runs/${runId}?agent=${gemini.id}`)
+    // El agente de Antigravity: su proveedor en la cabecera y bifurcar desactivado con el motivo.
+    const agy = review.agents.find((a) => a.provider === 'antigravity')!
+    await page.goto(`/runs/${runId}?agent=${agy.id}`)
     const header = page.locator('header.run-header')
-    await expect(header.getByTitle('Proveedor')).toHaveText(/Gemini CLI/)
+    await expect(header.getByTitle('Proveedor')).toHaveText(/Antigravity CLI/)
     await expect(header.getByRole('button', { name: 'Bifurcar…' })).toBeDisabled()
-    await expect(header.getByText('Gemini CLI no permite bifurcar una sesión.')).toBeVisible()
-    await expectAccessible(page, 'agente de Gemini')
+    await expect(header.getByText('Antigravity CLI no permite bifurcar una sesión.')).toBeVisible()
+    await expectAccessible(page, 'agente de Antigravity')
 
     // El de Codex sí bifurca.
     const codex = review.agents.find((a) => a.provider === 'codex')!
@@ -164,7 +165,7 @@ test('la revisión con Codex y Gemini corrige solo cuando hay hallazgos', async 
   })
 })
 
-test('un agente suelto con Gemini y su modelo, lanzado desde la web', async ({ page }) => {
+test('un agente suelto con Antigravity y su modelo, lanzado desde la web', async ({ page }) => {
   test.setTimeout(240_000)
   await page.goto('/')
   await login(page)
@@ -175,12 +176,12 @@ test('un agente suelto con Gemini y su modelo, lanzado desde la web', async ({ p
   await page.getByRole('button', { name: 'Lanzar workflow' }).click()
   const sheet = page.getByRole('dialog', { name: 'Lanzar workflow' })
   await sheet.getByLabel('Prompt').fill('Revisa calc.py')
-  await sheet.getByLabel('Proveedor').selectOption({ label: 'Gemini CLI' })
+  await sheet.getByLabel('Proveedor').selectOption({ label: 'Antigravity CLI' })
   await expect(sheet.getByLabel('Modelo')).toHaveAttribute(
     'placeholder',
-    'el predeterminado de Gemini CLI',
+    'el predeterminado de Antigravity CLI',
   )
-  await sheet.getByLabel('Modelo').fill('gemini-2.5-pro')
+  await sheet.getByLabel('Modelo').fill('gemini-3-flash')
   await expectAccessible(page, 'lanzar con otro proveedor')
   await sheet.getByRole('button', { name: 'Lanzar', exact: true }).click()
   await page.waitForURL('**/runs/**')
@@ -189,9 +190,9 @@ test('un agente suelto con Gemini y su modelo, lanzado desde la web', async ({ p
   await expect(header.locator('.hero-top').getByText('Completada')).toBeVisible({
     timeout: 90_000,
   })
-  await expect(header.getByTitle('Proveedor')).toHaveText(/Gemini CLI/)
-  await expect(header.getByTitle('Modelo')).toHaveText(/gemini-2\.5-pro/)
-  // Gemini continúa la sesión: la caja de mensajes está activa.
+  await expect(header.getByTitle('Proveedor')).toHaveText(/Antigravity CLI/)
+  await expect(header.getByTitle('Modelo')).toHaveText(/gemini-3-flash/)
+  // Antigravity continúa la conversación: la caja de mensajes está activa.
   await page.getByRole('tab', { name: 'Conversación' }).click()
   await expect(
     page.getByRole('form', { name: 'Continuar la conversación' }).getByLabel('Mensaje'),

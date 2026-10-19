@@ -9,8 +9,8 @@
   "capabilities" : [ "RESUME", "FORK", "STRUCTURED_OUTPUT" ],
   "onlineRunners" : 1
 }, {
-  "id" : "gemini",
-  "displayName" : "Gemini CLI",
+  "id" : "antigravity",
+  "displayName" : "Antigravity CLI",
   "capabilities" : [ "RESUME", "STRUCTURED_OUTPUT" ],
   "onlineRunners" : 0
 } ]

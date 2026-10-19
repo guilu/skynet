@@ -2,7 +2,6 @@ package dev.skynet.controlplane.workflow;
 
 import dev.skynet.controlplane.shared.InvalidRequestException;
 import dev.skynet.protocol.AgentProviderKind;
-import java.util.Arrays;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -28,12 +27,17 @@ record LaunchAgent(String provider, String model) {
   static LaunchAgent of(String provider, String model) {
     String p = provider == null || provider.isBlank() ? null : provider.strip();
     String m = model == null || model.isBlank() ? null : model.strip();
+    if (p != null && AgentProviderKind.byId(p).filter(AgentProviderKind::retired).isPresent()) {
+      throw new InvalidRequestException(
+          AgentProviderKind.byId(p).orElseThrow().displayName()
+              + " se ha retirado: elige otro proveedor");
+    }
     if (p != null && AgentProviderKind.byId(p).isEmpty()) {
       throw new InvalidRequestException(
           "El proveedor `"
               + p
               + "` no existe. Puede ser "
-              + Arrays.stream(AgentProviderKind.values())
+              + AgentProviderKind.active().stream()
                   .map(k -> "`" + k.id() + "`")
                   .collect(Collectors.joining(", ")));
     }

@@ -594,14 +594,14 @@ describe('contratos con el backend', () => {
 
   it('política efectiva por fase', () => {
     ;(effectivePolicy as StagePolicy[]).forEach((p) => expectShape(p, STAGE_POLICY))
-    expect(effectivePolicy.map((p) => p.agent)).toEqual(['reviewer', 'gemini-reviewer', null, null])
+    expect(effectivePolicy.map((p) => p.agent)).toEqual(['reviewer', 'agy-reviewer', null, null])
     expect(effectivePolicy.map((p) => p.type)).toEqual(['agent', 'agent', 'agent', 'command'])
     expect(effectivePolicy[1].unsupported).toEqual(['allowedTools', 'maxTurns'])
   })
 
   it('proveedores', () => {
     ;(providers as ProviderKind[]).forEach((p) => expectShape(p, PROVIDER_KIND))
-    expect(providers.map((p) => p.id)).toEqual(['claude-code', 'codex', 'gemini'])
+    expect(providers.map((p) => p.id)).toEqual(['claude-code', 'codex', 'antigravity'])
   })
 
   it('página de ejecuciones', () => {

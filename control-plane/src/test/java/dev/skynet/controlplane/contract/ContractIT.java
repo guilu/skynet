@@ -540,16 +540,16 @@ class ContractIT extends IntegrationTest {
               "second-opinion",
               "Segunda opinión",
               StageType.AGENT,
-              "gemini-reviewer",
+              "agy-reviewer",
               List.of("Read", "Grep"),
               "plan",
               null,
               null,
               null,
               null,
-              "gemini-2.5-pro",
+              "gemini-3-flash",
               null,
-              "gemini",
+              "antigravity",
               List.of("allowedTools", "maxTurns")),
           new StagePolicy(
               "fix",
@@ -613,8 +613,8 @@ class ContractIT extends IntegrationTest {
               EnumSet.of(Capability.RESUME, Capability.FORK, Capability.STRUCTURED_OUTPUT),
               1),
           new ProviderView(
-              "gemini",
-              "Gemini CLI",
+              "antigravity",
+              "Antigravity CLI",
               EnumSet.of(Capability.RESUME, Capability.STRUCTURED_OUTPUT),
               0));
     }
@@ -737,7 +737,7 @@ class ContractIT extends IntegrationTest {
           List.of(),
           List.of(new UnresponsiveAgent(AGENT, RUN, "TKM-1", at(17))),
           List.of(staleRunner()),
-          List.of(new ProviderShortage("gemini", "Gemini CLI", 2)),
+          List.of(new ProviderShortage("antigravity", "Antigravity CLI", 2)),
           List.of(
               new QuotaWarning(
                   RUNNER,

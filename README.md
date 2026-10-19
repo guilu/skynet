@@ -113,7 +113,7 @@ Con la aplicación levantada, abre la web. La navegación lateral da acceso al *
 
 1. **Proyectos** → crea un proyecto (p. ej. clave `TKM`).
 2. En el proyecto, **registra un repositorio** (ruta absoluta en la máquina del runner) y **crea un trabajo** (`TKM-1`).
-3. En el trabajo, **Lanzar workflow**: elige el workflow (por defecto `adhoc`, un agente con el prompt que escribas), rellena sus datos y, si quieres, el proveedor y el modelo del agente (Claude Code, Codex o Gemini CLI) y límites de turnos, presupuesto o tiempo (vacíos = valores por defecto). Se crea la ejecución con todas sus fases y cada agente queda **en cola** hasta que un runner conectado (ver abajo) lo recoge, crea un worktree y ejecuta Claude Code en él. Para un workflow propio, mira el ejemplo de abajo.
+3. En el trabajo, **Lanzar workflow**: elige el workflow (por defecto `adhoc`, un agente con el prompt que escribas), rellena sus datos y, si quieres, el proveedor y el modelo del agente (Claude Code, Codex o Antigravity CLI) y límites de turnos, presupuesto o tiempo (vacíos = valores por defecto). Se crea la ejecución con todas sus fases y cada agente queda **en cola** hasta que un runner conectado (ver abajo) lo recoge, crea un worktree y ejecuta Claude Code en él. Para un workflow propio, mira el ejemplo de abajo.
 4. La ejecución abre con una **cabecera operativa**: estado, duración, agente y herramienta en curso, runner, tokens (con caché), coste y estado de la conexión en vivo, con el workflow que sigue y el botón **Cancelar agente** (o **Cancelar ejecución** si tiene varias fases), que pide confirmación. Cancelar mata el agente y todos sus procesos (en Linux, su grupo de procesos entero). Debajo hay tres paneles:
    - **Fases** y sus agentes; al elegir uno se abre en el inspector (por defecto, el que está en curso). Una reanudación, un reintento o un fork enlaza con el agente del que parte.
    - **Inspector** con pestañas: Resumen (modelo, sesión, rama, tokens, coste y respuesta final), Prompt, Conversación, Herramientas (cada llamada con su entrada, su salida y su duración) y Evento original (el evento guardado, leído de la API). Los textos largos salen recortados con «Ver completo». Las flechas recorren las pestañas.
@@ -167,7 +167,7 @@ Al lanzarlo desde un trabajo, la web pide `Objetivo` y enseña lo que se le perm
 
 ### Runner local
 
-El runner se ejecuta en la máquina donde están los repositorios y `claude`. Se conecta al control plane (no hace falta abrir puertos) y guarda su estado en `~/.skynet-runner` (journal SQLite, logs NDJSON y worktrees). Necesita Java 21, `git` y al menos un CLI de agentes: Claude Code con sesión iniciada (`claude` y después `/login`) o `ANTHROPIC_API_KEY`, o Codex (`codex login` o `OPENAI_API_KEY`) para los agentes con `provider: codex`, o Gemini CLI (sesión de Google iniciada o `GEMINI_API_KEY`) para los de `provider: gemini`.
+El runner se ejecuta en la máquina donde están los repositorios y `claude`. Se conecta al control plane (no hace falta abrir puertos) y guarda su estado en `~/.skynet-runner` (journal SQLite, logs NDJSON y worktrees). Necesita Java 21, `git` y al menos un CLI de agentes: Claude Code con sesión iniciada (`claude` y después `/login`) o `ANTHROPIC_API_KEY`, o Codex (`codex login` o `OPENAI_API_KEY`) para los agentes con `provider: codex`, o Antigravity CLI (`agy` con la sesión de Google iniciada) para los de `provider: antigravity`.
 
 ```bash
 ./gradlew :runner:installDist
@@ -221,17 +221,17 @@ Para actualizarlo, repite los cinco primeros comandos de la instalación y reini
 | `SKYNET_RUNNER_HOME` | `~/.skynet-runner` | Journal, logs y worktrees |
 | `SKYNET_CLAUDE_BIN` | `claude` | Ejecutable de Claude Code (o fake-claude para probar) |
 | `SKYNET_CODEX_BIN` | `codex` | Ejecutable de Codex (o fake-codex para probar) |
-| `SKYNET_GEMINI_BIN` | `gemini` | Ejecutable de Gemini CLI (o fake-gemini para probar) |
-| `SKYNET_PROVIDERS` | — | Proveedores de agentes que declara el runner, separados por comas (p. ej. `claude-code,codex,gemini`). Sin definir, los que respondan a `--version` |
+| `SKYNET_AGY_BIN` | `agy` | Ejecutable de Antigravity CLI (o fake-agy para probar) |
+| `SKYNET_PROVIDERS` | — | Proveedores de agentes que declara el runner, separados por comas (p. ej. `claude-code,codex,antigravity`). Sin definir, los que respondan a `--version` |
 | `SKYNET_AGENT_ENV` | — | Variables extra que hereda el agente, separadas por comas |
 | `SKYNET_MODEL_PRICES` | — | Fichero que amplía la tabla de precios con la que se estima el coste (ver abajo) |
 | `SKYNET_LOG_RETENTION_DAYS` | `7` | Días que se conservan los logs locales (`SKYNET_RUNNER_HOME/logs`); ya están subidos como artefactos |
 
-Al arrancar, el runner prueba `--version` de cada CLI de agentes que conoce (Claude Code con `SKYNET_CLAUDE_BIN`, Codex con `SKYNET_CODEX_BIN` y Gemini CLI con `SKYNET_GEMINI_BIN`) y declara al control plane los que responden, al registrarse y en cada latido; los ves con su versión en **Runners**. Un agente solo se entrega a un runner que tiene su proveedor; si ninguno en línea lo tiene, se queda en cola y el Dashboard lo avisa en «Necesita tu atención». `SKYNET_PROVIDERS` fija la lista a mano, también si un CLI no responde bien a `--version`. Los comandos de las fases `command` van a cualquier runner.
+Al arrancar, el runner prueba `--version` de cada CLI de agentes que conoce (Claude Code con `SKYNET_CLAUDE_BIN`, Codex con `SKYNET_CODEX_BIN` y Antigravity CLI con `SKYNET_AGY_BIN`) y declara al control plane los que responden, al registrarse y en cada latido; los ves con su versión en **Runners**. Un agente solo se entrega a un runner que tiene su proveedor; si ninguno en línea lo tiene, se queda en cola y el Dashboard lo avisa en «Necesita tu atención». `SKYNET_PROVIDERS` fija la lista a mano, también si un CLI no responde bien a `--version`. Los comandos de las fases `command` van a cualquier runner.
 
 En **Runners**, «Revocar token…» invalida el token de un runner al momento. Si es el tuyo, se vuelve a registrar solo con `SKYNET_RUNNER_REGISTRATION_TOKEN`; quien tenga solo el token robado se queda fuera. Si el secreto de registro también se ha filtrado, cámbialo en el control plane y en tus runners.
 
-El agente solo hereda una lista corta de variables (`PATH`, `HOME`, idioma, proxy y las de su proveedor: `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL` y `CLAUDE_CONFIG_DIR` para Claude Code; `OPENAI_API_KEY`, `CODEX_API_KEY`, `OPENAI_BASE_URL` y `CODEX_HOME` para Codex; `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_CLOUD_PROJECT`, `GEMINI_CLI_HOME`… para Gemini) más las de `SKYNET_AGENT_ENV`. La política del repositorio puede reducir estas últimas, nunca ampliarlas. El comando de verificación del repositorio se ejecuta con ese mismo entorno: si necesita `JAVA_HOME`, `GRADLE_USER_HOME` o similares, añádelas a `SKYNET_AGENT_ENV`. Los artefactos pendientes de subir se guardan en `SKYNET_RUNNER_HOME/artifacts`. Para probar sin gastar, usa fake-claude:
+El agente solo hereda una lista corta de variables (`PATH`, `HOME`, idioma, proxy y las de su proveedor: `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL` y `CLAUDE_CONFIG_DIR` para Claude Code; `OPENAI_API_KEY`, `CODEX_API_KEY`, `OPENAI_BASE_URL` y `CODEX_HOME` para Codex; Antigravity no necesita ninguna propia) más las de `SKYNET_AGENT_ENV`. La política del repositorio puede reducir estas últimas, nunca ampliarlas. El comando de verificación del repositorio se ejecuta con ese mismo entorno: si necesita `JAVA_HOME`, `GRADLE_USER_HOME` o similares, añádelas a `SKYNET_AGENT_ENV`. Los artefactos pendientes de subir se guardan en `SKYNET_RUNNER_HOME/artifacts`. Para probar sin gastar, usa fake-claude:
 
 ```bash
 ./gradlew :tools:fake-claude:installDist
@@ -240,7 +240,7 @@ SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE FAKE_CLAUDE_FIXTURE=02-tools \
 SKYNET_RUNNER_REGISTRATION_TOKEN=<secreto> runner/build/install/skynet-runner/bin/skynet-runner
 ```
 
-El runner hace cumplir el presupuesto de cada invocación: estima su coste según llegan los tokens y la termina si se pasa («Presupuesto agotado»). Trae los precios de los modelos de Claude, de los `gpt-5*` de OpenAI y de los `gemini-2.5-*` y `gemini-3*` de Google (para Codex, solo si el agente fija `model`: si no, no se sabe qué modelo usa); para uno que no esté (se avisa en el fin del proceso y no cuenta para el presupuesto), crea un fichero con líneas `prefijo = entrada, salida, lectura de caché`, en US$ por millón de tokens, y apúntalo con `SKYNET_MODEL_PRICES`:
+El runner hace cumplir el presupuesto de cada invocación: estima su coste según llegan los tokens y la termina si se pasa («Presupuesto agotado»). Trae los precios de los modelos de Claude, de los `gpt-5*` de OpenAI y de los `gemini-2.5-*` y `gemini-3*` de Google (para Codex y Antigravity, solo si el agente fija `model`: si no, no se sabe qué modelo usa); para uno que no esté (se avisa en el fin del proceso y no cuenta para el presupuesto), crea un fichero con líneas `prefijo = entrada, salida, lectura de caché`, en US$ por millón de tokens, y apúntalo con `SKYNET_MODEL_PRICES`:
 
 ```text
 # Modelo propio: 3 US$ entrada, 15 salida, 0,30 lectura de caché
@@ -265,4 +265,4 @@ Variables: `FAKE_CLAUDE_FIXTURE` (nombre de fixture o ruta), `FAKE_CLAUDE_RESUME
 
 El mismo módulo instala `bin/fake-codex`, que imita `codex exec --json` con los fixtures de `fixtures/codex` (`FAKE_CODEX_FIXTURE`, `FAKE_CODEX_RESUME_FIXTURE`, `FAKE_CODEX_DELAY_MS`, `FAKE_CODEX_HANG`, `FAKE_CODEX_STRUCTURED_OUTPUT`). Arráncalo con `SKYNET_CODEX_BIN=$PWD/tools/fake-claude/build/install/fake-claude/bin/fake-codex`. Cómo traduce Skynet los modos de permisos, los eventos y el coste de Codex: [`docs/codex-exec-json.md`](docs/codex-exec-json.md). Qué admite cada proveedor, cómo se traducen los permisos y qué credenciales usa: [`docs/providers.md`](docs/providers.md).
 
-Y `bin/fake-gemini`, que imita `gemini --output-format stream-json` con los fixtures de `fixtures/gemini` (`FAKE_GEMINI_FIXTURE`, `FAKE_GEMINI_RESUME_FIXTURE`, `FAKE_GEMINI_DELAY_MS`, `FAKE_GEMINI_HANG`, `FAKE_GEMINI_STRUCTURED_OUTPUT`): `SKYNET_GEMINI_BIN=$PWD/tools/fake-claude/build/install/fake-claude/bin/fake-gemini`. El formato y la salida estructurada que valida el runner: [`docs/gemini-stream-json.md`](docs/gemini-stream-json.md).
+Y `bin/fake-agy`, que imita `agy --output-format stream-json` con las sesiones grabadas en `fixtures/agy` (`FAKE_AGY_FIXTURE`, `FAKE_AGY_RESUME_FIXTURE`, `FAKE_AGY_DELAY_MS`, `FAKE_AGY_HANG`, `FAKE_AGY_STRUCTURED_OUTPUT`, `FAKE_AGY_HOME`) y responde a `/usage`: `SKYNET_AGY_BIN=$PWD/tools/fake-claude/build/install/fake-claude/bin/fake-agy`. El formato y cómo se traduce: [`docs/antigravity-stream-json.md`](docs/antigravity-stream-json.md).

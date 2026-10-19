@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeEvent, formatCompact, formatDuration, statusTone } from './format'
+import { describeEvent, formatCompact, formatDuration, providerName, statusTone } from './format'
 
 describe('describeEvent', () => {
   it('describe la cuota y el límite de uso de la cuenta', () => {
@@ -108,5 +108,13 @@ describe('formatCompact', () => {
     expect(formatCompact(1200)).toBe('1200')
     expect(formatCompact(14_845)).toBe('14,8 k')
     expect(formatCompact(2_300_000)).toBe('2,3 M')
+  })
+})
+
+describe('providerName', () => {
+  it('marca Gemini CLI como retirado y conoce Antigravity', () => {
+    expect(providerName('antigravity')).toBe('Antigravity CLI')
+    expect(providerName('gemini')).toBe('Gemini CLI (retirado)')
+    expect(providerName('otro')).toBe('otro')
   })
 })
