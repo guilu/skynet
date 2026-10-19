@@ -5373,6 +5373,35 @@
     font-weight: 700;
   }
 
+  .graph-panels {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .graph-panels .btn[aria-pressed='true'] {
+    --c-on: var(--primary);
+    border-color: var(--primary);
+  }
+
+  .definition-entry {
+    border: 2px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 8px 12px;
+  }
+
+  .definition-entry > summary {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 800;
+  }
+
+  .definition-entry[open] > summary {
+    margin-bottom: 10px;
+  }
+
   .graph-selected {
     outline: 3px solid var(--primary);
     outline-offset: 3px;

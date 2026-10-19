@@ -546,6 +546,12 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito W8 (editor visual de workflows), aprobado el 2026-10-19:** W8-A motor de edición y problemas en el grafo, W8-B edición visual de fases, W8-C agentes, workflow nuevo y aceptación. Plan en `plans/siguiente-hito-w8.md` (espacio del proyecto).
 
+**Implementado (W8-C), agentes, workflow nuevo y aceptación (hito W8 terminado):**
+
+- Paneles **Workflow** (`id` solo en el alta, `name`, `description`), **Agentes** (prompt, `provider`, `model`, `permissionMode`, `tools`, `limits`; renombrar cambia sus usos y no se quita uno en uso) y **Entradas** (tipo, obligatoria, valor por defecto con su tipo, descripción; renombrar cambia sus `{{inputs.…}}`) en el grafo editable, con las operaciones nuevas de `definitionEdits.ts`.
+- Plantilla **Desde cero** en el alta, que abre la pestaña Grafo.
+- E2E de aceptación `editor.e2e.ts`: un workflow montado en el grafo sin escribir YAML se publica y se ejecuta; su v2, con una fase más añadida desde el grafo, también; la primera ejecución sigue siendo de la v1 con su única fase. axe en claro y oscuro. Cumple el criterio de W8 de §7.
+
 **Implementado (W8-B), edición visual de fases:**
 
 - La pestaña **Grafo** de un borrador se edita (`GraphEditor`): paleta con los seis tipos, unir fases arrastrando (con el ciclo rechazado y su camino), elegir una flecha para hacerla opcional o quitarla, y borrar una fase con confirmación. Cada cambio pasa por `definitionEdits.ts` y entra en Monaco como una edición aparte: Deshacer / Rehacer (y Ctrl+Z) valen igual para el grafo y el YAML. Al añadir o quitar fases se vuelve a ajustar a pantalla.

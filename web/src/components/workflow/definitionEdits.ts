@@ -703,3 +703,296 @@ export function stageLine(
     return null
   }
 }
+
+// ---- Agentes, entradas y raíz (W8-C) ------------------------------------------------------------
+
+/** Lo que se puede cambiar de un agente con `setAgentField`. */
+export type AgentField = 'description' | 'prompt' | 'provider' | 'model' | 'permissionMode'
+/** Los límites de un agente (`limits.*`). */
+export type AgentLimit = 'maxTurns' | 'maxBudgetUsd' | 'timeoutMinutes'
+/** Lo que se puede cambiar de una entrada con `setInputField`. */
+export type InputField = 'type' | 'required' | 'default' | 'description'
+/** Lo que se puede cambiar de la raíz con `setRootField`. */
+export type RootField = 'id' | 'name' | 'description'
+
+/** Como en el control plane: el de un agente, igual que el de una fase; el de una entrada, otro. */
+const INPUT_NAME = /^[A-Za-z]\w{0,63}$/
+
+/** Un mapa de la raíz (`agents`, `inputs`) por su nombre, creado si no está y `create`. */
+function rootMap(doc: Document, key: 'agents' | 'inputs', create: boolean): YAMLMap | null {
+  const map = doc.get(key, true)
+  if (isMap(map)) return map
+  if (!create) return null
+  const created = doc.createNode({}) as YAMLMap
+  // Delante de `stages`, como en los ejemplos: `agents` y `inputs` se leen antes que las fases.
+  const contents = doc.contents as YAMLMap
+  const at = contents.items.findIndex((p) => isScalar(p.key) && p.key.value === 'stages')
+  const pair = doc.createPair(key, created)
+  if (at < 0) contents.items.push(pair)
+  else contents.items.splice(at, 0, pair)
+  return created
+}
+
+function entryOf(map: YAMLMap | null, name: string): YAMLMap | null {
+  const value = map?.get(name, true)
+  return isMap(value) ? value : null
+}
+
+function namesOf(map: YAMLMap | null): string[] {
+  return (map?.items ?? [])
+    .map((p) => (isScalar(p.key) ? p.key.value : p.key))
+    .filter((n): n is string => typeof n === 'string')
+}
+
+/** Cada agente del texto con lo que dice, tal cual. */
+export function readAgents(text: string): { name: string; fields: Record<string, unknown> }[] {
+  try {
+    const agents = rootMap(parse(text), 'agents', false)
+    return namesOf(agents).map((name) => ({
+      name,
+      fields: (entryOf(agents, name)?.toJSON() as Record<string, unknown>) ?? {},
+    }))
+  } catch {
+    return []
+  }
+}
+
+/** Cada entrada del texto con lo que dice, tal cual. */
+export function readInputs(text: string): { name: string; fields: Record<string, unknown> }[] {
+  try {
+    const inputs = rootMap(parse(text), 'inputs', false)
+    return namesOf(inputs).map((name) => ({
+      name,
+      fields: (entryOf(inputs, name)?.toJSON() as Record<string, unknown>) ?? {},
+    }))
+  } catch {
+    return []
+  }
+}
+
+/** `id`, `name` y `description` de la raíz, tal cual. */
+export function readRoot(text: string): Record<RootField, string> {
+  try {
+    const doc = parse(text)
+    const get = (key: RootField) => {
+      const value = doc.get(key)
+      return typeof value === 'string' ? value : ''
+    }
+    return { id: get('id'), name: get('name'), description: get('description') }
+  } catch {
+    return { id: '', name: '', description: '' }
+  }
+}
+
+/** Cambia `id`, `name` o `description` de la raíz; '' quita `name` y `description`. */
+export function setRootField(text: string, field: RootField, value: string): string {
+  const doc = parse(text)
+  if (field === 'id' && !/^[a-z][a-z0-9-]{1,48}$/.test(value))
+    throw new EditError(
+      'El id del workflow tiene que empezar por una minúscula y llevar de 2 a 49 minúsculas, números y guiones',
+    )
+  const root = doc.contents as YAMLMap
+  if (value !== '' && !root.has(field) && field !== 'id') {
+    // Una clave nueva va donde se espera leerla: `name` detrás de `id`, `description` detrás.
+    const after = field === 'name' ? ['id'] : ['name', 'id']
+    const anchor =
+      after
+        .map((key) => root.items.findIndex((p) => isScalar(p.key) && p.key.value === key))
+        .find((i) => i >= 0) ?? -1
+    root.items.splice(anchor + 1, 0, doc.createPair(field, scalarFor(value)))
+    return render(text, doc)
+  }
+  setValue(root, field, value)
+  return render(text, doc)
+}
+
+/** Las fases (y los hijos de una `parallel`) que usan un agente. */
+export function agentUsers(text: string, name: string): string[] {
+  try {
+    return stageMaps(parse(text)).flatMap((s) => {
+      const id = idOf(s) ?? '?'
+      return [
+        ...(s.get('agent') === name ? [id] : []),
+        ...childrenOf(s)
+          .filter((c) => c.get('agent') === name)
+          .map((c) => `${id}.${childIdOf(c)}`),
+      ]
+    })
+  } catch {
+    return []
+  }
+}
+
+/** Añade un agente con un nombre libre y el prompt vacío. */
+export function addAgent(text: string): { text: string; name: string } {
+  const doc = parse(text)
+  const agents = rootMap(doc, 'agents', true)!
+  const name = freeId(new Set(namesOf(agents)), 'agente')
+  const agent = doc.createNode({ prompt: '' }) as YAMLMap
+  const prompt = agent.get('prompt', true)
+  if (isScalar(prompt)) prompt.type = Scalar.QUOTE_DOUBLE
+  agents.set(name, agent)
+  return { text: render(text, doc), name }
+}
+
+/** Quita un agente; no si alguna fase lo usa. Sin agentes, quita `agents`. */
+export function removeAgent(text: string, name: string): string {
+  const users = agentUsers(text, name)
+  if (users.length > 0)
+    throw new EditError(`No se puede quitar \`${name}\`: lo usa ${users.join(', ')}`)
+  const doc = parse(text)
+  const agents = rootMap(doc, 'agents', false)
+  if (!entryOf(agents, name)) throw new EditError(`No hay ningún agente \`${name}\``)
+  agents!.delete(name)
+  if (agents!.items.length === 0) doc.delete('agents')
+  return render(text, doc)
+}
+
+/**
+ * Cambia el nombre de un agente y lo que lo usa: el `agent` de las fases y de los hijos. Un hijo
+ * sin `id` propio se llamaba como su agente: se le fija el `id` para no cambiarle el nombre.
+ */
+export function renameAgent(text: string, from: string, to: string): string {
+  if (from === to) return text
+  checkId(to, 'el agente')
+  const doc = parse(text)
+  const agents = rootMap(doc, 'agents', false)
+  const pair = agents?.items.find((p) => isScalar(p.key) && p.key.value === from)
+  if (!pair || !isScalar(pair.key)) throw new EditError(`No hay ningún agente \`${from}\``)
+  if (namesOf(agents).includes(to)) throw new EditError(`Ya hay un agente \`${to}\``)
+  pair.key.value = to
+  for (const stage of stageMaps(doc)) {
+    if (stage.get('agent') === from) setValue(stage, 'agent', to)
+    for (const child of childrenOf(stage))
+      if (child.get('agent') === from) {
+        if (!child.has('id')) child.items.unshift(doc.createPair('id', from))
+        setValue(child, 'agent', to)
+      }
+  }
+  return render(text, doc)
+}
+
+/** Cambia un campo de un agente; null o '' lo quitan. */
+export function setAgentField(
+  text: string,
+  name: string,
+  field: AgentField,
+  value: string | null,
+): string {
+  const doc = parse(text)
+  const agent = entryOf(rootMap(doc, 'agents', false), name)
+  if (!agent) throw new EditError(`No hay ningún agente \`${name}\``)
+  setValue(agent, field, value)
+  return render(text, doc)
+}
+
+/** Las herramientas de un agente como `[Read, Edit]`; vacío las quita (las del repositorio). */
+export function setAgentTools(text: string, name: string, tools: string[]): string {
+  const doc = parse(text)
+  const agent = entryOf(rootMap(doc, 'agents', false), name)
+  if (!agent) throw new EditError(`No hay ningún agente \`${name}\``)
+  if (tools.length === 0) agent.delete('tools')
+  else {
+    const current = agent.get('tools', true)
+    const seq = doc.createNode(tools) as YAMLSeq
+    seq.flow = isSeq(current) ? current.flow === true : true
+    agent.set('tools', seq)
+  }
+  return render(text, doc)
+}
+
+/** Un límite del agente (`limits.*`); null lo quita, y `limits` si se queda vacío. */
+export function setAgentLimit(
+  text: string,
+  name: string,
+  limit: AgentLimit,
+  value: number | null,
+): string {
+  const doc = parse(text)
+  const agent = entryOf(rootMap(doc, 'agents', false), name)
+  if (!agent) throw new EditError(`No hay ningún agente \`${name}\``)
+  const limits = agent.get('limits', true)
+  if (isMap(limits)) {
+    setValue(limits, limit, value)
+    if (limits.items.length === 0) agent.delete('limits')
+  } else if (value != null) agent.set('limits', doc.createNode({ [limit]: value }))
+  return render(text, doc)
+}
+
+/** Las fases y agentes cuyo texto usa `{{inputs.<nombre>}}`. */
+function rewriteInputs(doc: Document, change: (value: string) => string) {
+  for (const stage of stageMaps(doc)) {
+    rewriteScalar(stage, 'prompt', change)
+    rewriteScalar(stage, 'action', change)
+    for (const child of childrenOf(stage)) rewriteScalar(child, 'prompt', change)
+  }
+  const agents = rootMap(doc, 'agents', false)
+  for (const name of namesOf(agents)) {
+    const agent = entryOf(agents, name)
+    if (agent) rewriteScalar(agent, 'prompt', change)
+  }
+}
+
+/** Añade una entrada de texto con un nombre libre. */
+export function addInput(text: string): { text: string; name: string } {
+  const doc = parse(text)
+  const inputs = rootMap(doc, 'inputs', true)!
+  const name = freeId(new Set(namesOf(inputs)), 'dato')
+  inputs.set(name, doc.createNode({ type: 'string' }))
+  return { text: render(text, doc), name }
+}
+
+/** Quita una entrada (los prompts que la usen los marca la validación). */
+export function removeInput(text: string, name: string): string {
+  const doc = parse(text)
+  const inputs = rootMap(doc, 'inputs', false)
+  if (!entryOf(inputs, name) && !inputs?.has(name))
+    throw new EditError(`No hay ninguna entrada \`${name}\``)
+  inputs!.delete(name)
+  if (inputs!.items.length === 0) doc.delete('inputs')
+  return render(text, doc)
+}
+
+/** Cambia el nombre de una entrada y sus `{{inputs.<nombre>}}` en prompts y acciones. */
+export function renameInput(text: string, from: string, to: string): string {
+  if (from === to) return text
+  if (!INPUT_NAME.test(to))
+    throw new EditError(
+      'El nombre de una entrada tiene que empezar por una letra y llevar solo letras, números y _',
+    )
+  const doc = parse(text)
+  const inputs = rootMap(doc, 'inputs', false)
+  const pair = inputs?.items.find((p) => isScalar(p.key) && p.key.value === from)
+  if (!pair || !isScalar(pair.key)) throw new EditError(`No hay ninguna entrada \`${from}\``)
+  if (namesOf(inputs).includes(to)) throw new EditError(`Ya hay una entrada \`${to}\``)
+  pair.key.value = to
+  const pattern = new RegExp(`(\\{\\{\\s*inputs\\.)${from}(?=\\s*\\}\\})`, 'g')
+  rewriteInputs(doc, (value) => value.replace(pattern, `$1${to}`))
+  return render(text, doc)
+}
+
+/**
+ * Cambia un campo de una entrada; null o '' lo quitan. `default` se escribe con el tipo de la
+ * entrada (número o sí/no) si se puede leer así.
+ */
+export function setInputField(
+  text: string,
+  name: string,
+  field: InputField,
+  value: string | boolean | null,
+): string {
+  const doc = parse(text)
+  const input = entryOf(rootMap(doc, 'inputs', false), name)
+  if (!input) throw new EditError(`No hay ninguna entrada \`${name}\``)
+  let written: Value = value
+  if (field === 'default' && typeof value === 'string' && value !== '') {
+    const type = input.get('type')
+    if (type === 'number' && value.trim() !== '' && !Number.isNaN(Number(value)))
+      written = Number(value)
+    if (type === 'boolean' && (value === 'true' || value === 'false')) written = value === 'true'
+  }
+  // `required: false` es lo de por defecto: no se escribe.
+  if (field === 'required' && value === false) written = null
+  setValue(input, field, written)
+  return render(text, doc)
+}

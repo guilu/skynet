@@ -1,4 +1,4 @@
-import { Redo2, Trash2, Undo2 } from 'lucide-react'
+import { Bot, FileText, Redo2, TextCursorInput, Trash2, Undo2 } from 'lucide-react'
 import { lazy, Suspense, useState, type KeyboardEvent } from 'react'
 import type { Problem, WorkflowModel } from '../../api'
 import type { GraphSelection } from '../graph/DefinitionGraph'
@@ -18,6 +18,7 @@ import {
   STAGE_TYPES,
   type StageType,
 } from './definitionEdits'
+import { AgentsPanel, InputsPanel, WorkflowPanel } from './DefinitionPanels'
 import { StagePanel, type ApplyEdit } from './StagePanel'
 
 const DefinitionGraph = lazy(() => import('../graph/DefinitionGraph'))
@@ -46,13 +47,24 @@ interface Props {
   lineOf: (id: string, field?: string) => { line: number; column: number } | null
   undo?: () => void
   redo?: () => void
+  /** Si se puede cambiar el id del workflow: solo en el alta. */
+  keyEditable?: boolean
 }
+
+/** Lo que no es una fase ni una flecha y también se edita en el panel (W8-C). */
+const PANELS = [
+  { id: 'workflow', label: 'Workflow', icon: FileText },
+  { id: 'agents', label: 'Agentes', icon: Bot },
+  { id: 'inputs', label: 'Entradas', icon: TextCursorInput },
+] as const
+type Panel = (typeof PANELS)[number]['id']
 
 /**
  * El grafo de un borrador, editable (W8-B): añadir fases desde la paleta, unirlas arrastrando,
  * elegir una flecha para hacerla opcional o quitarla, y cambiar una fase en su panel. Cada cambio
  * es una edición del YAML (se deshace igual que escribir en él). Todo lo que se hace con el ratón
- * se puede hacer desde la paleta y el panel, con el teclado.
+ * se puede hacer desde la paleta y el panel, con el teclado. El panel también edita el workflow,
+ * sus agentes y sus entradas (W8-C).
  */
 export function GraphEditor({
   text,
@@ -64,8 +76,18 @@ export function GraphEditor({
   lineOf,
   undo,
   redo,
+  keyEditable = false,
 }: Props) {
-  const [selection, setSelection] = useState<GraphSelection>(null)
+  const [selection, setSelectionState] = useState<GraphSelection>(null)
+  const [panel, setPanelState] = useState<Panel | null>(null)
+  const setSelection = (next: GraphSelection) => {
+    setSelectionState(next)
+    if (next) setPanelState(null)
+  }
+  const setPanel = (next: Panel | null) => {
+    setPanelState(next)
+    if (next) setSelectionState(null)
+  }
   const [message, setMessage] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
 
@@ -159,6 +181,20 @@ export function GraphEditor({
             Rehacer
           </Button>
         )}
+        <div className="graph-panels" role="group" aria-label="Más del workflow">
+          {PANELS.map(({ id, label, icon: Icon }) => (
+            <Button
+              key={id}
+              variant="secondary"
+              size="sm"
+              aria-pressed={panel === id}
+              onClick={() => setPanel(panel === id ? null : id)}
+            >
+              <Icon size={16} aria-hidden="true" />
+              {label}
+            </Button>
+          ))}
+        </div>
         <p className="graph-message" role="status">
           {message}
         </p>
@@ -180,7 +216,18 @@ export function GraphEditor({
           </p>
         </div>
         <div className="graph-editor-panel">
-          {selectedStage ? (
+          {panel === 'workflow' ? (
+            <WorkflowPanel
+              text={text}
+              problems={problems}
+              apply={apply}
+              keyEditable={keyEditable}
+            />
+          ) : panel === 'agents' ? (
+            <AgentsPanel text={text} problems={problems} apply={apply} />
+          ) : panel === 'inputs' ? (
+            <InputsPanel text={text} problems={problems} apply={apply} />
+          ) : selectedStage ? (
             <StagePanel
               key={selectedStage}
               text={text}
@@ -241,7 +288,9 @@ export function GraphEditor({
             <section className="card stage-panel" aria-labelledby="graph-help-title">
               <h2 id="graph-help-title">Propiedades</h2>
               <p className="muted small">
-                Elige una fase o una flecha para cambiarla, o añade una fase desde «Añadir fase».
+                Elige una fase o una flecha para cambiarla, o añade una fase desde «Añadir fase». El
+                nombre, los agentes y las entradas del workflow están en sus botones, encima del
+                grafo.
               </p>
             </section>
           )}

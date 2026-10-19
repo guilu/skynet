@@ -134,6 +134,7 @@ export function DefinitionEditor({
                     source={current?.text ?? text}
                     reveal={revealInYaml}
                     lineOf={(id, field) => stageLine(text, id, field)}
+                    keyEditable={validateAs == null}
                     undo={touchOnly ? undefined : () => editor.current?.undo?.()}
                     redo={touchOnly ? undefined : () => editor.current?.redo?.()}
                   />

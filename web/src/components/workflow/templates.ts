@@ -174,6 +174,16 @@ stages:
     checks: [tests, diff]
 `
 
+/** Lo mínimo para empezar desde el grafo (W8-C): una fase de agente sin prompt. */
+const BLANK = `id: mi-workflow
+name: Mi workflow
+
+stages:
+  - id: agent
+    type: agent
+    prompt: ""
+`
+
 export const TEMPLATES: WorkflowTemplate[] = [
   {
     id: 'basico',
@@ -201,5 +211,12 @@ export const TEMPLATES: WorkflowTemplate[] = [
     description:
       'Especifica en openspec/proposal.md, planifica a partir del resumen, aprueba el plan e implementa; Skynet comprueba que exista la propuesta y que pasen los tests.',
     yaml: SPEC_PLAN_IMPLEMENT,
+  },
+  {
+    id: 'desde-cero',
+    name: 'Desde cero',
+    description:
+      'Una sola fase de agente, sin prompt: para montar el workflow en la pestaña Grafo, sin escribir YAML.',
+    yaml: BLANK,
   },
 ]
