@@ -551,6 +551,7 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 - `definitionEdits.ts` (librería `yaml`): añadir, borrar y renombrar fases, unir y quitar dependencias, opcional sí o no, campos de fase e hijos de `parallel`, editando el documento: se conservan los comentarios, el orden y el estilo de cada lista, y las líneas que no cambian salen tal cual. Renombrar actualiza `dependsOn`, `workspaceFrom`, `revise`, las condiciones y `{{stages.…}}`; unir rechaza un ciclo con su camino. Aún no lo usa la web: lo usará el grafo editable de W8-B.
 - Grafo de la definición: cada fase lleva una insignia con sus problemas (icono y texto, por la ruta `stages.<id>` del problema); una dependencia que no existe sale como fase fantasma discontinua con su flecha en rojo; las flechas de un ciclo van en rojo.
 - vitest del motor y de la asignación de problemas; E2E `workflows.e2e.ts` con un grafo roto, con axe.
+- Arreglo del motor de ejecución: `JobQueue.retryLater` fallaba en PostgreSQL (al parámetro de la hora le faltaba el `CAST` a `timestamptz`) y una evaluación que tenía que esperar dejaba la ejecución parada hasta que vencía el alquiler del trabajo. Lo cubre un test nuevo en `WorkflowEngineIT`.
 
 **Implementado (AR-B), Antigravity sustituye a Gemini CLI:**
 

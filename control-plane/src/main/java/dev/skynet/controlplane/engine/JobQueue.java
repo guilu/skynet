@@ -86,10 +86,11 @@ class JobQueue {
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   void retryLater(UUID runId, long generation, Duration delay, String error) {
     // Si se ha vuelto a encolar mientras tanto, se evalúa ya: el cambio nuevo puede desbloquearla.
+    // Sin el CAST, PostgreSQL lee `? + interval` como un interval y el CASE no casa con run_after.
     jdbc.sql(
             "UPDATE workflow_job SET locked_until = NULL, attempts = attempts + 1,"
-                + " last_error = ?, run_after = CASE WHEN generation = ? THEN ? +"
-                + " make_interval(secs => ? * LEAST(attempts + 1, 12)) ELSE run_after END"
+                + " last_error = ?, run_after = CASE WHEN generation = ? THEN CAST(? AS timestamptz)"
+                + " + make_interval(secs => ? * LEAST(attempts + 1, 12)) ELSE run_after END"
                 + " WHERE workflow_run_id = ?")
         .params(error, generation, Timestamp.from(time.now()), delay.toMillis() / 1000.0, runId)
         .update();

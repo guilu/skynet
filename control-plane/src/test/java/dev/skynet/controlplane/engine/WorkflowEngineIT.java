@@ -424,6 +424,7 @@ class WorkflowEngineIT extends IntegrationTest {
       """;
 
   @Autowired private RunService runs;
+  @Autowired private JobQueue jobs;
 
   private String projectId;
   private String repositoryId;
@@ -444,6 +445,49 @@ class WorkflowEngineIT extends IntegrationTest {
                 Map.of("title", "Arreglar el login", "type", "BUG"))
             .path("id")
             .asString();
+  }
+
+  @Test
+  void anEvaluationThatHasToWaitIsRetriedLaterTheLongerTheMoreAttempts() {
+    String runId = launch(publish(CHAIN), Map.of()).path("id").asString();
+    UUID run = UUID.fromString(runId);
+    // Un trabajo pendiente para dentro de mucho, para que ningún worker lo reclame mientras tanto.
+    jdbc.sql(
+            "INSERT INTO workflow_job (workflow_run_id, generation, run_after, created_at)"
+                + " VALUES (?, 7, now() + interval '1 day', now()) ON CONFLICT (workflow_run_id)"
+                + " DO UPDATE SET generation = 7, run_after = now() + interval '1 day', attempts = 0")
+        .params(run)
+        .update();
+
+    Instant before = Instant.now();
+    jobs.retryLater(run, 7, Duration.ofSeconds(60), "esperando");
+    jobs.retryLater(run, 7, Duration.ofSeconds(60), "esperando otra vez");
+
+    Map<String, Object> job =
+        jdbc.sql(
+                "SELECT attempts, last_error, run_after FROM workflow_job WHERE workflow_run_id = ?")
+            .params(run)
+            .query()
+            .singleRow();
+    assertThat(job).containsEntry("attempts", 2).containsEntry("last_error", "esperando otra vez");
+    // El segundo intento espera el doble: 60 s × 2.
+    Instant runAfter = ((Timestamp) job.get("run_after")).toInstant();
+    assertThat(runAfter).isBetween(before.plusSeconds(115), before.plusSeconds(130));
+
+    // Si se volvió a encolar (otra generación), no se aplaza: queda cuando dijo el encolado nuevo.
+    jdbc.sql(
+            "UPDATE workflow_job SET generation = 8, run_after = now() + interval '1 day'"
+                + " WHERE workflow_run_id = ?")
+        .params(run)
+        .update();
+    jobs.retryLater(run, 7, Duration.ofSeconds(60), null);
+    Instant kept =
+        jdbc.sql("SELECT run_after FROM workflow_job WHERE workflow_run_id = ?")
+            .params(run)
+            .query(Timestamp.class)
+            .single()
+            .toInstant();
+    assertThat(kept).isAfter(before.plus(Duration.ofHours(23)));
   }
 
   @Test
