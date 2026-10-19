@@ -174,6 +174,12 @@ stages:
   await expect(graph.locator('.graph-edge-cycle')).toHaveCount(2)
   await expect(graph.locator('.react-flow__node[data-id="plan"]')).toContainText('1 error')
   await expect(graph.locator('.react-flow__node[data-id="plan"]')).toHaveClass(/graph-has-errors/)
+  // El control plane cuenta el ciclo en build; review, que también lo forma, lleva su insignia.
+  for (const id of ['build', 'review']) {
+    const node = graph.locator(`.react-flow__node[data-id="${id}"]`)
+    await expect(node.locator('.graph-problems')).toHaveAttribute('title', /forman un ciclo/)
+    await expect(node).toHaveClass(/graph-has-errors/)
+  }
   await expectAccessible(page, 'grafo con problemas')
   await graph.screenshot({ path: `${process.env.E2E_OUT ?? 'build'}/w8a-problemas.png` })
 })

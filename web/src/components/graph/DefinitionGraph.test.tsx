@@ -88,6 +88,31 @@ describe('DefinitionGraph', () => {
     expect(ghost).toHaveTextContent('la nombra plan')
   })
 
+  it('un ciclo pone la insignia en todas sus fases, no solo donde lo cuenta el control plane', async () => {
+    const cyclic = {
+      ...definition,
+      stages: [stage('plan'), stage('build', ['plan', 'review']), stage('review', ['build'])],
+    }
+    const cycle: Problem = {
+      severity: 'ERROR',
+      path: 'stages.build.dependsOn',
+      line: 5,
+      column: 5,
+      message: 'Las dependencias forman un ciclo: build → review → build',
+    }
+    render(<DefinitionGraph definition={cyclic} problems={[cycle]} source={source} />)
+    const graph = await screen.findByRole('group', { name: 'Grafo de demo' })
+    for (const id of ['build', 'review']) {
+      const node = box(graph, id)
+      expect(within(node).getByText('1 error').parentElement).toHaveAttribute(
+        'title',
+        cycle.message,
+      )
+      expect(node).toHaveClass('graph-has-errors')
+    }
+    expect(box(graph, 'plan').querySelector('.graph-problems')).toBeNull()
+  })
+
   it('sin problemas no hay insignias ni fantasmas', async () => {
     const clean = { ...definition, stages: [stage('plan'), stage('build', ['plan'])] }
     render(<DefinitionGraph definition={clean} />)

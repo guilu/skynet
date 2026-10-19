@@ -47,6 +47,21 @@ stages:
     ])
   })
 
+  it('un ciclo sale en todas sus fases, una sola vez en cada una', () => {
+    const cycle = {
+      ...problem('stages.build.dependsOn'),
+      message: 'Las dependencias forman un ciclo: build → review → test → build',
+    }
+    const byStage = problemsByStage(text, [cycle, problem('stages.review.prompt')])
+    expect([...byStage.keys()]).toEqual(['build', 'review', 'test'])
+    expect(byStage.get('build')).toEqual([cycle])
+    expect(byStage.get('review')!.map((p) => p.path)).toEqual([
+      'stages.build.dependsOn',
+      'stages.review.prompt',
+    ])
+    expect(problemBadge(byStage.get('test')!)!.label).toBe('1 error')
+  })
+
   it('con un texto ilegible no asigna nada', () => {
     expect(problemsByStage('stages: [', [problem('stages[0]')]).size).toBe(0)
   })

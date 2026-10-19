@@ -18,15 +18,27 @@ export function stageIdsByIndex(text: string): (string | null)[] {
 const BY_ID = /^stages\.([a-z][a-z0-9-]*)(?:\.|\[|$)/
 const BY_INDEX = /^stages\[(\d+)\]/
 
+/**
+ * El control plane cuenta un ciclo una sola vez, en la fase donde lo encontró: «Las dependencias
+ * forman un ciclo: build → review → build». Las demás fases del camino también lo llevan.
+ */
+const CYCLE = /^Las dependencias forman un ciclo: (.+)$/
+
 /** Los problemas de cada fase (también los de sus hijos), por su id; los demás no salen. */
 export function problemsByStage(text: string, problems: Problem[]): Map<string, Problem[]> {
   const byStage = new Map<string, Problem[]>()
+  const add = (id: string, problem: Problem) => {
+    const current = byStage.get(id) ?? []
+    if (!current.includes(problem)) byStage.set(id, [...current, problem])
+  }
   const ids = problems.some((p) => BY_INDEX.test(p.path)) ? stageIdsByIndex(text) : []
   for (const problem of problems) {
     const index = BY_INDEX.exec(problem.path)
     const id = BY_ID.exec(problem.path)?.[1] ?? (index ? ids[Number(index[1])] : null)
     if (!id) continue
-    byStage.set(id, [...(byStage.get(id) ?? []), problem])
+    add(id, problem)
+    const cycle = CYCLE.exec(problem.message)
+    if (cycle) for (const member of cycle[1].split(' → ')) add(member, problem)
   }
   return byStage
 }
