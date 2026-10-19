@@ -9,7 +9,10 @@ import {
   problemBadge,
   problemsByStage,
 } from './definitionProblems'
-import WorkflowGraph, { type GraphContent } from './WorkflowGraph'
+import WorkflowGraph, { type GraphContent, type GraphEditing } from './WorkflowGraph'
+
+/** Lo elegido en el grafo al editarlo: una fase o una flecha (`to` depende de `from`). */
+export type GraphSelection = { stage: string } | { from: string; to: string } | null
 
 const BADGE_ICON = { ERROR: CircleAlert, UNSUPPORTED: Info, WARNING: TriangleAlert }
 
@@ -19,7 +22,7 @@ function ProblemBadge({ problems }: { problems: Problem[] }) {
   if (!badge) return null
   const Icon = BADGE_ICON[badge.severity]
   return (
-    <div
+    <span
       className={cn(
         'graph-problems graph-problems-pill',
         `graph-problems-${badge.severity.toLowerCase()}`,
@@ -28,7 +31,7 @@ function ProblemBadge({ problems }: { problems: Problem[] }) {
     >
       <Icon size={13} aria-hidden="true" />
       <span>{badge.label}</span>
-    </div>
+    </span>
   )
 }
 
@@ -36,30 +39,46 @@ function StageNode({
   stage,
   index,
   problems,
+  selected,
+  onSelect,
 }: {
   stage: StageDefinition
   index: number
   problems: Problem[]
+  selected?: boolean
+  /** Al editar, la caja es un botón que elige la fase. */
+  onSelect?: () => void
 }) {
   const Icon = TYPE_ICON[stage.type] ?? Workflow
   const detail = stageDetail(stage)
   const hints = stageHints(stage)
-  return (
-    <div className="graph-box">
-      <div className="graph-title">
+  const inner = (
+    <>
+      <span className="graph-title">
         <Icon size={16} aria-hidden="true" />
         <span className="graph-name" title={stage.name ?? stage.id}>
           <span className="graph-index">{index + 1}.</span> {stage.name ?? stage.id}
         </span>
         <span className="tag">{stage.type}</span>
-      </div>
+      </span>
       {(detail || hints.length > 0) && (
-        <div className="graph-detail" title={[detail, ...hints].filter(Boolean).join(' · ')}>
+        <span className="graph-detail" title={[detail, ...hints].filter(Boolean).join(' · ')}>
           {[detail, ...hints].filter(Boolean).join(' · ')}
-        </div>
+        </span>
       )}
       <ProblemBadge problems={problems} />
-    </div>
+    </>
+  )
+  if (!onSelect) return <div className="graph-box">{inner}</div>
+  return (
+    <button
+      type="button"
+      className="graph-box graph-button"
+      aria-pressed={selected}
+      onClick={onSelect}
+    >
+      {inner}
+    </button>
   )
 }
 
@@ -91,10 +110,17 @@ export default function DefinitionGraph({
   definition,
   problems = [],
   source = '',
+  selection = null,
+  onSelect,
+  onConnect,
 }: {
   definition: WorkflowModel
   problems?: Problem[]
   source?: string
+  /** Al editar (W8-B): lo elegido, cómo se elige y qué pasa al unir dos fases arrastrando. */
+  selection?: GraphSelection
+  onSelect?: (selection: GraphSelection) => void
+  onConnect?: (from: string, to: string) => void
 }) {
   const missing = useMemo(() => missingDependencies(definition.stages), [definition])
   const stages = useMemo(
@@ -105,6 +131,8 @@ export default function DefinitionGraph({
     [definition, missing],
   )
   const byStage = useMemo(() => problemsByStage(source, problems), [source, problems])
+  const selected = selection && 'stage' in selection ? selection.stage : null
+  const edge = selection && 'from' in selection ? selection : null
   const content = useMemo<GraphContent>(() => {
     const byId = new Map(definition.stages.map((s, i) => [s.id, { stage: s, index: i }]))
     const cycles = cycleEdges(definition.stages)
@@ -113,7 +141,13 @@ export default function DefinitionGraph({
         const found = byId.get(id)
         if (!found) return <GhostNode id={id} from={missing.get(id) ?? []} />
         return (
-          <StageNode stage={found.stage} index={found.index} problems={byStage.get(id) ?? []} />
+          <StageNode
+            stage={found.stage}
+            index={found.index}
+            problems={byStage.get(id) ?? []}
+            selected={selected === id}
+            onSelect={onSelect && (() => onSelect({ stage: id }))}
+          />
         )
       },
       child: (stageId, childId) => {
@@ -145,22 +179,37 @@ export default function DefinitionGraph({
         return cn(
           `graph-type-${byId.get(id)?.stage.type ?? 'unknown'}`,
           badge?.severity === 'ERROR' && 'graph-has-errors',
+          selected === id && 'graph-selected',
         )
       },
       edgeClass: (from, to) =>
-        missing.has(from)
-          ? 'graph-edge-missing'
-          : cycles.has(`${from}->${to}`)
-            ? 'graph-edge-cycle'
-            : undefined,
+        cn(
+          missing.has(from) && 'graph-edge-missing',
+          cycles.has(`${from}->${to}`) && 'graph-edge-cycle',
+          edge?.from === from && edge.to === to && 'graph-edge-selected',
+        ) || undefined,
+      connectable: (id) => byId.has(id),
     }
-  }, [definition, missing, byStage])
+  }, [definition, missing, byStage, selected, edge, onSelect])
+  const editing = useMemo<GraphEditing | undefined>(
+    () =>
+      onSelect && onConnect
+        ? {
+            onConnect,
+            onEdgeSelect: (from, to) => onSelect({ from, to }),
+            onPaneClick: () => onSelect(null),
+          }
+        : undefined,
+    [onSelect, onConnect],
+  )
 
   return (
     <WorkflowGraph
       stages={stages}
       content={content}
       label={`Grafo de ${definition.name ?? definition.key}`}
+      interactive={editing != null}
+      editing={editing}
     />
   )
 }

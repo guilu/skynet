@@ -11,12 +11,15 @@ import { ProblemList } from './ProblemList'
 import { problemSummary } from './problems'
 import { useDebounced } from './useDebounced'
 import { useTouchOnly } from '../../useTouchOnly'
+import { useMediaQuery } from '../../useMediaQuery'
+import { stageLine } from './definitionEdits'
 import PlainYamlEditor from './PlainYamlEditor'
 import type { YamlEditorHandle } from './YamlEditor'
 
 const YamlEditor = lazy(() => import('./YamlEditor'))
 // React Flow y dagre van en su propio trozo: solo se descargan al abrir el grafo.
 const DefinitionGraph = lazy(() => import('../graph/DefinitionGraph'))
+const GraphEditor = lazy(() => import('./GraphEditor').then((m) => ({ default: m.GraphEditor })))
 
 const VIEWS = [
   { id: 'yaml', label: 'YAML', icon: Code },
@@ -41,7 +44,9 @@ interface Props {
 /**
  * El YAML en el editor, con sus problemas y lo que define. Mientras se escribe, el control plane lo
  * valida (con los mismos mensajes que al guardar) y los problemas se marcan en su línea. La
- * pestaña «Grafo» (`?view=graph`) dibuja las fases de lo último que se pudo leer.
+ * pestaña «Grafo» (`?view=graph`) dibuja las fases de lo último que se pudo leer y, en un
+ * borrador, se edita (W8-B): cada cambio del grafo es una edición del YAML, que se deshace igual.
+ * En una pantalla estrecha, el grafo es de solo lectura.
  */
 export function DefinitionEditor({
   text,
@@ -68,6 +73,8 @@ export function DefinitionEditor({
     )
   // En un móvil, Monaco no deja seleccionar, copiar ni pegar: se usa un campo de texto normal.
   const touchOnly = useTouchOnly()
+  const narrow = useMediaQuery('(max-width: 720px)')
+  const graphEditable = !readOnly && onChange != null && !narrow
   const schema = useQuery({
     queryKey: ['workflow-schema'],
     queryFn: api.workflowSchema,
@@ -86,9 +93,17 @@ export function DefinitionEditor({
     enabled: !readOnly && !unchanged,
     placeholderData: keepPreviousData,
   })
-  const current = unchanged || readOnly ? saved : live.data
+  // Hasta que llega la primera validación del texto cambiado, la de lo guardado: así el grafo no
+  // desaparece (ni pierde la fase elegida) al empezar a editar.
+  const current = unchanged || readOnly ? saved : (live.data ?? saved)
   const problems = current?.validation.problems ?? []
   const definition = current?.definition ?? null
+  // Desde el grafo, «Editar en YAML» y los problemas llevan a su línea en la pestaña YAML.
+  const revealInYaml = (line: number, column: number) => {
+    selectView('yaml')
+    // El editor estaba oculto: se le da el foco cuando ya se ve.
+    requestAnimationFrame(() => editor.current?.reveal(line, column))
+  }
 
   return (
     <>
@@ -109,8 +124,28 @@ export function DefinitionEditor({
               labelledBy="definition-view-graph"
               className="definition-graph"
             >
-              {definition ? (
+              {definition && graphEditable ? (
                 <Suspense fallback={<LinesSkeleton label="el grafo" lines={6} />}>
+                  <GraphEditor
+                    text={text}
+                    onChange={onChange}
+                    definition={definition}
+                    problems={problems}
+                    source={current?.text ?? text}
+                    reveal={revealInYaml}
+                    lineOf={(id, field) => stageLine(text, id, field)}
+                    undo={touchOnly ? undefined : () => editor.current?.undo?.()}
+                    redo={touchOnly ? undefined : () => editor.current?.redo?.()}
+                  />
+                </Suspense>
+              ) : definition ? (
+                <Suspense fallback={<LinesSkeleton label="el grafo" lines={6} />}>
+                  {!readOnly && onChange && narrow && (
+                    <p className="muted small">
+                      En una pantalla estrecha el grafo es de solo lectura: edita en la pestaña
+                      YAML.
+                    </p>
+                  )}
                   <DefinitionGraph
                     definition={definition}
                     problems={problems}

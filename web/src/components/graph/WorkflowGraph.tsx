@@ -30,16 +30,37 @@ export interface GraphContent {
   dimmedFrom?: (id: string) => boolean
   /** Clase de la flecha de `from` a `to`, p. ej. si forma un ciclo. */
   edgeClass?: (from: string, to: string) => string | undefined
+  /** Al editar, si se puede unir esa fase con otra arrastrando (no en una fase fantasma). */
+  connectable?: (id: string) => boolean
 }
 
-type BoxData = { content: ReactNode; handles: boolean }
+/** Lo que se puede hacer en el grafo al editarlo (W8-B). */
+export interface GraphEditing {
+  /** Se ha arrastrado una flecha de `from` a `to`: `to` pasa a depender de `from`. */
+  onConnect: (from: string, to: string) => void
+  /** Se ha elegido la flecha de `from` a `to`. */
+  onEdgeSelect: (from: string, to: string) => void
+  /** Un clic en el fondo: no queda nada elegido. */
+  onPaneClick: () => void
+}
+
+type BoxData = { content: ReactNode; handles: boolean; connectable: boolean }
 
 function StageBox({ data }: NodeProps<Node<BoxData>>) {
   return (
     <>
-      {data.handles && <Handle type="target" position={Position.Left} isConnectable={false} />}
+      {data.handles && (
+        <Handle type="target" position={Position.Left} isConnectable={data.connectable} />
+      )}
       {data.content}
-      {data.handles && <Handle type="source" position={Position.Right} isConnectable={false} />}
+      {data.handles && (
+        <Handle
+          type="source"
+          position={Position.Right}
+          isConnectable={data.connectable}
+          title={data.connectable ? 'Arrastra hasta otra fase para que dependa de esta' : undefined}
+        />
+      )}
     </>
   )
 }
@@ -94,8 +115,9 @@ function FollowFocus({ container }: { container: React.RefObject<HTMLDivElement 
 }
 
 /**
- * Las fases como un grafo de izquierda a derecha (React Flow), de solo lectura: zoom, ajustar a
- * pantalla y, si es grande, minimapa. Una fase `parallel` es una caja con sus hijos dentro. Qué se
+ * Las fases como un grafo de izquierda a derecha (React Flow): zoom, ajustar a pantalla y, si es
+ * grande, minimapa. De solo lectura salvo con `editing` (W8-B): unir fases arrastrando y elegir
+ * flechas. Una fase `parallel` es una caja con sus hijos dentro. Qué se
  * ve en cada caja lo decide quien lo usa: la definición del workflow o una ejecución.
  */
 export default function WorkflowGraph({
@@ -103,12 +125,15 @@ export default function WorkflowGraph({
   content,
   label,
   interactive = false,
+  editing,
 }: {
   stages: GraphStage[]
   content: GraphContent
   label: string
   /** Si las cajas llevan botones: React Flow no les deja recibir el ratón si no se le dice. */
   interactive?: boolean
+  /** Unir fases arrastrando y elegir flechas; sin él, el grafo es de solo lectura. */
+  editing?: GraphEditing
 }) {
   const layout = useMemo(() => layoutStages(stages), [stages])
   const nodes = useMemo(() => {
@@ -127,13 +152,14 @@ export default function WorkflowGraph({
     }))
     for (const box of layout.stages) {
       const group = box.children.length > 0
+      const connectable = editing != null && content.connectable?.(box.id) !== false
       all.push({
         id: box.id,
         type: 'box',
         position: { x: box.x, y: box.y },
         width: box.width,
         height: box.height,
-        data: { content: content.stage(box.id), handles: true },
+        data: { content: content.stage(box.id), handles: true, connectable },
         // Los puntos de las flechas, dados: si React Flow tuviera que medirlos, los perdería cada
         // vez que la ejecución trae nodos nuevos (con la misma medida no vuelve a medir).
         handles: [
@@ -142,7 +168,7 @@ export default function WorkflowGraph({
         ],
         className: cn('graph-node', group && 'graph-group', content.stageClass?.(box.id)),
         draggable: false,
-        connectable: false,
+        connectable,
         style: interactive ? { pointerEvents: 'all' } : undefined,
       })
       for (const child of box.children)
@@ -154,7 +180,11 @@ export default function WorkflowGraph({
           position: { x: child.x, y: child.y },
           width: child.width,
           height: child.height,
-          data: { content: content.child?.(box.id, child.id) ?? child.id, handles: false },
+          data: {
+            content: content.child?.(box.id, child.id) ?? child.id,
+            handles: false,
+            connectable: false,
+          },
           className: cn('graph-node graph-child', content.childClass?.(box.id, child.id)),
           draggable: false,
           connectable: false,
@@ -162,7 +192,7 @@ export default function WorkflowGraph({
         })
     }
     return all
-  }, [layout, content, interactive])
+  }, [layout, content, interactive, editing])
   const edges = useMemo<Edge[]>(
     () =>
       layout.edges.map((e) => ({
@@ -187,12 +217,15 @@ export default function WorkflowGraph({
   return (
     <div
       ref={container}
-      className="workflow-graph"
+      className={cn('workflow-graph', editing && 'workflow-graph-editing')}
       style={{ height }}
       role="group"
       aria-label={label}
     >
       <ReactFlow
+        // Al editar, cuando se añade o quita una fase el lienzo se vuelve a montar, y se ajusta a
+        // pantalla, para que la nueva se vea.
+        key={editing ? layout.stages.map((b) => b.id).join(' ') : undefined}
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
@@ -201,7 +234,11 @@ export default function WorkflowGraph({
         minZoom={0.25}
         maxZoom={1.5}
         nodesDraggable={false}
-        nodesConnectable={false}
+        nodesConnectable={editing != null}
+        onConnect={(c) => c.source && c.target && editing?.onConnect(c.source, c.target)}
+        isValidConnection={(c) => c.source !== c.target}
+        onEdgeClick={editing && ((_, edge) => editing.onEdgeSelect(edge.source, edge.target))}
+        onPaneClick={editing?.onPaneClick}
         nodesFocusable={false}
         edgesFocusable={false}
         elementsSelectable={false}

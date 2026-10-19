@@ -8,6 +8,9 @@ import {
   dependentsOf,
   EditError,
   keepUntouchedLines,
+  readAgentNames,
+  readChildIds,
+  readStage,
   readStages,
   removeChild,
   removeDependency,
@@ -15,8 +18,11 @@ import {
   renameStage,
   setChildField,
   setDependencyOptional,
+  setNamedChecks,
+  setRetryAttempts,
   setStageField,
   STAGE_TYPES,
+  stageLine,
 } from './definitionEdits'
 import { TEMPLATES } from './templates'
 
@@ -279,5 +285,53 @@ describe('hijos de una parallel', () => {
     expect(() => setChildField(withChild, 'parallel', 'nada', 'prompt', 'x')).toThrow(
       /no tiene ningún hijo/,
     )
+  })
+})
+
+describe('para el panel de propiedades', () => {
+  it('lee una fase, los agentes y los hijos tal como están en el texto', () => {
+    expect(readStage(BASE, 'tests')).toMatchObject({
+      type: 'command',
+      dependsOn: ['review', 'fix?'],
+      workspaceFrom: 'review',
+    })
+    expect(readStage(BASE, 'nada')).toBeNull()
+    expect(readStage('stages: [', 'a')).toBeNull()
+    expect(readAgentNames(BASE)).toEqual(['dev', 'revisor'])
+    const parallel = addChild(addStage(BASE, 'parallel').text, 'parallel', 'dev').text
+    expect(readChildIds(parallel, 'parallel')).toEqual(['dev'])
+  })
+
+  it('cambia los intentos de retry sin tocar lo demás de retry', () => {
+    const added = setRetryAttempts(BASE, 'implement', 3)
+    expect(added).toContain('    retry: {maxAttempts: 3}\n')
+    const withOn = added.replace('{maxAttempts: 3}', '{maxAttempts: 3, on: [lost]}')
+    expect(stageOf(setRetryAttempts(withOn, 'implement', 2), 'implement').retry).toEqual({
+      maxAttempts: 2,
+      on: ['lost'],
+    })
+    expect(stageOf(setRetryAttempts(withOn, 'implement', null), 'implement').retry).toBeUndefined()
+  })
+
+  it('marca las comprobaciones con nombre y conserva las de comando', () => {
+    const text = setStageField(BASE, 'implement', 'phase', 'implement').replace(
+      '    phase: implement\n',
+      '    checks: [commit, {command: npm run lint}]\n',
+    )
+    expect(
+      stageOf(setNamedChecks(text, 'implement', ['tests', 'commit']), 'implement').checks,
+    ).toEqual(['tests', 'commit', { command: 'npm run lint' }])
+    expect(stageOf(setNamedChecks(text, 'implement', []), 'implement').checks).toEqual([
+      { command: 'npm run lint' },
+    ])
+    expect(stageOf(setNamedChecks(BASE, 'fix', []), 'fix').checks).toBeUndefined()
+    expect(setNamedChecks(BASE, 'fix', ['diff'])).toContain('    checks: [diff]\n')
+  })
+
+  it('dice la línea de una fase y de su campo', () => {
+    expect(stageLine(BASE, 'review')).toEqual({ line: 14, column: 5 })
+    expect(stageLine(BASE, 'review', 'dependsOn')).toEqual({ line: 17, column: 5 })
+    expect(stageLine(BASE, 'review', 'nada')).toEqual({ line: 14, column: 5 })
+    expect(stageLine(BASE, 'nada')).toBeNull()
   })
 })

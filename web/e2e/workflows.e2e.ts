@@ -183,3 +183,98 @@ stages:
   await expectAccessible(page, 'grafo con problemas')
   await graph.screenshot({ path: `${process.env.E2E_OUT ?? 'build'}/w8a-problemas.png` })
 })
+
+test('editar un borrador desde el grafo: añadir una fase, unirla, completar su panel y guardar', async ({
+  page,
+}) => {
+  const key = `e2e-grafo-${Date.now().toString(36)}`
+  await page.goto('/workflows/new')
+  await login(page)
+  await page.getByLabel('Archivo YAML del workflow').setInputFiles({
+    name: `${key}.yaml`,
+    mimeType: 'text/yaml',
+    buffer: Buffer.from(yaml(key)),
+  })
+  await expect(problemsCard(page).getByText('Sin problemas')).toBeVisible()
+  await page.getByRole('button', { name: 'Crear borrador' }).click()
+  await page.waitForURL(`**/workflows/${key}`)
+  await page.getByRole('tab', { name: 'Grafo' }).click()
+  const graph = page.getByRole('group', { name: 'Grafo de Revisión E2E' })
+  const box = (id: string) => graph.locator(`.react-flow__node[data-id="${id}"]`)
+
+  await test.step('añadir una fase command detrás de fix y completar su panel', async () => {
+    await box('fix').getByRole('button').click()
+    await expect(page.getByRole('heading', { name: 'Fase fix' })).toBeVisible()
+    await page.getByLabel('Añadir fase').selectOption('command')
+    const panel = page.getByRole('region', { name: 'Fase command' })
+    await expect(panel).toBeVisible()
+    await expect(box('command')).toContainText('1 error')
+    await panel.getByLabel('Comando').fill('./gradlew test')
+    await panel.getByLabel('Comando').press('Enter')
+    await expect(box('command')).toContainText('./gradlew test')
+    await expect(box('command').locator('.graph-problems')).toHaveCount(0)
+  })
+
+  await test.step('unir review con command arrastrando y elegir qué worktree continúa', async () => {
+    await box('review')
+      .locator('.react-flow__handle.source')
+      .dragTo(box('command').locator('.react-flow__handle.target'))
+    await expect(graph.locator('.graph-edge')).toHaveCount(3)
+    // Depende de dos fases con worktree: hay que decir cuál continúa.
+    await expect(box('command')).toContainText('1 error')
+    const panel = page.getByRole('region', { name: 'Fase command' })
+    await expect(
+      panel.getByRole('button', { name: 'Quitar la dependencia de review' }),
+    ).toBeVisible()
+    await panel.getByLabel('Continúa el worktree de').selectOption('fix')
+    await expect(box('command').locator('.graph-problems')).toHaveCount(0)
+  })
+
+  await test.step('deshacer y rehacer el último cambio', async () => {
+    const panel = page.getByRole('region', { name: 'Fase command' })
+    await page.getByRole('button', { name: 'Deshacer' }).click()
+    await expect(panel.getByLabel('Continúa el worktree de')).toHaveValue('')
+    await page.getByRole('button', { name: 'Rehacer' }).click()
+    await expect(panel.getByLabel('Continúa el worktree de')).toHaveValue('fix')
+  })
+
+  await test.step('una flecha se elige y se hace opcional', async () => {
+    // La flecha de review a command: se elige con un clic al principio de su trazo (más allá
+    // pasa por detrás de fix).
+    const path = graph.locator('.react-flow__edge[data-id="review->command"] path').first()
+    const middle = await path.evaluate((element) => {
+      const p = element as unknown as {
+        getTotalLength: () => number
+        getPointAtLength: (at: number) => { x: number; y: number }
+        getScreenCTM: () => { a: number; b: number; c: number; d: number; e: number; f: number }
+      }
+      const point = p.getPointAtLength(p.getTotalLength() * 0.1)
+      const m = p.getScreenCTM()!
+      return { x: point.x * m.a + point.y * m.c + m.e, y: point.x * m.b + point.y * m.d + m.f }
+    })
+    await page.mouse.click(middle.x, middle.y)
+    const edge = page.getByRole('region', { name: /depende de/ })
+    await expect(edge).toBeVisible()
+    await edge.getByRole('checkbox').check()
+    await expect(graph.locator('.graph-edge-optional')).toHaveCount(1)
+  })
+
+  await expectAccessible(page, 'grafo editable')
+  await graph.screenshot({ path: `${process.env.E2E_OUT ?? 'build'}/w8b-editor.png` })
+  await page.screenshot({
+    path: `${process.env.E2E_OUT ?? 'build'}/w8b-pagina.png`,
+    fullPage: true,
+  })
+
+  await test.step('guardar: el YAML queda con la fase nueva', async () => {
+    await page.getByRole('button', { name: 'Guardar' }).click()
+    await expect(page.getByText(/Guardado el/)).toBeVisible()
+    await page.reload()
+    const summary = page.getByRole('region', { name: 'Qué define' })
+    const stages = summary.getByRole('list').first().getByRole('listitem')
+    await expect(stages).toHaveCount(3)
+    await expect(stages.nth(2)).toContainText('Ejecuta ./gradlew test')
+    await expect(stages.nth(2)).toContainText('Depende de fix, review (opcional)')
+    await expect(stages.nth(2)).toContainText('continúa el de fix')
+  })
+})

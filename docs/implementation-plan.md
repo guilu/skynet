@@ -546,9 +546,16 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito W8 (editor visual de workflows), aprobado el 2026-10-19:** W8-A motor de edición y problemas en el grafo, W8-B edición visual de fases, W8-C agentes, workflow nuevo y aceptación. Plan en `plans/siguiente-hito-w8.md` (espacio del proyecto).
 
+**Implementado (W8-B), edición visual de fases:**
+
+- La pestaña **Grafo** de un borrador se edita (`GraphEditor`): paleta con los seis tipos, unir fases arrastrando (con el ciclo rechazado y su camino), elegir una flecha para hacerla opcional o quitarla, y borrar una fase con confirmación. Cada cambio pasa por `definitionEdits.ts` y entra en Monaco como una edición aparte: Deshacer / Rehacer (y Ctrl+Z) valen igual para el grafo y el YAML. Al añadir o quitar fases se vuelve a ajustar a pantalla.
+- Panel de propiedades de fase (`StagePanel`), leído del texto (no espera a la validación): `id` (renombrar con sus referencias), `name`, agente y prompt, `command`, `action` / `risk` / `revise`, condición, macrofase, `workspace` y `workspaceFrom` con solo valores válidos, intentos de `retry`, `timeout`, comprobaciones con nombre, hijos de `parallel` y dependencias. Los problemas de cada campo salen debajo (`aria-invalid`) y los de la fase llevan a su línea; «Editar en YAML» para lo poco común.
+- Ruta de teclado para todo; por debajo de 720 px, solo lectura. El grafo ya no desaparece al empezar a editar: hasta la primera validación del texto cambiado se usa la de lo guardado.
+- vitest del panel y del editor del grafo (añadir, renombrar, ciclo rechazado, dependencias, borrar, problemas por campo) y de las lecturas nuevas del motor; E2E `workflows.e2e.ts`: añadir una fase, unirla arrastrando, completar su panel, deshacer y rehacer, flecha opcional, axe y guardar.
+
 **Implementado (W8-A), motor de edición y problemas en el grafo:**
 
-- `definitionEdits.ts` (librería `yaml`): añadir, borrar y renombrar fases, unir y quitar dependencias, opcional sí o no, campos de fase e hijos de `parallel`, editando el documento: se conservan los comentarios, el orden y el estilo de cada lista, y las líneas que no cambian salen tal cual. Renombrar actualiza `dependsOn`, `workspaceFrom`, `revise`, las condiciones y `{{stages.…}}`; unir rechaza un ciclo con su camino. Aún no lo usa la web: lo usará el grafo editable de W8-B.
+- `definitionEdits.ts` (librería `yaml`): añadir, borrar y renombrar fases, unir y quitar dependencias, opcional sí o no, campos de fase e hijos de `parallel`, editando el documento: se conservan los comentarios, el orden y el estilo de cada lista, y las líneas que no cambian salen tal cual. Renombrar actualiza `dependsOn`, `workspaceFrom`, `revise`, las condiciones y `{{stages.…}}`; unir rechaza un ciclo con su camino.
 - Grafo de la definición: cada fase lleva una insignia con sus problemas (icono y texto, por la ruta `stages.<id>` del problema); una dependencia que no existe sale como fase fantasma discontinua con su flecha en rojo; las flechas de un ciclo van en rojo.
 - vitest del motor y de la asignación de problemas; E2E `workflows.e2e.ts` con un grafo roto, con axe.
 - Arreglo del motor de ejecución: `JobQueue.retryLater` fallaba en PostgreSQL (al parámetro de la hora le faltaba el `CAST` a `timestamptz`) y una evaluación que tenía que esperar dejaba la ejecución parada hasta que vencía el alquiler del trabajo. Lo cubre un test nuevo en `WorkflowEngineIT`.
