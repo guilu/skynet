@@ -5229,6 +5229,175 @@
     stroke-dasharray: 6 5;
   }
 
+  /* ---------- Grafo editable (W8-B) ---------- */
+  .graph-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .graph-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .graph-palette {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    font-weight: 800;
+  }
+
+  .graph-message {
+    margin: 0;
+    color: var(--bad-ink);
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  .graph-message:empty {
+    display: none;
+  }
+
+  .graph-editor-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    gap: 16px;
+    align-items: start;
+  }
+
+  @media (max-width: 1100px) {
+    .graph-editor-body {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .graph-editor-canvas {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .stage-panel {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .stage-panel h2 {
+    margin: 0;
+    font-size: 1.0625rem;
+  }
+
+  .stage-panel h3 {
+    margin: 0 0 6px;
+    font-size: 0.9375rem;
+  }
+
+  .stage-panel .form {
+    max-width: none;
+  }
+
+  .stage-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .stage-panel textarea {
+    resize: vertical;
+  }
+
+  .stage-panel-list {
+    display: grid;
+    gap: 6px;
+    margin: 0 0 8px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .stage-panel-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .stage-panel-list li code {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .stage-panel-list label.checkbox,
+  .stage-checks label.checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  .stage-panel-add {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .stage-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin: 0;
+    padding: 8px 12px 10px;
+    border: 2px solid var(--border);
+    border-radius: var(--r-md);
+  }
+
+  .stage-checks legend {
+    padding: 0 6px;
+    font-size: 0.875rem;
+    font-weight: 800;
+  }
+
+  .field-error {
+    color: var(--bad-ink);
+    font-size: 0.8125rem;
+    font-weight: 700;
+  }
+
+  .graph-selected {
+    outline: 3px solid var(--primary);
+    outline-offset: 3px;
+  }
+
+  .graph-edge-selected {
+    --xy-edge-stroke: var(--primary);
+    --xy-edge-stroke-width: 3;
+  }
+
+  .workflow-graph-editing .react-flow__edge {
+    cursor: pointer;
+  }
+
+  /* Al editar, el punto de la derecha se arrastra hasta otra fase para unirlas. */
+  .workflow-graph-editing .react-flow__handle.connectable {
+    width: 12px;
+    height: 12px;
+    background: var(--surface);
+    border: 2px solid var(--primary);
+    opacity: 1;
+    pointer-events: all;
+    cursor: crosshair;
+  }
+
   /* Un carril por macrofase: una banda detrás de sus fases, con su nombre arriba. */
   .graph-lane {
     display: flex;

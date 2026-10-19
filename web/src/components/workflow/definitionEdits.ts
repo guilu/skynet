@@ -590,3 +590,116 @@ export function setChildField(
   setValue(child, field, value)
   return render(text, doc)
 }
+
+// ---- Para el panel de propiedades (W8-B) --------------------------------------------------------
+
+/** Lo que dice el texto de una fase, tal cual (sin validar), o null si no está o no se lee. */
+export function readStage(text: string, id: string): Record<string, unknown> | null {
+  try {
+    const stage = stageMaps(parse(text)).find((s) => idOf(s) === id)
+    return stage ? (stage.toJSON() as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
+}
+
+/** Los nombres de los agentes del texto, en su orden. */
+export function readAgentNames(text: string): string[] {
+  try {
+    const agents = parse(text).get('agents', true)
+    if (!isMap(agents)) return []
+    return agents.items
+      .map((pair) => (isScalar(pair.key) ? pair.key.value : pair.key))
+      .filter((name): name is string => typeof name === 'string')
+  } catch {
+    return []
+  }
+}
+
+/** Los ids de los hijos de una fase `parallel` (el suyo o el de su agente). */
+export function readChildIds(text: string, id: string): string[] {
+  try {
+    const stage = stageMaps(parse(text)).find((s) => idOf(s) === id)
+    return stage
+      ? childrenOf(stage)
+          .map(childIdOf)
+          .filter((c): c is string => c != null)
+      : []
+  } catch {
+    return []
+  }
+}
+
+/** Los intentos de `retry` (`maxAttempts`); null quita `retry` entero. Lo demás de `retry` se queda. */
+export function setRetryAttempts(text: string, id: string, attempts: number | null): string {
+  const doc = parse(text)
+  const stage = findStage(doc, id)
+  if (attempts == null) {
+    stage.delete('retry')
+    return render(text, doc)
+  }
+  const retry = stage.get('retry', true)
+  if (isMap(retry)) setValue(retry, 'maxAttempts', attempts)
+  else {
+    const map = doc.createNode({ maxAttempts: attempts }) as YAMLMap
+    map.flow = true
+    stage.set('retry', map)
+  }
+  return render(text, doc)
+}
+
+/** Las comprobaciones del catálogo que tienen nombre; los `{command: …}` no se tocan. */
+export const NAMED_CHECKS = ['tests', 'diff', 'commit', 'scope'] as const
+
+/**
+ * Deja en `checks` esas comprobaciones con nombre, en el orden del catálogo, y conserva las de
+ * `{command: …}` detrás. Sin ninguna, quita la clave.
+ */
+export function setNamedChecks(text: string, id: string, names: string[]): string {
+  const doc = parse(text)
+  const stage = findStage(doc, id)
+  const current = stage.get('checks', true)
+  const commands = isSeq(current) ? current.items.filter((item) => isMap(item)) : []
+  const named = NAMED_CHECKS.filter((n) => names.includes(n))
+  if (named.length === 0 && commands.length === 0) {
+    stage.delete('checks')
+    return render(text, doc)
+  }
+  if (isSeq(current)) {
+    current.items = [
+      ...named.map(
+        (n) => current.items.find((item) => isScalar(item) && item.value === n) ?? new Scalar(n),
+      ),
+      ...commands,
+    ]
+  } else {
+    const seq = doc.createNode(named) as YAMLSeq
+    seq.flow = true
+    stage.set('checks', seq)
+  }
+  return render(text, doc)
+}
+
+/**
+ * Dónde está en el texto una fase o uno de sus campos (línea y columna desde 1), para saltar a él
+ * en la pestaña YAML. Sin el campo, o si la fase no lo tiene, la línea de la fase.
+ */
+export function stageLine(
+  text: string,
+  id: string,
+  field?: string,
+): { line: number; column: number } | null {
+  try {
+    const stage = stageMaps(parse(text)).find((s) => idOf(s) === id)
+    if (!stage) return null
+    const pair = field ? stage.items.find((p) => isScalar(p.key) && p.key.value === field) : null
+    const key = pair && isScalar(pair.key) ? pair.key : null
+    const offset = key?.range?.[0] ?? stage.range?.[0]
+    if (offset == null) return null
+    const before = text.slice(0, offset)
+    const line = before.split('\n').length
+    return { line, column: offset - before.lastIndexOf('\n') }
+  } catch {
+    return null
+  }
+}

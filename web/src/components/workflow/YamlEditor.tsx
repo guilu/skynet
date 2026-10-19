@@ -34,6 +34,9 @@ const SEVERITY: Record<Problem['severity'], monaco.MarkerSeverity> = {
 export interface YamlEditorHandle {
   /** Lleva el cursor a esa posición y le da el foco. */
   reveal: (line: number, column: number) => void
+  /** Deshace o rehace el último cambio, del YAML o del grafo (W8-B). Sin ellos, no se puede. */
+  undo?: () => void
+  redo?: () => void
 }
 
 interface Props {
@@ -107,9 +110,12 @@ const YamlEditor = forwardRef<YamlEditorHandle, Props>(function YamlEditor(
     if (!model) return
     if (model.getValue() === value) emitted.current.clear()
     else if (!emitted.current.has(value)) {
-      // Un texto de fuera (importar un archivo): se aplica como una edición, que se puede deshacer.
+      // Un texto de fuera (importar un archivo, un cambio desde el grafo): se aplica como una
+      // edición aparte, que se deshace de una vez.
       emitted.current.clear()
+      model.pushStackElement()
       model.pushEditOperations([], [{ range: model.getFullModelRange(), text: value }], () => null)
+      model.pushStackElement()
     }
   }, [value])
 
@@ -149,6 +155,8 @@ const YamlEditor = forwardRef<YamlEditorHandle, Props>(function YamlEditor(
       instance.setPosition({ lineNumber: line, column })
       instance.focus()
     },
+    undo: () => void editor.current?.getModel()?.undo(),
+    redo: () => void editor.current?.getModel()?.redo(),
   }))
 
   return <div ref={container} className="monaco-view yaml-editor" style={{ height }} />
