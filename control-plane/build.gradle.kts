@@ -41,10 +41,14 @@ dependencies {
 val fakeClaude = project(":tools:fake-claude")
 // Contratos JSON entre el backend y la web (ContractIT y web/src/contracts.test.ts).
 val contracts = rootProject.layout.projectDirectory.dir("fixtures/contracts")
+// Workflows iniciales que publica scripts/seed-workflows.sh (SeedWorkflowsTest).
+val seedWorkflows = rootProject.layout.projectDirectory.dir("workflows")
 tasks.test {
     dependsOn(fakeClaude.tasks.named("installDist"))
     inputs.dir(contracts).withPropertyName("contracts").optional()
     systemProperty("skynet.contracts", contracts.asFile.path)
+    inputs.dir(seedWorkflows).withPropertyName("seedWorkflows")
+    systemProperty("skynet.seedWorkflows", seedWorkflows.asFile.path)
     System.getProperty("skynet.contracts.update")?.let { systemProperty("skynet.contracts.update", it) }
     systemProperty(
         "skynet.fakeClaude",

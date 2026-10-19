@@ -1,0 +1,95 @@
+id: especificar-planificar-implementar
+name: Especificar, planificar e implementar
+description: Antigravity especifica en openspec/proposal.md, Claude Code planifica, tú apruebas el plan, Claude Code implementa con los tests en verde y Codex revisa; si encuentra algo que bloquee, Claude Code lo corrige.
+
+agents:
+  analista:
+    provider: antigravity
+    model: ${AGY_FUERTE}
+    permissionMode: acceptEdits
+    prompt: |
+      Especifica {{workItem.key}}: {{workItem.title}}.
+
+      {{workItem.description}}
+
+      Lee lo que haga falta del repositorio y escribe la propuesta en openspec/proposal.md: qué cambia, por qué, qué queda fuera y cómo se comprueba.
+      Devuelve un resumen de una o dos frases y los riesgos que veas.
+  arquitecto:
+    model: ${CLAUDE_FUERTE}
+    permissionMode: acceptEdits
+    prompt: Planifica {{workItem.key}} a partir de openspec/proposal.md.
+  desarrollador:
+    model: ${CLAUDE_GENERAL}
+    permissionMode: acceptEdits
+    prompt: Implementa {{workItem.key}} siguiendo openspec/tasks.md y confirma los cambios con un commit.
+  revisor:
+    provider: codex
+    model: ${CODEX_FUERTE}
+    permissionMode: plan
+    prompt: |
+      Revisa la implementación de {{workItem.key}} ({{workItem.title}}) contra openspec/proposal.md y openspec/tasks.md: que haga lo que dice, con tests, y sin romper nada.
+      Pon hasBlockingFindings a true solo si hay algo que impida fusionarlo, y explica cada hallazgo con su fichero y línea.
+    output:
+      type: object
+      properties:
+        hasBlockingFindings: {type: boolean}
+        summary: {type: string}
+
+stages:
+  - id: spec
+    type: agent
+    agent: analista
+    phase: spec
+    outputSchema:
+      type: object
+      properties:
+        summary: {type: string}
+        risks: {type: array}
+    artifacts: [openspec/proposal.md]
+  - id: plan
+    type: agent
+    agent: arquitecto
+    dependsOn: [spec]
+    phase: plan
+    prompt: |
+      Planifica {{workItem.key}} a partir de su propuesta (openspec/proposal.md):
+      {{stages.spec.output.summary}}
+
+      Riesgos: {{stages.spec.output.risks}}
+
+      Escribe las tareas en openspec/tasks.md, en orden y cada una con cómo se comprueba, y confirma la propuesta y el plan con un commit. No implementes nada todavía.
+    outputSchema:
+      type: object
+      properties:
+        summary: {type: string}
+    artifacts: [openspec/tasks.md]
+  - id: aprobar-plan
+    type: human-approval
+    dependsOn: [plan]
+    action: "Aprobar el plan de {{workItem.key}} (openspec/tasks.md): {{stages.plan.output.summary}}"
+    risk: medium
+    revise: plan
+  - id: implementar
+    type: agent
+    agent: desarrollador
+    dependsOn: [aprobar-plan]
+    phase: implement
+    checks: [tests, diff]
+  - id: revisar
+    type: agent
+    agent: revisor
+    dependsOn: [implementar]
+    phase: review
+  - id: corregir
+    type: agent
+    agent: desarrollador
+    dependsOn: [revisar]
+    phase: implement
+    condition: revisar.hasBlockingFindings
+    prompt: |
+      Corrige lo que bloquea en {{workItem.key}} según la revisión de Codex:
+
+      {{stages.revisar.output.summary}}
+
+      Vuelve a pasar los tests y confirma los cambios con un commit.
+    checks: [tests, diff]

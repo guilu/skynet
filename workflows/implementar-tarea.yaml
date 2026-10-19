@@ -1,0 +1,96 @@
+id: implementar-tarea
+name: Implementar una tarea
+description: Antigravity explora el repositorio, Claude Code implementa con los tests en verde, Codex y Antigravity revisan a la vez y Claude Code corrige solo si alguno encuentra algo que bloquee.
+
+agents:
+  explorador:
+    provider: antigravity
+    model: ${AGY_RAPIDO}
+    permissionMode: plan
+    prompt: |
+      Antes de implementar {{workItem.key}} ({{workItem.title}}), explora el repositorio y prepara el terreno.
+
+      {{workItem.description}}
+
+      No cambies nada. Devuelve un resumen de cómo está organizado lo que toca la tarea, los ficheros que habrá que cambiar y los riesgos.
+  desarrollador:
+    model: ${CLAUDE_GENERAL}
+    permissionMode: acceptEdits
+    prompt: |
+      Implementa {{workItem.key}}: {{workItem.title}}.
+
+      {{workItem.description}}
+
+      Sigue las convenciones del repositorio, añade o ajusta los tests y confirma los cambios con un commit.
+  calidad:
+    provider: codex
+    model: ${CODEX_FUERTE}
+    permissionMode: plan
+    prompt: |
+      Revisa el cambio de {{workItem.key}} ({{workItem.title}}) respecto a la rama por defecto: corrección, tests y casos límite.
+      Pon hasBlockingFindings a true solo si hay algo que impida fusionarlo, y explica cada hallazgo con su fichero y línea.
+    output:
+      type: object
+      properties:
+        hasBlockingFindings: {type: boolean}
+        summary: {type: string}
+  seguridad:
+    provider: antigravity
+    model: ${AGY_FUERTE}
+    permissionMode: plan
+    prompt: |
+      Revisa la seguridad del cambio de {{workItem.key}} ({{workItem.title}}) respecto a la rama por defecto: entradas, secretos, permisos y dependencias.
+      Pon hasBlockingFindings a true solo si hay algo que impida fusionarlo, y explica cada hallazgo con su fichero y línea.
+    output:
+      type: object
+      properties:
+        hasBlockingFindings: {type: boolean}
+        summary: {type: string}
+
+stages:
+  - id: explorar
+    type: agent
+    agent: explorador
+    phase: spec
+    outputSchema:
+      type: object
+      properties:
+        summary: {type: string}
+        files: {type: array}
+        risks: {type: array}
+  - id: implementar
+    type: agent
+    agent: desarrollador
+    dependsOn: [explorar]
+    phase: implement
+    prompt: |
+      Implementa {{workItem.key}}: {{workItem.title}}.
+
+      {{workItem.description}}
+
+      Lo que encontró la exploración: {{stages.explorar.output.summary}}
+      Ficheros que seguramente toca: {{stages.explorar.output.files}}
+      Riesgos: {{stages.explorar.output.risks}}
+
+      Sigue las convenciones del repositorio, añade o ajusta los tests y confirma los cambios con un commit.
+    checks: [tests, diff]
+  - id: revisar
+    type: parallel
+    dependsOn: [implementar]
+    phase: review
+    children:
+      - agent: calidad
+      - agent: seguridad
+  - id: corregir
+    type: agent
+    agent: desarrollador
+    dependsOn: [revisar]
+    phase: implement
+    condition: revisar.hasBlockingFindings
+    prompt: |
+      Corrige lo que bloquea en {{workItem.key}} según la revisión, vuelve a pasar los tests y confirma los cambios.
+
+      Calidad (Codex): {{stages.revisar.calidad.output.summary}}
+
+      Seguridad (Antigravity): {{stages.revisar.seguridad.output.summary}}
+    checks: [tests, diff]
