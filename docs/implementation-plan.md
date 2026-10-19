@@ -542,6 +542,8 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Hito AR (agentes reales), aprobado el 2026-10-18:** AR-A ver si un runner usa un CLI simulado, AR-B Antigravity CLI sustituye a Gemini CLI, AR-C los tres reales de punta a punta.
 
+**Implementado (AR-C), los tres reales de punta a punta:** README («Runner con CLIs reales» y cómo volver a los simuladores), `deploy/runner/runner.env.example` con los tres ejecutables y guía [`tests/probar-ar-c.md`](tests/probar-ar-c.md) para probar Claude Code, Codex y Antigravity reales en omarchy. La E2E con los tres simuladores llegó en AR-B. **Hito AR terminado.**
+
 **Implementado (AR-B), Antigravity sustituye a Gemini CLI:**
 
 - `runner/provider/antigravity`: `AntigravityProvider` lanza `agy --output-format stream-json --print=<prompt>` con `--mode plan` o `accept-edits` (o `--dangerously-skip-permissions`), `--model`, `--json-schema <fichero>` y `--conversation <id>` para continuar; bifurcar falla. `AntigravityEventParser` y `AntigravityCostMeter` salen de las sesiones grabadas con agy 1.4.2 (`fixtures/agy`): pasos `step_update`, acciones denegadas sin terminal como `PERMISSION_DENIED`, salida estructurada validada por agy y coste solo con `model`. Formato en [`antigravity-stream-json.md`](antigravity-stream-json.md).

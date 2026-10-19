@@ -176,6 +176,16 @@ SKYNET_RUNNER_REGISTRATION_TOKEN=<el mismo secreto que el control plane> \
 runner/build/install/skynet-runner/bin/skynet-runner
 ```
 
+#### Runner con CLIs reales
+
+El runner usa los CLIs reales siempre que no apuntes `SKYNET_CLAUDE_BIN`, `SKYNET_CODEX_BIN` o `SKYNET_AGY_BIN` a los simuladores. Para tener los tres:
+
+1. Instala cada CLI y comprueba, con el usuario del runner, que responde y tiene sesión: `claude --version` (y `/login` dentro de `claude`), `codex --version` (y `codex login`), `agy --version` (y entra con tu cuenta de Google al abrir `agy`).
+2. Quita de tu entorno o de `runner.env` los `SKYNET_*_BIN` que apunten a `fake-claude`, `fake-codex` o `fake-agy`, y las variables `FAKE_*`. Si los CLIs no están en el `PATH` del servicio, añade sus directorios o apunta cada `SKYNET_*_BIN` a su ejecutable real.
+3. Reinicia el runner. Al conectarse escribe `proveedores: claude-code 2.1.x, codex 0.1xx, antigravity 1.4.x`, y en **Runners** salen sin la píldora «Simulado». Si uno falta, su `--version` no respondió: pruébalo a mano con el usuario del runner.
+
+Para volver a los simuladores (probar sin gastar cuota), apunta las tres variables a `tools/fake-claude/build/install/fake-claude/bin/fake-claude`, `fake-codex` y `fake-agy` y reinicia: la web vuelve a marcarlos como «Simulado». Qué admite cada CLI y cómo se traducen los permisos: [`docs/providers.md`](docs/providers.md).
+
 #### Instalar el runner como servicio
 
 Para que arranque solo con el equipo, instálalo en `~/.local/share/skynet-runner` con su configuración en `~/.config/skynet-runner/runner.env`. Los ficheros de ejemplo están en `deploy/runner/`.
@@ -191,7 +201,7 @@ chmod 600 ~/.config/skynet-runner/runner.env    # y rellénalo: SKYNET_URL, el s
 ~/.local/share/skynet-runner/skynet-runner.sh  # prueba en primer plano; Ctrl+C cuando se registre
 ```
 
-Un servicio no hereda el `PATH` de tu shell: pon en `runner.env` el directorio de `claude` (`dirname $(command -v claude)`), el de `git` y el de `java` (o `JAVA_HOME`). Después:
+Un servicio no hereda el `PATH` de tu shell: pon en `runner.env` el directorio de cada CLI de agentes (`dirname $(command -v claude)`, y lo mismo con `codex` y `agy`), el de `git` y el de `java` (o `JAVA_HOME`). Después:
 
 - **Linux (systemd, servicio de usuario):**
   ```bash
