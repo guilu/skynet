@@ -28,6 +28,8 @@ export interface GraphContent {
   childClass?: (stageId: string, childId: string) => string | undefined
   /** Si la flecha que sale de esa fase va apagada (una fase omitida). */
   dimmedFrom?: (id: string) => boolean
+  /** Clase de la flecha de `from` a `to`, p. ej. si forma un ciclo. */
+  edgeClass?: (from: string, to: string) => string | undefined
 }
 
 type BoxData = { content: ReactNode; handles: boolean }
@@ -171,6 +173,7 @@ export default function WorkflowGraph({
           'graph-edge',
           e.optional && 'graph-edge-optional',
           content.dimmedFrom?.(e.from) && 'graph-edge-dim',
+          content.edgeClass?.(e.from, e.to),
         ),
         markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
         focusable: false,

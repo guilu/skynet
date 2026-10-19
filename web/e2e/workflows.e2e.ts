@@ -134,3 +134,46 @@ test('la pestaña Grafo dibuja la plantilla «Revisión en paralelo»', async ({
   await expect(page.locator('.monaco-editor').getByText('id: revision-en-paralelo')).toBeVisible()
   await expect(graph).toHaveCount(0)
 })
+
+test('el grafo marca los problemas de cada fase, las dependencias que no existen y los ciclos', async ({
+  page,
+}) => {
+  await page.goto('/workflows/new')
+  await login(page)
+  await page.getByLabel('Archivo YAML del workflow').setInputFiles({
+    name: 'roto.yaml',
+    mimeType: 'text/yaml',
+    buffer: Buffer.from(`id: grafo-roto
+name: Grafo roto
+
+stages:
+  - id: plan
+    type: agent
+    prompt: Planifica
+    dependsOn: [spec]
+  - id: build
+    type: agent
+    prompt: Implementa
+    dependsOn: [plan, review]
+  - id: review
+    type: agent
+    prompt: Revisa
+    dependsOn: [build]
+`),
+  })
+  await expect(problemsCard(page).getByText(/errores/)).toBeVisible()
+  await page.getByRole('tab', { name: 'Grafo' }).click()
+
+  const graph = page.getByRole('group', { name: 'Grafo de Grafo roto' })
+  // `spec` no existe: sale como fase fantasma, con su flecha discontinua en rojo.
+  const ghost = graph.locator('.graph-ghost')
+  await expect(ghost).toContainText('spec')
+  await expect(ghost).toContainText('No existe')
+  await expect(graph.locator('.graph-edge-missing')).toHaveCount(1)
+  // build → review → build es un ciclo: sus dos flechas en rojo.
+  await expect(graph.locator('.graph-edge-cycle')).toHaveCount(2)
+  await expect(graph.locator('.react-flow__node[data-id="plan"]')).toContainText('1 error')
+  await expect(graph.locator('.react-flow__node[data-id="plan"]')).toHaveClass(/graph-has-errors/)
+  await expectAccessible(page, 'grafo con problemas')
+  await graph.screenshot({ path: `${process.env.E2E_OUT ?? 'build'}/w8a-problemas.png` })
+})

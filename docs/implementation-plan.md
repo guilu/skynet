@@ -544,6 +544,14 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Implementado (AR-C), los tres reales de punta a punta:** README («Runner con CLIs reales» y cómo volver a los simuladores), `deploy/runner/runner.env.example` con los tres ejecutables y guía [`tests/probar-ar-c.md`](tests/probar-ar-c.md) para probar Claude Code, Codex y Antigravity reales en omarchy. La E2E con los tres simuladores llegó en AR-B. **Hito AR terminado.**
 
+**Hito W8 (editor visual de workflows), aprobado el 2026-10-19:** W8-A motor de edición y problemas en el grafo, W8-B edición visual de fases, W8-C agentes, workflow nuevo y aceptación. Plan en `plans/siguiente-hito-w8.md` (espacio del proyecto).
+
+**Implementado (W8-A), motor de edición y problemas en el grafo:**
+
+- `definitionEdits.ts` (librería `yaml`): añadir, borrar y renombrar fases, unir y quitar dependencias, opcional sí o no, campos de fase e hijos de `parallel`, editando el documento: se conservan los comentarios, el orden y el estilo de cada lista, y las líneas que no cambian salen tal cual. Renombrar actualiza `dependsOn`, `workspaceFrom`, `revise`, las condiciones y `{{stages.…}}`; unir rechaza un ciclo con su camino. Aún no lo usa la web: lo usará el grafo editable de W8-B.
+- Grafo de la definición: cada fase lleva una insignia con sus problemas (icono y texto, por la ruta `stages.<id>` del problema); una dependencia que no existe sale como fase fantasma discontinua con su flecha en rojo; las flechas de un ciclo van en rojo.
+- vitest del motor y de la asignación de problemas; E2E `workflows.e2e.ts` con un grafo roto, con axe.
+
 **Implementado (AR-B), Antigravity sustituye a Gemini CLI:**
 
 - `runner/provider/antigravity`: `AntigravityProvider` lanza `agy --output-format stream-json --print=<prompt>` con `--mode plan` o `accept-edits` (o `--dangerously-skip-permissions`), `--model`, `--json-schema <fichero>` y `--conversation <id>` para continuar; bifurcar falla. `AntigravityEventParser` y `AntigravityCostMeter` salen de las sesiones grabadas con agy 1.4.2 (`fixtures/agy`): pasos `step_update`, acciones denegadas sin terminal como `PERMISSION_DENIED`, salida estructurada validada por agy y coste solo con `model`. Formato en [`antigravity-stream-json.md`](antigravity-stream-json.md).

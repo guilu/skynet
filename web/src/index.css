@@ -5167,6 +5167,68 @@
     opacity: 0.35;
   }
 
+  /* W8: los problemas de cada fase, con icono y texto. */
+  .graph-problems {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    font-size: 0.75rem;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .graph-problems svg {
+    flex: none;
+  }
+
+  /* En una fase, sobre su borde de arriba: no le quita sitio a lo que dice la caja. */
+  .graph-problems-pill {
+    position: absolute;
+    top: -12px;
+    right: 10px;
+    padding: 0 7px;
+    line-height: 18px;
+    background: var(--surface);
+    border: 2px solid currentColor;
+    border-radius: 999px;
+  }
+
+  .graph-problems-error {
+    color: var(--bad-ink);
+  }
+
+  .graph-problems-unsupported,
+  .graph-problems-warning {
+    color: var(--warn-ink);
+  }
+
+  .graph-has-errors {
+    border-color: var(--bad-shade);
+  }
+
+  /* Una dependencia que no existe: una fase fantasma, discontinua. */
+  .graph-ghost {
+    background: var(--bad-soft);
+    border-color: var(--bad-shade);
+    border-style: dashed;
+    box-shadow: none;
+  }
+
+  .graph-ghost .graph-title svg {
+    color: var(--bad-ink);
+  }
+
+  /* La hoja de React Flow va fuera de las capas y gana a esta: se cambia su variable. */
+  .graph-edge-missing,
+  .graph-edge-cycle {
+    --xy-edge-stroke: var(--bad-shade);
+  }
+
+  .graph-edge-missing .react-flow__edge-path {
+    stroke-dasharray: 6 5;
+  }
+
   /* Un carril por macrofase: una banda detrás de sus fases, con su nombre arriba. */
   .graph-lane {
     display: flex;
