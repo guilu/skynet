@@ -187,9 +187,11 @@ class WorkflowDefinitionsIT extends IntegrationTest {
   void aVersionPublishedBeforeTheRuleIsStillReadAndRun() {
     JsonNode v1 = post("/api/workflows", Map.of("sourceYaml", ARRAYS));
     String id = v1.path("id").asString();
-    publish(id, v1.path("revision").asLong());
-    // Como una versión publicada antes de RV-A: sin `items`.
-    jdbc.sql("UPDATE workflow_definition SET source_yaml = ? WHERE id = ?::uuid")
+    // Como una versión publicada antes de RV-A, sin `items` (una publicada ya no se modifica).
+    jdbc.sql(
+            "UPDATE workflow_definition SET source_yaml = ?, status = 'PUBLISHED',"
+                + " published_at = now(), updated_at = now(), revision = revision + 1"
+                + " WHERE id = ?::uuid")
         .params(ARRAYS.replace(", items: {type: string}", ""), id)
         .update();
 
