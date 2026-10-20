@@ -28,6 +28,7 @@ mkdir -p "$T/bin"
 cat > "$T/bin/docker" <<'EOF'
 #!/usr/bin/env bash
 echo "$*" >> "$RESET_TEST_DIR/docker.log"
+echo "COMPOSE_FILE=${COMPOSE_FILE:-} COMPOSE_ENV_FILES=${COMPOSE_ENV_FILES:-}" >> "$RESET_TEST_DIR/docker-env.log"
 case "$*" in
   *"ps --services"*) printf 'postgres\n' ;;
   *"exec -T postgres"*) cat "$RESET_TEST_DIR/repos.txt" ;;
@@ -71,7 +72,7 @@ snapshot() {
 
 # Prepara un caso: repositorios en $T/case, rutas en repos.txt y el home del runner.
 setup() { # nombre-de-cada-tipo...
-  rm -rf "$T/case" "$T/home" "$T/art" "$T/docker.log" "$T/systemctl.log"
+  rm -rf "$T/case" "$T/home" "$T/art" "$T/docker.log" "$T/docker-env.log" "$T/systemctl.log"
   mkdir -p "$T/case" "$T/home/workspaces" "$T/home/logs" "$T/home/artifacts" "$T/art"
   : > "$T/repos.txt"
   echo journal > "$T/home/journal.db"
@@ -97,10 +98,27 @@ run_reset() { # [stdin] -- argumentos
     SKYNET_DB_USER=skynet "$SCRIPT" --artifacts "$T/art" --no-seed "$@" > "$T/out.txt" 2>&1
 }
 
+run_reset_custom_compose() {
+  env PATH="$T/bin:$PATH" RESET_TEST_DIR="$T" SKYNET_RUNNER_HOME="$T/home" \
+    SKYNET_DB_USER=skynet \
+    COMPOSE_FILE="deploy/docker-compose.yml:$T/private.override.yml" \
+    COMPOSE_ENV_FILES="$T/protected.env" \
+    "$SCRIPT" --artifacts "$T/art" --no-seed --dry-run > "$T/out.txt" 2>&1
+}
+
 destructive_docker_calls() { grep -E '(^| )(down|up|rm)( |$)' "$T/docker.log" 2>/dev/null || true; }
 branches() { git -C "$1" for-each-ref --format='%(refname)' refs/heads refs/skynet refs/notes | sort | tr '\n' ' '; }
 
 # --- Casos --------------------------------------------------------------------------------------
+
+echo "· Respeta la configuración estándar de Docker Compose del entorno"
+setup valido
+run_reset_custom_compose
+check "compose personalizado: no fuerza el fichero base con -f" \
+  bash -c "! grep -q -- '-f deploy/docker-compose.yml' '$T/docker.log'"
+check "compose personalizado: conserva COMPOSE_FILE y COMPOSE_ENV_FILES" \
+  grep -qx "COMPOSE_FILE=deploy/docker-compose.yml:$T/private.override.yml COMPOSE_ENV_FILES=$T/protected.env" \
+    "$T/docker-env.log"
 
 dry_run_case() { # descripción tipos...
   local what=$1; shift

@@ -6,6 +6,8 @@
 #   scripts/reset-local.sh --runner              # además, lo del runner en este equipo (abajo)
 #   scripts/reset-local.sh --dry-run [--runner]  # solo dice lo que borraría
 #
+# Respeta COMPOSE_FILE y COMPOSE_ENV_FILES para instalaciones con overrides o ficheros de entorno.
+#
 # Opciones:
 #   --runner [dir]  También el runner: su journal, logs, artefactos y worktrees (en dir, por defecto
 #                   SKYNET_RUNNER_HOME o ~/.skynet-runner), y en cada repositorio registrado los
@@ -24,7 +26,11 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-COMPOSE=(docker compose -f deploy/docker-compose.yml)
+if [[ -n ${COMPOSE_FILE:-} ]]; then
+  COMPOSE=(docker compose)
+else
+  COMPOSE=(docker compose -f deploy/docker-compose.yml)
+fi
 PROJECT=skynet
 
 runner=false runner_home=${SKYNET_RUNNER_HOME:-$HOME/.skynet-runner}
