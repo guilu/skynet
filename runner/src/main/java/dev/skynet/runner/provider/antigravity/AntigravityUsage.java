@@ -23,6 +23,18 @@ record AntigravityUsage(long input, long output, long thinking, long cacheRead) 
         usage.path("cache_read_tokens").asLong(0));
   }
 
+  /** La suma con {@code other}, que puede ser {@code null}. */
+  AntigravityUsage plus(AntigravityUsage other) {
+    if (other == null) {
+      return this;
+    }
+    return new AntigravityUsage(
+        input + other.input,
+        output + other.output,
+        thinking + other.thinking,
+        cacheRead + other.cacheRead);
+  }
+
   /** Salida que se cobra: la respuesta y el razonamiento. */
   long billedOutput() {
     return output + thinking;

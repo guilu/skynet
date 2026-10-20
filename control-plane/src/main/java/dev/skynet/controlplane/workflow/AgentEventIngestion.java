@@ -224,6 +224,9 @@ public class AgentEventIngestion {
             errors(p));
       }
       case PROCESS_EXITED -> {
+        // Sin resultado (cancelado a medias) se queda al menos con lo que estimó el runner.
+        agent.recordEstimatedCost(
+            decimal(p.get("estimatedCostUsd")), previousCumulativeCost(agent));
         AgentObservableStatus outcome =
             agent.exited(
                 integer(p.get("exitCode")),

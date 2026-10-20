@@ -385,6 +385,19 @@ public class AgentRun {
   }
 
   /**
+   * Coste que estimó el runner con la salida del CLI, para un agente que terminó sin que el
+   * proveedor declarase el suyo: uno cancelado (el fail-fast de una {@code parallel}), agotado o
+   * caído antes del resultado. Un coste ya declarado no se toca.
+   */
+  void recordEstimatedCost(BigDecimal estimated, BigDecimal previousCumulative) {
+    if (costUsd != null || estimated == null || estimated.signum() <= 0) {
+      return;
+    }
+    costUsd = estimated;
+    costUsdCumulative = previousCumulative == null ? estimated : previousCumulative.add(estimated);
+  }
+
+  /**
    * Estado final al terminar el proceso: cancelado si lo pedimos nosotros; completado solo con un
    * resultado sin error y código de salida 0; fallido en cualquier otro caso.
    */

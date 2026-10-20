@@ -861,6 +861,8 @@ class DefinitionParserTest {
                 type: string
               risks:
                 type: array
+                items:
+                  type: string
         - id: externo
           type: agent
           prompt: Usa el schema del repositorio
@@ -1337,6 +1339,46 @@ class DefinitionParserTest {
             "`agents.dev.limits.maxTurns` debe estar entre 1 y 1000",
             "`agents.dev.limits.maxBudgetUsd` debe ser un número");
     assertThat(messages(parsed, Severity.WARNING)).containsExactly("`Read` está repetida");
+  }
+
+  @Test
+  void anArrayWithoutItemsIsWarnedBecauseAntigravityRejectsIt() {
+    Parsed parsed =
+        parse(
+            """
+            id: arrays
+            name: Arrays
+            version: 1
+            agents:
+              seguridad:
+                prompt: Revisa
+                output:
+                  type: object
+                  properties:
+                    findings: {type: array}
+                    nested:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          tags: {type: array}
+                    ok: {type: array, items: {type: string}}
+            stages:
+              - id: a
+                type: agent
+                agent: seguridad
+            """);
+    assertThat(parsed.validation().publishable()).isTrue();
+    assertThat(parsed.validation().problems())
+        .extracting(Problem::path)
+        .containsExactly(
+            "agents.seguridad.output.properties.findings.items",
+            "agents.seguridad.output.properties.nested.items.properties.tags.items");
+    assertThat(messages(parsed, Severity.WARNING))
+        .first()
+        .isEqualTo(
+            "Un `type: array` de `output` necesita `items` con el tipo de sus elementos, p. ej."
+                + " `items: {type: string}`: sin él Antigravity rechaza el schema");
   }
 
   @Test

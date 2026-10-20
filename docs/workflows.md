@@ -175,7 +175,7 @@ stages:
       type: object
       properties:
         summary: {type: string}
-        risks: {type: array}
+        risks: {type: array, items: {type: string}}
   - id: plan
     type: agent
     dependsOn: [spec]

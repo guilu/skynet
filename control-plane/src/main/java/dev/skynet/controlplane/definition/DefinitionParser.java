@@ -575,12 +575,53 @@ public final class DefinitionParser {
           valid = false;
         }
       }
+      warnArraysWithoutItems(mapping, path, key);
       if (!valid) {
         return null;
       }
       @SuppressWarnings("unchecked")
       Map<String, Object> plain = (Map<String, Object>) plain(entry.value());
       return plain;
+    }
+
+    /**
+     * Avisa de cada {@code type: array} del schema sin {@code items}: Gemini (Antigravity) rechaza
+     * la petición entera si falta («properties[x].items: missing field»). Es un aviso y no un error
+     * para que las versiones ya publicadas se sigan leyendo.
+     */
+    private void warnArraysWithoutItems(Node node, String path, String key) {
+      switch (node) {
+        case MappingNode mapping -> {
+          Node type = null;
+          boolean items = false;
+          for (NodeTuple tuple : mapping.getValue()) {
+            if (!(tuple.getKeyNode() instanceof ScalarNode name)) {
+              continue;
+            }
+            switch (name.getValue()) {
+              case "type" -> type = tuple.getValueNode();
+              case "items" -> items = true;
+              default -> {}
+            }
+            warnArraysWithoutItems(tuple.getValueNode(), path + "." + name.getValue(), key);
+          }
+          if (type instanceof ScalarNode kind && kind.getValue().equals("array") && !items) {
+            warning(
+                type,
+                path + ".items",
+                "Un `type: array` de `"
+                    + key
+                    + "` necesita `items` con el tipo de sus elementos, p. ej. `items: {type:"
+                    + " string}`: sin él Antigravity rechaza el schema");
+          }
+        }
+        case SequenceNode sequence -> {
+          for (int i = 0; i < sequence.getValue().size(); i++) {
+            warnArraysWithoutItems(sequence.getValue().get(i), path + "[" + i + "]", key);
+          }
+        }
+        default -> {}
+      }
     }
 
     /** Un nodo del YAML como mapas, listas, textos, números, booleanos y {@code null}. */

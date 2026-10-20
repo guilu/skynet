@@ -256,6 +256,8 @@ class WorkflowEngineIT extends IntegrationTest {
                 type: string
               risks:
                 type: array
+                items:
+                  type: string
         - id: externo
           type: agent
           prompt: Externo

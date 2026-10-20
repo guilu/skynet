@@ -56,8 +56,8 @@ stages:
       type: object
       properties:
         summary: {type: string}
-        files: {type: array}
-        risks: {type: array}
+        files: {type: array, items: {type: string}}
+        risks: {type: array, items: {type: string}}
   - id: implementar
     type: agent
     agent: desarrollador

@@ -20,7 +20,14 @@ agents:
       type: object
       properties:
         summary: {type: string}
-        findings: {type: array}
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              file: {type: string}
+              severity: {type: string}
+              recommendation: {type: string}
   tests:
     provider: codex
     model: ${CODEX_FUERTE}
@@ -33,11 +40,20 @@ agents:
       type: object
       properties:
         summary: {type: string}
-        findings: {type: array}
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              file: {type: string}
+              severity: {type: string}
+              recommendation: {type: string}
   seguridad:
     provider: antigravity
     model: ${AGY_FUERTE}
-    permissionMode: plan
+    # Antigravity sin terminal deniega en `plan` hasta `find` o `ls`: con `dontAsk` se salta los
+    # permisos, siempre dentro de su sandbox (ver docs/antigravity-stream-json.md).
+    permissionMode: dontAsk
     prompt: |
       Revisa la seguridad del repositorio para {{workItem.key}} ({{workItem.title}}). Foco: {{inputs.foco}}.
       Busca entradas sin validar, secretos en el código, permisos, inyecciones y dependencias vulnerables. No cambies nada.
@@ -46,7 +62,14 @@ agents:
       type: object
       properties:
         summary: {type: string}
-        findings: {type: array}
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              file: {type: string}
+              severity: {type: string}
+              recommendation: {type: string}
   redactor:
     model: ${CLAUDE_GENERAL}
     permissionMode: plan

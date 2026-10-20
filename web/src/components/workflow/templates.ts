@@ -146,7 +146,7 @@ stages:
       type: object
       properties:
         summary: {type: string}
-        risks: {type: array}
+        risks: {type: array, items: {type: string}}
     artifacts: [openspec/proposal.md]
   - id: plan
     type: agent

@@ -9,11 +9,12 @@ Cómo ejecuta Skynet los agentes con `provider: antigravity` (AR-B, [#119](https
 | Arranque | `agy --output-format stream-json --mode M [--model X] [--json-schema <fichero>] --print=<prompt>` |
 | Mensaje (reanudar) | `agy … --conversation <id> --print=<prompt>` |
 | Bifurcar | no se puede: el control plane responde 409 («Antigravity CLI no permite bifurcar una sesión») |
-| `permissionMode: plan` | `--mode plan` |
-| `permissionMode: bypassPermissions` | `--dangerously-skip-permissions` |
+| `permissionMode: plan` | `--mode plan`: modo restrictivo, sin ediciones; sin terminal deniega también los comandos de lectura (`find`, `ls`), así que un revisor no puede explorar el repositorio |
+| `permissionMode: dontAsk` | `--dangerously-skip-permissions --sandbox`: no pregunta nada, pero siempre dentro del sandbox de agy (RV-A, [#134](https://github.com/guilu/skynet/issues/134)). Es el modo para un agente headless que tiene que leer el código con comandos, como el revisor de seguridad de `revisar-codigo` |
+| `permissionMode: bypassPermissions` | igual que `dontAsk` (la política del control plane ya no lo admite): **nunca** se genera `--dangerously-skip-permissions` sin `--sandbox` |
 | Cualquier otro modo | `--mode accept-edits`: aprueba las ediciones; lo que pediría permiso (los comandos) se deniega solo, porque sin terminal no puede preguntar |
 | `model` | `--model`; sin él, el predeterminado de la cuenta (agy no dice cuál: no hay coste estimado) |
-| `output` | `--json-schema` con el schema en un fichero junto a los logs de la invocación; agy lo valida y lo devuelve en `result.structured_output` |
+| `output` | `--json-schema` con el schema en un fichero junto a los logs de la invocación; agy lo valida y lo devuelve en `result.structured_output`. Cada `type: array` necesita `items` (`findings: {type: array, items: {type: object, …}}`): sin él Gemini rechaza la petición con `INVALID_ARGUMENT … properties[findings].items: missing field`. Al validar un workflow sale un aviso |
 
 El id de la conversación lo asigna agy al arrancar (`init.conversation_id`) y el runner lo guarda como sesión del agente, como con Codex. El prompt va con `=` para que uno que empiece por `-` no se lea como una opción.
 
@@ -28,7 +29,8 @@ Una línea JSON por evento, con `event`. agy cuenta la conversación en pasos (`
 | agy | Evento normalizado |
 |---|---|
 | `init {conversation_id, init.permission_mode}` | `SESSION_STARTED {provider: antigravity, sessionId, model, permissionMode}` (`model` solo si se pidió) |
-| `step_update` `agent_response` con `text_delta` | se juntan los fragmentos hasta que el paso llega a `DONE`: `MESSAGE_RECEIVED {messageId: step_N, text}` |
+| `step_update` `agent_response` con `text_delta` | se juntan los fragmentos hasta que el paso llega a `DONE`: `MESSAGE_RECEIVED {messageId: step_N, text, usage}` |
+| `usage` de un `agent_response` en `DONE` | viaja en el siguiente `MESSAGE_RECEIVED` o `TOOL_STARTED` (`usage {input, output, cacheRead}`), para que el control plane sume los tokens en vivo. Un agente cancelado (el fail-fast de una `parallel`) no llega al `result`, pero conserva sus tokens; su coste es el que estimó el runner (`estimatedCostUsd` del fin del proceso) |
 | `step_update` `tool` en `ACTIVE` | `TOOL_STARTED {toolUseId: step_N, name, input}`; `run_command` sale como `Bash` con `input.command` |
 | `step_update` `tool` en `DONE` | `TOOL_COMPLETED {toolUseId, name, isError: false, output}` |
 | `write_to_file`, `replace_file_content`, `multi_replace_file_content`, `sed_file` en `DONE` | además, `FILE_CHANGED {path: TargetFile, change: created \| modified}` |

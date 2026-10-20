@@ -78,14 +78,21 @@ public class AntigravityProvider implements AgentProvider {
   }
 
   /**
-   * Modo según el modo de permisos de la política: {@code plan} no edita, {@code bypassPermissions}
-   * lo aprueba todo y los demás aprueban las ediciones (sin terminal, lo que pediría confirmación,
-   * como los comandos, se deniega y sale en {@code denied_actions}).
+   * Modo según el modo de permisos de la política. Sin terminal agy no puede pedir permiso, así que
+   * lo que lo pediría se deniega solo:
+   *
+   * <ul>
+   *   <li>{@code plan}: no edita ni ejecuta comandos (modo restrictivo);
+   *   <li>{@code dontAsk} y {@code bypassPermissions}: lo aprueba todo, pero siempre dentro del
+   *       sandbox de agy, para que un revisor pueda leer el código con comandos ({@code find},
+   *       {@code ls}) sin tocar nada fuera del worktree. Nunca se genera bypass sin sandbox;
+   *   <li>los demás aprueban las ediciones y deniegan los comandos.
+   * </ul>
    */
   static List<String> mode(String permissionMode) {
     return switch (permissionMode) {
       case "plan" -> List.of("--mode", "plan");
-      case "bypassPermissions" -> List.of("--dangerously-skip-permissions");
+      case "dontAsk", "bypassPermissions" -> List.of("--dangerously-skip-permissions", "--sandbox");
       case null, default -> List.of("--mode", "accept-edits");
     };
   }
