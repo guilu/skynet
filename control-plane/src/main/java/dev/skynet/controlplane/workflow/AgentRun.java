@@ -385,6 +385,16 @@ public class AgentRun {
   }
 
   /**
+   * Suma los tokens que el runner manda con el fin del proceso porque ningún evento los llevó. Con
+   * resultado no hace nada: sus totales ya los incluyen.
+   */
+  void addUnreportedUsage(TokenUsage usage) {
+    if (resultSubtype == null) {
+      addUsage(usage);
+    }
+  }
+
+  /**
    * Coste que estimó el runner con la salida del CLI, para un agente que terminó sin que el
    * proveedor declarase el suyo: uno cancelado (el fail-fast de una {@code parallel}), agotado o
    * caído antes del resultado. Un coste ya declarado no se toca.

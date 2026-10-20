@@ -1341,44 +1341,58 @@ class DefinitionParserTest {
     assertThat(messages(parsed, Severity.WARNING)).containsExactly("`Read` está repetida");
   }
 
-  @Test
-  void anArrayWithoutItemsIsWarnedBecauseAntigravityRejectsIt() {
-    Parsed parsed =
-        parse(
-            """
-            id: arrays
-            name: Arrays
-            version: 1
-            agents:
-              seguridad:
-                prompt: Revisa
-                output:
+  static final String ARRAYS =
+      """
+      id: arrays
+      name: Arrays
+      version: 1
+      agents:
+        seguridad:
+          prompt: Revisa
+          output:
+            type: object
+            properties:
+              findings: {type: array}
+              nested:
+                type: array
+                items:
                   type: object
                   properties:
-                    findings: {type: array}
-                    nested:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          tags: {type: array}
-                    ok: {type: array, items: {type: string}}
-            stages:
-              - id: a
-                type: agent
-                agent: seguridad
-            """);
-    assertThat(parsed.validation().publishable()).isTrue();
-    assertThat(parsed.validation().problems())
+                    tags: {type: array}
+              ok: {type: array, items: {type: string}}
+      stages:
+        - id: a
+          type: agent
+          agent: seguridad
+      """;
+
+  static final String ARRAYS_MESSAGE =
+      "Un `type: array` de `output` necesita `items` con el tipo de sus elementos, p. ej."
+          + " `items: {type: string}`: sin él Antigravity rechaza el schema";
+
+  @Test
+  void anArrayWithoutItemsCannotBePublishedBecauseAntigravityRejectsIt() {
+    Parsed parsed = parse(ARRAYS);
+
+    assertThat(parsed.validation().publishable()).isFalse();
+    assertThat(errors(parsed))
         .extracting(Problem::path)
         .containsExactly(
             "agents.seguridad.output.properties.findings.items",
             "agents.seguridad.output.properties.nested.items.properties.tags.items");
-    assertThat(messages(parsed, Severity.WARNING))
-        .first()
-        .isEqualTo(
-            "Un `type: array` de `output` necesita `items` con el tipo de sus elementos, p. ej."
-                + " `items: {type: string}`: sin él Antigravity rechaza el schema");
+    assertThat(messages(parsed, Severity.ERROR)).containsOnly(ARRAYS_MESSAGE);
+  }
+
+  @Test
+  void aPublishedVersionWithAnArrayWithoutItemsIsStillReadWithAWarning() {
+    Parsed parsed = DefinitionParser.parse(ARRAYS, Expectations.published("arrays"));
+
+    assertThat(parsed.validation().publishable()).isTrue();
+    assertThat(parsed.definition()).isNotNull();
+    assertThat(parsed.definition().agent("seguridad").orElseThrow().outputFields())
+        .containsKeys("findings", "nested", "ok");
+    assertThat(messages(parsed, Severity.WARNING)).containsExactly(ARRAYS_MESSAGE, ARRAYS_MESSAGE);
+    assertThat(errors(parsed)).isEmpty();
   }
 
   @Test

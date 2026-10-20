@@ -2,10 +2,11 @@
 
 RV-A ([#134](https://github.com/guilu/skynet/issues/134), parte de [#133](https://github.com/guilu/skynet/issues/133)) hace que `revisar-codigo` termine con los tres CLIs reales:
 
-- **Esquemas:** los tres `findings` de `workflows/revisar-codigo.yaml` llevan `items` (objetos con `file`, `severity` y `recommendation`). Validar un workflow con un `type: array` sin `items` en su `output` o `outputSchema` da un **aviso** (no un error, para que las versiones ya publicadas se sigan leyendo). También se arreglan los `risks` y `files` de `especificar-planificar-implementar`, `implementar-tarea` y la plantilla de la web.
+- **Esquemas:** los tres `findings` de `workflows/revisar-codigo.yaml` llevan `items` (objetos con `file`, `severity` y `recommendation`). Un `type: array` sin `items` en un `output` o `outputSchema` es un **error**: el borrador no se puede publicar. Las versiones ya publicadas sin `items` se siguen leyendo y ejecutando, con un aviso. También se arreglan los `risks` y `files` de `especificar-planificar-implementar`, `implementar-tarea` y la plantilla de la web.
 - **Antigravity sin terminal:** `permissionMode: dontAsk` pasa a `agy --dangerously-skip-permissions --sandbox`. `plan` sigue siendo restrictivo. Nunca se genera bypass sin `--sandbox`, tampoco con `bypassPermissions`.
 - **Revisor de seguridad:** el agente `seguridad` de `revisar-codigo` usa `permissionMode: dontAsk`.
-- **Fail-fast:** un agente cancelado sin `result` conserva sus tokens (Antigravity los manda paso a paso) y su coste es el que estimó el runner (`estimatedCostUsd`).
+- **Fail-fast:** un agente cancelado sin `result` conserva su modelo, sus tokens (Antigravity los manda paso a paso; los de un último paso solo de razonamiento llegan con el fin del proceso), su cuota y, como coste, el que estimó el runner (`estimatedCostUsd`).
+- **Tests web:** Testing Library espera hasta 5 s (`src/test/setup.ts`) y cada test hasta 20 s (`vite.config.ts`): con la máquina cargada, `App.test`, `Workflows.test`, `GraphEditor.test` y otros fallaban por tiempo.
 
 No hay migraciones ni dependencias nuevas.
 
@@ -20,12 +21,13 @@ No hay migraciones ni dependencias nuevas.
 
 Comprueban, entre otras cosas:
 - `AntigravityProviderTest`: `dontAsk` → `--dangerously-skip-permissions --sandbox` exacto, y ningún modo da bypass sin sandbox;
-- `AntigravityEventParserTest`: en `fixtures/agy/06-cancelled` (sin `result`) los tokens de los pasos 1 y 3 viajan con las herramientas siguientes;
-- `DefinitionParserTest`: un array sin `items` (también anidado) da aviso y se puede publicar;
-- `RunnerProtocolIT`: un agente cancelado se queda con sus tokens en vivo y con el coste estimado;
+- `AntigravityEventParserTest`: en `fixtures/agy/06-cancelled` (sin `result`) los tokens de los pasos 1 y 3 viajan con las herramientas siguientes; los de un paso solo de razonamiento quedan para el fin del proceso, una sola vez;
+- `AgentExecutorTest`: un agente de Antigravity cancelado justo después de pensar manda esos tokens en el `usage` del fin del proceso;
+- `DefinitionParserTest` y `WorkflowDefinitionsIT`: un array sin `items` (también anidado) es un error al publicar; una versión publicada sin `items` se lee, se puede lanzar y su versión siguiente sí da el error;
+- `RunnerProtocolIT` y `WorkflowEngineIT`: un agente cancelado por el fail-fast conserva modelo, tokens (en vivo y del fin del proceso), coste estimado y cuota;
 - `SeedWorkflowsTest`: los cinco workflows iniciales se publican sin problemas.
 
-## 2. El aviso en el editor
+## 2. El error en el editor
 
 1. **Workflows → Nuevo**, pega:
 
@@ -47,8 +49,9 @@ Comprueban, entre otras cosas:
        agent: a
    ```
 
-2. Sale un aviso en `agents.a.output.properties.findings.items`: «Un `type: array` de `output` necesita `items` con el tipo de sus elementos, p. ej. `items: {type: string}`: sin él Antigravity rechaza el schema». Se puede publicar igual.
-3. Cambia la línea a `findings: {type: array, items: {type: string}}`: el aviso desaparece. Descarta el borrador.
+2. Sale un error en `agents.a.output.properties.findings.items`: «Un `type: array` de `output` necesita `items` con el tipo de sus elementos, p. ej. `items: {type: string}`: sin él Antigravity rechaza el schema». **Publicar** responde «No se puede publicar un borrador con errores».
+3. Cambia la línea a `findings: {type: array, items: {type: string}}`: el error desaparece. Descarta el borrador.
+4. Si tienes `revisar-codigo` v1 publicada sin `items`, ábrela: se ve y se puede lanzar, con un aviso. **Nueva versión** abre un borrador con el error, que se quita con el paso 1 de la sección 3.
 
 ## 3. Ejecución real completa de `revisar-codigo` (a mano)
 
@@ -74,6 +77,6 @@ Con el runner real (Claude Code, Codex y Antigravity sin «Simulado» en **Runne
 
 ## 4. Fail-fast sin perder datos (opcional, a mano)
 
-1. Lanza `revisar-codigo` otra vez y, cuando `seguridad` lleve un rato trabajando, cancela `tests` desde su panel (o deja que uno falle).
+1. Lanza `revisar-codigo` otra vez y, cuando `seguridad` lleve un rato trabajando,, cancela `tests` desde su panel (o deja que uno falle).
 2. La fase `revisar` se cancela y `seguridad` termina en **Cancelado**.
-3. En el Resumen de `seguridad` siguen sus tokens (entrada, salida, caché) y, si tiene `model`, un coste distinto de cero; en **Uso** cuenta en su proveedor.
+3. En el Resumen de `seguridad` siguen su modelo, sus tokens (entrada, salida, caché) y, si tiene `model`, un coste distinto de cero; en **Uso** cuenta en su proveedor y su cuota.

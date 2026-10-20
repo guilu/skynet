@@ -422,6 +422,11 @@ public final class AgentExecutor implements AutoCloseable {
               + usd(budget));
     }
     payload.put("estimatedCostUsd", cost.estimatedUsd().setScale(6, RoundingMode.HALF_UP));
+    // Tokens que ningún evento llevó (cancelado justo después de pensar): no se pierden.
+    Map<String, Object> unreported = parser.unreportedUsage();
+    if (unreported != null) {
+      payload.put("usage", unreported);
+    }
     if (!cost.unpricedModels().isEmpty()) {
       payload.put("unpricedModels", List.copyOf(cost.unpricedModels()));
     }

@@ -49,7 +49,9 @@ public final class AntigravityEventParser implements EventParser {
   /**
    * Tokens de los pasos del agente que aún no ha llevado ningún evento. Viajan en el siguiente
    * mensaje o herramienta para que el control plane los sume en vivo: si el agente se cancela (el
-   * fail-fast de una {@code parallel}) no llega el {@code result} con los totales.
+   * fail-fast de una {@code parallel}) no llega el {@code result} con los totales. Los de un paso
+   * sin texto (solo razonamiento) tras el que se cancela salen con el fin del proceso ({@link
+   * #unreportedUsage()}).
    */
   private AntigravityUsage pendingUsage;
 
@@ -141,6 +143,15 @@ public final class AntigravityEventParser implements EventParser {
                 .put("model", model)
                 .put("text", message)
                 .put("usage", takeUsage())));
+  }
+
+  /** Con resultado no hay nada pendiente: el {@code result} trae los totales. */
+  @Override
+  public Map<String, Object> unreportedUsage() {
+    if (sawResult) {
+      pendingUsage = null;
+    }
+    return takeUsage();
   }
 
   /** Los tokens pendientes, como {@code usage} de un evento, o {@code null} si no hay. */

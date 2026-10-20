@@ -169,6 +169,27 @@ class AntigravityEventParserTest {
   }
 
   @Test
+  void theTokensOfAThinkingOnlyStepAreReportedWhenNoEventCarriedThem() {
+    AntigravityEventParser parser = new AntigravityEventParser(null, false, ModelPrices.defaults());
+    parser.parse(
+        "{\"event\":\"step_update\",\"step_update\":{\"step_index\":1,\"state\":\"DONE\","
+            + "\"step_type\":\"agent_response\",\"usage\":{\"input_tokens\":900,"
+            + "\"thinking_tokens\":40,\"cache_read_tokens\":100}}}");
+
+    assertThat(parser.unreportedUsage())
+        .isEqualTo(Map.of("input", 900L, "output", 40L, "cacheRead", 100L));
+    // Una sola vez.
+    assertThat(parser.unreportedUsage()).isNull();
+  }
+
+  @Test
+  void withAResultNothingIsLeftUnreported() {
+    Parsed p = parse("01-simple-text", null, false);
+
+    assertThat(p.parser().unreportedUsage()).isNull();
+  }
+
+  @Test
   void aFailedRunIsAnErrorResultAndUnknownLinesAreRaw() {
     AntigravityEventParser parser = new AntigravityEventParser(null, false, ModelPrices.defaults());
 

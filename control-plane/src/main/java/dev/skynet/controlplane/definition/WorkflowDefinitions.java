@@ -394,8 +394,9 @@ public class WorkflowDefinitions {
   private static Parsed parse(DefinitionRow row) {
     return DefinitionParser.parse(
         row.sourceYaml(),
-        new Expectations(
-            row.key(), row.status() == DefinitionStatus.PUBLISHED ? null : row.version()));
+        row.status() == DefinitionStatus.PUBLISHED
+            ? Expectations.published(row.key())
+            : new Expectations(row.key(), row.version()));
   }
 
   private DefinitionDetail detail(DefinitionRow row, Parsed parsed) {
