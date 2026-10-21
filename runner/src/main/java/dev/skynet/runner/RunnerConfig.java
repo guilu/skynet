@@ -1,5 +1,6 @@
 package dev.skynet.runner;
 
+import dev.skynet.runner.verify.DeclaredFiles;
 import java.net.URI;
 import java.net.UnknownHostException;
 import java.nio.file.Path;
@@ -32,6 +33,9 @@ import java.util.stream.Collectors;
  * @param agyExecutable ejecutable de Antigravity CLI ({@code SKYNET_AGY_BIN})
  * @param quotaPoll cada cuánto pregunta su cuota a Codex y Antigravity ({@code SKYNET_QUOTA_POLL}:
  *     {@code 10m} por defecto, {@code 30s}, {@code 1h}…; {@code off} lo apaga), o {@code null}
+ * @param declaredFiles límites de los ficheros declarados en {@code artifacts} que se suben de una
+ *     fase ({@code SKYNET_ARTIFACT_FILE_MAX_MB}, 10 por defecto; {@code
+ *     SKYNET_ARTIFACT_STAGE_MAX_MB}, 50; {@code SKYNET_ARTIFACT_STAGE_MAX_FILES}, 50)
  */
 public record RunnerConfig(
     URI controlPlane,
@@ -49,7 +53,12 @@ public record RunnerConfig(
     Duration logRetention,
     Set<String> providers,
     String agyExecutable,
-    Duration quotaPoll) {
+    Duration quotaPoll,
+    DeclaredFiles.Limits declaredFiles) {
+
+  public RunnerConfig {
+    declaredFiles = declaredFiles == null ? DeclaredFiles.Limits.DEFAULT : declaredFiles;
+  }
 
   public Path journalFile() {
     return home.resolve("journal.db");
@@ -91,7 +100,15 @@ public record RunnerConfig(
         Duration.ofDays(Long.parseLong(env.getOrDefault("SKYNET_LOG_RETENTION_DAYS", "7"))),
         providers(env.get("SKYNET_PROVIDERS")),
         env.getOrDefault("SKYNET_AGY_BIN", "agy"),
-        interval(env.getOrDefault("SKYNET_QUOTA_POLL", "10m")));
+        interval(env.getOrDefault("SKYNET_QUOTA_POLL", "10m")),
+        new DeclaredFiles.Limits(
+            megabytes(env, "SKYNET_ARTIFACT_FILE_MAX_MB", 10),
+            megabytes(env, "SKYNET_ARTIFACT_STAGE_MAX_MB", 50),
+            Integer.parseInt(env.getOrDefault("SKYNET_ARTIFACT_STAGE_MAX_FILES", "50"))));
+  }
+
+  private static long megabytes(Map<String, String> env, String name, long defaultValue) {
+    return Long.parseLong(env.getOrDefault(name, Long.toString(defaultValue))) * 1024 * 1024;
   }
 
   /** {@code 30s}, {@code 10m} o {@code 2h}; {@code off} (o {@code 0}) es {@code null}. */

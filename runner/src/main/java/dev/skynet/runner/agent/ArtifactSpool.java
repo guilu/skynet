@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
@@ -55,7 +56,10 @@ public final class ArtifactSpool {
         metadata);
   }
 
-  /** Encola una copia del fichero {@code source} (recortada a {@link #MAX_BYTES}). */
+  /**
+   * Encola una copia del fichero {@code source} (recortada a {@link #MAX_BYTES}). No sigue enlaces
+   * simbólicos: si {@code source} lo es, falla.
+   */
   public void addFile(
       UUID agentRunId,
       UUID verificationRunId,
@@ -65,7 +69,7 @@ public final class ArtifactSpool {
       Path source,
       Map<String, Object> metadata)
       throws IOException {
-    try (InputStream in = Files.newInputStream(source)) {
+    try (InputStream in = Files.newInputStream(source, LinkOption.NOFOLLOW_LINKS)) {
       add(agentRunId, verificationRunId, type, name, mediaType, in, metadata);
     }
   }

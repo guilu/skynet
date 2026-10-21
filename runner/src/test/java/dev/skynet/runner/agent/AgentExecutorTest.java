@@ -1010,10 +1010,22 @@ class AgentExecutorTest {
                     true)))
         .doesNotContainKeys("error", "exitCode");
     Map<ArtifactType, Journal.PendingArtifact> artifacts = artifactsOf(agent);
-    assertThat(artifacts).containsOnlyKeys(ArtifactType.VERIFICATION_LOG);
+    assertThat(artifacts)
+        .containsOnlyKeys(ArtifactType.VERIFICATION_LOG, ArtifactType.DECLARED_FILE);
     assertThat(artifacts.get(ArtifactType.VERIFICATION_LOG).upload().name())
         .isEqualTo("check-1.log");
     assertThat(artifacts.get(ArtifactType.VERIFICATION_LOG).file()).hasContent("comprobado");
+    // El fichero declarado en `artifacts`, tal como quedó en el worktree.
+    Journal.PendingArtifact declared = artifacts.get(ArtifactType.DECLARED_FILE);
+    assertThat(declared.upload().name()).isEqualTo("calc.py");
+    assertThat(declared.upload().verificationRunId())
+        .isEqualTo(verify.verify().verificationRunId());
+    assertThat(declared.upload().mediaType()).isEqualTo("application/octet-stream");
+    assertThat(declared.upload().metadata())
+        .containsEntry("path", "calc.py")
+        .containsEntry("glob", "calc.py");
+    assertThat(Files.readAllBytes(declared.file()))
+        .isEqualTo(Files.readAllBytes(worktree.resolve("calc.py")));
   }
 
   /** Worktree de una invocación ya terminada. */

@@ -4,14 +4,12 @@ import dev.skynet.protocol.runner.VerificationCheck;
 import dev.skynet.runner.workspace.WorktreeState;
 import java.io.IOException;
 import java.nio.file.FileSystems;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
 /**
  * Las comprobaciones de una fase en su worktree ({@link VerificationCheck}). Cada una se informa
@@ -19,9 +17,6 @@ import java.util.stream.Stream;
  * no existe», «3 tests fallan».
  */
 public final class StageChecks {
-
-  /** Ficheros que se recorren como mucho al buscar los artefactos. */
-  static final int MAX_FILES = 100_000;
 
   /** Ficheros fuera del ámbito que se nombran en el motivo. */
   private static final int MAX_LISTED = 5;
@@ -41,9 +36,15 @@ public final class StageChecks {
     CommandRun run(String command, int index) throws IOException, InterruptedException;
   }
 
+  /** Recibe los ficheros declarados que hay que subir de un check {@code artifacts}. */
+  @FunctionalInterface
+  public interface Declared {
+    void found(DeclaredFiles.Selection selection);
+  }
+
   /**
-   * Ejecuta {@code checks} en orden. Cada resultado lleva {@code name}, {@code target} (el comando
-   * o los globs, si los tiene), {@code passed} y, si no pasa, {@code reason}.
+   * {@link #run(Path, List, String, TestsRun, Commands, DeclaredFiles.Limits, Declared)} sin subir
+   * nada.
    */
   public static List<Map<String, Object>> run(
       Path worktree,
@@ -52,13 +53,38 @@ public final class StageChecks {
       TestsRun tests,
       Commands commands)
       throws IOException, InterruptedException {
+    return run(
+        worktree, checks, baseCommit, tests, commands, DeclaredFiles.Limits.DEFAULT, s -> {});
+  }
+
+  /**
+   * Ejecuta {@code checks} en orden. Cada resultado lleva {@code name}, {@code target} (el comando
+   * o los globs, si los tiene), {@code passed} y, si no pasa, {@code reason}. El de {@code
+   * artifacts} pasa a {@code declared} los ficheros que hay que subir y lleva en {@code omitted}
+   * los que casan pero no se suben, con su motivo.
+   */
+  public static List<Map<String, Object>> run(
+      Path worktree,
+      List<VerificationCheck> checks,
+      String baseCommit,
+      TestsRun tests,
+      Commands commands,
+      DeclaredFiles.Limits limits,
+      Declared declared)
+      throws IOException, InterruptedException {
     WorktreeState state = null;
     List<Map<String, Object>> results = new ArrayList<>();
     int commandIndex = 0;
     for (VerificationCheck check : checks) {
       String reason;
+      List<DeclaredFiles.Omitted> omitted = List.of();
       switch (check.name()) {
-        case VerificationCheck.ARTIFACTS -> reason = artifacts(worktree, check.paths());
+        case VerificationCheck.ARTIFACTS -> {
+          DeclaredFiles.Selection selection = DeclaredFiles.select(worktree, check.paths(), limits);
+          declared.found(selection);
+          omitted = selection.omitted();
+          reason = missing(selection.missing());
+        }
         case VerificationCheck.TESTS -> reason = tests(tests);
         case VerificationCheck.COMMAND ->
             reason = command(check, commands.run(check.command(), commandIndex++));
@@ -78,24 +104,22 @@ public final class StageChecks {
       if (reason != null) {
         result.put("reason", reason);
       }
+      if (!omitted.isEmpty()) {
+        result.put(
+            "omitted",
+            omitted.stream().map(o -> Map.of("path", o.path(), "reason", o.reason())).toList());
+      }
       results.add(result);
     }
     return results;
   }
 
   /** Cada glob tiene que encontrar al menos un fichero; los que no, en el motivo. */
-  static String artifacts(Path worktree, List<String> globs) throws IOException {
-    List<String> files = files(worktree);
-    List<String> missing = new ArrayList<>();
-    for (String glob : globs) {
-      PathMatcher matcher = matcher(glob);
-      if (files.stream().noneMatch(f -> matcher.matches(Path.of(f)))) {
-        missing.add("`" + glob + "`");
-      }
-    }
-    if (missing.isEmpty()) {
+  private static String missing(List<String> globs) {
+    if (globs.isEmpty()) {
       return null;
     }
+    List<String> missing = globs.stream().map(g -> "`" + g + "`").toList();
     return String.join(", ", missing) + (missing.size() == 1 ? " no existe" : " no existen");
   }
 
@@ -168,17 +192,6 @@ public final class StageChecks {
         + " fuera del ámbito permitido: "
         + listed
         + more;
-  }
-
-  /** Ficheros del worktree, relativos y con {@code /}, sin {@code .git}. */
-  private static List<String> files(Path worktree) throws IOException {
-    try (Stream<Path> walk = Files.walk(worktree)) {
-      return walk.filter(Files::isRegularFile)
-          .map(p -> worktree.relativize(p).toString().replace('\\', '/'))
-          .filter(p -> !p.equals(".git") && !p.startsWith(".git/"))
-          .limit(MAX_FILES)
-          .toList();
-    }
   }
 
   private static PathMatcher matcher(String glob) {

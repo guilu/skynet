@@ -209,6 +209,10 @@ stages:
 ```
 
 - `artifacts`: rutas o globs del repositorio (`docs/*.md`, `openspec/**/*.md`). Cada uno tiene que encontrar al menos un fichero; si no, «`docs/spec.md` no existe».
+  - Cuenta un fichero regular o un enlace simbólico a un fichero regular **dentro** del worktree (fuera de `.git`). Un enlace que sale del worktree, una FIFO, un socket o un dispositivo no cuentan.
+  - Cada fichero que casa se guarda además como artefacto `DECLARED_FILE` (#145), con su ruta relativa como nombre y en metadatos `path`, `glob`, `mediaType` y `size`: se abre y se descarga desde la web (`GET /api/artifacts/{id}/download`) aunque se limpie el worktree. Solo lo declarado: el resto de cambios sigue en `GIT_CHANGES` y `DIFF`.
+  - Límites del runner: `SKYNET_ARTIFACT_FILE_MAX_MB` (10) por fichero, `SKYNET_ARTIFACT_STAGE_MAX_MB` (50) y `SKYNET_ARTIFACT_STAGE_MAX_FILES` (50) por fase. Lo que no cabe no se sube (nunca a medias) y el resultado del check lo lista en `omitted` con su motivo; el check pasa igual, porque el fichero existe.
+  - El tipo MIME sale de la extensión, de una lista cerrada (Markdown, texto, CSV, JSON, YAML, XML, PNG, JPEG, GIF, WebP, SVG y PDF; el HTML se trata como texto). Lo de texto se redacta como el resto de artefactos; los binarios no se tocan.
 - `checks`, del catálogo cerrado:
   - `tests`: el comando de validación del repositorio termina con código 0 y sin tests fallidos. Sin comando configurado, no pasa.
   - `diff`: hay cambios respecto al inicio de la fase (confirmados o no).

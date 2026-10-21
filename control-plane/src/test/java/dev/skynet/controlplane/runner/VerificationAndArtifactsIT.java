@@ -238,6 +238,53 @@ class VerificationAndArtifactsIT extends IntegrationTest {
   }
 
   @Test
+  void declaredFilesAreDownloadedWholeAsAttachments() {
+    Runner runner = register("owner");
+    Launched run = launch(null);
+    ack(runner, poll(runner).getFirst());
+
+    byte[] markdown =
+        "# Mapa\n\nTOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789\n"
+            .getBytes(StandardCharsets.UTF_8);
+    String md = declared(runner, run, "docs/skynet/mapa.md", "text/markdown", markdown);
+    byte[] png = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, (byte) 0xff};
+    String image = declared(runner, run, "docs/img/grafo final.png", "image/png", png);
+    String html =
+        declared(
+            runner,
+            run,
+            "informe.html",
+            "text/html",
+            "<script>alert(1)</script>".getBytes(StandardCharsets.UTF_8));
+
+    ResponseEntity<byte[]> doc = download(md);
+    assertThat(doc.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION))
+        .isEqualTo("attachment; filename=\"mapa.md\"; filename*=UTF-8''mapa.md");
+    assertThat(doc.getHeaders().getFirst("X-Content-Type-Options")).isEqualTo("nosniff");
+    assertThat(doc.getHeaders().getContentType().toString()).isEqualTo("text/plain;charset=UTF-8");
+    // El texto se redacta como el resto de artefactos.
+    assertThat(new String(doc.getBody(), StandardCharsets.UTF_8))
+        .startsWith("# Mapa")
+        .contains("[REDACTED]")
+        .doesNotContain("ghp_");
+
+    ResponseEntity<byte[]> picture = download(image);
+    assertThat(picture.getBody()).isEqualTo(png);
+    assertThat(picture.getHeaders().getContentType().toString()).isEqualTo("image/png");
+    assertThat(picture.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION))
+        .isEqualTo("attachment; filename=\"grafo_final.png\"; filename*=UTF-8''grafo%20final.png");
+
+    // Lo que dice ser HTML se descarga como texto plano.
+    assertThat(download(html).getHeaders().getContentType().toString())
+        .isEqualTo("text/plain;charset=UTF-8");
+
+    JsonNode list = get("/api/agent-runs/" + run.agentId() + "/artifacts");
+    assertThat(list).extracting(a -> a.path("type").asString()).containsOnly("DECLARED_FILE");
+    assertStatus(
+        HttpStatus.NOT_FOUND, () -> get("/api/artifacts/" + UUID.randomUUID() + "/download"));
+  }
+
+  @Test
   void largeArtifactsAreTruncatedAndBadUploadsRejected() {
     Runner runner = register("owner");
     Launched run = launch(null);
@@ -418,6 +465,30 @@ class VerificationAndArtifactsIT extends IntegrationTest {
         .body(content)
         .retrieve()
         .body(JsonNode.class);
+  }
+
+  private String declared(
+      Runner runner, Launched run, String path, String mediaType, byte[] content) {
+    return upload(
+            runner,
+            new ArtifactUpload(
+                run.agentId(),
+                null,
+                ArtifactType.DECLARED_FILE,
+                path,
+                mediaType,
+                sha256(content),
+                Map.of("path", path, "glob", path)),
+            content)
+        .path("id")
+        .asString();
+  }
+
+  private ResponseEntity<byte[]> download(String artifactId) {
+    return http.get()
+        .uri("/api/artifacts/" + artifactId + "/download")
+        .retrieve()
+        .toEntity(byte[].class);
   }
 
   private ResponseEntity<String> content(String artifactId, long offset, int limit) {

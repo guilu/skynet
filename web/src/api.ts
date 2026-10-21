@@ -788,7 +788,15 @@ export interface StoredEvent {
 }
 
 export type ArtifactType =
-  'PROMPT' | 'RESULT' | 'LOG' | 'GIT_CHANGES' | 'DIFF' | 'VERIFICATION_LOG' | 'TEST_REPORT'
+  | 'PROMPT'
+  | 'RESULT'
+  | 'LOG'
+  | 'GIT_CHANGES'
+  | 'DIFF'
+  | 'VERIFICATION_LOG'
+  | 'TEST_REPORT'
+  /** Fichero que la fase declara en `artifacts` (#145); su nombre es la ruta relativa. */
+  | 'DECLARED_FILE'
 
 /** Artefacto de una invocación o de una verificación, sin su contenido. */
 export interface ArtifactSummary {
