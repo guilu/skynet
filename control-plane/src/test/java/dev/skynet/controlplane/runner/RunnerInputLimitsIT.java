@@ -18,12 +18,14 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
 
-/** Límites de lo que aceptan la API del runner y las decisiones de aprobación (RV-C). */
-@TestPropertySource(properties = "skynet.runner.max-request=4MB")
+/**
+ * Límites de lo que aceptan la API del runner y las decisiones de aprobación (RV-C). Con el
+ * contexto de todos los ITs ({@code skynet.runner.max-request} de 4 MB): otro contexto contra la
+ * misma base de datos tendría sus tareas en marcha y el TRUNCATE de cada test se bloquearía.
+ */
 class RunnerInputLimitsIT extends IntegrationTest {
 
   @Test

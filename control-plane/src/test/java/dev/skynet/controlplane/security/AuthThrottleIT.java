@@ -15,11 +15,12 @@ import java.util.Base64;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.TestPropertySource;
 
-/** Bloqueo temporal tras varios fallos seguidos de login, HTTP Basic o registro del runner. */
-@TestPropertySource(
-    properties = {"skynet.security.max-failed-attempts=3", "skynet.security.lockout=2s"})
+/**
+ * Bloqueo temporal tras varios fallos seguidos de login, HTTP Basic o registro del runner, con los
+ * valores por defecto (10 fallos, 5 minutos). El fin del bloqueo lo prueba {@link
+ * AuthThrottleTest}.
+ */
 class AuthThrottleIT extends IntegrationTest {
 
   private CookieManager cookies;
@@ -36,34 +37,36 @@ class AuthThrottleIT extends IntegrationTest {
     client.close();
   }
 
+  private static final int MAX_FAILURES = 10;
+
   @Test
-  void afterTooManyFailedLoginsEvenTheRightPasswordWaitsForTheLockout() throws Exception {
-    for (int i = 0; i < 3; i++) {
+  void afterTooManyFailedLoginsEvenTheRightPasswordWaits() throws Exception {
+    for (int i = 0; i < MAX_FAILURES; i++) {
       assertThat(login("mala").statusCode()).isEqualTo(401);
     }
 
     HttpResponse<String> blocked = login(ADMIN_SECRET);
     assertThat(blocked.statusCode()).isEqualTo(429);
-    assertThat(blocked.headers().firstValue("Retry-After")).isPresent();
-
-    Thread.sleep(2_200);
-    assertThat(login(ADMIN_SECRET).statusCode()).isEqualTo(200);
+    assertThat(blocked.headers().firstValue("Retry-After")).contains("300");
+    assertThat(blocked.body()).contains("Demasiados intentos");
   }
 
   @Test
   void aSuccessfulLoginClearsTheFailures() throws Exception {
-    assertThat(login("mala").statusCode()).isEqualTo(401);
-    assertThat(login("mala").statusCode()).isEqualTo(401);
+    for (int i = 0; i < MAX_FAILURES - 1; i++) {
+      assertThat(login("mala").statusCode()).isEqualTo(401);
+    }
     assertThat(login(ADMIN_SECRET).statusCode()).isEqualTo(200);
-    assertThat(login("mala").statusCode()).isEqualTo(401);
-    assertThat(login("mala").statusCode()).isEqualTo(401);
+    for (int i = 0; i < MAX_FAILURES - 1; i++) {
+      assertThat(login("mala").statusCode()).isEqualTo(401);
+    }
 
     assertThat(login(ADMIN_SECRET).statusCode()).isEqualTo(200);
   }
 
   @Test
   void basicAuthIsBlockedTooAfterTooManyWrongPasswords() throws Exception {
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < MAX_FAILURES; i++) {
       assertThat(basic("mala").statusCode()).isEqualTo(401);
     }
 
@@ -72,7 +75,7 @@ class AuthThrottleIT extends IntegrationTest {
 
   @Test
   void runnerRegistrationHasItsOwnLockoutAndDoesNotBlockTheWeb() throws Exception {
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < MAX_FAILURES; i++) {
       assertThat(register("malo").statusCode()).isEqualTo(401);
     }
 

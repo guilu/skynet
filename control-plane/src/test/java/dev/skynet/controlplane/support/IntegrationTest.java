@@ -31,6 +31,7 @@ public abstract class IntegrationTest {
     registry.add("skynet.artifacts.root", () -> ARTIFACTS.toString());
     registry.add("skynet.artifacts.max-size", () -> "64KB");
     registry.add("skynet.artifacts.max-upload", () -> "512KB");
+    registry.add("skynet.runner.max-request", () -> "4MB");
   }
 
   protected static final String RUNNER_REGISTRATION_TOKEN = "test-registration-token";
