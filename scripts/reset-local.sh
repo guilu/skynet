@@ -24,7 +24,25 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-COMPOSE=(docker compose -f deploy/docker-compose.yml)
+command -v docker >/dev/null || { echo "Falta docker." >&2; exit 1; }
+
+# Si ya hay un despliegue, conserva exactamente sus ficheros Compose y su env-file. Esto evita
+# recrearlo con los puertos de desarrollo del fichero base (por ejemplo PostgreSQL en 0.0.0.0:5432)
+# cuando la instalación usa un override privado.
+COMPOSE=(docker compose)
+existing_compose_files=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' \
+  skynet-postgres-1 2>/dev/null || true)
+existing_env_file=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.environment_file" }}' \
+  skynet-postgres-1 2>/dev/null || true)
+if [[ -n $existing_env_file && -f $existing_env_file ]]; then
+  COMPOSE+=(--env-file "$existing_env_file")
+fi
+if [[ -n $existing_compose_files ]]; then
+  IFS=',' read -r -a compose_files <<< "$existing_compose_files"
+  for file in "${compose_files[@]}"; do COMPOSE+=(-f "$file"); done
+else
+  COMPOSE+=(-f deploy/docker-compose.yml)
+fi
 PROJECT=skynet
 
 runner=false runner_home=${SKYNET_RUNNER_HOME:-$HOME/.skynet-runner}
@@ -44,8 +62,6 @@ while (($#)); do
   esac
   shift
 done
-
-command -v docker >/dev/null || { echo "Falta docker." >&2; exit 1; }
 
 env_file_value() { # fichero nombre
   [[ -f $1 ]] || return 0
