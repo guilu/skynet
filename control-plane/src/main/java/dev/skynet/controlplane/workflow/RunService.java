@@ -25,6 +25,7 @@ import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.AgentProviderKind;
 import dev.skynet.protocol.AgentProviderKind.Capability;
+import dev.skynet.protocol.SafeIds;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
 import dev.skynet.protocol.runner.AgentLimits;
@@ -514,6 +515,12 @@ public class RunService {
     if (!sessionStarted(parent)) {
       throw new ConflictException(
           "La sesión del agente " + parent.getId() + " no llegó a arrancar: no se puede continuar");
+    }
+    if (!SafeIds.isSessionId(parent.getProviderSessionId())) {
+      throw new ConflictException(
+          "La sesión del agente "
+              + parent.getId()
+              + " no tiene un id de sesión válido: no se puede continuar");
     }
     UUID sessionId = fork ? UUID.randomUUID() : UUID.fromString(parent.getProviderSessionId());
     CodeRepository repository = projects.getRepository(parent.getRepositoryId());

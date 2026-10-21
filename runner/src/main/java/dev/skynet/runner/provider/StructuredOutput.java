@@ -48,9 +48,14 @@ public final class StructuredOutput {
     if (!Files.isRegularFile(file)) {
       throw new IllegalArgumentException("No existe `" + path + "` en el worktree");
     }
+    // Con los enlaces simbólicos resueltos: uno del repositorio no puede sacar el schema de fuera.
+    Path real = file.toRealPath();
+    if (!real.startsWith(root.toRealPath())) {
+      throw new IllegalArgumentException("`" + path + "` está fuera del worktree");
+    }
     JsonNode content;
     try {
-      content = JSON.readTree(Files.readString(file));
+      content = JSON.readTree(Files.readString(real));
     } catch (JacksonException e) {
       throw new IllegalArgumentException(
           "`" + path + "` no es JSON válido: " + e.getOriginalMessage());

@@ -2,6 +2,8 @@ package dev.skynet.controlplane.project;
 
 import dev.skynet.controlplane.shared.ArchiveState;
 import dev.skynet.controlplane.shared.Archived;
+import dev.skynet.controlplane.shared.InvalidRequestException;
+import dev.skynet.protocol.SafeIds;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Digits;
@@ -192,6 +194,12 @@ class ProjectController {
         request.defaultBranch() == null || request.defaultBranch().isBlank()
             ? "main"
             : request.defaultBranch();
+    // Va al runner como argumento de `git worktree add`: una rama que empiece por - sería una
+    // opción.
+    if (!SafeIds.isBranch(branch)) {
+      throw new InvalidRequestException(
+          "`" + branch + "` no es un nombre de rama válido para git (ni puede empezar por `-`)");
+    }
     return view(
         service.registerRepository(
             id,

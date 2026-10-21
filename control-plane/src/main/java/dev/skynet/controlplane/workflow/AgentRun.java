@@ -3,6 +3,7 @@ package dev.skynet.controlplane.workflow;
 import dev.skynet.controlplane.shared.ConflictException;
 import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.AgentObservableStatus;
+import dev.skynet.protocol.SafeIds;
 import dev.skynet.protocol.runner.AgentLimits;
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -298,7 +299,9 @@ public class AgentRun {
   /** El proveedor ha confirmado la sesión. */
   void startSession(String sessionId, String model, boolean simulated, Instant at) {
     this.simulated = simulated;
-    if (sessionId != null) {
+    // Un id que no lo es (con ../ o que empieza por -) no se guarda: volvería al runner como
+    // argumento del CLI y como parte de una ruta al continuar la sesión.
+    if (SafeIds.isSessionId(sessionId)) {
       providerSessionId = sessionId;
     }
     if (model != null) {
@@ -600,14 +603,16 @@ public class AgentRun {
 
   /** La instantánea del worktree cuando la invocación lo recibió; solo cuenta la primera. */
   void recordBaseSnapshot(String snapshot) {
-    if (baseSnapshot == null) {
+    // Vuelve al runner como argumento de git al restaurar el worktree: solo un hash.
+    if (baseSnapshot == null && SafeIds.isCommit(snapshot)) {
       baseSnapshot = snapshot;
     }
   }
 
   /** El {@code HEAD} del worktree cuando la invocación lo recibió; solo cuenta el primero. */
   void recordBaseCommit(String commit) {
-    if (baseCommit == null) {
+    // Vuelve al runner como argumento de git en las verificaciones: solo un hash.
+    if (baseCommit == null && SafeIds.isCommit(commit)) {
       baseCommit = commit;
     }
   }

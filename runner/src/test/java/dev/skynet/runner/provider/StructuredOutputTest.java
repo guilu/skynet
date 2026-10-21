@@ -43,4 +43,33 @@ class StructuredOutputTest {
             "`lista.json` no es el JSON Schema de un objeto: necesita `\"type\": \"object\"` y sus"
                 + " campos en `properties`");
   }
+
+  @Test
+  void aSymlinkThatLeavesTheWorktreeIsRefused(@TempDir Path dir) throws IOException {
+    Path worktree = Files.createDirectories(dir.resolve("worktree"));
+    Path secret = dir.resolve("secreto.json");
+    Files.writeString(
+        secret, "{\"type\": \"object\", \"properties\": {\"token\": {\"type\": \"string\"}}}");
+    Files.createDirectories(worktree.resolve("schemas"));
+    Files.createSymbolicLink(worktree.resolve("schemas/spec.json"), secret);
+    Files.createSymbolicLink(worktree.resolve("fuera"), dir);
+
+    assertThatThrownBy(() -> StructuredOutput.resolve("{\"$ref\":\"schemas/spec.json\"}", worktree))
+        .hasMessage("`schemas/spec.json` está fuera del worktree");
+    assertThatThrownBy(
+            () -> StructuredOutput.resolve("{\"$ref\":\"fuera/secreto.json\"}", worktree))
+        .hasMessage("`fuera/secreto.json` está fuera del worktree");
+  }
+
+  @Test
+  void aSymlinkInsideTheWorktreeIsFollowed(@TempDir Path worktree) throws IOException {
+    Files.createDirectories(worktree.resolve("schemas"));
+    Files.writeString(
+        worktree.resolve("schemas/real.json"),
+        "{\"type\": \"object\", \"properties\": {\"ok\": {\"type\": \"boolean\"}}}");
+    Files.createSymbolicLink(worktree.resolve("schemas/spec.json"), Path.of("real.json"));
+
+    assertThat(StructuredOutput.resolve("{\"$ref\":\"schemas/spec.json\"}", worktree))
+        .isEqualTo("{\"type\":\"object\",\"properties\":{\"ok\":{\"type\":\"boolean\"}}}");
+  }
 }

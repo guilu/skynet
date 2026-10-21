@@ -1,5 +1,6 @@
 package dev.skynet.runner.workspace;
 
+import dev.skynet.protocol.SafeIds;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -14,6 +15,14 @@ final class Git {
   private static final long TIMEOUT_SECONDS = 120;
 
   private Git() {}
+
+  /** El commit base tal cual si es un hash: otra cosa podría leerse como una opción de git. */
+  static String commit(String baseCommit) throws IOException {
+    if (!SafeIds.isCommit(baseCommit)) {
+      throw new IOException("El commit base `" + baseCommit + "` no es un hash de git");
+    }
+    return baseCommit;
+  }
 
   static String text(Path directory, List<String> args) throws IOException, InterruptedException {
     return new String(run(directory, args, new byte[0], Map.of()), StandardCharsets.UTF_8);

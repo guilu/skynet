@@ -74,6 +74,36 @@ class WorkspaceManagerTest {
   }
 
   @Test
+  void aBaseBranchThatGitWouldReadAsAnOptionIsRefused() throws Exception {
+    Path repo = TestRepos.create(dir.resolve("repo"));
+    WorkspaceManager manager = new WorkspaceManager(dir.resolve("workspaces"));
+
+    for (String branch : new String[] {"--detach", "-q", "--orphan=x", "main..HEAD", "a b"}) {
+      UUID run = UUID.randomUUID();
+      assertThatThrownBy(() -> manager.create(repo, branch, run, "X-1", UUID.randomUUID()))
+          .as(branch)
+          .isInstanceOf(IOException.class)
+          .hasMessage("La rama base `" + branch + "` no es un nombre de rama válido");
+      assertThat(dir.resolve("workspaces").resolve(run.toString())).doesNotExist();
+    }
+    assertThat(TestRepos.git(repo, "worktree", "list").lines()).hasSize(1);
+  }
+
+  @Test
+  void aSnapshotToRestoreMustBeACommitHash() throws Exception {
+    Path repo = TestRepos.create(dir.resolve("repo"));
+    WorkspaceManager manager = new WorkspaceManager(dir.resolve("workspaces"));
+    Workspace ws = manager.create(repo, "main", UUID.randomUUID(), "X-1", UUID.randomUUID());
+
+    assertThatThrownBy(() -> manager.continued(ws.path(), "--hard", UUID.randomUUID()))
+        .isInstanceOf(IOException.class)
+        .hasMessage("La instantánea `--hard` no es un hash de git");
+    assertThatThrownBy(() -> manager.continued(ws.path(), "HEAD~1", UUID.randomUUID()))
+        .isInstanceOf(IOException.class)
+        .hasMessage("La instantánea `HEAD~1` no es un hash de git");
+  }
+
+  @Test
   void forkStartsFromTheParentHeadWithItsUncommittedChanges() throws Exception {
     Path repo = TestRepos.create(dir.resolve("repo"));
     WorkspaceManager manager = new WorkspaceManager(dir.resolve("workspaces"));

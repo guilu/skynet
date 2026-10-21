@@ -42,7 +42,7 @@ public final class GitIndexer {
       throws IOException, InterruptedException {
     String branch = Git.text(worktree, List.of("rev-parse", "--abbrev-ref", "HEAD")).trim();
     String head = Git.text(worktree, List.of("rev-parse", "HEAD")).trim();
-    String base = baseCommit == null || baseCommit.isBlank() ? head : baseCommit;
+    String base = baseCommit == null || baseCommit.isBlank() ? head : Git.commit(baseCommit);
     List<Map<String, Object>> commits = commits(worktree, base);
     int uncommitted =
         (int)
@@ -60,9 +60,11 @@ public final class GitIndexer {
       Git.run(worktree, List.of("add", "-A"), new byte[0], env);
       List<String> diff = List.of("diff", "--cached", "--no-color", "--no-ext-diff", "-M");
       List<FileChange> files =
-          nameStatus(Git.run(worktree, with(diff, "-z", "--name-status", base), new byte[0], env));
-      addNumstat(files, Git.run(worktree, with(diff, "-z", "--numstat", base), new byte[0], env));
-      Git.run(worktree, with(diff, "--output=" + diffFile, base), new byte[0], env);
+          nameStatus(
+              Git.run(worktree, with(diff, "-z", "--name-status", base, "--"), new byte[0], env));
+      addNumstat(
+          files, Git.run(worktree, with(diff, "-z", "--numstat", base, "--"), new byte[0], env));
+      Git.run(worktree, with(diff, "--output=" + diffFile, base, "--"), new byte[0], env);
       addOffsets(files, diffFile);
 
       long insertions = files.stream().mapToLong(f -> f.insertions).sum();
@@ -98,7 +100,8 @@ public final class GitIndexer {
                 "log",
                 "--max-count=" + MAX_COMMITS,
                 "--format=%H%x1f%an%x1f%ae%x1f%aI%x1f%s%x1e",
-                base + "..HEAD"));
+                base + "..HEAD",
+                "--"));
     List<Map<String, Object>> commits = new ArrayList<>();
     for (String entry : log.split("\u001e")) {
       String[] fields = entry.strip().split("\u001f", -1);

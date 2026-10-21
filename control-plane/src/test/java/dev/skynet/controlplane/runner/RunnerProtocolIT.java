@@ -220,7 +220,7 @@ class RunnerProtocolIT extends IntegrationTest {
     Events events = new Events(run.agentId());
     events.add(
         AgentEventType.WORKSPACE_READY,
-        Map.of("path", "/w/r/a", "branch", "skynet/adhoc/abcd1234", "baseCommit", "abc"));
+        Map.of("path", "/w/r/a", "branch", "skynet/adhoc/abcd1234", "baseCommit", "abc1234"));
     events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", "s"));
     events.add(
         AgentEventType.PROCESS_EXITED,
@@ -815,6 +815,35 @@ class RunnerProtocolIT extends IntegrationTest {
   }
 
   @Test
+  void idsThatCouldReachTheCliOrGitAsOptionsAreNotRecorded() {
+    Runner runner = register("laptop", 1);
+    Launched run = launch("x");
+    ack(runner, poll(runner, 0).getFirst());
+    Events events = new Events(run.agentId());
+    events.add(
+        AgentEventType.WORKSPACE_READY,
+        Map.of(
+            "path", "/w/run/a",
+            "branch", "skynet/x/a",
+            "baseCommit", "--output=/tmp/pwned",
+            "snapshot", "HEAD~1"));
+    events.add(
+        AgentEventType.SESSION_STARTED, Map.of("sessionId", "--dangerously-skip-permissions"));
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 0));
+    send(runner, events.batch());
+
+    // Se queda con el id que le dio el control plane al lanzarlo, y sin commit ni instantánea.
+    assertThat(
+            jdbc.sql(
+                    "SELECT concat_ws('|', provider_session_id, base_commit, base_snapshot)"
+                        + " FROM agent_run WHERE id = ?")
+                .param(run.agentId())
+                .query(String.class)
+                .single())
+        .matches("[0-9a-f-]{36}");
+  }
+
+  @Test
   void onlyFinishedAgentsWithAStartedSessionCanContinue() {
     Runner runner = register("laptop", 1);
     Launched run = launch("x");
@@ -954,7 +983,7 @@ class RunnerProtocolIT extends IntegrationTest {
     Events events = new Events(run.agentId());
     events.add(
         AgentEventType.WORKSPACE_READY,
-        Map.of("path", "/w/b1", "branch", "skynet/run-1/b1", "baseCommit", "abc"));
+        Map.of("path", "/w/b1", "branch", "skynet/run-1/b1", "baseCommit", "abc1234"));
     send(runner, events.batch());
 
     assertStatus(
@@ -1021,7 +1050,7 @@ class RunnerProtocolIT extends IntegrationTest {
             "branch",
             "skynet/run-1/" + worktree.substring(worktree.lastIndexOf('/') + 1),
             "baseCommit",
-            "abc"));
+            "abc1234"));
     events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", session));
     events.add(AgentEventType.MESSAGE_RECEIVED, Map.of("text", "Hecho"));
     Map<String, Object> result = new java.util.HashMap<>(cost);

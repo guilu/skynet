@@ -292,7 +292,7 @@ class PurgeIT extends IntegrationTest {
           runner,
           agentRunId,
           AgentEventType.WORKSPACE_READY,
-          Map.of("path", path, "branch", "skynet" + path, "baseCommit", "abc"));
+          Map.of("path", path, "branch", "skynet" + path, "baseCommit", "abc1234"));
     }
     send(
         runner,
