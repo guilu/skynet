@@ -6,6 +6,8 @@ import dev.skynet.protocol.runner.ArtifactUpload;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -43,8 +45,30 @@ public final class Journal implements AutoCloseable {
     this.db = db;
   }
 
+  private static void ownerOnly(Path path, String permissions) throws IOException {
+    if (Files.getFileStore(path).supportsFileAttributeView(PosixFileAttributeView.class)) {
+      Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(permissions));
+    }
+  }
+
+  /**
+   * Abre (o crea) el journal. Guarda el token Bearer del runner, así que su directorio queda en
+   * {@code 0700} y sus ficheros en {@code 0600}, también los de un journal que ya existía.
+   */
   public static Journal open(Path file) throws IOException {
-    Files.createDirectories(file.toAbsolutePath().getParent());
+    Path dir = file.toAbsolutePath().getParent();
+    Files.createDirectories(dir);
+    ownerOnly(dir, "rwx------");
+    if (Files.notExists(file)) {
+      // SQLite crea el -wal y el -shm con los permisos del fichero de la base.
+      Files.createFile(file);
+    }
+    for (String suffix : List.of("", "-wal", "-shm")) {
+      Path f = dir.resolve(file.getFileName() + suffix);
+      if (Files.exists(f)) {
+        ownerOnly(f, "rw-------");
+      }
+    }
     Connection db;
     try {
       db = DriverManager.getConnection("jdbc:sqlite:" + file.toAbsolutePath());

@@ -7,7 +7,9 @@ import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.runner.ArtifactType;
 import dev.skynet.protocol.runner.ArtifactUpload;
 import java.math.BigDecimal;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +20,41 @@ import org.junit.jupiter.api.io.TempDir;
 class JournalTest {
 
   @TempDir Path dir;
+
+  @Test
+  void onlyTheRunnerUserCanReadTheJournalAndItsDirectory() throws Exception {
+    // Guarda el token Bearer del runner: ni el grupo ni otros usuarios pueden leerlo.
+    Path home = dir.resolve("home");
+    Path file = home.resolve("journal.db");
+    try (Journal journal = Journal.open(file)) {
+      journal.append(UUID.randomUUID(), AgentEventType.RAW, Map.of(), Instant.now());
+      assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(home)))
+          .isEqualTo("rwx------");
+      try (var files = Files.list(home)) {
+        for (Path f : files.toList()) {
+          assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(f)))
+              .as(f.getFileName().toString())
+              .isEqualTo("rw-------");
+        }
+      }
+    }
+  }
+
+  @Test
+  void reopeningAJournalCreatedWithLooserPermissionsTightensThem() throws Exception {
+    Path home = Files.createDirectories(dir.resolve("old"));
+    Path file = home.resolve("journal.db");
+    Journal.open(file).close();
+    Files.setPosixFilePermissions(home, PosixFilePermissions.fromString("rwxr-xr-x"));
+    Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-r--r--"));
+
+    Journal.open(file).close();
+
+    assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(home)))
+        .isEqualTo("rwx------");
+    assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(file)))
+        .isEqualTo("rw-------");
+  }
 
   @Test
   void eventsGetConsecutiveSeqPerAgentAndSurviveAReopen() throws Exception {

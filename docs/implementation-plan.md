@@ -134,7 +134,7 @@ Las órdenes se generan desde una tabla `runner_command` (con `FOR UPDATE SKIP L
 - `journal/Journal` (SQLite en `$SKYNET_RUNNER_HOME/journal.db`): credenciales, eventos pendientes con `seq` por invocación, órdenes recibidas (una orden reentregada no se ejecuta dos veces), invocaciones terminadas y PIDs. Un evento solo se borra cuando el control plane responde al lote.
 - `supervisor/ProcessSupervisor`: entorno vaciado y rellenado desde una lista permitida, stdin a `/dev/null`, stdout línea a línea al parser y al log bruto (`logs/<agentRunId>.ndjson`), últimos 8 KB de stderr. Terminar = SIGTERM a todo el árbol (descendientes tomados antes de matar al padre), gracia de 10 s y SIGKILL. Al arrancar mata los procesos que dejó vivos un runner anterior (comprobando el instante de arranque para no matar un PID reutilizado).
 - `workspace/WorkspaceManager`: `git worktree add -b skynet/<trabajo>/<agente> $SKYNET_RUNNER_HOME/workspaces/<ejecución>/<agente> <rama base>`. Emite `agent.workspace.ready` (ruta, rama, commit base). El worktree se conserva al terminar; se elimina con la orden `CLEANUP` (M6-C).
-- `provider/claude/ClaudeCodeProvider`: `claude -p … --output-format stream-json --verbose --include-partial-messages --session-id … --permission-mode … --allowedTools … [--model] [--max-turns] [--max-budget-usd]`.
+- `provider/claude/ClaudeCodeProvider`: `claude -p … --output-format stream-json --verbose --include-partial-messages --session-id … --permission-mode … --allowedTools … [--model] [--max-turns] [--max-budget-usd] -- <prompt>` (el prompt al final y tras `--`, por si empieza por `-`).
 - `agent/AgentExecutor`: cada `START` termina con exactamente un `agent.process.exited`, también si falla el worktree, si se cancela antes de arrancar, si se agota `limits.timeout` o si el runner se para o se reinicia.
 - Pendiente: presupuesto propio en el runner (hace falta la tabla de precios; de momento solo `--max-budget-usd`, que no es estricto). La tabla `workspace` llegó en M4-A y los grupos de procesos en M4-B.
 
@@ -465,7 +465,7 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 
 **Implementado (M6-A), acceso:**
 
-- Spring Security con un usuario único (`SKYNET_ADMIN_USER`, `SKYNET_ADMIN_PASSWORD`). Sin contraseña genera una y la escribe en el log; con `SKYNET_REQUIRE_ADMIN_PASSWORD=true` (Docker Compose) no arranca.
+- Spring Security con un usuario único (`SKYNET_ADMIN_USER`, `SKYNET_ADMIN_PASSWORD`). Sin contraseña genera una y la guarda en `data/admin-password` (`0600`; desde RV-C, el log solo dice dónde está); con `SKYNET_REQUIRE_ADMIN_PASSWORD=true` (Docker Compose) no arranca.
 - La web entra con `POST /api/auth/login` (sesión por cookie, `HttpOnly` y `SameSite=Lax`; el identificador cambia al entrar), consulta `GET /api/auth/session` y sale con `POST /api/auth/logout`. Caduca tras `SKYNET_SESSION_TIMEOUT` (12 h) sin uso.
 - CSRF por cookie (`XSRF-TOKEN`, cabecera `X-XSRF-TOKEN`) en todo lo que cambia algo. No se pide a peticiones con `Authorization` (HTTP Basic de scripts, o el runner) ni a `/api/runner/**`.
 - Un 401 nunca lleva `WWW-Authenticate`, para que el navegador no abra su diálogo. Quedan abiertos `/actuator/health`, el login y la API del runner, que tiene su token.

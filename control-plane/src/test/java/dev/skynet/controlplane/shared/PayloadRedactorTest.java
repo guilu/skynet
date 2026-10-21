@@ -37,6 +37,27 @@ class PayloadRedactorTest {
         .isEqualTo("antes " + MASK + " después");
   }
 
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "SKYNET_ADMIN_PASSWORD",
+        "SKYNET_RUNNER_REGISTRATION_TOKEN",
+        "SKYNET_DB_PASSWORD",
+        "OPENAI_API_KEY",
+        "CODEX_API_KEY",
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY"
+      })
+  void theControlPlaneAndProviderSecretsAreMaskedByDefault(String variable) {
+    PayloadRedactor defaults =
+        new PayloadRedactor(
+            new RedactionProperties(null),
+            new MockEnvironment().withProperty(variable, "valor-del-secreto-42"));
+
+    assertThat(defaults.redact("el agente vio valor-del-secreto-42"))
+        .isEqualTo("el agente vio " + MASK);
+  }
+
   @Test
   void assignmentsHeadersAndUrlsKeepTheirNameButNotTheValue() {
     assertThat(redactor.redact("export DB_PASSWORD=hunter2hunter2"))

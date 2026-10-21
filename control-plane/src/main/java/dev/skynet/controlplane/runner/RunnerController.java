@@ -16,6 +16,7 @@ import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
 import dev.skynet.protocol.runner.RunnerRegistration;
+import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
@@ -29,6 +30,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -82,6 +84,7 @@ class RunnerController {
   @PostMapping("/register")
   @ResponseStatus(HttpStatus.CREATED)
   RunnerRegistered register(@RequestBody RunnerRegistration registration) {
+    RunnerLimits.check(registration);
     return registry.register(registration);
   }
 
@@ -91,6 +94,7 @@ class RunnerController {
       @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
       @RequestBody RunnerHeartbeat heartbeat) {
     UUID runnerId = registry.authenticate(authorization);
+    RunnerLimits.check(heartbeat);
     registry.heartbeat(runnerId, heartbeat);
     lost.reconcile(runnerId, heartbeat);
     quotas.recordPolled(runnerId, heartbeat.quotas());
@@ -137,6 +141,7 @@ class RunnerController {
       @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
       @RequestBody EventBatch batch) {
     UUID runnerId = registry.authenticate(authorization);
+    RunnerLimits.check(batch);
     int accepted = 0;
     int duplicates = 0;
     List<EventBatchResult.Rejected> rejected = new ArrayList<>();
@@ -204,6 +209,17 @@ class RunnerController {
   @ExceptionHandler(ArtifactTooLargeException.class)
   ProblemDetail artifactTooLarge(ArtifactTooLargeException e) {
     return ProblemDetail.forStatusAndDetail(HttpStatus.CONTENT_TOO_LARGE, e.getMessage());
+  }
+
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  ProblemDetail unreadable(HttpMessageNotReadableException e, HttpServletRequest request) {
+    Object max = request.getAttribute(RunnerRequestSizeFilter.TOO_LARGE);
+    if (max != null) {
+      return ProblemDetail.forStatusAndDetail(
+          HttpStatus.CONTENT_TOO_LARGE,
+          "La petición pasa de " + max + " bytes (skynet.runner.max-request)");
+    }
+    return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Cuerpo no válido");
   }
 
   @ExceptionHandler(UnauthorizedRunnerException.class)

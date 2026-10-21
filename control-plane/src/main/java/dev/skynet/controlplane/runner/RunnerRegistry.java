@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,8 @@ import org.springframework.transaction.annotation.Transactional;
 /** Alta de runners, autenticación por token y latidos. */
 @Component
 class RunnerRegistry {
+
+  private static final Logger log = LoggerFactory.getLogger(RunnerRegistry.class);
 
   private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -63,7 +67,7 @@ class RunnerRegistry {
     }
     Instant now = time.now();
     String token = newToken();
-    UUID id =
+    Registered row =
         jdbc.sql(
                 "INSERT INTO runner (id, name, token_hash, capacity, runner_version,"
                     + " provider_version, registered_at, last_heartbeat_at)"
@@ -72,7 +76,8 @@ class RunnerRegistry {
                     + " capacity = EXCLUDED.capacity, runner_version = EXCLUDED.runner_version,"
                     + " provider_version = EXCLUDED.provider_version,"
                     + " last_heartbeat_at = EXCLUDED.last_heartbeat_at, archived_at = NULL"
-                    + " RETURNING id")
+                    // xmax distinto de 0: la fila ya existía y se ha actualizado.
+                    + " RETURNING id, xmax <> 0 AS replaced")
             .params(
                 UUID.randomUUID(),
                 registration.name(),
@@ -82,10 +87,21 @@ class RunnerRegistry {
                 registration.providerVersion(),
                 Timestamp.from(now),
                 Timestamp.from(now))
-            .query(UUID.class)
+            .query(
+                (rs, n) ->
+                    new Registered(rs.getObject("id", UUID.class), rs.getBoolean("replaced")))
             .single();
+    UUID id = row.id();
+    if (row.replaced()) {
+      // Con el secreto de registro se puede registrar cualquier runner, así que reutilizar el
+      // nombre no da más acceso; queda constancia de que el token anterior ya no vale.
+      log.warn(
+          "El runner '{}' se ha vuelto a registrar: su token anterior deja de valer",
+          registration.name());
+    }
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("name", registration.name());
+    payload.put("tokenReplaced", row.replaced());
     payload.put("capacity", registration.capacity());
     payload.put("runnerVersion", registration.runnerVersion());
     payload.put("providerVersion", registration.providerVersion());
@@ -211,6 +227,8 @@ class RunnerRegistry {
         .query((rs, row) -> new ProviderInfo(rs.getString("provider"), rs.getString("version")))
         .list();
   }
+
+  private record Registered(UUID id, boolean replaced) {}
 
   private void saveProviders(UUID runnerId, List<ProviderInfo> providers) {
     jdbc.sql("DELETE FROM runner_provider WHERE runner_id = ?").param(runnerId).update();

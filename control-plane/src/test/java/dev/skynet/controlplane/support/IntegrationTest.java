@@ -1,5 +1,6 @@
 package dev.skynet.controlplane.support;
 
+import dev.skynet.controlplane.security.AuthThrottle;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +17,7 @@ import org.springframework.web.client.RestClient;
 public abstract class IntegrationTest {
 
   @Autowired protected JdbcClient jdbc;
+  @Autowired private AuthThrottle authThrottle;
   @LocalServerPort protected int port;
   protected RestClient http;
 
@@ -59,6 +61,8 @@ public abstract class IntegrationTest {
 
   @BeforeEach
   void cleanDatabase() {
+    // Todos los tests llaman desde 127.0.0.1: los fallos de uno no bloquean al siguiente.
+    authThrottle.clear();
     // TRUNCATE no dispara el trigger append-only de event (es por fila). La secuencia de
     // eventos no se reinicia: igual que en producción, nunca retrocede.
     jdbc.sql(
