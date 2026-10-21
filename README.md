@@ -45,7 +45,7 @@ docker compose -f deploy/docker-compose.yml up -d
 ./gradlew build
 ./gradlew spotlessApply   # formatear
 
-# Control plane en :8080 (sin SKYNET_ADMIN_PASSWORD, genera una contraseña y la escribe en el log)
+# Control plane en :8080 (sin SKYNET_ADMIN_PASSWORD, genera una contraseña en data/admin-password)
 SKYNET_ADMIN_PASSWORD=<contraseña> ./gradlew :control-plane:bootRun
 
 # Web en :5173 (redirige /api y /actuator a :8080)
@@ -104,7 +104,7 @@ SKYNET_ADMIN_PASSWORD=<contraseña> SKYNET_RUNNER_REGISTRATION_TOKEN=<secreto> s
 | API | http://localhost:8080/actuator/health | `SKYNET_API_PORT` |
 | PostgreSQL | localhost:5432 | `SKYNET_DB_PORT` |
 
-**Acceso.** La web pide usuario y contraseña: `SKYNET_ADMIN_USER` (por defecto `admin`) y `SKYNET_ADMIN_PASSWORD`, obligatoria con Docker Compose. Fuera de Docker, sin contraseña, el control plane genera una al arrancar y la escribe en el log. La sesión caduca tras `SKYNET_SESSION_TIMEOUT` (12 h) sin uso; detrás de HTTPS, pon `SKYNET_SECURE_COOKIES=true`. Los scripts pueden llamar a la API con HTTP Basic (`curl -u admin:<contraseña> …`), sin cookies ni token CSRF. La API del runner usa su propio token y no necesita usuario. CORS está cerrado: la web va por el mismo origen; para abrirlo a otros dominios, `SKYNET_CORS_ORIGINS` (separados por comas).
+**Acceso.** La web pide usuario y contraseña: `SKYNET_ADMIN_USER` (por defecto `admin`) y `SKYNET_ADMIN_PASSWORD`, obligatoria con Docker Compose. Fuera de Docker, sin contraseña, el control plane genera una al arrancar y la guarda en `data/admin-password` (`SKYNET_ADMIN_PASSWORD_FILE`), legible solo por su usuario; el log dice dónde está, nunca la contraseña. Tras 10 fallos seguidos de login, HTTP Basic o registro del runner desde un mismo origen, ese origen espera 5 minutos (429 con `Retry-After`; `SKYNET_MAX_FAILED_ATTEMPTS` y `SKYNET_LOCKOUT`). La sesión caduca tras `SKYNET_SESSION_TIMEOUT` (12 h) sin uso; detrás de HTTPS, pon `SKYNET_SECURE_COOKIES=true`. Los scripts pueden llamar a la API con HTTP Basic (`curl -u admin:<contraseña> …`), sin cookies ni token CSRF. La API del runner usa su propio token y no necesita usuario. CORS está cerrado: la web va por el mismo origen; para abrirlo a otros dominios, `SKYNET_CORS_ORIGINS` (separados por comas).
 
 Credenciales de la base de datos: `SKYNET_DB_USER` / `SKYNET_DB_PASSWORD` (por defecto `skynet`/`skynet`). Los artefactos (diff, logs, informes de tests) se guardan en el volumen `artifacts-data`; fuera de Docker, en `SKYNET_ARTIFACTS_DIR` (por defecto `data/artifacts`), con un máximo por artefacto de `SKYNET_ARTIFACT_MAX_SIZE` (20 MB) y por subida de `SKYNET_ARTIFACT_MAX_UPLOAD` (64 MB). El comando de verificación tiene un tiempo máximo de `SKYNET_VERIFICATION_TIMEOUT` (30 min). Si un runner no confirma que ha parado un agente cancelado en `SKYNET_CANCEL_TIMEOUT` (70 s), el control plane lo da por cancelado. Para que un runner pueda registrarse, define `SKYNET_RUNNER_REGISTRATION_TOKEN` con un secreto compartido; sin él, el registro de runners está desactivado. Para parar: `docker compose -f deploy/docker-compose.yml --profile app down` (añade `-v` para borrar los datos). El runner no va en contenedor: se ejecuta en el host porque necesita `claude` y los repositorios.
 

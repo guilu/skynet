@@ -2,6 +2,7 @@ package dev.skynet.controlplane.runner;
 
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.util.unit.DataSize;
 
 /**
  * @param registrationToken secreto compartido para registrar runners; sin él, el registro está
@@ -11,6 +12,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param staleAfter tiempo sin latido tras el que un runner se considera caído ({@code STALE})
  * @param lostAfterHeartbeats latidos seguidos sin declarar una invocación confirmada tras los que
  *     el agente se da por perdido ({@code FAILED})
+ * @param maxRequest lo más que ocupa una petición JSON del runner (registro, latido, eventos); las
+ *     subidas de artefactos tienen su propio límite
  */
 @ConfigurationProperties("skynet.runner")
 record RunnerProperties(
@@ -18,7 +21,8 @@ record RunnerProperties(
     Duration maxWait,
     Duration redeliverAfter,
     Duration staleAfter,
-    Integer lostAfterHeartbeats) {
+    Integer lostAfterHeartbeats,
+    DataSize maxRequest) {
 
   RunnerProperties {
     maxWait = maxWait == null ? Duration.ofSeconds(30) : maxWait;
@@ -26,5 +30,6 @@ record RunnerProperties(
     staleAfter = staleAfter == null ? Duration.ofSeconds(60) : staleAfter;
     lostAfterHeartbeats =
         lostAfterHeartbeats == null || lostAfterHeartbeats < 1 ? 2 : lostAfterHeartbeats;
+    maxRequest = maxRequest == null ? DataSize.ofMegabytes(32) : maxRequest;
   }
 }

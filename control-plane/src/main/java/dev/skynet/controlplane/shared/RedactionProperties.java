@@ -14,6 +14,11 @@ public record RedactionProperties(List<String> secretEnv) {
       List.of(
           "ANTHROPIC_API_KEY",
           "ANTHROPIC_AUTH_TOKEN",
+          "OPENAI_API_KEY",
+          "CODEX_API_KEY",
+          "GEMINI_API_KEY",
+          "GOOGLE_API_KEY",
+          "SKYNET_ADMIN_PASSWORD",
           "SKYNET_RUNNER_REGISTRATION_TOKEN",
           "SKYNET_DB_PASSWORD",
           "GITHUB_TOKEN",

@@ -1,11 +1,19 @@
 package dev.skynet.controlplane.security;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -84,6 +92,22 @@ class SecurityConfiguration {
   }
 
   @Bean
+  AuthThrottle authThrottle(SecurityProperties properties) {
+    return new AuthThrottle(
+        properties.maxFailedAttempts(), properties.lockout(), java.time.Clock.systemUTC());
+  }
+
+  /** Antes que Spring Security, para ver el 401 de un login o de un HTTP Basic fallido. */
+  @Bean
+  FilterRegistrationBean<AuthThrottleFilter> authThrottleFilter(AuthThrottle throttle) {
+    FilterRegistrationBean<AuthThrottleFilter> registration =
+        new FilterRegistrationBean<>(new AuthThrottleFilter(throttle));
+    registration.addUrlPatterns("/api/*");
+    registration.setOrder(SecurityFilterProperties.DEFAULT_FILTER_ORDER - 1);
+    return registration;
+  }
+
+  @Bean
   SecurityContextRepository securityContextRepository() {
     return new HttpSessionSecurityContextRepository();
   }
@@ -104,10 +128,13 @@ class SecurityConfiguration {
                 + "' de la web");
       }
       password = generatedPassword();
+      Path file = properties.generatedPasswordFile().toAbsolutePath();
+      writeOwnerOnly(file, password);
+      // Nunca la contraseña: el log puede acabar en un agregador o en una captura.
       log.warn(
-          "Sin SKYNET_ADMIN_PASSWORD: contraseña generada para el usuario '{}': {}",
+          "Sin SKYNET_ADMIN_PASSWORD: la contraseña generada para el usuario '{}' está en {}",
           properties.username(),
-          password);
+          file);
     }
     return new InMemoryUserDetailsManager(
         User.withUsername(properties.username())
@@ -135,6 +162,28 @@ class SecurityConfiguration {
       source.registerCorsConfiguration("/api/**", cors);
     }
     return source;
+  }
+
+  private static void writeOwnerOnly(Path file, String content) {
+    try {
+      Files.createDirectories(file.getParent());
+      Files.deleteIfExists(file);
+      if (Files.getFileStore(file.getParent())
+          .supportsFileAttributeView(PosixFileAttributeView.class)) {
+        Files.createFile(
+            file,
+            PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+      } else {
+        Files.createFile(file);
+      }
+      Files.writeString(file, content + "\n");
+    } catch (IOException e) {
+      throw new UncheckedIOException(
+          "No se pudo guardar la contraseña generada en "
+              + file
+              + "; define SKYNET_ADMIN_PASSWORD o SKYNET_ADMIN_PASSWORD_FILE",
+          e);
+    }
   }
 
   private static String generatedPassword() {

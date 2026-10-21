@@ -219,6 +219,11 @@ public final class FakeClaude {
       String jsonSchema = null;
       List<String> rest = new ArrayList<>();
       for (int i = 0; i < args.length; i++) {
+        if (args[i].equals("--")) {
+          // Lo que sigue es el prompt, aunque empiece por "-".
+          rest.addAll(List.of(args).subList(i + 1, args.length));
+          break;
+        }
         switch (args[i]) {
           case "--output-format" -> outputFormat = args[++i];
           case "--session-id" -> sessionId = args[++i];

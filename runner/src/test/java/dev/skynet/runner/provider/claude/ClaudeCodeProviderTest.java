@@ -36,7 +36,6 @@ class ClaudeCodeProviderTest {
         .containsExactly(
             "claude",
             "-p",
-            "Arregla add()",
             "--output-format",
             "stream-json",
             "--verbose",
@@ -50,7 +49,33 @@ class ClaudeCodeProviderTest {
             "--max-turns",
             "5",
             "--max-budget-usd",
-            "2.00");
+            "2.00",
+            "--",
+            "Arregla add()");
+  }
+
+  @Test
+  void aPromptThatLooksLikeAnOptionIsStillThePrompt() {
+    // `claude -p --version` imprime la versión: el CLI lee el prompt como una opción.
+    StartAgent start =
+        new StartAgent(
+            UUID.randomUUID(),
+            "TKM-1",
+            "/r",
+            "main",
+            UUID.randomUUID(),
+            "--dangerously-skip-permissions",
+            List.of(),
+            "dontAsk",
+            null,
+            AgentLimits.none(),
+            null,
+            null);
+
+    List<String> command = new ClaudeCodeProvider("claude", List.of()).command(start);
+    assertThat(command.subList(command.size() - 2, command.size()))
+        .containsExactly("--", "--dangerously-skip-permissions");
+    assertThat(command.indexOf("--dangerously-skip-permissions")).isEqualTo(command.size() - 1);
   }
 
   @Test
@@ -86,7 +111,7 @@ class ClaudeCodeProviderTest {
 
     assertThat(
             provider.command(resume(parent, new ResumeFrom(parent.toString(), false, "/w", "b"))))
-        .containsSubsequence("-p", "Añade un test", "--resume", parent.toString())
+        .containsSubsequence("-p", "--resume", parent.toString(), "--", "Añade un test")
         .doesNotContain("--session-id", "--fork-session");
     assertThat(provider.command(resume(forked, new ResumeFrom(parent.toString(), true, "/w", "b"))))
         .containsSubsequence(

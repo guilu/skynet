@@ -78,6 +78,17 @@ class FakeClaudeTest {
   }
 
   @Test
+  void afterTheDoubleDashEverythingIsThePrompt() {
+    FakeClaude.Invocation invocation =
+        FakeClaude.Invocation.parse(
+            new String[] {"-p", "--output-format", "stream-json", "--", "--resume", "x"});
+
+    assertThat(invocation.outputFormat()).isEqualTo("stream-json");
+    assertThat(invocation.resume()).isNull();
+    assertThat(invocation.rest()).containsExactly("-p", "--resume", "x");
+  }
+
+  @Test
   void withFailOnceTheFirstRunFailsAndTheNextOneWorks(@TempDir Path dir) throws Exception {
     Path marker = dir.resolve("falla-una-vez");
     Map<String, String> env =

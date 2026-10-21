@@ -96,7 +96,6 @@ public class ClaudeCodeProvider implements AgentProvider {
     List<String> command = new ArrayList<>();
     command.add(executable);
     command.add("-p");
-    command.add(start.prompt());
     command.addAll(
         List.of("--output-format", "stream-json", "--verbose", "--include-partial-messages"));
     ResumeFrom resume = start.resume();
@@ -136,6 +135,8 @@ public class ClaudeCodeProvider implements AgentProvider {
       // No es un límite estricto (se comprueba al final de cada turno), pero acota el gasto.
       command.addAll(List.of("--max-budget-usd", limits.maxBudgetUsd().toPlainString()));
     }
+    // Al final y tras "--": un prompt que empiece por "-" no se confunde con una opción.
+    command.addAll(List.of("--", start.prompt()));
     return command;
   }
 
