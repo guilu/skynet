@@ -385,6 +385,36 @@ class AgentExecutorTest {
   }
 
   @Test
+  void binaryToolOutputReachesTheJournalWithoutNulAndTheLogKeepsItsBytes() throws Exception {
+    // El agente hace `head -c 40 app.jar`: su tool_result trae los bytes del ZIP escapados.
+    String jar = "PK\\u0003\\u0004\\u0014\\u0000\\b\\b\\b\\u0000\\u0000\\u0000META-INF/\\u0000";
+    String fixture;
+    try (var in = getClass().getResourceAsStream("/claude/02-tools.ndjson")) {
+      fixture =
+          new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+              .replace(
+                  "\"content\":\"1\\tdef add(a, b):\\n2\\t    return a - b\\n3\\t\"",
+                  "\"content\":\"" + jar + "\"");
+    }
+    assertThat(fixture).contains(jar);
+    Path file = Files.writeString(dir.resolve("binario.ndjson"), fixture);
+    UUID id = UUID.randomUUID();
+    executor(file.toString()).start(TestAgents.start(id, repo.toString(), null));
+
+    NormalizedEvent exit = awaitExit(id);
+
+    assertThat(exit.payload()).containsEntry("exitCode", 0);
+    String journaled =
+        tools.jackson.databind.json.JsonMapper.shared().writeValueAsString(eventsOf(id));
+    // Un NUL real sale escapado como barra, u y 0000; el saneado lleva además la barra escapada.
+    assertThat(journaled.replace("\\\\", "")).doesNotContain("\\u0000");
+    assertThat(journaled).contains("PK\\\\u0003\\\\u0004");
+    // El log NDJSON es una copia de la salida del proceso, sin tocar.
+    Journal.PendingArtifact log = artifactsOf(id).get(ArtifactType.LOG);
+    assertThat(Files.readString(log.file())).contains(jar);
+  }
+
+  @Test
   void cleanupRemovesTheWorktreeAndKeepsItsBranch() throws Exception {
     UUID id = UUID.randomUUID();
     executor("01-simple-text").start(TestAgents.start(id, repo.toString(), null));

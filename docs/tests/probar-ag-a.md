@@ -9,6 +9,12 @@ Qué cambia:
 - **MIME:** sale de la extensión, con una lista cerrada. El HTML se trata como texto. El texto se redacta y los binarios no se tocan.
 - **Control plane:** `GET /api/artifacts/{id}/download` devuelve el artefacto entero con `Content-Disposition: attachment` (nombre base saneado, `filename` ASCII y `filename*` UTF-8) y `X-Content-Type-Options: nosniff`. Necesita sesión. Las imágenes y los PDF conservan su tipo, el texto sale como `text/plain` o JSON, y lo demás como `application/octet-stream`. No acepta rutas.
 
+Además, corrige el bloqueo de la primera aceptación. Un agente que lee un ZIP o un JAR devolvía bytes NUL en sus eventos. PostgreSQL rechazaba el `jsonb` y el lote fallaba con 500. El runner lo reenviaba sin fin y el agente acababa en UNRESPONSIVE. Ahora:
+- **`NormalizedEvent`** sanea sus textos al construirse (`SafeText`), también las claves y en mapas y listas anidados. El NUL y los demás controles, salvo tabulador, salto de línea y retorno de carro, pasan a su escape visible (`\u0000`), y los surrogates sueltos a `U+FFFD`. Así el runner ni guarda ni envía un NUL, y el control plane tampoco lo recibe de un runner antiguo, porque lee el JSON con el mismo constructor.
+- **`EventStore`** sanea el payload antes de escribirlo en `jsonb`, como defensa para cualquier evento.
+- **Un evento que la base de datos no admite** (`DataIntegrityViolationException`) se rechaza solo, con `invalid-event`, y los demás del lote se aceptan. Si el control plane rechaza un lote entero con 400, 413 o 422, el runner lo reenvía de uno en uno y descarta solo el evento rechazado. Los 5xx y los fallos de red se siguen reintentando.
+- **Los artefactos no cambian:** sus bytes (log NDJSON, ficheros declarados binarios) nunca se interpretan como texto.
+
 No hay migraciones ni dependencias nuevas. El tipo de artefacto es texto libre en la base de datos.
 
 ## 1. Tests
@@ -28,6 +34,12 @@ Los de AG-A:
 - `ArtifactControllerTest`:
   - el nombre de descarga saneado: comillas, `;`, saltos de línea, `..\` y nombres vacíos;
   - el tipo con el que se descarga cada MIME;
+- NUL en eventos:
+  - `NormalizedEventTest`: NUL y controles en mapas y listas anidados (también en las claves), salida de un JAR, surrogates sueltos y eventos leídos de JSON;
+  - `JournalTest.eventsWithBinaryOutputAreStoredAndReadWithoutNul`: el journal guarda y devuelve el evento saneado;
+  - `AgentExecutorTest.binaryToolOutputReachesTheJournalWithoutNulAndTheLogKeepsItsBytes`: fake-claude devuelve la cabecera de un JAR en un `tool_result`; el journal no tiene NUL y el log NDJSON conserva los bytes;
+  - `EventSenderTest`: un evento que el control plane no admite se descarta sin bloquear los siguientes, y un 5xx deja los eventos para reintentar;
+  - `RunnerProtocolIT`: un lote con NUL escapado, como el de un runner antiguo, se acepta entero y se guarda visible en PostgreSQL; `EventStore` nunca persiste un NUL; un evento que falla al guardarse se rechaza con `invalid-event` y el agente termina igual.
 - `VerificationAndArtifactsIT.declaredFilesAreDownloadedWholeAsAttachments`:
   - un Markdown se descarga redactado y como adjunto, y un PNG byte a byte;
   - lo que dice ser `text/html` se sirve como texto plano;

@@ -183,4 +183,24 @@ class JournalTest {
       assertThat(journal.firstVerification(verification, agent)).isFalse();
     }
   }
+
+  @Test
+  void eventsWithBinaryOutputAreStoredAndReadWithoutNul() throws Exception {
+    UUID agent = UUID.randomUUID();
+    try (Journal journal = Journal.open(dir.resolve("j.db"))) {
+      journal.append(
+          agent,
+          AgentEventType.TOOL_COMPLETED,
+          Map.of(
+              "toolName",
+              "Bash",
+              "output",
+              List.of(Map.of("text", "PK\u0003\u0004\u0000\u0000META-INF/\u0000"))),
+          Instant.now());
+
+      NormalizedEvent pending = journal.pending(10).getFirst();
+      assertThat(pending.payload().get("output"))
+          .isEqualTo(List.of(Map.of("text", "PK\\u0003\\u0004\\u0000\\u0000META-INF/\\u0000")));
+    }
+  }
 }
