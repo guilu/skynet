@@ -4,8 +4,9 @@
 #   Aplicación completa:                   cp deploy/.env.example deploy/.env   # y rellénalo
 #                                          docker compose -f deploy/docker-compose.yml --profile app up -d --build --wait
 #
-# Variables: deploy/.env.example. SKYNET_ADMIN_PASSWORD es obligatoria con el perfil app (la API no
-# arranca sin ella) y SKYNET_RUNNER_REGISTRATION_TOKEN hace falta para registrar runners.
+# Variables: deploy/.env.example. SKYNET_ADMIN_PASSWORD y SKYNET_DB_PASSWORD son obligatorias con el
+# perfil app (la API no arranca sin ellas) y SKYNET_RUNNER_REGISTRATION_TOKEN hace falta para
+# registrar runners. Solo PostgreSQL, sin .env, usa skynet/skynet y escucha únicamente en este equipo.
 #
 # El runner no va en contenedor: se ejecuta en el host porque necesita `claude` y los repositorios
 # (README, «Instalar el runner»).
@@ -47,7 +48,9 @@ services:
     environment:
       SKYNET_DB_URL: jdbc:postgresql://postgres:5432/skynet
       SKYNET_DB_USER: ${SKYNET_DB_USER:-skynet}
-      SKYNET_DB_PASSWORD: ${SKYNET_DB_PASSWORD:-skynet}
+      # Sin valor por defecto: sin SKYNET_DB_PASSWORD la API no arranca.
+      SKYNET_DB_PASSWORD: ${SKYNET_DB_PASSWORD:-}
+      SKYNET_REQUIRE_DB_PASSWORD: "true"
       # Secreto para registrar runners; vacío desactiva el registro.
       SKYNET_RUNNER_REGISTRATION_TOKEN: ${SKYNET_RUNNER_REGISTRATION_TOKEN:-}
       SKYNET_ARTIFACTS_DIR: /data/artifacts
@@ -81,8 +84,9 @@ services:
     profiles: [app]
     build:
       context: ../web
+    # nginx sin privilegios: escucha en el 8080 del contenedor.
     ports:
-      - "${SKYNET_WEB_PORT:-8081}:80"
+      - "${SKYNET_WEB_PORT:-8081}:8080"
     depends_on:
       api:
         condition: service_healthy
