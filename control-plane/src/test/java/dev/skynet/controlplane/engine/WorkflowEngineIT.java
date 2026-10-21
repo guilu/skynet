@@ -256,6 +256,8 @@ class WorkflowEngineIT extends IntegrationTest {
                 type: string
               risks:
                 type: array
+                items:
+                  type: string
         - id: externo
           type: agent
           prompt: Externo
@@ -837,7 +839,11 @@ class WorkflowEngineIT extends IntegrationTest {
     Events security =
         new Events(
             UUID.fromString(byPrompt.get("Revisa la seguridad").path("agentRunId").asString()));
-    security.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", "s"));
+    security.add(
+        AgentEventType.SESSION_STARTED, Map.of("sessionId", "s", "model", "claude-sonnet-4-5"));
+    security.add(
+        AgentEventType.MESSAGE_RECEIVED,
+        Map.of("text", "mirando", "usage", Map.of("input", 1000, "output", 50)));
     runner.send(security);
 
     Events quality =
@@ -855,11 +861,44 @@ class WorkflowEngineIT extends IntegrationTest {
         .containsEntry("harden", "CANCELLED");
     assertThat(runner.claim()).extracting(c -> c.path("type").asString()).containsExactly("CANCEL");
 
-    security = new Events(security.agentRunId, 1);
-    security.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 143, "signal", "SIGTERM"));
+    // Lo que produce mientras termina (la cuota, los tokens que ningún evento llevó y el coste
+    // estimado del fin del proceso) se guarda aunque ya no llegue su resultado.
+    security = new Events(security.agentRunId, 2);
+    security.add(
+        AgentEventType.QUOTA,
+        Map.of(
+            "provider",
+            "claude-code",
+            "windows",
+            List.of(Map.of("bucket", "default", "window", "five_hour", "usedFraction", 0.3))));
+    security.add(
+        AgentEventType.PROCESS_EXITED,
+        Map.of(
+            "exitCode",
+            143,
+            "signal",
+            "SIGTERM",
+            "usage",
+            Map.of("input", 200, "output", 10, "cacheRead", 300),
+            "estimatedCostUsd",
+            new java.math.BigDecimal("0.0031")));
     runner.send(security);
     assertThat(stageStatuses(runId)).containsEntry("review", "FAILED");
     assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("FAILED");
+
+    JsonNode cancelled = get("/api/agent-runs/" + security.agentRunId).path("agent");
+    assertThat(cancelled.path("status").asString()).isEqualTo("CANCELLED");
+    assertThat(cancelled.path("model").asString()).isEqualTo("claude-sonnet-4-5");
+    assertThat(cancelled.path("inputTokens").asLong()).isEqualTo(1200);
+    assertThat(cancelled.path("outputTokens").asLong()).isEqualTo(60);
+    assertThat(cancelled.path("cacheReadTokens").asLong()).isEqualTo(300);
+    assertThat(cancelled.path("costUsd").decimalValue()).isEqualByComparingTo("0.0031");
+    assertThat(
+            jdbc.sql("SELECT count(*) FROM quota_snapshot WHERE agent_run_id = ?")
+                .param(security.agentRunId)
+                .query(Long.class)
+                .single())
+        .isEqualTo(1);
   }
 
   @Test

@@ -25,7 +25,7 @@ class AntigravityProviderTest {
 
   @Test
   void aStartAcceptsEditsAndPassesThePromptWithEquals() throws Exception {
-    assertThat(provider.command(start(null, "dontAsk", null, null), dir.resolve("a")))
+    assertThat(provider.command(start(null, "acceptEdits", null, null), dir.resolve("a")))
         .containsExactly(
             "agy",
             "--output-format",
@@ -63,10 +63,35 @@ class AntigravityProviderTest {
   @Test
   void thePermissionModeChoosesTheMode() {
     assertThat(AntigravityProvider.mode("plan")).containsExactly("--mode", "plan");
+    assertThat(AntigravityProvider.mode("dontAsk"))
+        .containsExactly("--dangerously-skip-permissions", "--sandbox");
     assertThat(AntigravityProvider.mode("bypassPermissions"))
-        .containsExactly("--dangerously-skip-permissions");
+        .containsExactly("--dangerously-skip-permissions", "--sandbox");
     assertThat(AntigravityProvider.mode("acceptEdits")).containsExactly("--mode", "accept-edits");
     assertThat(AntigravityProvider.mode(null)).containsExactly("--mode", "accept-edits");
+  }
+
+  @Test
+  void aHeadlessReviewerSkipsThePromptsOnlyInsideTheSandbox() throws Exception {
+    assertThat(provider.command(start(null, "dontAsk", null, null), dir.resolve("a")))
+        .containsExactly(
+            "agy",
+            "--output-format",
+            "stream-json",
+            "--dangerously-skip-permissions",
+            "--sandbox",
+            "--print=-arregla add");
+  }
+
+  @Test
+  void neverSkipsThePermissionsWithoutTheSandbox() {
+    for (String mode :
+        new String[] {"plan", "dontAsk", "acceptEdits", "default", "bypassPermissions", null}) {
+      List<String> flags = AntigravityProvider.mode(mode);
+      if (flags.contains("--dangerously-skip-permissions")) {
+        assertThat(flags).as("modo %s", mode).contains("--sandbox");
+      }
+    }
   }
 
   @Test

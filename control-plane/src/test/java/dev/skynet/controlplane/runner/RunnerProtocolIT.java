@@ -622,10 +622,21 @@ class RunnerProtocolIT extends IntegrationTest {
         .isEqualTo(run.agentId().toString());
     ack(runner, commands.getFirst());
 
-    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 143, "signal", "SIGTERM"));
+    // Lo que ya produjo antes de cancelarse (tokens en vivo, coste estimado) no se pierde.
+    events.add(
+        AgentEventType.MESSAGE_RECEIVED,
+        Map.of("text", "mirando", "usage", Map.of("input", 1200, "output", 80)));
+    events.add(
+        AgentEventType.PROCESS_EXITED,
+        Map.of("exitCode", 143, "signal", "SIGTERM", "estimatedCostUsd", new BigDecimal("0.0042")));
     send(runner, events.batch());
 
-    assertThat(agent(run).path("status").asString()).isEqualTo("CANCELLED");
+    JsonNode agent = agent(run);
+    assertThat(agent.path("status").asString()).isEqualTo("CANCELLED");
+    assertThat(agent.path("inputTokens").asLong()).isEqualTo(1200);
+    assertThat(agent.path("outputTokens").asLong()).isEqualTo(80);
+    assertThat(agent.path("costUsd").decimalValue()).isEqualByComparingTo("0.0042");
+    assertThat(agent.path("costUsdCumulative").decimalValue()).isEqualByComparingTo("0.0042");
     JsonNode after = get("/api/workflow-runs/" + run.runId());
     assertThat(after.path("status").asString()).isEqualTo("CANCELLED");
     assertThat(after.path("stages").get(0).path("status").asString()).isEqualTo("CANCELLED");

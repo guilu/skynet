@@ -861,6 +861,8 @@ class DefinitionParserTest {
                 type: string
               risks:
                 type: array
+                items:
+                  type: string
         - id: externo
           type: agent
           prompt: Usa el schema del repositorio
@@ -1337,6 +1339,60 @@ class DefinitionParserTest {
             "`agents.dev.limits.maxTurns` debe estar entre 1 y 1000",
             "`agents.dev.limits.maxBudgetUsd` debe ser un número");
     assertThat(messages(parsed, Severity.WARNING)).containsExactly("`Read` está repetida");
+  }
+
+  static final String ARRAYS =
+      """
+      id: arrays
+      name: Arrays
+      version: 1
+      agents:
+        seguridad:
+          prompt: Revisa
+          output:
+            type: object
+            properties:
+              findings: {type: array}
+              nested:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    tags: {type: array}
+              ok: {type: array, items: {type: string}}
+      stages:
+        - id: a
+          type: agent
+          agent: seguridad
+      """;
+
+  static final String ARRAYS_MESSAGE =
+      "Un `type: array` de `output` necesita `items` con el tipo de sus elementos, p. ej."
+          + " `items: {type: string}`: sin él Antigravity rechaza el schema";
+
+  @Test
+  void anArrayWithoutItemsCannotBePublishedBecauseAntigravityRejectsIt() {
+    Parsed parsed = parse(ARRAYS);
+
+    assertThat(parsed.validation().publishable()).isFalse();
+    assertThat(errors(parsed))
+        .extracting(Problem::path)
+        .containsExactly(
+            "agents.seguridad.output.properties.findings.items",
+            "agents.seguridad.output.properties.nested.items.properties.tags.items");
+    assertThat(messages(parsed, Severity.ERROR)).containsOnly(ARRAYS_MESSAGE);
+  }
+
+  @Test
+  void aPublishedVersionWithAnArrayWithoutItemsIsStillReadWithAWarning() {
+    Parsed parsed = DefinitionParser.parse(ARRAYS, Expectations.published("arrays"));
+
+    assertThat(parsed.validation().publishable()).isTrue();
+    assertThat(parsed.definition()).isNotNull();
+    assertThat(parsed.definition().agent("seguridad").orElseThrow().outputFields())
+        .containsKeys("findings", "nested", "ok");
+    assertThat(messages(parsed, Severity.WARNING)).containsExactly(ARRAYS_MESSAGE, ARRAYS_MESSAGE);
+    assertThat(errors(parsed)).isEmpty();
   }
 
   @Test

@@ -47,6 +47,15 @@ public final class AntigravityEventParser implements EventParser {
   private boolean sawResult;
 
   /**
+   * Tokens de los pasos del agente que aún no ha llevado ningún evento. Viajan en el siguiente
+   * mensaje o herramienta para que el control plane los sume en vivo: si el agente se cancela (el
+   * fail-fast de una {@code parallel}) no llega el {@code result} con los totales. Los de un paso
+   * sin texto (solo razonamiento) tras el que se cancela salen con el fin del proceso ({@link
+   * #unreportedUsage()}).
+   */
+  private AntigravityUsage pendingUsage;
+
+  /**
    * @param model modelo que se pidió, o {@code null} para el predeterminado de la cuenta
    * @param structured si se pidió salida estructurada ({@code --json-schema})
    */
@@ -104,6 +113,9 @@ public final class AntigravityEventParser implements EventParser {
         }
         List<ParsedEvent> events = new ArrayList<>();
         if (done) {
+          if (step.path("usage").isObject()) {
+            pendingUsage = AntigravityUsage.of(step.path("usage")).plus(pendingUsage);
+          }
           flush(events, step);
         }
         yield events;
@@ -129,7 +141,31 @@ public final class AntigravityEventParser implements EventParser {
             payload()
                 .put("messageId", "step_" + step.path("step_index").asLong())
                 .put("model", model)
-                .put("text", message)));
+                .put("text", message)
+                .put("usage", takeUsage())));
+  }
+
+  /** Con resultado no hay nada pendiente: el {@code result} trae los totales. */
+  @Override
+  public Map<String, Object> unreportedUsage() {
+    if (sawResult) {
+      pendingUsage = null;
+    }
+    return takeUsage();
+  }
+
+  /** Los tokens pendientes, como {@code usage} de un evento, o {@code null} si no hay. */
+  private Map<String, Object> takeUsage() {
+    AntigravityUsage usage = pendingUsage;
+    pendingUsage = null;
+    if (usage == null) {
+      return null;
+    }
+    return payload()
+        .put("input", usage.input())
+        .put("output", usage.billedOutput())
+        .put("cacheRead", usage.cacheRead())
+        .map();
   }
 
   private List<ParsedEvent> tool(JsonNode step, boolean done) {
@@ -145,7 +181,8 @@ public final class AntigravityEventParser implements EventParser {
               payload()
                   .put("toolUseId", id)
                   .put("name", toolName(rawName))
-                  .put("input", input(rawName, info.path("parameters")))));
+                  .put("input", input(rawName, info.path("parameters")))
+                  .put("usage", takeUsage())));
     }
     if (!done) {
       return events;

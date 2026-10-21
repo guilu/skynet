@@ -9,6 +9,7 @@ import static dev.skynet.protocol.AgentEventType.SESSION_STARTED;
 import static dev.skynet.protocol.AgentEventType.TOOL_COMPLETED;
 import static dev.skynet.protocol.AgentEventType.TOOL_STARTED;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.runner.provider.ModelPrices;
@@ -148,6 +149,44 @@ class AntigravityEventParserTest {
 
     assertThat(p.types()).doesNotContain(RESULT);
     assertThat(p.parser().sawResult()).isFalse();
+  }
+
+  @Test
+  void theTokensOfEachStepTravelLiveSoACancelledRunKeepsThem() {
+    Parsed p = parse("06-cancelled", null, false);
+
+    // Los pasos 1 y 3 del agente no dicen nada: sus tokens van con la herramienta siguiente.
+    assertThat(p.events())
+        .filteredOn(e -> e.payload().containsKey("usage"))
+        .extracting(
+            ParsedEvent::type, e -> e.payload().get("toolUseId"), e -> e.payload().get("usage"))
+        .containsExactly(
+            tuple(TOOL_STARTED, "step_2", Map.of("input", 11783L, "output", 90L, "cacheRead", 0L)),
+            tuple(
+                TOOL_STARTED,
+                "step_4",
+                Map.of("input", 2304L, "output", 172L, "cacheRead", 9736L)));
+  }
+
+  @Test
+  void theTokensOfAThinkingOnlyStepAreReportedWhenNoEventCarriedThem() {
+    AntigravityEventParser parser = new AntigravityEventParser(null, false, ModelPrices.defaults());
+    parser.parse(
+        "{\"event\":\"step_update\",\"step_update\":{\"step_index\":1,\"state\":\"DONE\","
+            + "\"step_type\":\"agent_response\",\"usage\":{\"input_tokens\":900,"
+            + "\"thinking_tokens\":40,\"cache_read_tokens\":100}}}");
+
+    assertThat(parser.unreportedUsage())
+        .isEqualTo(Map.of("input", 900L, "output", 40L, "cacheRead", 100L));
+    // Una sola vez.
+    assertThat(parser.unreportedUsage()).isNull();
+  }
+
+  @Test
+  void withAResultNothingIsLeftUnreported() {
+    Parsed p = parse("01-simple-text", null, false);
+
+    assertThat(p.parser().unreportedUsage()).isNull();
   }
 
   @Test

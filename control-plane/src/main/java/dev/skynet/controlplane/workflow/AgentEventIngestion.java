@@ -224,6 +224,11 @@ public class AgentEventIngestion {
             errors(p));
       }
       case PROCESS_EXITED -> {
+        // Sin resultado (cancelado a medias) se queda con los tokens que ningún evento llevó y,
+        // como coste, con lo que estimó el runner.
+        agent.addUnreportedUsage(TokenUsage.of(p.get("usage")));
+        agent.recordEstimatedCost(
+            decimal(p.get("estimatedCostUsd")), previousCumulativeCost(agent));
         AgentObservableStatus outcome =
             agent.exited(
                 integer(p.get("exitCode")),

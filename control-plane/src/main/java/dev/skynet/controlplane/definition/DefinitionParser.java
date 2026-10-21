@@ -141,9 +141,21 @@ public final class DefinitionParser {
    *
    * @param key clave del workflow, que no puede cambiar; {@code null} si es nuevo
    * @param version número de la versión que se guarda; {@code null} si no se sabe
+   * @param published si es una versión ya publicada que se vuelve a leer para ejecutarla o
+   *     enseñarla: lo que se endureció después de publicarla (un {@code type: array} sin {@code
+   *     items}) es un aviso y no un error, para que siga leyéndose
    */
-  public record Expectations(String key, Integer version) {
+  public record Expectations(String key, Integer version, boolean published) {
     public static final Expectations NONE = new Expectations(null, null);
+
+    public Expectations(String key, Integer version) {
+      this(key, version, false);
+    }
+
+    /** Una versión publicada de {@code key}. */
+    public static Expectations published(String key) {
+      return new Expectations(key, null, true);
+    }
   }
 
   /**
@@ -575,12 +587,64 @@ public final class DefinitionParser {
           valid = false;
         }
       }
+      if (!arraysHaveItems(mapping, path, key)) {
+        valid = false;
+      }
       if (!valid) {
         return null;
       }
       @SuppressWarnings("unchecked")
       Map<String, Object> plain = (Map<String, Object>) plain(entry.value());
       return plain;
+    }
+
+    /**
+     * Que cada {@code type: array} del schema diga cómo son sus elementos en {@code items}: Gemini
+     * (Antigravity) rechaza la petición entera si falta («properties[x].items: missing field»). Es
+     * un error que impide publicar, salvo al volver a leer una versión ya publicada ({@link
+     * Expectations#published()}): ahí es un aviso, para que se siga leyendo y ejecutando.
+     *
+     * @return si el schema vale (con una versión publicada, siempre)
+     */
+    private boolean arraysHaveItems(Node node, String path, String key) {
+      boolean valid = true;
+      switch (node) {
+        case MappingNode mapping -> {
+          Node type = null;
+          boolean items = false;
+          for (NodeTuple tuple : mapping.getValue()) {
+            if (!(tuple.getKeyNode() instanceof ScalarNode name)) {
+              continue;
+            }
+            switch (name.getValue()) {
+              case "type" -> type = tuple.getValueNode();
+              case "items" -> items = true;
+              default -> {}
+            }
+            valid &= arraysHaveItems(tuple.getValueNode(), path + "." + name.getValue(), key);
+          }
+          if (type instanceof ScalarNode kind && kind.getValue().equals("array") && !items) {
+            String message =
+                "Un `type: array` de `"
+                    + key
+                    + "` necesita `items` con el tipo de sus elementos, p. ej. `items: {type:"
+                    + " string}`: sin él Antigravity rechaza el schema";
+            if (expect.published()) {
+              warning(type, path + ".items", message);
+            } else {
+              error(type, path + ".items", message);
+              valid = false;
+            }
+          }
+        }
+        case SequenceNode sequence -> {
+          for (int i = 0; i < sequence.getValue().size(); i++) {
+            valid &= arraysHaveItems(sequence.getValue().get(i), path + "[" + i + "]", key);
+          }
+        }
+        default -> {}
+      }
+      return valid;
     }
 
     /** Un nodo del YAML como mapas, listas, textos, números, booleanos y {@code null}. */

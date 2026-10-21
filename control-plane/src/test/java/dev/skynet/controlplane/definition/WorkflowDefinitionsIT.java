@@ -7,11 +7,14 @@ import dev.skynet.controlplane.support.IntegrationTest;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
 
 /** Ciclo de vida de un workflow por la API: borrador, validación, publicación y versiones. */
 class WorkflowDefinitionsIT extends IntegrationTest {
+
+  @Autowired WorkflowDefinitions definitions;
 
   static final String REVIEW =
       """
@@ -143,6 +146,68 @@ class WorkflowDefinitionsIT extends IntegrationTest {
         .retrieve()
         .toBodilessEntity();
     assertThat(get("/api/workflows/revisar").path("versions")).hasSize(1);
+  }
+
+  static final String ARRAYS =
+      """
+      id: arrays
+      version: 1
+      name: Arrays
+      agents:
+        seguridad:
+          provider: antigravity
+          prompt: Revisa
+          output:
+            type: object
+            properties:
+              findings: {type: array, items: {type: string}}
+      stages:
+        - id: revisar
+          type: agent
+          agent: seguridad
+      """;
+
+  @Test
+  void anArrayWithoutItemsCannotBePublished() {
+    JsonNode draft =
+        post("/api/workflows", Map.of("sourceYaml", ARRAYS.replace(", items: {type: string}", "")));
+    assertThat(draft.path("status").asString()).isEqualTo("DRAFT");
+    JsonNode problem = draft.path("validation").path("problems").get(0);
+    assertThat(problem.path("severity").asString()).isEqualTo("ERROR");
+    assertThat(problem.path("path").asString())
+        .isEqualTo("agents.seguridad.output.properties.findings.items");
+
+    assertThatThrownBy(() -> publish(draft.path("id").asString(), draft.path("revision").asLong()))
+        .isInstanceOfSatisfying(
+            HttpClientErrorException.Conflict.class,
+            e -> assertThat(e.getResponseBodyAsString()).contains("necesita `items`"));
+  }
+
+  @Test
+  void aVersionPublishedBeforeTheRuleIsStillReadAndRun() {
+    JsonNode v1 = post("/api/workflows", Map.of("sourceYaml", ARRAYS));
+    String id = v1.path("id").asString();
+    // Como una versión publicada antes de RV-A, sin `items` (una publicada ya no se modifica).
+    jdbc.sql(
+            "UPDATE workflow_definition SET source_yaml = ?, status = 'PUBLISHED',"
+                + " published_at = now(), updated_at = now(), revision = revision + 1"
+                + " WHERE id = ?::uuid")
+        .params(ARRAYS.replace(", items: {type: string}", ""), id)
+        .update();
+
+    JsonNode detail = get("/api/workflow-versions/" + id);
+    assertThat(detail.path("validation").path("publishable").asBoolean()).isTrue();
+    assertThat(detail.path("validation").path("problems").get(0).path("severity").asString())
+        .isEqualTo("WARNING");
+    // Lo que lee el motor para lanzarla y ejecutarla.
+    PublishedDefinition published = definitions.published(java.util.UUID.fromString(id));
+    assertThat(published.definition().stage("revisar")).isPresent();
+
+    // Su versión siguiente es un borrador nuevo: ahí sí es un error.
+    JsonNode v2 = post("/api/workflows/arrays/draft", Map.of());
+    assertThat(v2.path("status").asString()).isEqualTo("DRAFT");
+    assertThat(v2.path("validation").path("problems").get(0).path("severity").asString())
+        .isEqualTo("ERROR");
   }
 
   @Test

@@ -480,6 +480,42 @@ class AgentExecutorTest {
   }
 
   @Test
+  void anAntigravityAgentCancelledRightAfterThinkingKeepsThoseTokens() throws Exception {
+    // Un paso solo de razonamiento (sin texto) y, antes de otro mensaje o herramienta, se cancela.
+    Path fixture = dir.resolve("pensar.jsonl");
+    Files.writeString(
+        fixture,
+        """
+        {"event":"init","conversation_id":"c-1","init":{"permission_mode":"accept-edits"}}
+        {"event":"step_update","step_update":{"step_index":1,"state":"DONE","step_type":"agent_response","usage":{"input_tokens":900,"output_tokens":0,"thinking_tokens":40,"cache_read_tokens":100}}}
+        """);
+    UUID id = UUID.randomUUID();
+    agyExecutor(fixture.toString(), Map.of())
+        .start(TestAgents.withProvider(TestAgents.start(id, repo.toString(), null), "antigravity"));
+    Path log = dir.resolve("logs").resolve(id + ".ndjson");
+    long deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos();
+    while (!Files.exists(log) || !Files.readString(log).contains("agent_response")) {
+      if (System.nanoTime() > deadline) {
+        throw new AssertionError("agy no llegó al paso del agente");
+      }
+      Thread.sleep(20);
+    }
+
+    executor.cancel(id);
+    NormalizedEvent exit = awaitExit(id);
+
+    // Del diario vuelven como números JSON: se comparan por su valor.
+    Map<?, ?> usage = (Map<?, ?>) exit.payload().get("usage");
+    assertThat(
+            java.util.stream.Stream.of("input", "output", "cacheRead")
+                .map(k -> ((Number) usage.get(k)).longValue()))
+        .containsExactly(900L, 40L, 100L);
+    assertThat(eventsOf(id))
+        .filteredOn(e -> e.type() != AgentEventType.PROCESS_EXITED)
+        .noneMatch(e -> e.payload().containsKey("usage"));
+  }
+
+  @Test
   void aTimeoutTerminatesTheAgentWithAnError() throws Exception {
     UUID id = UUID.randomUUID();
     executor("07-cancelled").start(TestAgents.start(id, repo.toString(), Duration.ofSeconds(1)));

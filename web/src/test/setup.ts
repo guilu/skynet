@@ -1,6 +1,11 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterEach } from 'vitest'
+
+// Con la máquina cargada (la CI, o los tests de Java a la vez) un render del grafo o del editor
+// tarda más que el segundo por defecto de los findBy/waitFor: se esperan hasta 5 s. Un test que
+// de verdad falla sigue fallando, solo más tarde.
+configure({ asyncUtilTimeout: 5000 })
 
 // Sin `globals` de Vitest, Testing Library no desmonta solo entre tests.
 afterEach(cleanup)
