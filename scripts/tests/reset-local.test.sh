@@ -29,6 +29,8 @@ cat > "$T/bin/docker" <<'EOF'
 #!/usr/bin/env bash
 echo "$*" >> "$RESET_TEST_DIR/docker.log"
 case "$*" in
+  *"inspect -f"*"com.docker.compose.project.config_files"*) printf '%s\n' "${RESET_TEST_COMPOSE_FILES:-}" ;;
+  *"inspect -f"*"com.docker.compose.project.environment_file"*) printf '%s\n' "${RESET_TEST_ENV_FILE:-}" ;;
   *"ps --services"*) printf 'postgres\n' ;;
   *"exec -T postgres"*) cat "$RESET_TEST_DIR/repos.txt" ;;
   "volume inspect"*) exit 0 ;;
@@ -94,7 +96,9 @@ setup() { # nombre-de-cada-tipo...
 run_reset() { # [stdin] -- argumentos
   local input=$1; shift
   printf '%s' "$input" | env PATH="$T/bin:$PATH" RESET_TEST_DIR="$T" SKYNET_RUNNER_HOME="$T/home" \
-    SKYNET_DB_USER=skynet "$SCRIPT" --artifacts "$T/art" --no-seed "$@" > "$T/out.txt" 2>&1
+    SKYNET_DB_USER=skynet RESET_TEST_COMPOSE_FILES="${RESET_TEST_COMPOSE_FILES:-}" \
+    RESET_TEST_ENV_FILE="${RESET_TEST_ENV_FILE:-}" \
+    "$SCRIPT" --artifacts "$T/art" --no-seed "$@" > "$T/out.txt" 2>&1
 }
 
 destructive_docker_calls() { grep -E '(^| )(down|up|rm)( |$)' "$T/docker.log" 2>/dev/null || true; }
@@ -175,6 +179,20 @@ check "borrado: no toca el .git roto" grep -q "gitdir: $T/no-existe" "$T/case/gi
 check "borrado: no toca el repositorio de la subcarpeta" \
   test "$(branches "$T/case/subcarpeta")" = "refs/heads/feature/mia refs/heads/main refs/heads/skynet/TK-1/abc refs/notes/mias refs/skynet/snapshots/abc "
 check "borrado: vuelve a levantar PostgreSQL" grep -q 'up -d --wait postgres' "$T/docker.log"
+
+echo "· Conserva los ficheros Compose y el env-file del despliegue existente"
+setup
+RESET_TEST_COMPOSE_FILES="$ROOT/deploy/docker-compose.yml,$T/private.override.yml"
+RESET_TEST_ENV_FILE="$T/skynet.env"
+touch "$RESET_TEST_ENV_FILE"
+code=0
+run_reset $'borrar\n' || code=$?
+check "compose existente: termina con 0 (fue $code)" test "$code" = 0
+check "compose existente: usa ambos ficheros al bajar" \
+  grep -q -- "--env-file $T/skynet.env -f $ROOT/deploy/docker-compose.yml -f $T/private.override.yml --profile app down" "$T/docker.log"
+check "compose existente: usa ambos ficheros al levantar" \
+  grep -q -- "--env-file $T/skynet.env -f $ROOT/deploy/docker-compose.yml -f $T/private.override.yml up -d --wait postgres" "$T/docker.log"
+unset RESET_TEST_COMPOSE_FILES RESET_TEST_ENV_FILE
 
 echo "· Borrado real solo con rutas inválidas"
 setup inexistente sin-git
