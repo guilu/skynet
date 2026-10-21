@@ -702,7 +702,7 @@ class WorkflowEngineIT extends IntegrationTest {
     Events events = new Events(UUID.fromString(testsAgent));
     events.add(
         AgentEventType.WORKSPACE_READY,
-        Map.of("path", "/w/eng/implement", "branch", "skynet/implement", "baseCommit", "abc"));
+        Map.of("path", "/w/eng/implement", "branch", "skynet/implement", "baseCommit", "abc1234"));
     events.add(
         AgentEventType.TOOL_STARTED,
         Map.of("toolUseId", "c", "name", "Bash", "input", Map.of("command", "./gradlew test")));
@@ -917,8 +917,8 @@ class WorkflowEngineIT extends IntegrationTest {
         Map.of(
             "path", "/w/eng/implement",
             "branch", "skynet/implement",
-            "baseCommit", "abc",
-            "snapshot", "snap-1"));
+            "baseCommit", "abc1234",
+            "snapshot", "5a0001a"));
     events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", "f1"));
     events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 1));
     runner.send(events);
@@ -940,7 +940,7 @@ class WorkflowEngineIT extends IntegrationTest {
     assertThat(second.path("start").path("prompt").asString()).isEqualTo("Corrige");
     JsonNode workspace = second.path("start").path("workspace");
     assertThat(workspace.path("path").asString()).isEqualTo("/w/eng/implement");
-    assertThat(workspace.path("restore").asString()).isEqualTo("snap-1");
+    assertThat(workspace.path("restore").asString()).isEqualTo("5a0001a");
     JsonNode retried = get("/api/agent-runs/" + second.path("agentRunId").asString()).path("agent");
     assertThat(retried.path("kind").asString()).isEqualTo("RETRY");
     assertThat(retried.path("parentAgentRunId").asString()).isEqualTo(firstId);
@@ -1037,16 +1037,15 @@ class WorkflowEngineIT extends IntegrationTest {
     Runner runner = register("laptop");
     String runId = launch(definitionId, Map.of()).path("id").asString();
     complete(runner, runner.claim().getFirst(), "/w/eng/implement");
-    snapshotted(runner, runner.claim().getFirst(), "snap-fix", 0);
-    snapshotted(runner, runner.claim().getFirst(), "snap-tests", 2);
+    snapshotted(runner, runner.claim().getFirst(), "5a0f1c5", 0);
+    snapshotted(runner, runner.claim().getFirst(), "5a07e57", 2);
     assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("FAILED");
 
     post("/api/workflow-runs/" + runId + "/stages/fix/retry", Map.of());
 
     // fix vuelve a como lo dejó implement; tests sigue desde lo que deje el fix nuevo.
     JsonNode fix = awaitCommand(runner);
-    assertThat(fix.path("start").path("workspace").path("restore").asString())
-        .isEqualTo("snap-fix");
+    assertThat(fix.path("start").path("workspace").path("restore").asString()).isEqualTo("5a0f1c5");
     complete(runner, fix, "/w/eng/implement");
     JsonNode tests = awaitCommand(runner);
     assertThat(
@@ -1284,7 +1283,7 @@ class WorkflowEngineIT extends IntegrationTest {
     assertThat(verify.path("type").asString()).isEqualTo("VERIFY");
     JsonNode request = verify.path("verify");
     assertThat(request.path("command").isNull()).isTrue();
-    assertThat(request.path("baseCommit").asString()).isEqualTo("abc");
+    assertThat(request.path("baseCommit").asString()).isEqualTo("abc1234");
     assertThat(request.path("checks"))
         .extracting(c -> c.path("name").asString())
         .containsExactly("artifacts", "diff");
@@ -1354,7 +1353,7 @@ class WorkflowEngineIT extends IntegrationTest {
     assertThat(verify.path("verify").path("command").asString()).isEqualTo("npm test");
     assertThat(verify.path("verify").path("workspacePath").asString())
         .isEqualTo("/w/eng/implement");
-    assertThat(verify.path("verify").path("baseCommit").asString()).isEqualTo("abc");
+    assertThat(verify.path("verify").path("baseCommit").asString()).isEqualTo("abc1234");
     assertThat(provider(verify.path("agentRunId").asString())).isEqualTo("verification");
     assertThat(stageStatuses(runId)).containsEntry("verify", "RUNNING");
     String nodeAgent = verify.path("agentRunId").asString();
@@ -2066,7 +2065,7 @@ class WorkflowEngineIT extends IntegrationTest {
     assertThat(stageStatuses(runId)).containsEntry("aprobar-spec", "RUNNING");
     JsonNode verify = runner.claim().getFirst();
     assertThat(verify.path("type").asString()).isEqualTo("VERIFY");
-    assertThat(verify.path("verify").path("baseCommit").asString()).isEqualTo("abc");
+    assertThat(verify.path("verify").path("baseCommit").asString()).isEqualTo("abc1234");
     verified(runner, verify, false);
 
     assertThat(stageStatuses(runId))
@@ -2224,7 +2223,7 @@ class WorkflowEngineIT extends IntegrationTest {
             "branch",
             "skynet/" + worktree.substring(worktree.lastIndexOf('/') + 1),
             "baseCommit",
-            "abc"));
+            "abc1234"));
     events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", session));
     Map<String, Object> result =
         new LinkedHashMap<>(Map.of("subtype", "success", "isError", false));
@@ -2289,7 +2288,7 @@ class WorkflowEngineIT extends IntegrationTest {
         Map.of(
             "path", "/w/eng/implement",
             "branch", "skynet/implement",
-            "baseCommit", "abc",
+            "baseCommit", "abc1234",
             "snapshot", snapshot));
     events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", snapshot));
     if (exitCode == 0) {

@@ -394,7 +394,7 @@ class VerificationAndArtifactsIT extends IntegrationTest {
     Events events = new Events(agentRunId, 1);
     events.add(
         AgentEventType.WORKSPACE_READY,
-        Map.of("path", "/w/run/a1", "branch", "skynet/ver-1/a1", "baseCommit", "abc"));
+        Map.of("path", "/w/run/a1", "branch", "skynet/ver-1/a1", "baseCommit", "abc1234"));
     events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", UUID.randomUUID().toString()));
     events.add(AgentEventType.MESSAGE_RECEIVED, Map.of("text", "Hecho"));
     events.add(

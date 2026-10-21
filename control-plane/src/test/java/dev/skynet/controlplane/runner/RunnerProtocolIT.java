@@ -220,7 +220,7 @@ class RunnerProtocolIT extends IntegrationTest {
     Events events = new Events(run.agentId());
     events.add(
         AgentEventType.WORKSPACE_READY,
-        Map.of("path", "/w/r/a", "branch", "skynet/adhoc/abcd1234", "baseCommit", "abc"));
+        Map.of("path", "/w/r/a", "branch", "skynet/adhoc/abcd1234", "baseCommit", "abc1234"));
     events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", "s"));
     events.add(
         AgentEventType.PROCESS_EXITED,
@@ -983,7 +983,7 @@ class RunnerProtocolIT extends IntegrationTest {
     Events events = new Events(run.agentId());
     events.add(
         AgentEventType.WORKSPACE_READY,
-        Map.of("path", "/w/b1", "branch", "skynet/run-1/b1", "baseCommit", "abc"));
+        Map.of("path", "/w/b1", "branch", "skynet/run-1/b1", "baseCommit", "abc1234"));
     send(runner, events.batch());
 
     assertStatus(
@@ -1050,7 +1050,7 @@ class RunnerProtocolIT extends IntegrationTest {
             "branch",
             "skynet/run-1/" + worktree.substring(worktree.lastIndexOf('/') + 1),
             "baseCommit",
-            "abc"));
+            "abc1234"));
     events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", session));
     events.add(AgentEventType.MESSAGE_RECEIVED, Map.of("text", "Hecho"));
     Map<String, Object> result = new java.util.HashMap<>(cost);
