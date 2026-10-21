@@ -2,6 +2,7 @@ package dev.skynet.runner.agent;
 
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.AgentFailure;
+import dev.skynet.protocol.SafeIds;
 import dev.skynet.protocol.runner.ArtifactType;
 import dev.skynet.protocol.runner.CleanupWorkspace;
 import dev.skynet.protocol.runner.ResumeFrom;
@@ -291,6 +292,10 @@ public final class AgentExecutor implements AutoCloseable {
           start.workflowRunId(),
           start.workItemKey(),
           id);
+    }
+    // El id va a la línea de comandos del CLI (--resume, --conversation) y a rutas de su sesión.
+    if (!SafeIds.isSessionId(resume.sessionId())) {
+      throw new IOException("`" + resume.sessionId() + "` no es un id de sesión válido");
     }
     Path parent = Path.of(resume.workspacePath());
     if (!resume.fork()) {

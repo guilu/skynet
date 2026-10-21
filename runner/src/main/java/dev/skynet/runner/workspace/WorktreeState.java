@@ -28,12 +28,13 @@ public record WorktreeState(
     String base =
         baseCommit == null || baseCommit.isBlank()
             ? Git.text(worktree, List.of("rev-parse", "HEAD")).trim()
-            : baseCommit;
+            : Git.commit(baseCommit);
     int commits =
         Integer.parseInt(
-            Git.text(worktree, List.of("rev-list", "--count", base + "..HEAD")).trim());
+            Git.text(worktree, List.of("rev-list", "--count", base + "..HEAD", "--")).trim());
     Set<String> files = new LinkedHashSet<>();
-    files.addAll(lines(Git.text(worktree, List.of("diff", "--name-only", "--no-renames", base))));
+    files.addAll(
+        lines(Git.text(worktree, List.of("diff", "--name-only", "--no-renames", base, "--"))));
     files.addAll(lines(Git.text(worktree, List.of("ls-files", "--others", "--exclude-standard"))));
     int uncommitted = lines(Git.text(worktree, List.of("status", "--porcelain"))).size();
     return new WorktreeState(base, commits, List.copyOf(files), uncommitted);

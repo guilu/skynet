@@ -1,6 +1,7 @@
 package dev.skynet.runner.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.skynet.runner.TestRepos;
 import java.nio.charset.StandardCharsets;
@@ -113,5 +114,20 @@ class GitIndexerTest {
             List.of("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", message));
     args.addAll(List.of(extra));
     TestRepos.git(repo, args.toArray(String[]::new));
+  }
+
+  @Test
+  void aBaseCommitThatGitWouldReadAsAnOptionIsRefused() throws Exception {
+    Path repo = TestRepos.create(dir.resolve("repo"));
+    Path pwned = dir.resolve("pwned");
+    String base = "--output=" + pwned;
+
+    assertThatThrownBy(() -> GitIndexer.index(repo, base, dir.resolve("changes.diff")))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessage("El commit base `" + base + "` no es un hash de git");
+    assertThatThrownBy(() -> WorktreeState.of(repo, base))
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessage("El commit base `" + base + "` no es un hash de git");
+    assertThat(pwned).doesNotExist();
   }
 }

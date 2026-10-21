@@ -1,5 +1,6 @@
 package dev.skynet.runner.workspace;
 
+import dev.skynet.protocol.SafeIds;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -34,6 +35,10 @@ public class WorkspaceManager {
     if (!Files.isDirectory(repository)) {
       throw new IOException("El repositorio no existe en este runner: " + repository);
     }
+    boolean hasBase = baseBranch != null && !baseBranch.isBlank();
+    if (hasBase && !SafeIds.isBranch(baseBranch)) {
+      throw new IOException("La rama base `" + baseBranch + "` no es un nombre de rama válido");
+    }
     Path path = root.resolve(workflowRunId.toString()).resolve(agentRunId.toString());
     if (Files.exists(path)) {
       throw new IOException("El worktree ya existe: " + path);
@@ -41,7 +46,7 @@ public class WorkspaceManager {
     Files.createDirectories(path.getParent());
     String branch = branchName(workItemKey, agentRunId);
     List<String> add = new ArrayList<>(List.of("worktree", "add", "-b", branch, path.toString()));
-    if (baseBranch != null && !baseBranch.isBlank()) {
+    if (hasBase) {
       add.add(baseBranch);
     }
     git(repository, add);
@@ -126,8 +131,11 @@ public class WorkspaceManager {
    * hubiera de más (ficheros nuevos no ignorados) se borra; los ignorados se quedan.
    */
   static void restore(Path worktree, String snapshot) throws IOException, InterruptedException {
+    if (!SafeIds.isCommit(snapshot)) {
+      throw new IOException("La instantánea `" + snapshot + "` no es un hash de git");
+    }
     String parent = git(worktree, List.of("rev-parse", snapshot + "^")).trim();
-    git(worktree, List.of("reset", "--hard", "-q", parent));
+    git(worktree, List.of("reset", "--hard", "-q", parent, "--"));
     git(worktree, List.of("clean", "-fdq"));
     git(worktree, List.of("read-tree", "-u", "--reset", snapshot));
     git(worktree, List.of("reset", "-q"));

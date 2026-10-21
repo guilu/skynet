@@ -128,6 +128,24 @@ class RunLifecycleIT extends IntegrationTest {
                 "/api/projects/" + UUID.randomUUID() + "/repositories",
                 Map.of("name", "r", "localPath", "relative/path")));
 
+    // Una rama base que git leería como opción (va a `git worktree add` en el runner).
+    String project = post("/api/projects", Map.of("key", "RAM", "name", "x")).path("id").asString();
+    for (String branch : List.of("--upload-pack=touch /tmp/x", "-main", "main..HEAD")) {
+      assertStatus(
+          HttpStatus.BAD_REQUEST,
+          () ->
+              post(
+                  "/api/projects/" + project + "/repositories",
+                  Map.of("name", "r", "localPath", "/repos/r", "defaultBranch", branch)));
+    }
+    assertThat(
+            post(
+                    "/api/projects/" + project + "/repositories",
+                    Map.of("name", "r", "localPath", "/repos/r", "defaultBranch", "release/1.2"))
+                .path("defaultBranch")
+                .asString())
+        .isEqualTo("release/1.2");
+
     // El repositorio debe pertenecer al proyecto del trabajo.
     Fixture f = fixture();
     JsonNode other = post("/api/projects", Map.of("key", "OTH", "name", "Other"));

@@ -715,6 +715,29 @@ class AgentExecutorTest {
   }
 
   @Test
+  void aResumeWithASessionIdThatIsNotAnIdFailsBeforeTouchingAnything() throws Exception {
+    UUID first = UUID.randomUUID();
+    executor("01-simple-text").start(TestAgents.start(first, repo.toString(), null));
+    awaitExit(first);
+    String path = (String) eventsOf(first).getFirst().payload().get("path");
+
+    for (String session : new String[] {"--dangerously-skip-permissions", "../../x"}) {
+      UUID id = UUID.randomUUID();
+      executor.start(
+          TestAgents.resume(
+              id, repo.toString(), UUID.randomUUID(), new ResumeFrom(session, true, path, "x")));
+
+      NormalizedEvent exit = awaitExit(id);
+      assertThat(exit.payload())
+          .containsEntry("failure", "start")
+          .containsEntry(
+              "error",
+              "No se pudo preparar el worktree: `" + session + "` no es un id de sesión válido");
+      assertThat(eventsOf(id)).hasSize(1);
+    }
+  }
+
+  @Test
   void aWorktreeOnlyRunsOneInvocationAtATime() throws Exception {
     UUID running = UUID.randomUUID();
     RunnerCommand start = TestAgents.start(running, repo.toString(), null);
