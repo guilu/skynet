@@ -47,19 +47,27 @@ Los de AG-A:
 
 ## 2. Ejecución real
 
-1. Lanza `conocer-repositorio` sobre un repositorio cualquiera y espera a que termine la fase que declara `artifacts: [docs/skynet/mapa.md]`.
-2. Busca el id del agente de esa fase (en la URL del detalle de la ejecución) y lista sus artefactos:
+> **No uses el repositorio `skynet`** para esta prueba. Se hace solo con `demo-repo`, del proyecto DEMO.
+
+1. En la web, abre el proyecto **DEMO** y crea un trabajo, o reutiliza uno que ya exista.
+2. Lanza el workflow `conocer-repositorio` desde ese trabajo. Como repositorio, selecciona **exclusivamente `demo-repo`**, el registrado en `/home/diegobarrioh/code/demo-repo`. No selecciones ningún otro.
+3. Espera a que termine la fase que declara `artifacts: [docs/skynet/mapa.md]`. Comprueba en la cabecera de la ejecución que el repositorio es `demo-repo`.
+4. Busca el id del agente de esa fase (está en la URL del detalle de la ejecución) y lista sus artefactos:
    ```bash
    curl -s -u admin:$SKYNET_ADMIN_PASSWORD http://localhost:8080/api/agent-runs/<agente>/artifacts | jq '.[] | {id, type, name, mediaType, size, metadata}'
    ```
-   Sale un `DECLARED_FILE` con `name: "docs/skynet/mapa.md"`, `mediaType: "text/markdown"` y `metadata.glob: "docs/skynet/mapa.md"`. No sale ningún otro fichero cambiado del worktree: esos siguen en `changes.diff`.
-3. Descárgalo:
+   - Sale un artefacto de tipo `DECLARED_FILE` con `name: "docs/skynet/mapa.md"` y `mediaType: "text/markdown"`.
+   - Sus metadatos llevan `path: "docs/skynet/mapa.md"`, `glob: "docs/skynet/mapa.md"`, `mediaType` y `size`.
+   - No sale como `DECLARED_FILE` ningún otro fichero cambiado del worktree: esos siguen en `changes.diff`.
+5. Descárgalo con credenciales:
    ```bash
    curl -s -D - -o mapa.md -u admin:$SKYNET_ADMIN_PASSWORD http://localhost:8080/api/artifacts/<id>/download
    ```
-   Las cabeceras llevan `Content-Disposition: attachment; filename="mapa.md"; filename*=UTF-8''mapa.md` y `X-Content-Type-Options: nosniff`, y `mapa.md` coincide con el del worktree.
-4. Borra el worktree del runner (o archiva la ejecución y limpia los worktrees) y repite el paso 3: la descarga sigue funcionando.
-5. Sin credenciales, `curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/artifacts/<id>/download` da 401.
+   - La respuesta es 200.
+   - Las cabeceras llevan `Content-Disposition: attachment; filename="mapa.md"; filename*=UTF-8''mapa.md` y `X-Content-Type-Options: nosniff`.
+   - El contenido coincide con el del worktree de `demo-repo`: `diff mapa.md <worktree>/docs/skynet/mapa.md` no muestra diferencias. La ruta del worktree está en el evento `agent.workspace.ready`.
+6. Limpia el worktree del runner (borrándolo o archivando la ejecución y limpiando los worktrees) y repite el paso 5. La descarga sigue funcionando y el contenido es el mismo que antes.
+7. Sin credenciales, `curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/artifacts/<id>/download` da 401.
 
 ## 3. Límites y enlaces (opcional)
 
