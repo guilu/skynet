@@ -41,7 +41,9 @@ public class AgentEventIngestion {
     DUPLICATE,
     UNKNOWN_AGENT_RUN,
     NOT_ASSIGNED_TO_RUNNER,
-    UNKNOWN_VERIFICATION_RUN
+    UNKNOWN_VERIFICATION_RUN,
+    /** La base de datos no lo admite; lo decide quien llama, porque su transacción ya falló. */
+    INVALID
   }
 
   private final AgentRunRepository agentRuns;

@@ -218,6 +218,49 @@ public class ArtifactService {
     }
   }
 
+  /** Lo necesario para descargar un artefacto entero. */
+  public record Download(String name, String mediaType, long size, String uri) {}
+
+  /** El artefacto {@code artifactId}, para descargarlo con {@link #bytes}. */
+  @Transactional(readOnly = true)
+  public Download download(UUID artifactId) {
+    return jdbc.sql("SELECT name, media_type, size, uri FROM artifact WHERE id = ?")
+        .param(artifactId)
+        .query(
+            (rs, row) ->
+                new Download(
+                    rs.getString("name"),
+                    rs.getString("media_type"),
+                    rs.getLong("size"),
+                    rs.getString("uri")))
+        .optional()
+        .orElseThrow(() -> new NotFoundException("Artefacto", artifactId));
+  }
+
+  /**
+   * El contenido entero de {@code download}, leído por trozos. Cabe en memoria: lo guardado nunca
+   * pasa de {@code skynet.artifacts.max-size}.
+   */
+  public byte[] bytes(Download download) {
+    java.io.ByteArrayOutputStream out =
+        new java.io.ByteArrayOutputStream((int) Math.min(download.size(), MAX_ARRAY));
+    try {
+      long offset = 0;
+      while (offset < download.size()) {
+        byte[] chunk =
+            blobs.read(download.uri(), offset, (int) Math.min(MAX_CHUNK, download.size() - offset));
+        if (chunk.length == 0) {
+          break;
+        }
+        out.write(chunk);
+        offset += chunk.length;
+      }
+    } catch (IOException e) {
+      throw new UncheckedIOException("No se pudo leer el artefacto " + download.name(), e);
+    }
+    return out.toByteArray();
+  }
+
   static boolean isText(String mediaType) {
     String base = mediaType.split(";", 2)[0].strip().toLowerCase(java.util.Locale.ROOT);
     return base.startsWith("text/") || TEXT_TYPES.contains(base) || base.endsWith("+json");

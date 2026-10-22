@@ -33,6 +33,7 @@ public class ControlPlaneClient {
   private static final Duration TIMEOUT = Duration.ofSeconds(15);
   private static final Duration UPLOAD_TIMEOUT = Duration.ofMinutes(2);
   private static final java.util.Set<Integer> REJECTED = java.util.Set.of(400, 404, 409, 413);
+  private static final java.util.Set<Integer> EVENTS_REJECTED = java.util.Set.of(400, 413, 422);
 
   private final URI base;
   private final HttpClient http;
@@ -77,8 +78,19 @@ public class ControlPlaneClient {
     send(post("/api/runner/commands/" + commandId + "/ack", null, true), Void.class, TIMEOUT);
   }
 
+  /**
+   * Envía un lote de eventos. Si el control plane lo rechaza entero por algo que no cambiará al
+   * reintentar (400, 413, 422), lanza {@link EventsRejectedException}.
+   */
   public EventBatchResult events(EventBatch batch) throws IOException, InterruptedException {
-    return send(post("/api/runner/events", batch, true), EventBatchResult.class, TIMEOUT);
+    try {
+      return send(post("/api/runner/events", batch, true), EventBatchResult.class, TIMEOUT);
+    } catch (StatusException e) {
+      if (EVENTS_REJECTED.contains(e.status())) {
+        throw new EventsRejectedException(e.getMessage());
+      }
+      throw e;
+    }
   }
 
   /**

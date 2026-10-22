@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -156,6 +157,8 @@ class RunnerController {
         case UNKNOWN_VERIFICATION_RUN ->
             rejected.add(
                 new EventBatchResult.Rejected(event.eventId(), "unknown-verification-run"));
+        case INVALID ->
+            rejected.add(new EventBatchResult.Rejected(event.eventId(), "invalid-event"));
       }
     }
     // Un agente que termina libera capacidad: puede haber arranques esperando.
@@ -189,6 +192,11 @@ class RunnerController {
     }
   }
 
+  /**
+   * Un evento que la base de datos no admite (p. ej. un texto que no cabe en {@code jsonb}) se
+   * rechaza solo: si fallara el lote entero, el runner lo reenviaría siempre y no llegaría ningún
+   * evento posterior. Su transacción ya se deshizo.
+   */
   private AgentEventIngestion.Outcome ingest(UUID runnerId, NormalizedEvent event) {
     for (int attempt = 1; ; attempt++) {
       try {
@@ -197,6 +205,9 @@ class RunnerController {
         if (attempt == INGEST_ATTEMPTS) {
           throw e;
         }
+      } catch (DataIntegrityViolationException e) {
+        log.warn("Evento {} de {} rechazado: no se puede guardar", event.eventId(), runnerId, e);
+        return AgentEventIngestion.Outcome.INVALID;
       }
     }
   }

@@ -95,7 +95,8 @@ public final class RunnerMain {
                 config.logsDir(),
                 config.cancelGrace(),
                 sender::wakeUp,
-                new ArtifactSpool(journal, config.artifactsDir(), artifactSender::wakeUp));
+                new ArtifactSpool(journal, config.artifactsDir(), artifactSender::wakeUp),
+                config.declaredFiles());
         RunnerDaemon daemon =
             new RunnerDaemon(
                 config,

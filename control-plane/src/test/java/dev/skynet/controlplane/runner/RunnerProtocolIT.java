@@ -3,7 +3,11 @@ package dev.skynet.controlplane.runner;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.skynet.controlplane.event.EventDraft;
+import dev.skynet.controlplane.event.EventStore;
+import dev.skynet.controlplane.event.StoredEvent;
 import dev.skynet.controlplane.support.IntegrationTest;
+import dev.skynet.controlplane.workflow.AgentEventIngestion;
 import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.runner.EventBatch;
@@ -23,14 +27,21 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
 
 /** Protocolo runner ↔ control plane (§4.3): registro, órdenes con long-poll e ingestión. */
 class RunnerProtocolIT extends IntegrationTest {
+
+  @MockitoSpyBean private AgentEventIngestion ingestion;
+  @Autowired private EventStore eventStore;
 
   @Test
   void registrationRequiresTheSharedTokenAndReRegisteringRotatesTheToken() {
@@ -145,6 +156,100 @@ class RunnerProtocolIT extends IntegrationTest {
             "stage.status.changed",
             "workflow.status.changed")
         .containsOnlyOnce("agent.session.started", "agent.process.exited");
+  }
+
+  @Test
+  void eventsWithNulFromBinaryOutputAreStoredVisible() {
+    Runner runner = register("laptop", 1);
+    Launched run = launch("lee el jar");
+    poll(runner, 1);
+    String jar = "PK\\u0003\\u0004\\u0014\\u0000\\b\\u0000META-INF/MANIFEST.MF\\u0000";
+    // Lo que manda un runner sin sanear: el NUL llega escapado en el JSON.
+    String batch =
+        "{\"events\":["
+            + raw(
+                run.agentId(),
+                1,
+                "TOOL_COMPLETED",
+                "{\"toolName\":\"Bash\",\"output\":[{\"text\":\""
+                    + jar
+                    + "\"}],"
+                    + "\"meta\":{\"k\\u0000\":[\"a\\u0000b\"]}}")
+            + ","
+            + raw(
+                run.agentId(),
+                2,
+                "RESULT",
+                "{\"subtype\":\"error\",\"isError\":true,\"errors\":[\"fallo\\u0000\"]}")
+            + ","
+            + raw(run.agentId(), 3, "PROCESS_EXITED", "{\"exitCode\":1}")
+            + "]}";
+
+    JsonNode result =
+        http.post()
+            .uri("/api/runner/events")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + runner.token())
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .body(batch)
+            .retrieve()
+            .body(JsonNode.class);
+
+    assertThat(result.path("accepted").asInt()).isEqualTo(3);
+    JsonNode agent = agent(run);
+    assertThat(agent.path("status").asString()).isEqualTo("FAILED");
+    assertThat(agent.path("error").asString()).isEqualTo("fallo\\u0000");
+    String stored =
+        jdbc.sql(
+                "SELECT payload::text FROM event WHERE source_event_id IS NOT NULL"
+                    + " AND event_type = 'agent.tool.completed'")
+            .query(String.class)
+            .single();
+    assertThat(stored)
+        .contains("PK\\\\u0003\\\\u0004\\\\u0014\\\\u0000\\\\u0008\\\\u0000META-INF")
+        .contains("k\\\\u0000");
+  }
+
+  @Test
+  void theEventStoreNeverPersistsNul() {
+    Launched run = launch("x");
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("text", "PK\u0003\u0004\u0000");
+    payload.put("nested", List.of(Map.of("k\u0000", "v\u0000")));
+
+    StoredEvent event =
+        eventStore.append(
+            EventDraft.of(
+                "workflow_run", run.runId(), "test.binary", run.runId(), payload, Instant.now()));
+
+    String stored =
+        jdbc.sql("SELECT payload::text FROM event WHERE sequence = ?")
+            .param(event.sequence())
+            .query(String.class)
+            .single();
+    assertThat(stored.replace("\\\\", "")).doesNotContain("\\u0000");
+    assertThat(stored).contains("PK\\\\u0003\\\\u0004\\\\u0000");
+  }
+
+  @Test
+  void anEventThatCannotBeStoredIsRejectedWithoutBlockingTheRest() {
+    Runner runner = register("laptop", 1);
+    Launched run = launch("x");
+    poll(runner, 1);
+    Mockito.doThrow(new DataIntegrityViolationException("no se puede guardar"))
+        .when(ingestion)
+        .ingest(
+            ArgumentMatchers.any(),
+            ArgumentMatchers.argThat(e -> e != null && e.payload().containsKey("veneno")));
+
+    Events events = new Events(run.agentId());
+    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", "s"));
+    events.add(AgentEventType.MESSAGE_RECEIVED, Map.of("text", "x", "veneno", true));
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 1));
+    JsonNode result = send(runner, events.batch());
+
+    assertThat(result.path("accepted").asInt()).isEqualTo(2);
+    assertThat(result.path("rejected").get(0).path("reason").asString()).isEqualTo("invalid-event");
+    assertThat(agent(run).path("status").asString()).isEqualTo("FAILED");
   }
 
   @Test
@@ -1190,6 +1295,23 @@ class RunnerProtocolIT extends IntegrationTest {
         .header(HttpHeaders.AUTHORIZATION, "Bearer " + runner.token())
         .retrieve()
         .toBodilessEntity();
+  }
+
+  /** Un evento como JSON, tal como lo escribe un runner. */
+  private static String raw(UUID agentRunId, long seq, String type, String payload) {
+    return "{\"eventId\":\""
+        + UUID.randomUUID()
+        + "\",\"agentRunId\":\""
+        + agentRunId
+        + "\",\"seq\":"
+        + seq
+        + ",\"occurredAt\":\""
+        + Instant.now()
+        + "\",\"type\":\""
+        + type
+        + "\",\"payload\":"
+        + payload
+        + "}";
   }
 
   private JsonNode send(Runner runner, EventBatch batch) {

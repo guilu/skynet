@@ -5,6 +5,7 @@ import dev.skynet.protocol.runner.EventBatch;
 import dev.skynet.protocol.runner.EventBatchResult;
 import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.transport.ControlPlaneClient;
+import dev.skynet.runner.transport.EventsRejectedException;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
@@ -15,7 +16,8 @@ import java.util.logging.Logger;
 /**
  * Envía al control plane los eventos pendientes del journal, por lotes y en orden. Un evento solo
  * se borra del journal cuando el control plane responde; si la conexión falla, se reintenta. Como
- * la ingestión es idempotente, reenviar un lote es seguro.
+ * la ingestión es idempotente, reenviar un lote es seguro. Un evento que el control plane rechaza
+ * siempre se descarta, para no bloquear los siguientes.
  */
 public final class EventSender implements AutoCloseable {
 
@@ -94,8 +96,25 @@ public final class EventSender implements AutoCloseable {
     }
   }
 
+  /**
+   * Envía {@code batch}. Si el control plane rechaza el lote entero, se reenvía de uno en uno para
+   * que solo se descarte el evento que no admite y los demás no se queden esperando para siempre.
+   */
   private void send(List<NormalizedEvent> batch) throws IOException, InterruptedException {
-    EventBatchResult result = client.events(new EventBatch(batch));
+    EventBatchResult result;
+    try {
+      result = client.events(new EventBatch(batch));
+    } catch (EventsRejectedException e) {
+      if (batch.size() == 1) {
+        LOG.warning("Evento " + batch.getFirst().eventId() + " descartado: " + e.getMessage());
+        journal.delivered(List.of(batch.getFirst().eventId()));
+        return;
+      }
+      for (NormalizedEvent event : batch) {
+        send(List.of(event));
+      }
+      return;
+    }
     for (EventBatchResult.Rejected rejected : result.rejected()) {
       LOG.warning("Evento " + rejected.eventId() + " rechazado: " + rejected.reason());
     }

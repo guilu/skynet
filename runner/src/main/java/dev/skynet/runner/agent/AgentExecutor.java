@@ -19,6 +19,7 @@ import dev.skynet.runner.provider.StructuredOutput;
 import dev.skynet.runner.supervisor.ProcessExit;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.supervisor.SupervisedProcess;
+import dev.skynet.runner.verify.DeclaredFiles;
 import dev.skynet.runner.verify.JUnitReports;
 import dev.skynet.runner.verify.StageChecks;
 import dev.skynet.runner.workspace.GitIndexer;
@@ -81,6 +82,7 @@ public final class AgentExecutor implements AutoCloseable {
   private final Map<UUID, Execution> executions = new ConcurrentHashMap<>();
   private final Map<Path, UUID> busyWorkspaces = new ConcurrentHashMap<>();
   private final Map<UUID, SupervisedProcess> verifications = new ConcurrentHashMap<>();
+  private final DeclaredFiles.Limits declaredLimits;
   private final ArtifactSpool spool;
 
   public AgentExecutor(
@@ -93,6 +95,30 @@ public final class AgentExecutor implements AutoCloseable {
       Duration cancelGrace,
       Runnable eventsAvailable,
       ArtifactSpool spool) {
+    this(
+        journal,
+        supervisor,
+        workspaces,
+        providers,
+        runnerEnv,
+        logs,
+        cancelGrace,
+        eventsAvailable,
+        spool,
+        DeclaredFiles.Limits.DEFAULT);
+  }
+
+  public AgentExecutor(
+      Journal journal,
+      ProcessSupervisor supervisor,
+      WorkspaceManager workspaces,
+      ProviderRegistry providers,
+      Map<String, String> runnerEnv,
+      Path logs,
+      Duration cancelGrace,
+      Runnable eventsAvailable,
+      ArtifactSpool spool,
+      DeclaredFiles.Limits declaredLimits) {
     this.journal = journal;
     this.supervisor = supervisor;
     this.workspaces = workspaces;
@@ -102,6 +128,7 @@ public final class AgentExecutor implements AutoCloseable {
     this.cancelGrace = cancelGrace;
     this.eventsAvailable = eventsAvailable;
     this.spool = spool;
+    this.declaredLimits = declaredLimits;
   }
 
   /** Invocaciones en curso en este runner. */
@@ -774,7 +801,34 @@ public final class AgentExecutor implements AutoCloseable {
               verification.baseCommit(),
               tests,
               (command, index) ->
-                  runCheckCommand(agentRunId, verification, workspace, command, index)));
+                  runCheckCommand(agentRunId, verification, workspace, command, index),
+              declaredLimits,
+              selection -> uploadDeclared(agentRunId, id, selection)));
+    }
+  }
+
+  /**
+   * Los ficheros que declara la fase en {@code artifacts}, uno a uno como {@code DECLARED_FILE}.
+   */
+  private void uploadDeclared(
+      UUID agentRunId, UUID verificationRunId, DeclaredFiles.Selection selection) {
+    for (DeclaredFiles.Match file : selection.files()) {
+      artifact(
+          agentRunId,
+          "DECLARED_FILE " + file.path(),
+          () ->
+              spool.addFile(
+                  agentRunId,
+                  verificationRunId,
+                  ArtifactType.DECLARED_FILE,
+                  file.path(),
+                  file.mediaType(),
+                  file.file(),
+                  Map.of(
+                      "path", file.path(),
+                      "glob", file.glob(),
+                      "mediaType", file.mediaType(),
+                      "size", file.size())));
     }
   }
 

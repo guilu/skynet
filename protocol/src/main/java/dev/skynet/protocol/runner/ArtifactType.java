@@ -15,5 +15,10 @@ public enum ArtifactType {
   /** Salida (stdout y stderr) del comando de verificación. */
   VERIFICATION_LOG,
   /** Resultado de los informes JUnit de la verificación (JSON). */
-  TEST_REPORT
+  TEST_REPORT,
+  /**
+   * Fichero que la fase declara en {@code artifacts}, tal como quedó en el worktree (#145). Su
+   * nombre es la ruta relativa; se abre y se descarga desde la web.
+   */
+  DECLARED_FILE
 }

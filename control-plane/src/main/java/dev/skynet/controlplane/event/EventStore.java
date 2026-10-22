@@ -1,6 +1,7 @@
 package dev.skynet.controlplane.event;
 
 import dev.skynet.controlplane.shared.TimeSource;
+import dev.skynet.protocol.SafeText;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -73,7 +74,8 @@ public class EventStore {
             draft.aggregateType(),
             draft.aggregateId(),
             draft.type(),
-            json.valueToTree(draft.payload()),
+            // PostgreSQL no guarda un NUL en jsonb: nunca llega a la consulta.
+            json.valueToTree(SafeText.sanitize(draft.payload())),
             draft.occurredAt(),
             time.now());
     jdbc.sql(

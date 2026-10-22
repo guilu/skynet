@@ -2,7 +2,6 @@ package dev.skynet.protocol;
 
 import java.time.Instant;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -15,7 +14,9 @@ import java.util.UUID;
  * @param seq orden local dentro de la invocación, empezando en 1
  * @param occurredAt momento en que el runner observó el evento
  * @param type tipo normalizado
- * @param payload datos del evento; nunca contiene valores {@code null}
+ * @param payload datos del evento; nunca contiene valores {@code null}. Sus textos se sanean con
+ *     {@link SafeText} al construirlo, también al leerlo de JSON: el runner nunca guarda ni envía
+ *     un NUL, y el control plane no lo recibe aunque se lo mande un runner antiguo
  */
 public record NormalizedEvent(
     UUID eventId,
@@ -34,6 +35,6 @@ public record NormalizedEvent(
       throw new IllegalArgumentException("seq debe empezar en 1: " + seq);
     }
     payload =
-        payload == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(payload));
+        payload == null ? Map.of() : Collections.unmodifiableMap(SafeText.sanitizeMap(payload));
   }
 }
