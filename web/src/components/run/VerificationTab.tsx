@@ -180,6 +180,15 @@ function Checks({ checks }: { checks: VerificationResult['checks'] }) {
             </>
           )}
           {c.reason && <span className="muted"> · {c.reason}</span>}
+          {c.omitted?.length > 0 && (
+            <ul className="list" aria-label={`No guardados de ${c.name}`}>
+              {c.omitted.map((o) => (
+                <li key={o.path}>
+                  <code>{o.path}</code> <span className="muted">· no se guardó: {o.reason}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </li>
       ))}
     </ul>

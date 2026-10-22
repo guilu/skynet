@@ -903,6 +903,7 @@ class ContractIT extends IntegrationTest {
     static final UUID VERIFICATION = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0f");
     static final UUID DIFF_ARTIFACT = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a10");
     static final UUID REPORT_ARTIFACT = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a11");
+    static final UUID DECLARED_ARTIFACT = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a30");
     static final UUID STAGE_VERIFICATION = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a20");
 
     static List<ArtifactSummary> artifacts() {
@@ -944,6 +945,23 @@ class ContractIT extends IntegrationTest {
               "a4d62eed966ce4e2563a0776d2d4a4ed3d87a09ecc026f0e478a39ec9b613107",
               false,
               totals,
+              at(58)),
+          new ArtifactSummary(
+              DECLARED_ARTIFACT,
+              AGENT,
+              VERIFICATION,
+              "DECLARED_FILE",
+              "docs/skynet/mapa.md",
+              "text/markdown",
+              2048,
+              "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+              false,
+              new java.util.TreeMap<>(
+                  Map.of(
+                      "path", "docs/skynet/mapa.md",
+                      "glob", "docs/skynet/mapa.md",
+                      "mediaType", "text/markdown",
+                      "size", 2048)),
               at(58)));
     }
 
@@ -980,7 +998,13 @@ class ContractIT extends IntegrationTest {
               STAGE,
               List.of(
                   new VerificationResult.CheckResult(
-                      "artifacts", "docs/spec.md", false, "`docs/spec.md` no existe"),
+                      "artifacts",
+                      "docs/spec.md",
+                      false,
+                      "`docs/spec.md` no existe",
+                      List.of(
+                          new VerificationResult.OmittedFile(
+                              "docs/plano.pdf", "Supera el máximo de 10 MB por fichero"))),
                   new VerificationResult.CheckResult("diff", null, true, null))));
     }
 

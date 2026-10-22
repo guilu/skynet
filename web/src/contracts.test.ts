@@ -460,7 +460,13 @@ const APPROVAL_DECISION: Keys<ApprovalDecision> = {
   actor: true,
   createdAt: true,
 }
-const CHECK_RESULT: Keys<CheckResult> = { name: true, target: true, passed: true, reason: true }
+const CHECK_RESULT: Keys<CheckResult> = {
+  name: true,
+  target: true,
+  passed: true,
+  reason: true,
+  omitted: true,
+}
 const TEST_TOTALS: Keys<TestTotals> = { total: true, failed: true, errors: true, skipped: true }
 
 const VERSION: Keys<VersionView> = {
@@ -693,7 +699,7 @@ describe('contratos con el backend', () => {
   })
 
   it('artefactos', () => {
-    expect(artifacts.map((a) => a.type)).toEqual(['DIFF', 'TEST_REPORT'])
+    expect(artifacts.map((a) => a.type)).toEqual(['DIFF', 'TEST_REPORT', 'DECLARED_FILE'])
     artifacts.forEach((a) => expectShape(a, ARTIFACT))
   })
 

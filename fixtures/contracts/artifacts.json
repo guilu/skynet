@@ -36,4 +36,21 @@
     "skipped" : 2
   },
   "createdAt" : "2026-10-05T09:00:58Z"
+}, {
+  "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a30",
+  "agentRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a06",
+  "verificationRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a0f",
+  "type" : "DECLARED_FILE",
+  "name" : "docs/skynet/mapa.md",
+  "mediaType" : "text/markdown",
+  "size" : 2048,
+  "sha256" : "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+  "truncated" : false,
+  "metadata" : {
+    "glob" : "docs/skynet/mapa.md",
+    "mediaType" : "text/markdown",
+    "path" : "docs/skynet/mapa.md",
+    "size" : 2048
+  },
+  "createdAt" : "2026-10-05T09:00:58Z"
 } ]

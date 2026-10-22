@@ -265,7 +265,21 @@ public class VerificationService {
                     string(m.get("name")),
                     string(m.get("target")),
                     Boolean.TRUE.equals(m.get("passed")),
-                    string(m.get("reason"))))
+                    string(m.get("reason")),
+                    omitted(m.get("omitted"))))
+        .toList();
+  }
+
+  /** Los ficheros declarados que el runner no guardó, si los hay. */
+  private static List<VerificationResult.OmittedFile> omitted(Object value) {
+    if (!(value instanceof List<?> list)) {
+      return List.of();
+    }
+    return list.stream()
+        .filter(Map.class::isInstance)
+        .map(Map.class::cast)
+        .map(
+            m -> new VerificationResult.OmittedFile(string(m.get("path")), string(m.get("reason"))))
         .toList();
   }
 

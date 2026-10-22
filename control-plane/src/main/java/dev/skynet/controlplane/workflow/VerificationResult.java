@@ -48,8 +48,23 @@ public record VerificationResult(
    * @param target lo que comprueba (los globs o el comando), si lo tiene
    * @param passed si pasó; {@code null} mientras la verificación no ha terminado
    * @param reason por qué no pasó
+   * @param omitted en {@code artifacts}, los ficheros declarados que no se guardaron, con el motivo
+   *     (#145); vacío en los demás
    */
-  public record CheckResult(String name, String target, Boolean passed, String reason) {}
+  public record CheckResult(
+      String name, String target, Boolean passed, String reason, List<OmittedFile> omitted) {
+
+    public CheckResult {
+      omitted = omitted == null ? List.of() : List.copyOf(omitted);
+    }
+
+    public CheckResult(String name, String target, Boolean passed, String reason) {
+      this(name, target, passed, reason, List.of());
+    }
+  }
+
+  /** Un fichero declarado en {@code artifacts} que no se guardó (por tamaño, enlace o tipo). */
+  public record OmittedFile(String path, String reason) {}
 
   public boolean isLive() {
     return "QUEUED".equals(status) || "RUNNING".equals(status);

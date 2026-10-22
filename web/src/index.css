@@ -4032,6 +4032,65 @@
     transition: transform 160ms;
   }
 
+  /* Archivos que declara la fase (`artifacts`): vista previa y descarga. */
+  .generated-files .btn-sm {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: var(--space-2);
+    text-decoration: none;
+  }
+
+  .generated-files .file-path {
+    font-family: var(--font-mono);
+    overflow-wrap: anywhere;
+  }
+
+  .generated-preview {
+    min-width: 0;
+    margin-top: var(--space-2);
+  }
+
+  .generated-image {
+    display: block;
+    max-width: 100%;
+    max-height: 480px;
+    border: 2px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--surface-2);
+  }
+
+  .markdown {
+    padding: var(--space-3) var(--space-4);
+    border: 2px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    font-size: 0.95rem;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+
+  .markdown > :first-child {
+    margin-top: 0;
+  }
+
+  .markdown pre {
+    overflow-x: auto;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+  }
+
+  .markdown table {
+    border-collapse: collapse;
+  }
+
+  .markdown th,
+  .markdown td {
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+  }
+
   [aria-expanded='true'] > .log-chevron {
     transform: rotate(90deg);
   }

@@ -37,12 +37,17 @@
     "name" : "artifacts",
     "target" : "docs/spec.md",
     "passed" : false,
-    "reason" : "`docs/spec.md` no existe"
+    "reason" : "`docs/spec.md` no existe",
+    "omitted" : [ {
+      "path" : "docs/plano.pdf",
+      "reason" : "Supera el máximo de 10 MB por fichero"
+    } ]
   }, {
     "name" : "diff",
     "target" : null,
     "passed" : true,
-    "reason" : null
+    "reason" : null,
+    "omitted" : [ ]
   } ],
   "live" : false
 } ]

@@ -134,12 +134,14 @@
         "name" : "artifacts",
         "target" : "docs/spec.md",
         "passed" : true,
-        "reason" : null
+        "reason" : null,
+        "omitted" : [ ]
       }, {
         "name" : "diff",
         "target" : null,
         "passed" : true,
-        "reason" : null
+        "reason" : null,
+        "omitted" : [ ]
       } ],
       "live" : false
     } ],

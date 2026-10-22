@@ -8,6 +8,7 @@ import {
   artifactLabel,
   artifactOf,
   ChunkDecoder,
+  declaredFilesOf,
   fileStatusLabel,
   languageOf,
   logsOf,
@@ -16,6 +17,7 @@ import {
   type GitChanges,
 } from './artifacts'
 import { CodeView } from './CodeView'
+import { GeneratedFiles } from './GeneratedFiles'
 import { Button } from '../ui/Button'
 import { Pill } from '../ui/Pill'
 import { LinesSkeleton } from '../ui/Skeleton'
@@ -26,7 +28,10 @@ const sum = (files: FileChange[], key: 'insertions' | 'deletions') =>
 /** Lo que se lee de un log de una vez. */
 export const LOG_PAGE = 512 * 1024
 
-/** Artefactos del agente: lo que cambió en git, su diff y los logs (ADR-0001 §13.5). */
+/**
+ * Artefactos del agente: lo que cambió en git, su diff, los archivos que declaró la fase y los logs
+ * (ADR-0001 §13.5).
+ */
 export function ArtifactsTab({ agent }: { agent: AgentRun }) {
   const artifacts = useQuery({
     queryKey: ['artifacts', agent.id],
@@ -52,6 +57,7 @@ export function ArtifactsTab({ agent }: { agent: AgentRun }) {
       ) : (
         <p className="muted">Sin datos de git para esta invocación.</p>
       )}
+      <GeneratedFiles files={declaredFilesOf(artifacts.data)} />
       <Logs artifacts={logsOf(artifacts.data)} />
     </>
   )
