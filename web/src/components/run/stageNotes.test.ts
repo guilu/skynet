@@ -192,8 +192,9 @@ describe('stageNote', () => {
             target: 'docs/spec.md',
             passed: false,
             reason: '`docs/spec.md` no existe',
+            omitted: [],
           },
-          { name: 'diff', target: null, passed: true, reason: null },
+          { name: 'diff', target: null, passed: true, reason: null, omitted: [] },
         ]),
       ],
     }

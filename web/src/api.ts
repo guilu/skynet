@@ -861,6 +861,8 @@ export interface CheckResult {
   passed: boolean | null
   /** Por qué no pasó. */
   reason: string | null
+  /** En `artifacts`: ficheros declarados que no se guardaron, con el motivo (#145). */
+  omitted: { path: string; reason: string }[]
 }
 
 /** Lanzamiento de un agente; los límites que falten usan los valores por defecto del servidor. */
@@ -1144,6 +1146,8 @@ export const api = {
   artifacts: (agentId: string) =>
     request<ArtifactSummary[]>('GET', `/api/agent-runs/${agentId}/artifacts`),
   artifactChunk,
+  /** El artefacto entero como adjunto; la sesión va en la cookie, así que vale un enlace. */
+  artifactDownloadUrl: (id: string) => `/api/artifacts/${id}/download`,
   /** Peticiones de aprobación, primero las pendientes; `status` admite varios. */
   approvals: (
     query: { status?: ApprovalStatus[]; projectId?: string; risk?: ApprovalRisk } = {},

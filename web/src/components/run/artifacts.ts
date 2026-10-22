@@ -119,3 +119,48 @@ export class ChunkDecoder {
     return this.decoder.decode(bytes, { stream: !last })
   }
 }
+
+/**
+ * Los ficheros que declaró la fase en `artifacts` (#145), uno por ruta: si se verificó más de una
+ * vez (p. ej. tras pedir cambios), el de la última verificación. Por orden de ruta.
+ */
+export function declaredFilesOf(artifacts: ArtifactSummary[]): ArtifactSummary[] {
+  const latest = new Map<string, ArtifactSummary>()
+  for (const a of artifacts) {
+    if (a.type !== 'DECLARED_FILE') continue
+    const seen = latest.get(a.name)
+    if (!seen || a.createdAt.localeCompare(seen.createdAt) > 0) latest.set(a.name, a)
+  }
+  return [...latest.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** Cómo se previsualiza un fichero declarado. */
+export type PreviewKind = 'markdown' | 'json' | 'text' | 'image' | 'pdf' | 'none'
+
+/** Imágenes que se pintan con `<img>`; el SVG no, porque puede llevar scripts. */
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+
+export function previewKind(mediaType: string): PreviewKind {
+  const base = mediaType.split(';')[0].trim().toLowerCase()
+  if (base === 'text/markdown') return 'markdown'
+  if (base === 'application/json' || base.endsWith('+json')) return 'json'
+  if (base.startsWith('text/') || base === 'application/yaml' || base === 'application/xml') {
+    return 'text'
+  }
+  if (IMAGE_TYPES.includes(base)) return 'image'
+  if (base === 'application/pdf') return 'pdf'
+  return 'none'
+}
+
+/**
+ * Una URL de Markdown que se puede seguir: solo `http`, `https` y `mailto`. Lo demás (p. ej.
+ * `javascript:` o rutas relativas al repositorio, que en Skynet no llevan a ningún sitio) se quita.
+ */
+export function safeLink(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return ['http:', 'https:', 'mailto:'].includes(parsed.protocol) ? url : ''
+  } catch {
+    return ''
+  }
+}

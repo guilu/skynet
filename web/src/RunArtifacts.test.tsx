@@ -185,10 +185,10 @@ describe('artefactos y verificación', () => {
       .getAllByText(/Comprobaciones de la fase/)[0]
       .closest('details')!
     const checks = within(older).getByRole('list', { name: 'Comprobaciones' })
-    expect(within(checks).getAllByRole('listitem')[0]).toHaveTextContent(
-      '✗ artifacts docs/spec.md · `docs/spec.md` no existe',
-    )
-    expect(within(checks).getAllByRole('listitem')[1]).toHaveTextContent('✓ diff')
+    // Solo los elementos de primer nivel: los ficheros no guardados van en una lista anidada.
+    const items = [...checks.children]
+    expect(items[0]).toHaveTextContent('✗ artifacts docs/spec.md · `docs/spec.md` no existe')
+    expect(items[1]).toHaveTextContent('✓ diff')
 
     fireEvent.click(within(panel).getByRole('button', { name: 'Reejecutar verificación' }))
     await waitFor(() =>

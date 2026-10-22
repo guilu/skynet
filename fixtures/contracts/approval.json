@@ -61,7 +61,8 @@
           "name" : "artifacts",
           "target" : "openspec/tasks.md",
           "passed" : true,
-          "reason" : null
+          "reason" : null,
+          "omitted" : [ ]
         } ],
         "changes" : {
           "branch" : "skynet/tkm-1-plan",
