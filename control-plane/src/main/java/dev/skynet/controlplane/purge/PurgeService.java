@@ -133,6 +133,15 @@ class PurgeService {
     aggregates.addAll(workspaces);
     aggregates.addAll(scope.workItems());
     aggregates.addAll(scope.repositories());
+    // La memoria se borra en cascada con su proyecto o su repositorio; sus eventos, aquí.
+    aggregates.addAll(
+        ids(
+            "SELECT id FROM memory_observation WHERE repository_id IN (:ids)",
+            scope.repositories()));
+    if (kind == Kind.PROJECT) {
+      aggregates.addAll(
+          ids("SELECT id FROM memory_observation WHERE project_id IN (:ids)", List.of(id)));
+    }
     update("DELETE FROM event WHERE workflow_run_id IN (:ids)", scope.runs());
     update("DELETE FROM event WHERE aggregate_id IN (:ids)", aggregates);
 
