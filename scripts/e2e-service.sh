@@ -32,14 +32,16 @@ start() {
       SKYNET_RUNNER_NAME=${E2E_RUNNER_NAME:-e2e} \
       # Los tres proveedores con sus fakes; cada revisor devuelve lo que dejó en .revision.json la
       # fase anterior del worktree (web/e2e/nodes.e2e.ts y providers.e2e.ts). Cada sesión de
-      # fake-codex gasta cuota de la cuenta, como la de verdad (web/e2e/usage.e2e.ts).
+      # fake-codex gasta cuota de la cuenta, como la de verdad (web/e2e/usage.e2e.ts). El agente
+      # llama a la memoria con el guion que dejó en .memoria.json la fase anterior (memory.e2e.ts).
       SKYNET_CLAUDE_BIN=$FAKE/fake-claude SKYNET_CODEX_BIN=$FAKE/fake-codex \
       SKYNET_AGY_BIN=$FAKE/fake-agy \
-      SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE,FAKE_CLAUDE_DELAY_MS,FAKE_CLAUDE_APPLY,FAKE_CLAUDE_STRUCTURED_OUTPUT,FAKE_CODEX_FIXTURE,FAKE_CODEX_DELAY_MS,FAKE_CODEX_STRUCTURED_OUTPUT,FAKE_AGY_FIXTURE,FAKE_AGY_DELAY_MS,FAKE_AGY_STRUCTURED_OUTPUT,FAKE_AGY_HOME,FAKE_CODEX_QUOTA_STEP \
+      SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE,FAKE_CLAUDE_DELAY_MS,FAKE_CLAUDE_APPLY,FAKE_CLAUDE_STRUCTURED_OUTPUT,FAKE_CODEX_FIXTURE,FAKE_CODEX_DELAY_MS,FAKE_CODEX_STRUCTURED_OUTPUT,FAKE_AGY_FIXTURE,FAKE_AGY_DELAY_MS,FAKE_AGY_STRUCTURED_OUTPUT,FAKE_AGY_HOME,FAKE_CODEX_QUOTA_STEP,FAKE_MCP_CALLS \
       FAKE_CLAUDE_FIXTURE=02-tools FAKE_CLAUDE_DELAY_MS=${FAKE_CLAUDE_DELAY_MS:-500} FAKE_CLAUDE_APPLY=1 \
       FAKE_CLAUDE_STRUCTURED_OUTPUT=@.revision.json \
       FAKE_CODEX_DELAY_MS=200 FAKE_CODEX_STRUCTURED_OUTPUT=@.revision.json FAKE_CODEX_QUOTA_STEP=3,1 \
       FAKE_AGY_DELAY_MS=200 FAKE_AGY_STRUCTURED_OUTPUT=@.revision.json FAKE_AGY_HOME=$OUT/agy \
+      FAKE_MCP_CALLS=@.memoria.json \
       CLAUDE_CONFIG_DIR=$OUT/claude CODEX_HOME=$OUT/codex \
         "$ROOT/runner/build/install/skynet-runner/bin/skynet-runner" >> "$OUT/runner.log" 2>&1 &
       echo $! > "$pidfile"

@@ -81,6 +81,21 @@ class MemoryAgentIT extends IntegrationTest {
                 .query(String.class)
                 .list())
         .containsExactly("PROMPT", "SEARCH", "GET", "CONTEXT");
+
+    // La web lo ve por invocación: lo que guardó una y lo que recibió, buscó y leyó la otra.
+    JsonNode saver = get("/api/agent-runs/" + firstAgent + "/memory");
+    assertThat(saver.path("mode").asString()).isEqualTo("WRITE");
+    assertThat(saver.path("projectId").asString()).isEqualTo(alpha.id());
+    assertThat(saver.path("accesses"))
+        .filteredOn(a -> a.path("via").asString().equals("SAVE"))
+        .extracting(a -> a.path("title").asString())
+        .contains("Fusionar con squash");
+    JsonNode reader = get("/api/agent-runs/" + agentId(other) + "/memory");
+    assertThat(reader.path("accesses"))
+        .filteredOn(a -> a.path("observationId").asString().equals(id))
+        .extracting(a -> a.path("via").asString() + " v" + a.path("version").asInt())
+        .containsExactly("PROMPT v1", "SEARCH v1", "GET v1", "CONTEXT v1");
+    assertStatus(() -> get("/api/agent-runs/" + UUID.randomUUID() + "/memory"), 404);
   }
 
   @Test

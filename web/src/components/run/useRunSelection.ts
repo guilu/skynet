@@ -9,6 +9,7 @@ export const INSPECTOR_TABS = [
   { id: 'artifacts', label: 'Artefactos' },
   { id: 'verification', label: 'Verificación' },
   { id: 'cost', label: 'Coste' },
+  { id: 'memory', label: 'Memoria' },
   { id: 'event', label: 'Evento original' },
 ] as const
 

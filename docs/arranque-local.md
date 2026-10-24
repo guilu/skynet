@@ -89,6 +89,7 @@ Los proyectos y los repositorios no se siembran.
 | `corregir-bug` | Un fallo que se puede reproducir | test que falla (Codex) → corrección con los tests en verde (Claude Code) → buscar regresiones (Antigravity) → ajustar si hay alguna (Claude Code) |
 | `revisar-codigo` | Una auditoría sin cambios, con un `foco` opcional | arquitectura (Claude Code), tests (Codex) y seguridad (Antigravity) a la vez → un informe con los hallazgos por prioridad (Claude Code) |
 | `especificar-planificar-implementar` | Una funcionalidad que conviene pensar antes | especificación (Antigravity) → plan (Claude Code) → **tu aprobación** → implementar (Claude Code) → revisión (Codex) → corregir si algo bloquea (Claude Code) |
+| `investigar-mejoras` | Decidir qué hacer después, con un `foco` opcional | lee la memoria del proyecto (bitácora, decisiones y hallazgos), comprueba en el código qué sigue abierto y propone mejoras por prioridad, sin cambiar nada (Claude Code, `memory: read`) |
 
 Las plantillas de la web siguen ahí para crear workflows nuevos: Dos fases, Revisión en paralelo, Revisión con Codex y Antigravity, Especificar-planificar-implementar y Desde cero.
 
