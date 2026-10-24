@@ -133,12 +133,11 @@ class EventStreamIT extends IntegrationTest {
   @Test
   void rejectsMalformedTypesAndAfter() {
     for (String query : List.of("?types=approval.%25", "?types=a,,b", "?after=pronto")) {
-      assertThat(
-              http.get()
-                  .uri(URI.create(streamUrl(query)))
-                  .exchange((request, response) -> response.getStatusCode().value()))
-          .as(query)
-          .isEqualTo(400);
+      Integer status =
+          http.get()
+              .uri(URI.create(streamUrl(query)))
+              .exchange((request, response) -> response.getStatusCode().value());
+      assertThat(status).as(query).isEqualTo(400);
     }
   }
 
