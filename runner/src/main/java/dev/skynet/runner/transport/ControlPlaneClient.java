@@ -5,6 +5,7 @@ import dev.skynet.protocol.runner.ArtifactUpload;
 import dev.skynet.protocol.runner.EventBatch;
 import dev.skynet.protocol.runner.EventBatchResult;
 import dev.skynet.protocol.runner.HeartbeatReply;
+import dev.skynet.protocol.runner.MemoryToken;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
@@ -72,6 +73,19 @@ public class ControlPlaneClient {
             .build();
     String body = send(request, String.class, wait.plus(TIMEOUT));
     return JSON.readValue(body, new TypeReference<List<RunnerCommand>>() {});
+  }
+
+  /** Token de memoria de una invocación de este runner, para su puente MCP (ME-B). */
+  public MemoryToken memoryToken(UUID agentRunId) throws IOException, InterruptedException {
+    return send(
+        post("/api/runner/agent-runs/" + agentRunId + "/memory-token", null, true),
+        MemoryToken.class,
+        TIMEOUT);
+  }
+
+  /** Dirección del control plane. */
+  public URI base() {
+    return base;
   }
 
   public void ack(UUID commandId) throws IOException, InterruptedException {

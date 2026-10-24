@@ -34,7 +34,13 @@ public final class TestAgents {
   public static ClaudeCodeProvider fakeClaude(Map<String, String> runnerEnv) {
     return new ClaudeCodeProvider(
         Path.of(System.getProperty("skynet.fakeClaude")).toAbsolutePath().toString(),
-        List.of("JAVA_HOME", "FAKE_CLAUDE_FIXTURE", "FAKE_CLAUDE_DELAY_MS", "FAKE_CLAUDE_APPLY"),
+        List.of(
+            "JAVA_HOME",
+            "FAKE_CLAUDE_FIXTURE",
+            "FAKE_CLAUDE_DELAY_MS",
+            "FAKE_CLAUDE_APPLY",
+            "FAKE_MCP_CALLS",
+            "FAKE_MCP_LOG"),
         ModelPrices.defaults(),
         ClaudeSessions.of(runnerEnv).orElse(null));
   }
@@ -54,7 +60,9 @@ public final class TestAgents {
             "FAKE_CODEX_RESUME_FIXTURE",
             "FAKE_CODEX_DELAY_MS",
             "FAKE_CODEX_HANG",
-            "FAKE_CODEX_STRUCTURED_OUTPUT"),
+            "FAKE_CODEX_STRUCTURED_OUTPUT",
+            "FAKE_MCP_CALLS",
+            "FAKE_MCP_LOG"),
         ModelPrices.defaults());
   }
 

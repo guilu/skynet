@@ -2,6 +2,7 @@ package dev.skynet.runner.provider;
 
 import dev.skynet.protocol.AgentProviderKind;
 import dev.skynet.protocol.runner.StartAgent;
+import dev.skynet.runner.memory.MemoryBridge;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
@@ -28,6 +29,23 @@ public interface AgentProvider {
    *     <files>.schema.json}); están junto a los logs de la invocación y se borran con ellos
    */
   List<String> command(StartAgent start, Path files) throws IOException;
+
+  /**
+   * Si el CLI puede recibir el servidor MCP de memoria ({@link #command(StartAgent, Path,
+   * MemoryBridge)}).
+   */
+  default boolean supportsMemory() {
+    return false;
+  }
+
+  /**
+   * Línea de comandos con el servidor MCP de memoria de la invocación, o sin él con {@code memory}
+   * nulo. Los proveedores que no lo admiten lo ignoran.
+   */
+  default List<String> command(StartAgent start, Path files, MemoryBridge memory)
+      throws IOException {
+    return command(start, files);
+  }
 
   /**
    * Entorno de una invocación: las variables básicas y las de este proveedor y, de las adicionales

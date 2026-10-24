@@ -10,6 +10,8 @@ import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.StartAgent;
 import dev.skynet.runner.journal.Journal;
+import dev.skynet.runner.memory.MemoryBridge;
+import dev.skynet.runner.memory.MemorySessions;
 import dev.skynet.runner.provider.AgentProvider;
 import dev.skynet.runner.provider.CostMeter;
 import dev.skynet.runner.provider.EventParser;
@@ -84,6 +86,7 @@ public final class AgentExecutor implements AutoCloseable {
   private final Map<UUID, SupervisedProcess> verifications = new ConcurrentHashMap<>();
   private final DeclaredFiles.Limits declaredLimits;
   private final ArtifactSpool spool;
+  private final MemorySessions memory;
 
   public AgentExecutor(
       Journal journal,
@@ -119,6 +122,36 @@ public final class AgentExecutor implements AutoCloseable {
       Runnable eventsAvailable,
       ArtifactSpool spool,
       DeclaredFiles.Limits declaredLimits) {
+    this(
+        journal,
+        supervisor,
+        workspaces,
+        providers,
+        runnerEnv,
+        logs,
+        cancelGrace,
+        eventsAvailable,
+        spool,
+        declaredLimits,
+        null);
+  }
+
+  /**
+   * @param memory prepara la memoria de cada invocación (ME-B), o {@code null} para lanzar los
+   *     agentes sin ella
+   */
+  public AgentExecutor(
+      Journal journal,
+      ProcessSupervisor supervisor,
+      WorkspaceManager workspaces,
+      ProviderRegistry providers,
+      Map<String, String> runnerEnv,
+      Path logs,
+      Duration cancelGrace,
+      Runnable eventsAvailable,
+      ArtifactSpool spool,
+      DeclaredFiles.Limits declaredLimits,
+      MemorySessions memory) {
     this.journal = journal;
     this.supervisor = supervisor;
     this.workspaces = workspaces;
@@ -129,6 +162,7 @@ public final class AgentExecutor implements AutoCloseable {
     this.eventsAvailable = eventsAvailable;
     this.spool = spool;
     this.declaredLimits = declaredLimits;
+    this.memory = memory;
   }
 
   /** Invocaciones en curso en este runner. */
@@ -383,6 +417,8 @@ public final class AgentExecutor implements AutoCloseable {
                   + " pide variables que el runner no permite (SKYNET_AGENT_ENV): "
                   + refused);
     }
+    Path memoryToken = logs.resolve(id + ".memory-token");
+    MemoryBridge bridge = memoryBridge(id, start, provider, memoryToken);
     EventParser parser = provider.newParser(start);
     BigDecimal budget = start.limits().maxBudgetUsd();
     CostMeter cost = provider.newCostMeter(start);
@@ -392,7 +428,7 @@ public final class AgentExecutor implements AutoCloseable {
           execution.launch(
               () ->
                   supervisor.start(
-                      provider.command(start, logs.resolve(id.toString())),
+                      provider.command(start, logs.resolve(id.toString()), bridge),
                       workspace.path(),
                       provider.environment(runnerEnv, start.environment()),
                       logs.resolve(id + ".ndjson"),
@@ -404,10 +440,12 @@ public final class AgentExecutor implements AutoCloseable {
                         }
                       }));
     } catch (IOException e) {
+      deleteQuietly(memoryToken);
       finish(id, failure(AgentFailure.START, "No se pudo lanzar el agente: " + e.getMessage()));
       return;
     }
     if (process == null) {
+      deleteQuietly(memoryToken);
       finish(id, failure("Cancelado antes de arrancar"));
       return;
     }
@@ -428,6 +466,8 @@ public final class AgentExecutor implements AutoCloseable {
     if (deadline != null) {
       deadline.cancel(false);
     }
+    // El token caduca al terminar la invocación; el fichero sobra.
+    deleteQuietly(memoryToken);
     // Lo que el CLI no dice en su salida (la cuota de Codex), antes del fin.
     provider.afterExit(parser, runnerEnv).forEach(e -> emit(id, e));
     // Antes del fin: así el agente termina con sus artefactos ya en cola.
@@ -466,6 +506,41 @@ public final class AgentExecutor implements AutoCloseable {
       payload.put("stderr", exit.stderrTail());
     }
     finish(id, payload);
+  }
+
+  /**
+   * El servidor MCP de memoria de la invocación, si la fase lo pide y el CLI lo admite. Si el
+   * control plane no da el token, el agente arranca sin memoria: no es motivo para fallar.
+   */
+  private MemoryBridge memoryBridge(
+      UUID id, StartAgent start, AgentProvider provider, Path tokenFile)
+      throws InterruptedException {
+    if (memory == null || start.memory() == null) {
+      return null;
+    }
+    if (!provider.supportsMemory()) {
+      LOG.info(
+          () ->
+              "La invocación "
+                  + id
+                  + " arranca sin memoria: "
+                  + provider.kind().id()
+                  + " no admite el servidor MCP de memoria");
+      return null;
+    }
+    try {
+      return memory.open(id, tokenFile);
+    } catch (IOException | RuntimeException e) {
+      LOG.warning(
+          () ->
+              "La invocación "
+                  + id
+                  + " arranca sin memoria: no se pudo pedir su token ("
+                  + e.getMessage()
+                  + ")");
+      deleteQuietly(tokenFile);
+      return null;
+    }
   }
 
   /**

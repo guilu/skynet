@@ -27,6 +27,8 @@ sourceSets {
 val fakeClaude = project(":tools:fake-claude")
 tasks.test {
     dependsOn(fakeClaude.tasks.named("installDist"))
+    // El puente MCP de memoria se lanza como `java -cp <esto> RunnerMain memory-mcp`.
+    systemProperty("skynet.runnerClasspath", sourceSets.main.get().runtimeClasspath.asPath)
     systemProperty(
         "skynet.fakeClaude",
         fakeClaude.layout.buildDirectory.file("install/fake-claude/bin/fake-claude").get().asFile.path,

@@ -69,6 +69,12 @@ skynet:
   verification:
     # Tiempo máximo del comando de validación de un repositorio.
     timeout: ${SKYNET_VERIFICATION_TIMEOUT:30m}
+  memory:
+    # Lo más que ocupa el contexto de memoria que recibe un agente al empezar (mem_context).
+    context-max-chars: ${SKYNET_MEMORY_CONTEXT_MAX_CHARS:4000}
+    # Límites de cada invocación: llamadas a las herramientas de memoria y guardados.
+    max-calls: ${SKYNET_MEMORY_MAX_CALLS:500}
+    max-saves: ${SKYNET_MEMORY_MAX_SAVES:100}
   artifacts:
     # Directorio donde se guarda el contenido de los artefactos.
     root: ${SKYNET_ARTIFACTS_DIR:data/artifacts}

@@ -4,6 +4,7 @@ import dev.skynet.protocol.AgentProviderKind;
 import dev.skynet.protocol.runner.QuotaSample;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.StartAgent;
+import dev.skynet.runner.memory.MemoryBridge;
 import dev.skynet.runner.provider.AgentEnvironment;
 import dev.skynet.runner.provider.AgentProvider;
 import dev.skynet.runner.provider.CliVersion;
@@ -71,8 +72,31 @@ public class CodexProvider implements AgentProvider {
   }
 
   @Override
+  public boolean supportsMemory() {
+    return true;
+  }
+
+  @Override
   public List<String> command(StartAgent start, Path files) throws IOException {
+    return command(start, files, null);
+  }
+
+  /** Con memoria, el servidor MCP va en {@code -c mcp_servers.<nombre>.*} (TOML). */
+  @Override
+  public List<String> command(StartAgent start, Path files, MemoryBridge memory)
+      throws IOException {
     List<String> command = new ArrayList<>(List.of(executable, "exec", "--json"));
+    if (memory != null) {
+      String prefix = "mcp_servers." + MemoryBridge.SERVER + ".";
+      command.addAll(List.of("-c", prefix + "command=" + toml(memory.executable())));
+      command.addAll(
+          List.of(
+              "-c",
+              prefix
+                  + "args=["
+                  + String.join(", ", memory.args().stream().map(CodexProvider::toml).toList())
+                  + "]"));
+    }
     command.addAll(sandbox(start.permissionMode()));
     if (start.model() != null) {
       command.addAll(List.of("--model", start.model()));
@@ -90,6 +114,11 @@ public class CodexProvider implements AgentProvider {
     // Tras "--": un prompt que empiece por "-" no se confunde con una opción.
     command.addAll(List.of("--", start.prompt()));
     return command;
+  }
+
+  /** Cadena TOML básica: las comillas y los escapes de JSON valen en TOML. */
+  static String toml(String value) {
+    return JSON.writeValueAsString(value);
   }
 
   /**

@@ -3,6 +3,7 @@ package dev.skynet.controlplane.runner;
 import dev.skynet.controlplane.artifact.ArtifactService;
 import dev.skynet.controlplane.artifact.ArtifactTooLargeException;
 import dev.skynet.controlplane.artifact.InvalidArtifactException;
+import dev.skynet.controlplane.memory.MemoryAgents;
 import dev.skynet.controlplane.usage.QuotaRefresh;
 import dev.skynet.controlplane.usage.QuotaSnapshots;
 import dev.skynet.controlplane.workflow.AgentEventIngestion;
@@ -12,6 +13,7 @@ import dev.skynet.protocol.runner.ArtifactUpload;
 import dev.skynet.protocol.runner.EventBatch;
 import dev.skynet.protocol.runner.EventBatchResult;
 import dev.skynet.protocol.runner.HeartbeatReply;
+import dev.skynet.protocol.runner.MemoryToken;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
@@ -60,6 +62,7 @@ class RunnerController {
   private final LostInvocations lost;
   private final QuotaSnapshots quotas;
   private final QuotaRefresh refresh;
+  private final MemoryAgents memory;
 
   RunnerController(
       RunnerRegistry registry,
@@ -70,7 +73,8 @@ class RunnerController {
       ArtifactService artifacts,
       LostInvocations lost,
       QuotaSnapshots quotas,
-      QuotaRefresh refresh) {
+      QuotaRefresh refresh,
+      MemoryAgents memory) {
     this.registry = registry;
     this.commands = commands;
     this.signal = signal;
@@ -80,6 +84,19 @@ class RunnerController {
     this.lost = lost;
     this.quotas = quotas;
     this.refresh = refresh;
+    this.memory = memory;
+  }
+
+  /**
+   * Token de memoria de una invocación de este runner, para el puente MCP del agente (ME-B). Vale
+   * hasta que la invocación termina; pedirlo otra vez invalida el anterior.
+   */
+  @PostMapping("/agent-runs/{id}/memory-token")
+  MemoryToken memoryToken(
+      @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+      @PathVariable UUID id) {
+    MemoryAgents.IssuedToken issued = memory.issue(registry.authenticate(authorization), id);
+    return new MemoryToken(issued.token(), issued.mode().name());
   }
 
   @PostMapping("/register")
