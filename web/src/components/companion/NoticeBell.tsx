@@ -55,7 +55,7 @@ export function NoticeBell({
                   <Companion state={NOTICE_FACE[n.kind]} size={30} still />
                   <span className="notice-text">
                     <strong>{n.title}</strong>
-                    {n.body && <span className="muted">{n.body}</span>}
+                    {n.body !== '' && <span className="muted">{n.body}</span>}
                   </span>
                   <time className="notice-time" dateTime={new Date(n.at).toISOString()}>
                     {formatTime(new Date(n.at).toISOString())}

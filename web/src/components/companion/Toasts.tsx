@@ -36,7 +36,7 @@ function ToastCard({ toast, onClose }: { toast: Toast; onClose: () => void }) {
       <Companion state={NOTICE_FACE[toast.kind]} size={44} />
       <div className="toast-text">
         <strong>{title}</strong>
-        {body && <span>{body}</span>}
+        {body !== '' && <span>{body}</span>}
         <Link to={href} className="toast-action" onClick={onClose}>
           {action}
         </Link>
