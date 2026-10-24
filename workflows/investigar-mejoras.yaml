@@ -1,0 +1,46 @@
+id: investigar-mejoras
+name: Investigar mejoras
+description: Parte de la memoria del proyecto (la bitácora de las ejecuciones, las decisiones, las trampas y los hallazgos guardados) y propone las siguientes mejoras del repositorio por prioridad. Solo lee la memoria y no cambia nada.
+
+inputs:
+  foco:
+    type: string
+    required: false
+    description: En qué fijarse (un módulo, un tema o un workflow anterior, p. ej. revisar-codigo). Vacío, todo el repositorio.
+
+agents:
+  investigador:
+    model: ${CLAUDE_FUERTE}
+    permissionMode: plan
+    prompt: Propón las siguientes mejoras de este repositorio a partir de su memoria.
+    output:
+      type: object
+      properties:
+        summary: {type: string}
+        improvements:
+          type: array
+          items:
+            type: object
+            properties:
+              title: {type: string}
+              why: {type: string}
+              where: {type: string}
+              priority: {type: string}
+              effort: {type: string}
+              memory: {type: array, items: {type: string}}
+
+stages:
+  - id: investigar
+    type: agent
+    agent: investigador
+    phase: plan
+    # Solo lee: lo que proponga sale en su resultado, no se guarda en la memoria.
+    memory: read
+    prompt: |
+      Investiga qué conviene mejorar en este repositorio para {{workItem.key}} ({{workItem.title}}). Foco: {{inputs.foco}}.
+
+      1. Empieza por la memoria del proyecto: el bloque del principio y, con mem_search y mem_get, la bitácora de las ejecuciones anteriores (tema bitacora/…), los hallazgos de las revisiones, las decisiones, las trampas y las restricciones.
+      2. Comprueba en el código cuáles de esos hallazgos siguen abiertos y cuáles ya se arreglaron. Respeta las decisiones y las restricciones guardadas.
+      3. Propón las siguientes mejoras, ordenadas por prioridad: primero lo que más valor da con menos esfuerzo.
+
+      Para cada mejora, di qué es, por qué conviene (con lo que viste en la memoria o en el código), dónde se toca, su prioridad (alta, media o baja), su esfuerzo (pequeño, medio o grande) y los títulos de las entradas de la memoria en las que te basas. No cambies nada.

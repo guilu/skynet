@@ -421,7 +421,7 @@ Cada problema lleva `severity` (`ERROR`, `UNSUPPORTED` o `WARNING`), `path` (p. 
 
 ## Memoria del proyecto
 
-Skynet recuerda lo que se hace en cada proyecto y repositorio, al estilo de [engram](https://github.com/Gentleman-Programming/engram) (hito ME). Lo guardan los propios agentes mientras trabajan y Skynet al terminar cada ejecución; las personas lo revisan después.
+Skynet recuerda lo que se hace en cada proyecto y repositorio, al estilo de [engram](https://github.com/Gentleman-Programming/engram) (hito ME). Lo guardan los propios agentes mientras trabajan y Skynet al terminar cada ejecución; las personas lo revisan después. Todo el detalle está en [memoria.md](memoria.md).
 
 - **Al empezar una sesión nueva**, el prompt de la fase va precedido de un bloque `<memoria-del-proyecto>`: las entradas fijadas, los últimos resúmenes de sesión, la bitácora y lo último guardado en el repositorio de la ejecución y en todo su proyecto, hasta 4 000 caracteres (`SKYNET_MEMORY_CONTEXT_MAX_CHARS`). Si no cabe todo, deja fuera entradas enteras, nunca medias, y avisa de que hay más con `mem_search`. Llega como contexto de referencia, no como instrucciones: si contradice el repositorio, manda el repositorio. Nunca incluye lo archivado ni lo de otro repositorio u otro proyecto.
 - **Al continuar una sesión** (un mensaje, una reanudación o una bifurcación) no se repite el bloque: ya está en la conversación. Las herramientas siguen disponibles.

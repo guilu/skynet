@@ -261,6 +261,50 @@ public class MemoryService {
         .list();
   }
 
+  /** Lo que una invocación hizo con la memoria, en el orden en que lo hizo. */
+  @Transactional(readOnly = true)
+  public AgentMemory agentMemory(UUID agentRunId) {
+    Map.Entry<UUID, Optional<String>> agent =
+        jdbc.sql(
+                "SELECT p.project_id, a.memory FROM agent_run a"
+                    + " JOIN repository p ON p.id = a.repository_id WHERE a.id = ?")
+            .param(agentRunId)
+            .query(
+                (rs, n) ->
+                    Map.entry(
+                        rs.getObject("project_id", UUID.class),
+                        Optional.ofNullable(rs.getString("memory"))))
+            .optional()
+            .orElseThrow(() -> new NotFoundException("Invocación", agentRunId));
+    List<AgentMemory.Access> accesses =
+        jdbc.sql(
+                "SELECT a.observation_id, a.version, a.via, r.kind, r.title, o.repository_id,"
+                    + " o.archived_at IS NOT NULL AS archived, count(*) AS times,"
+                    + " min(a.accessed_at) AS first_at FROM memory_access a"
+                    + " JOIN memory_observation o ON o.id = a.observation_id"
+                    + " JOIN memory_observation_revision r"
+                    + " ON r.observation_id = a.observation_id AND r.version = a.version"
+                    + " WHERE a.agent_run_id = ?"
+                    + " GROUP BY a.observation_id, a.version, a.via, r.kind, r.title,"
+                    + " o.repository_id, o.archived_at"
+                    + " ORDER BY min(a.id)")
+            .param(agentRunId)
+            .query(
+                (rs, n) ->
+                    new AgentMemory.Access(
+                        rs.getObject("observation_id", UUID.class),
+                        rs.getInt("version"),
+                        rs.getString("via"),
+                        MemoryKind.valueOf(rs.getString("kind")),
+                        rs.getString("title"),
+                        rs.getObject("repository_id", UUID.class),
+                        rs.getBoolean("archived"),
+                        rs.getInt("times"),
+                        rs.getTimestamp("first_at").toInstant()))
+            .list();
+    return new AgentMemory(agentRunId, agent.getKey(), agent.getValue().orElse(null), accesses);
+  }
+
   /**
    * Busca en el proyecto. Con texto, primero lo más pertinente; sin él, las fijadas y después lo
    * más reciente.
