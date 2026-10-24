@@ -3,6 +3,7 @@ import { useMemo, useState, type CSSProperties } from 'react'
 import { api, type Appearance } from '../api'
 import { APPEARANCE_KEY, useAppearance } from '../appearance'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { CompanionGallery } from '../components/companion/CompanionGallery'
 import { Button } from '../components/ui/Button'
 import { Pill } from '../components/ui/Pill'
 import { LinesSkeleton } from '../components/ui/Skeleton'
@@ -19,7 +20,7 @@ import {
   type Palette,
 } from '../lib/palette'
 
-/** Ajustes de la web que valen para todos los navegadores. De momento, la apariencia. */
+/** Ajustes de la web que valen para todos los navegadores: la apariencia y el companion. */
 export function SettingsPage() {
   const appearance = useAppearance()
   return (
@@ -29,6 +30,7 @@ export function SettingsPage() {
       <ErrorMessage error={appearance.error} />
       {appearance.isPending && <LinesSkeleton label="la apariencia" />}
       {appearance.data && <AppearanceForm saved={appearance.data.colors} />}
+      <CompanionGallery />
     </>
   )
 }

@@ -151,6 +151,7 @@ export function ApprovalsPage() {
           empty={
             <EmptyState
               icon={Hand}
+              companion={filtered ? undefined : 'sleeping'}
               title={
                 filtered
                   ? 'Ninguna aprobación con estos filtros.'

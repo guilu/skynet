@@ -54,6 +54,9 @@
   --on-state-btn: #ffffff;
   /* Lo gastado fuera de Skynet en los medidores de cuota (rayado) */
   --other: #a3aec2;
+  /* Mascota (CO-A): nodos blancos y visor oscuro en los dos temas */
+  --companion-node: #ffffff;
+  --companion-visor: #1c2345;
 
   /* Alias de los tokens anteriores, para las piezas que aún los usan */
   --accent: var(--primary);
@@ -126,6 +129,8 @@
     --bad-btn-shade: #d13f3f;
     --on-state-btn: #0b1022;
     --other: #6f7b93;
+    --companion-node: #f4f6ff;
+    --companion-visor: #11162c;
     color-scheme: dark;
   }
 }
@@ -172,6 +177,8 @@
   --bad-btn-shade: #d13f3f;
   --on-state-btn: #0b1022;
   --other: #6f7b93;
+  --companion-node: #f4f6ff;
+  --companion-visor: #11162c;
   color-scheme: dark;
 }
 
@@ -442,13 +449,6 @@
       transform 0.12s var(--ease-pop),
       box-shadow 0.12s ease,
       filter 0.12s ease;
-  }
-
-  .brand-mark-lg {
-    width: 84px;
-    height: 84px;
-    border-radius: 26px;
-    box-shadow: 0 5px 0 var(--brand-tile-shade);
   }
 
   .brand-tagline {
@@ -4432,6 +4432,10 @@
     gap: var(--space-4);
   }
 
+  .settings + .settings-section {
+    margin-top: var(--space-4);
+  }
+
   .settings-section h2 {
     margin-top: 0;
   }
@@ -6112,6 +6116,587 @@
 
     .usage-run-status {
       display: none;
+    }
+  }
+
+  /* ---------- Mascota (CO-A): el isotipo hecho personaje, plano y en pastel ---------- */
+  .companion {
+    --c-body: color-mix(in srgb, var(--primary) 72%, white);
+    --c-body-hi: color-mix(in srgb, var(--primary) 45%, white);
+    --c-shade: color-mix(in srgb, var(--primary-shade) 85%, white);
+    --c-line: color-mix(in srgb, var(--primary) 26%, white);
+    --c-eye: color-mix(in srgb, var(--primary) 25%, #c4f1ff);
+    display: block;
+    flex: none;
+    overflow: visible;
+  }
+
+  .companion[data-state='error'] {
+    --c-body: color-mix(in srgb, var(--bad) 70%, white);
+    --c-body-hi: color-mix(in srgb, var(--bad) 40%, white);
+    --c-shade: var(--bad-shade);
+    --c-line: color-mix(in srgb, var(--bad) 28%, white);
+    --c-eye: #ffd2d2;
+  }
+
+  .companion[data-state='offline'],
+  .companion[data-state='cancelled'] {
+    --c-body: #b9c2d3;
+    --c-body-hi: #d7dde8;
+    --c-shade: #8f9ab0;
+    --c-line: #d9dfe9;
+    --c-eye: #e3e8f1;
+  }
+
+  .companion[data-state='offline'] {
+    opacity: 0.85;
+  }
+
+  .companion-body,
+  .companion-head,
+  .companion-hand,
+  .companion-eyes {
+    transform-box: view-box;
+  }
+
+  .companion-body {
+    transform-origin: 60px 112px;
+  }
+
+  .companion-head {
+    transform-origin: 60px 24px;
+  }
+
+  .companion-eyes {
+    transform-origin: 60px 66px;
+  }
+
+  .companion-hand-l {
+    transform-origin: 20px 96px;
+  }
+
+  .companion-hand-r {
+    transform-origin: 100px 96px;
+  }
+
+  .companion-floor {
+    fill: #1c2345;
+    opacity: 0.1;
+  }
+
+  .companion-shell,
+  .companion-shade {
+    stroke-width: 30;
+    stroke-linejoin: round;
+  }
+
+  .companion-shell {
+    fill: var(--c-body);
+    stroke: var(--c-body);
+  }
+
+  .companion-shade {
+    fill: var(--c-shade);
+    stroke: var(--c-shade);
+  }
+
+  .companion-shine {
+    fill: none;
+    stroke: var(--c-body-hi);
+    stroke-width: 7;
+    stroke-linecap: round;
+  }
+
+  .companion-node,
+  .companion-ring {
+    fill: var(--companion-node);
+  }
+
+  .companion-node {
+    stroke: var(--c-line);
+  }
+
+  .companion[data-small] .companion-node {
+    stroke: var(--c-shade);
+  }
+
+  .companion-node-shade {
+    fill: var(--c-line);
+  }
+
+  .companion-node-shine {
+    fill: #fff;
+  }
+
+  .companion-visor,
+  .companion-eye-glint {
+    fill: var(--companion-visor);
+  }
+
+  .companion-eye {
+    fill: var(--c-eye);
+  }
+
+  .companion-eye-line {
+    fill: none;
+    stroke: var(--c-eye);
+    stroke-width: 4.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .companion-fx-think .companion-badge {
+    fill: var(--surface);
+    stroke: var(--c-line);
+    stroke-width: 2.5;
+  }
+
+  .companion-fx-think circle:not(.companion-badge) {
+    fill: var(--c-body);
+  }
+
+  .companion-fx-speed line {
+    stroke: var(--c-line);
+    stroke-width: 5;
+    stroke-linecap: round;
+  }
+
+  .companion-laptop {
+    fill: #c9d2e3;
+  }
+
+  .companion-laptop-base {
+    fill: #aab6cc;
+  }
+
+  .companion-laptop-led {
+    fill: #eef2f8;
+  }
+
+  .companion-fx-alarm line {
+    stroke: var(--bad);
+    stroke-width: 5;
+    stroke-linecap: round;
+  }
+
+  .companion-fx-pause circle {
+    fill: var(--warn-soft);
+    stroke: var(--warn);
+    stroke-width: 2.5;
+  }
+
+  .companion-fx-pause rect {
+    fill: var(--warn-shade);
+  }
+
+  .companion-fx-bang circle:first-child {
+    fill: var(--warn);
+  }
+
+  .companion-fx-bang rect,
+  .companion-fx-bang circle:last-child {
+    fill: #fff;
+  }
+
+  .companion-fx-zz {
+    fill: var(--c-line);
+    font-family: var(--font-display);
+    font-weight: 800;
+  }
+
+  .companion-fx-off circle {
+    fill: var(--idle-soft);
+    stroke: var(--idle);
+    stroke-width: 2.5;
+  }
+
+  .companion-fx-off path,
+  .companion-fx-off line {
+    fill: none;
+    stroke: var(--idle);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+  }
+
+  /* «Te necesita»: levanta la mano derecha y saluda */
+  .companion[data-state='waiting'] .companion-hand-r {
+    transform: translate(8px, -40px);
+  }
+
+  /* Movimiento: solo transform y opacity */
+  .companion[data-state='ready'] .companion-body {
+    animation: companion-breathe 3.2s ease-in-out infinite;
+  }
+
+  .companion[data-state='ready'] .companion-eyes,
+  .companion[data-state='waiting'] .companion-eyes {
+    animation: companion-blink 5s infinite;
+  }
+
+  .companion[data-state='sleeping'] .companion-body {
+    animation: companion-breathe 5s ease-in-out infinite;
+  }
+
+  .companion[data-state='sleeping'] .companion-fx-zz text {
+    animation: companion-float 3s ease-in-out infinite;
+  }
+
+  .companion[data-state='sleeping'] .companion-fx-zz text + text {
+    animation-delay: 1s;
+  }
+
+  .companion[data-state='thinking'] .companion-body {
+    animation: companion-breathe 2.4s ease-in-out infinite;
+  }
+
+  .companion[data-state='thinking'] .companion-head {
+    animation: companion-tilt 2.4s ease-in-out infinite;
+  }
+
+  .companion-fx-think circle:not(.companion-badge) {
+    animation: companion-dot 1.2s ease-in-out infinite;
+  }
+
+  .companion-fx-think circle:nth-child(3) {
+    animation-delay: 0.15s;
+  }
+
+  .companion-fx-think circle:nth-child(4) {
+    animation-delay: 0.3s;
+  }
+
+  /* Ciclo de 4 fotogramas en 1,2 s, inclinado hacia delante */
+  .companion[data-state='running'] .companion-body {
+    animation: companion-run 1.2s steps(1) infinite;
+  }
+
+  .companion[data-state='running'] .companion-hand-l {
+    animation: companion-swing 0.6s ease-in-out infinite alternate;
+  }
+
+  .companion[data-state='running'] .companion-hand-r {
+    animation: companion-swing 0.6s ease-in-out infinite alternate-reverse;
+  }
+
+  .companion-fx-speed line {
+    animation: companion-speed 0.45s linear infinite;
+  }
+
+  .companion-fx-speed line:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+
+  .companion-fx-speed line:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+
+  .companion[data-state='reviewing'] .companion-eyes {
+    animation: companion-scan 2.4s ease-in-out infinite;
+  }
+
+  .companion[data-state='success'] .companion-body {
+    animation:
+      companion-pop 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) both,
+      companion-hop 2.4s ease-in-out 0.6s infinite;
+  }
+
+  .companion[data-state='success'] .companion-hand {
+    animation: companion-cheer 2.4s ease-in-out 0.6s infinite;
+  }
+
+  .companion-fx-confetti > * {
+    animation: companion-confetti 1.8s ease-out infinite;
+  }
+
+  .companion-fx-confetti > :nth-child(2n) {
+    animation-delay: 0.3s;
+  }
+
+  .companion-fx-confetti > :nth-child(3n) {
+    animation-delay: 0.6s;
+  }
+
+  .companion[data-state='error'] .companion-body {
+    animation: companion-shake 0.45s ease-in-out both;
+  }
+
+  .companion-fx-alarm,
+  .companion-fx-pause {
+    animation: companion-fade 1.2s ease-in-out infinite;
+  }
+
+  .companion[data-state='waiting'] .companion-hand-r {
+    animation: companion-wave 1.1s ease-in-out infinite;
+  }
+
+  .companion-fx-bang {
+    animation: companion-bob 1.4s ease-in-out infinite;
+  }
+
+  /* Cambio de expresión: el visor parpadea y tapa el cambio de ojos */
+  .companion.companion-swap .companion-eyes {
+    animation: companion-swap 220ms ease-in-out both;
+  }
+
+  /*
+   * Quietas en listas y galerías (se animan al pasar el ratón). Sin animación, no en pausa: una
+   * finita en pausa (el «pop» del éxito) no terminaría nunca.
+   */
+  .companion[data-still]:not(:hover),
+  .companion[data-still]:not(:hover) * {
+    animation: none;
+  }
+
+  @keyframes companion-breathe {
+    50% {
+      transform: scale(1.02, 0.98);
+    }
+  }
+
+  @keyframes companion-blink {
+    0%,
+    93%,
+    100% {
+      transform: scaleY(1);
+    }
+    95% {
+      transform: scaleY(0.1);
+    }
+  }
+
+  @keyframes companion-swap {
+    50% {
+      transform: scaleY(0.05);
+    }
+  }
+
+  @keyframes companion-tilt {
+    50% {
+      transform: rotate(-6deg);
+    }
+  }
+
+  @keyframes companion-dot {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.45;
+    }
+    30% {
+      transform: translateY(-4px);
+      opacity: 1;
+    }
+  }
+
+  @keyframes companion-run {
+    0%,
+    50% {
+      transform: rotate(-3deg);
+    }
+    25% {
+      transform: rotate(-6deg) translateY(-4px);
+    }
+    75% {
+      transform: rotate(-6deg) translateY(-3px);
+    }
+  }
+
+  @keyframes companion-swing {
+    from {
+      transform: translateY(-3px);
+    }
+    to {
+      transform: translateY(3px);
+    }
+  }
+
+  @keyframes companion-speed {
+    from {
+      transform: translateX(6px);
+      opacity: 0;
+    }
+    40% {
+      opacity: 1;
+    }
+    to {
+      transform: translateX(-10px);
+      opacity: 0;
+    }
+  }
+
+  @keyframes companion-scan {
+    0%,
+    100% {
+      transform: translateX(-2px);
+    }
+    50% {
+      transform: translateX(2px);
+    }
+  }
+
+  @keyframes companion-pop {
+    0% {
+      transform: scale(0.85);
+    }
+    60% {
+      transform: scale(1.12);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes companion-hop {
+    0%,
+    70%,
+    100% {
+      transform: translateY(0);
+    }
+    80% {
+      transform: translateY(-7px);
+    }
+    90% {
+      transform: scale(1.03, 0.97);
+    }
+  }
+
+  @keyframes companion-cheer {
+    0%,
+    70%,
+    100% {
+      transform: translateY(0);
+    }
+    80% {
+      transform: translateY(-10px);
+    }
+  }
+
+  @keyframes companion-confetti {
+    from {
+      transform: translateY(4px);
+      opacity: 0;
+    }
+    25% {
+      opacity: 1;
+    }
+    to {
+      transform: translateY(-8px);
+      opacity: 0;
+    }
+  }
+
+  @keyframes companion-shake {
+    20% {
+      transform: translateX(-5px) rotate(-3deg);
+    }
+    40% {
+      transform: translateX(5px) rotate(3deg);
+    }
+    60% {
+      transform: translateX(-3px);
+    }
+    80% {
+      transform: translateX(3px);
+    }
+  }
+
+  @keyframes companion-fade {
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  @keyframes companion-wave {
+    0%,
+    100% {
+      transform: translate(8px, -40px) rotate(-12deg);
+    }
+    50% {
+      transform: translate(12px, -42px) rotate(12deg);
+    }
+  }
+
+  @keyframes companion-bob {
+    50% {
+      transform: translateY(-5px);
+    }
+  }
+
+  @keyframes companion-float {
+    0% {
+      transform: translate(0, 4px);
+      opacity: 0;
+    }
+    30% {
+      opacity: 1;
+    }
+    100% {
+      transform: translate(6px, -10px);
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .companion,
+    .companion * {
+      animation: none !important;
+    }
+  }
+
+  /* En los estados vacíos, la mascota sustituye al icono */
+  .empty-companion {
+    margin-bottom: 4px;
+  }
+
+  /* Galería de Ajustes › Companion */
+  .companion-stage {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 20px;
+    align-items: center;
+  }
+
+  .companion-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .companion-tile {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    width: 100%;
+    padding: 10px 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    color: var(--fg);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .companion-tile[aria-pressed='true'] {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+
+  .companion-tile:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 640px) {
+    .companion-stage {
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: center;
     }
   }
 }

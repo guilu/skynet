@@ -2,6 +2,8 @@ import * as Menu from '@radix-ui/react-dropdown-menu'
 import { Check, Columns3, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/cn'
+import { Companion } from '../companion/Companion'
+import type { CompanionState } from '../companion/state'
 
 export interface Column<T> {
   id: string
@@ -149,21 +151,32 @@ export function ColumnsMenu<T>({
   )
 }
 
-/** Estado vacío: icono grande, una frase y, si se puede hacer algo, la acción. */
+/**
+ * Estado vacío: icono grande (o la mascota con `companion`), una frase y, si se puede hacer
+ * algo, la acción.
+ */
 export function EmptyState({
   icon: Icon,
+  companion,
   title,
   children,
 }: {
-  icon: LucideIcon
+  icon?: LucideIcon
+  companion?: CompanionState
   title: string
   children?: ReactNode
 }) {
   return (
     <div className="empty-state">
-      <span className="empty-icon" aria-hidden="true">
-        <Icon size={28} strokeWidth={2.25} />
-      </span>
+      {companion ? (
+        <Companion state={companion} size={96} className="empty-companion" />
+      ) : (
+        Icon && (
+          <span className="empty-icon" aria-hidden="true">
+            <Icon size={28} strokeWidth={2.25} />
+          </span>
+        )
+      )}
       <p className="empty-title">{title}</p>
       {children && <div className="empty-body">{children}</div>}
     </div>
