@@ -88,7 +88,7 @@ export function RunnersPage() {
       <ErrorMessage error={runners.error} />
       {runners.isPending && <TableSkeleton label="los runners" columns={5} rows={3} />}
       {runners.data?.length === 0 && !archived && (
-        <EmptyState icon={Server} title="No hay runners registrados.">
+        <EmptyState companion="offline" title="No hay runners registrados.">
           <p>Arranca uno en la máquina de los repositorios (README, «Runner local»).</p>
         </EmptyState>
       )}

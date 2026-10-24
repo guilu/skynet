@@ -48,10 +48,10 @@ export function Logo({ size = 24, className }: { size?: number; className?: stri
 }
 
 /** Baldosa de marca: el isotipo sobre el acento, con su degradado y su sombra corta. */
-export function BrandMark({ large = false }: { large?: boolean }) {
+export function BrandMark() {
   return (
-    <span className={large ? 'brand-mark brand-mark-lg' : 'brand-mark'} aria-hidden="true">
-      <Logo size={large ? 52 : 26} />
+    <span className="brand-mark" aria-hidden="true">
+      <Logo size={26} />
     </span>
   )
 }

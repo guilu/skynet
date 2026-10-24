@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Gauge, RefreshCw, Server } from 'lucide-react'
+import { RefreshCw, Server } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { api, type AgentUsage, type QuotaWindowKind, type RunUsage, type UsageWindow } from '../api'
@@ -134,7 +134,7 @@ export function UsagePage() {
         </div>
         {windows.isPending && <CardsSkeleton label="las ventanas de uso" count={3} />}
         {windows.data && providers.length === 0 && (
-          <EmptyState icon={Gauge} title="Aún no hay datos de cuota.">
+          <EmptyState companion="paused" title="Aún no hay datos de cuota.">
             <p>
               El runner lee la cuota de cada CLI al terminar cada agente y consulta la de Codex y
               Antigravity cada 10 minutos. Pulsa «Actualizar» para pedirla ahora.

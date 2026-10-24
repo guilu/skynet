@@ -106,6 +106,7 @@ export function ProjectsPage() {
               empty={
                 <EmptyState
                   icon={Folder}
+                  companion={!q && !archived ? 'sleeping' : undefined}
                   title={
                     q
                       ? 'Ningún proyecto coincide con la búsqueda.'

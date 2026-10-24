@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, type Session } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
-import { BrandMark } from '../components/brand/Logo'
+import { Companion } from '../components/companion/Companion'
 import { Button } from '../components/ui/Button'
 import { Pill } from '../components/ui/Pill'
 
@@ -29,7 +29,7 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
     <main className="login">
       <div className="login-card">
         <section className="login-hero" aria-hidden="true">
-          <BrandMark large />
+          <Companion state="ready" size={128} />
           <p className="login-tagline">Tus agentes, a la vista.</p>
           <ul className="login-states">
             <li>

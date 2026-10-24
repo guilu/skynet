@@ -167,6 +167,7 @@ export function RunsPage() {
           empty={
             <EmptyState
               icon={CirclePlay}
+              companion={!filtered && !archived ? 'sleeping' : undefined}
               title={
                 archived && !(status.length > 0 || !!since || !!projectId || !!q)
                   ? 'No hay ejecuciones archivadas.'
