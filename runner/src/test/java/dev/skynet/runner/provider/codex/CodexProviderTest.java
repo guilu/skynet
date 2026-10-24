@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.skynet.protocol.runner.AgentLimits;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.StartAgent;
+import dev.skynet.runner.memory.MemoryBridge;
 import dev.skynet.runner.provider.ModelPrices;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -109,6 +110,31 @@ class CodexProviderTest {
             null);
 
     assertThat(env).containsOnlyKeys("PATH", "OPENAI_API_KEY", "CODEX_HOME", "EXTRA");
+  }
+
+  @Test
+  void withMemoryTheMcpServerGoesInConfigOverridesRightAfterExec() throws Exception {
+    MemoryBridge memory =
+        new MemoryBridge(List.of("/jdk/bin/java", "-cp", "/r/lib/\"x\"", "memory-mcp"));
+
+    List<String> command =
+        provider.command(start(null, null, null, null), dir.resolve("a"), memory);
+
+    assertThat(command.subList(0, 9))
+        .containsExactly(
+            "codex",
+            "exec",
+            "--json",
+            "-c",
+            "mcp_servers.skynet_memoria.command=\"/jdk/bin/java\"",
+            "-c",
+            "mcp_servers.skynet_memoria.args=[\"-cp\", \"/r/lib/\\\"x\\\"\", \"memory-mcp\"]",
+            "-c",
+            "mcp_servers.skynet_memoria.default_tools_approval_mode=\"approve\"");
+    assertThat(command.subList(command.size() - 2, command.size()))
+        .containsExactly("--", "-arregla add");
+    assertThat(provider.command(start(null, null, null, null), dir.resolve("b"), null))
+        .doesNotContain("-c");
   }
 
   private static StartAgent start(

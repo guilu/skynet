@@ -109,6 +109,8 @@ public final class FakeCodex {
         Files.copy(resumed, sessionFile, StandardCopyOption.REPLACE_EXISTING);
       }
     }
+    // Las llamadas de FAKE_MCP_CALLS al servidor de memoria, antes de la sesión grabada.
+    McpScript.run(McpScript.fromCodexConfig(inv.config(), "skynet_memoria"), env, cwd, err);
     String fixture =
         inv.subcommand() == null
             ? env.getOrDefault("FAKE_CODEX_FIXTURE", DEFAULT_FIXTURE)
@@ -275,6 +277,7 @@ public final class FakeCodex {
       String outputSchema,
       String model,
       String sandbox,
+      List<String> config,
       String prompt) {
 
     static Invocation parse(String[] args) {
@@ -285,6 +288,7 @@ public final class FakeCodex {
       String outputSchema = null;
       String model = null;
       String sandbox = null;
+      List<String> config = new ArrayList<>();
       List<String> positional = new ArrayList<>();
       for (int i = exec ? 1 : 0; i < args.length; i++) {
         switch (args[i]) {
@@ -292,6 +296,7 @@ public final class FakeCodex {
           case "--output-schema" -> outputSchema = args[++i];
           case "--model", "-m" -> model = args[++i];
           case "--sandbox", "-s" -> sandbox = args[++i];
+          case "--config", "-c" -> config.add(args[++i]);
           case "--dangerously-bypass-approvals-and-sandbox", "--yolo" -> sandbox = "none";
           case "--" -> {
             for (i++; i < args.length; i++) {
@@ -317,6 +322,7 @@ public final class FakeCodex {
           outputSchema,
           model,
           sandbox,
+          List.copyOf(config),
           positional.isEmpty() ? null : positional.getLast());
     }
   }

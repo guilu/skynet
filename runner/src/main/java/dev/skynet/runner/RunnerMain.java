@@ -6,6 +6,8 @@ import dev.skynet.runner.agent.ArtifactSender;
 import dev.skynet.runner.agent.ArtifactSpool;
 import dev.skynet.runner.agent.EventSender;
 import dev.skynet.runner.journal.Journal;
+import dev.skynet.runner.memory.MemoryMcpMain;
+import dev.skynet.runner.memory.MemorySessions;
 import dev.skynet.runner.provider.CliVersion;
 import dev.skynet.runner.provider.ModelPrices;
 import dev.skynet.runner.provider.ProviderRegistry;
@@ -38,6 +40,11 @@ public final class RunnerMain {
   public static void main(String[] args) throws Exception {
     if (args.length > 0 && "--version".equals(args[0])) {
       System.out.println("skynet-runner " + version());
+      return;
+    }
+    if (args.length > 0 && "memory-mcp".equals(args[0])) {
+      // El puente MCP de memoria que lanza el CLI de un agente (ME-B).
+      MemoryMcpMain.run(java.util.Arrays.copyOfRange(args, 1, args.length), version());
       return;
     }
     RunnerConfig config = RunnerConfig.fromEnvironment(System.getenv());
@@ -96,7 +103,9 @@ public final class RunnerMain {
                 config.cancelGrace(),
                 sender::wakeUp,
                 new ArtifactSpool(journal, config.artifactsDir(), artifactSender::wakeUp),
-                config.declaredFiles());
+                config.declaredFiles(),
+                new MemorySessions(
+                    client::memoryToken, config.controlPlane(), MemorySessions.currentRunner()));
         RunnerDaemon daemon =
             new RunnerDaemon(
                 config,

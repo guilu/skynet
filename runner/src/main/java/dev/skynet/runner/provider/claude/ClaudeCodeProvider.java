@@ -4,17 +4,22 @@ import dev.skynet.protocol.AgentProviderKind;
 import dev.skynet.protocol.runner.AgentLimits;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.StartAgent;
+import dev.skynet.runner.memory.MemoryBridge;
 import dev.skynet.runner.provider.AgentEnvironment;
 import dev.skynet.runner.provider.AgentProvider;
 import dev.skynet.runner.provider.CliVersion;
 import dev.skynet.runner.provider.ModelPrices;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Construye la invocación de {@code claude -p} para una orden de arranque o de reanudación (ver
@@ -26,6 +31,8 @@ public class ClaudeCodeProvider implements AgentProvider {
   /** Variables propias de Claude Code que hereda el agente, además de las básicas. */
   static final Set<String> CLAUDE_ENV =
       Set.of("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR");
+
+  private static final ObjectMapper JSON = JsonMapper.builder().build();
 
   private final String executable;
   private final AgentEnvironment env;
@@ -91,6 +98,45 @@ public class ClaudeCodeProvider implements AgentProvider {
   public List<String> command(StartAgent start, Path files) {
     return command(start);
   }
+
+  @Override
+  public boolean supportsMemory() {
+    return true;
+  }
+
+  /**
+   * Con memoria, el servidor MCP va en {@code <files>.mcp.json} ({@code --mcp-config}) y sus
+   * herramientas se permiten aunque la fase limite las demás.
+   */
+  @Override
+  public List<String> command(StartAgent start, Path files, MemoryBridge memory)
+      throws IOException {
+    List<String> command = command(start);
+    if (memory == null) {
+      return command;
+    }
+    Path config = Path.of(files + ".mcp.json");
+    Files.createDirectories(config.getParent());
+    ObjectNode root = JSON.createObjectNode();
+    ObjectNode server = root.putObject("mcpServers").putObject(MemoryBridge.SERVER);
+    server.put("type", "stdio");
+    server.put("command", memory.executable());
+    memory.args().forEach(server.putArray("args")::add);
+    Files.writeString(config, JSON.writeValueAsString(root));
+    // Antes de "--" y el prompt, que van siempre al final.
+    List<String> options = new ArrayList<>(List.of("--mcp-config", config.toString()));
+    int allowed = command.indexOf("--allowedTools");
+    if (allowed >= 0 && allowed < command.size() - 2) {
+      command.set(allowed + 1, command.get(allowed + 1) + "," + MEMORY_TOOLS);
+    } else {
+      options.addAll(List.of("--allowedTools", MEMORY_TOOLS));
+    }
+    command.addAll(command.size() - 2, options);
+    return command;
+  }
+
+  /** Las herramientas del servidor de memoria, para {@code --allowedTools}. */
+  static final String MEMORY_TOOLS = "mcp__" + MemoryBridge.SERVER;
 
   public List<String> command(StartAgent start) {
     List<String> command = new ArrayList<>();

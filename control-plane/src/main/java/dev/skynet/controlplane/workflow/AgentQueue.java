@@ -145,7 +145,9 @@ class AgentQueue {
                 invocation.workspace(),
                 invocation.command(),
                 outputSchema,
-                agent.isCommand() ? null : agent.getProvider()),
+                agent.isCommand() ? null : agent.getProvider(),
+                // ME-B: todos los agentes leen y escriben la memoria; ME-C añade `memory` al YAML.
+                agent.isCommand() ? null : StartAgent.MEMORY_WRITE),
             invocation.runnerId()));
     return agent;
   }

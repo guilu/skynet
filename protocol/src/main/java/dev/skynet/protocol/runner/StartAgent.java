@@ -30,6 +30,9 @@ import java.util.UUID;
  *     apunta a un fichero del repositorio, que el runner lee del worktree al arrancar
  * @param provider proveedor que ejecuta el agente ({@link dev.skynet.protocol.AgentProviderKind});
  *     {@code null} para {@code claude-code}. No aplica a un comando.
+ * @param memory acceso del agente a la memoria del proyecto ({@link #MEMORY_READ} o {@link
+ *     #MEMORY_WRITE}): el runner pide un token de memoria para la invocación y le da las
+ *     herramientas MCP de memoria. {@code null} sin memoria; nunca en un comando.
  */
 public record StartAgent(
     UUID workflowRunId,
@@ -47,7 +50,11 @@ public record StartAgent(
     WorkspaceRef workspace,
     String command,
     String outputSchema,
-    String provider) {
+    String provider,
+    String memory) {
+
+  public static final String MEMORY_READ = "read";
+  public static final String MEMORY_WRITE = "write";
 
   public StartAgent {
     Objects.requireNonNull(workflowRunId, "workflowRunId");
@@ -66,6 +73,50 @@ public record StartAgent(
     if (command != null && outputSchema != null) {
       throw new IllegalArgumentException("Un comando no devuelve salida estructurada");
     }
+    if (memory != null && !MEMORY_READ.equals(memory) && !MEMORY_WRITE.equals(memory)) {
+      throw new IllegalArgumentException("memory debe ser read o write: " + memory);
+    }
+    if (command != null && memory != null) {
+      throw new IllegalArgumentException("Un comando no usa la memoria");
+    }
+  }
+
+  /** Invocación sin memoria. */
+  public StartAgent(
+      UUID workflowRunId,
+      String workItemKey,
+      String repositoryPath,
+      String baseBranch,
+      UUID sessionId,
+      String prompt,
+      List<String> allowedTools,
+      String permissionMode,
+      String model,
+      AgentLimits limits,
+      ResumeFrom resume,
+      List<String> environment,
+      WorkspaceRef workspace,
+      String command,
+      String outputSchema,
+      String provider) {
+    this(
+        workflowRunId,
+        workItemKey,
+        repositoryPath,
+        baseBranch,
+        sessionId,
+        prompt,
+        allowedTools,
+        permissionMode,
+        model,
+        limits,
+        resume,
+        environment,
+        workspace,
+        command,
+        outputSchema,
+        provider,
+        null);
   }
 
   /** Invocación de Claude Code (o un comando). */
@@ -122,7 +173,8 @@ public record StartAgent(
         workspace,
         command,
         schema,
-        provider);
+        provider,
+        memory);
   }
 
   /** Proveedor efectivo: {@code claude-code} si no se indica. */
