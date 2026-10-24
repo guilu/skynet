@@ -547,7 +547,7 @@ class WorkflowEngineIT extends IntegrationTest {
     List<JsonNode> commands = runner.claim();
     assertThat(commands).hasSize(2);
     Map<String, JsonNode> byPrompt = new HashMap<>();
-    commands.forEach(c -> byPrompt.put(c.path("start").path("prompt").asString(), c));
+    commands.forEach(c -> byPrompt.put(taskPrompt(c.path("start")), c));
     assertThat(byPrompt).containsOnlyKeys("Planifica #42", "Escribe tests para #42");
     JsonNode tests = byPrompt.get("Escribe tests para #42");
     assertThat(tests.path("start").path("workspace").isNull()).isTrue();
@@ -560,7 +560,7 @@ class WorkflowEngineIT extends IntegrationTest {
     List<JsonNode> fix = runner.claim();
     assertThat(fix).hasSize(1);
     JsonNode start = fix.getFirst().path("start");
-    assertThat(start.path("prompt").asString()).isEqualTo("Arregla #42 de ENG-1");
+    assertThat(taskPrompt(start)).isEqualTo("Arregla #42 de ENG-1");
     assertThat(start.path("workspace").path("path").asString()).isEqualTo("/w/eng/tests");
     assertThat(start.path("workspace").path("branch").asString()).isEqualTo("skynet/tests");
     assertThat(start.path("allowedTools"))
@@ -592,7 +592,7 @@ class WorkflowEngineIT extends IntegrationTest {
     Runner runner = register("laptop");
     String runId = launch(definitionId, Map.of("issue", "#7")).path("id").asString();
     Map<String, JsonNode> byStage = new HashMap<>();
-    runner.claim().forEach(c -> byStage.put(c.path("start").path("prompt").asString(), c));
+    runner.claim().forEach(c -> byStage.put(taskPrompt(c.path("start")), c));
     JsonNode plan = byStage.get("Planifica #7");
     JsonNode tests = byStage.get("Escribe tests para #7");
     Events testsEvents = new Events(UUID.fromString(tests.path("agentRunId").asString()));
@@ -628,7 +628,7 @@ class WorkflowEngineIT extends IntegrationTest {
     Runner runner = register("laptop");
     String runId = launch(definitionId, Map.of("issue", "#9")).path("id").asString();
     for (JsonNode command : runner.claim()) {
-      String prompt = command.path("start").path("prompt").asString();
+      String prompt = taskPrompt(command.path("start"));
       complete(runner, command, prompt.startsWith("Planifica") ? "/w/plan" : "/w/tests");
     }
 
@@ -692,7 +692,7 @@ class WorkflowEngineIT extends IntegrationTest {
     JsonNode tests = runner.claim().getFirst();
     JsonNode start = tests.path("start");
     assertThat(start.path("command").asString()).isEqualTo("./gradlew test");
-    assertThat(start.path("prompt").asString()).isEqualTo("./gradlew test");
+    assertThat(taskPrompt(start)).isEqualTo("./gradlew test");
     assertThat(start.path("model").isNull()).isTrue();
     assertThat(start.path("workspace").path("path").asString()).isEqualTo("/w/eng/implement");
     assertThat(start.path("limits").path("timeout").isNull()).isFalse();
@@ -719,7 +719,7 @@ class WorkflowEngineIT extends IntegrationTest {
     List<JsonNode> next = runner.claim();
     assertThat(next).hasSize(1);
     assertThat(next.getFirst().path("type").asString()).isEqualTo("START");
-    assertThat(next.getFirst().path("start").path("prompt").asString()).isEqualTo("Revisa");
+    assertThat(taskPrompt(next.getFirst().path("start"))).isEqualTo("Revisa");
     assertThat(next.getFirst().path("start").path("workspace").path("path").asString())
         .isEqualTo("/w/eng/implement");
     assertThat(stageStatuses(runId)).containsEntry("tests", "SUCCEEDED");
@@ -785,7 +785,7 @@ class WorkflowEngineIT extends IntegrationTest {
     List<JsonNode> children = runner.claim();
     assertThat(children).hasSize(2);
     Map<String, JsonNode> byPrompt = new HashMap<>();
-    children.forEach(c -> byPrompt.put(c.path("start").path("prompt").asString(), c));
+    children.forEach(c -> byPrompt.put(taskPrompt(c.path("start")), c));
     assertThat(byPrompt).containsOnlyKeys("Revisa la calidad de ENG-1", "Revisa la seguridad");
     for (JsonNode child : children) {
       JsonNode workspace = child.path("start").path("workspace");
@@ -835,7 +835,7 @@ class WorkflowEngineIT extends IntegrationTest {
     String runId = launch(definitionId, Map.of()).path("id").asString();
     complete(runner, runner.claim().getFirst(), "/w/eng/implement");
     Map<String, JsonNode> byPrompt = new HashMap<>();
-    runner.claim().forEach(c -> byPrompt.put(c.path("start").path("prompt").asString(), c));
+    runner.claim().forEach(c -> byPrompt.put(taskPrompt(c.path("start")), c));
     Events security =
         new Events(
             UUID.fromString(byPrompt.get("Revisa la seguridad").path("agentRunId").asString()));
@@ -937,7 +937,7 @@ class WorkflowEngineIT extends IntegrationTest {
 
     // Pasada la espera, el segundo intento vuelve al worktree como lo dejó implement.
     JsonNode second = awaitCommand(runner);
-    assertThat(second.path("start").path("prompt").asString()).isEqualTo("Corrige");
+    assertThat(taskPrompt(second.path("start"))).isEqualTo("Corrige");
     JsonNode workspace = second.path("start").path("workspace");
     assertThat(workspace.path("path").asString()).isEqualTo("/w/eng/implement");
     assertThat(workspace.path("restore").asString()).isEqualTo("5a0001a");
@@ -1019,7 +1019,7 @@ class WorkflowEngineIT extends IntegrationTest {
 
     // El intento 3 parte del worktree de implement y, al fallar, aún tiene su reintento automático.
     JsonNode third = awaitCommand(runner);
-    assertThat(third.path("start").path("prompt").asString()).isEqualTo("Corrige");
+    assertThat(taskPrompt(third.path("start"))).isEqualTo("Corrige");
     lose(runner, third);
     complete(runner, awaitCommand(runner), "/w/eng/implement");
     complete(runner, awaitCommand(runner), "/w/eng/implement");
@@ -1234,7 +1234,7 @@ class WorkflowEngineIT extends IntegrationTest {
     String runId = launch(definitionId, Map.of()).path("id").asString();
     complete(runner, runner.claim().getFirst(), "/w/eng/implement");
     Map<String, JsonNode> byPrompt = new HashMap<>();
-    runner.claim().forEach(c -> byPrompt.put(c.path("start").path("prompt").asString(), c));
+    runner.claim().forEach(c -> byPrompt.put(taskPrompt(c.path("start")), c));
     JsonNode quality = byPrompt.get("Revisa la calidad de ENG-1");
 
     // calidad falla; seguridad no recibe la orden de terminar.
@@ -1252,8 +1252,7 @@ class WorkflowEngineIT extends IntegrationTest {
         .extracting(r -> r.path("status").asString())
         .containsExactly("FAILED", "PENDING");
     JsonNode again = awaitCommand(runner);
-    assertThat(again.path("start").path("prompt").asString())
-        .isEqualTo("Revisa la calidad de ENG-1");
+    assertThat(taskPrompt(again.path("start"))).isEqualTo("Revisa la calidad de ENG-1");
     assertThat(again.path("start").path("workspace").path("copy").asBoolean()).isTrue();
     assertThat(runner.claim()).isEmpty();
     complete(runner, again, "/w/eng/calidad-2");
@@ -1302,7 +1301,7 @@ class WorkflowEngineIT extends IntegrationTest {
     assertThat(specView.path("verifications").get(0).path("checks").get(1).path("name").asString())
         .isEqualTo("diff");
     JsonNode plan = runner.claim().getFirst();
-    assertThat(plan.path("start").path("prompt").asString()).isEqualTo("Planifica");
+    assertThat(taskPrompt(plan.path("start"))).isEqualTo("Planifica");
     assertThat(plan.path("start").path("workspace").path("path").asString())
         .isEqualTo("/w/eng/spec");
     assertThat(eventTypes(runId))
@@ -1362,7 +1361,7 @@ class WorkflowEngineIT extends IntegrationTest {
     verified(runner, verify, true);
     assertThat(stageStatuses(runId)).containsEntry("verify", "SUCCEEDED");
     JsonNode review = runner.claim().getFirst();
-    assertThat(review.path("start").path("prompt").asString()).isEqualTo("Revisa");
+    assertThat(taskPrompt(review.path("start"))).isEqualTo("Revisa");
     assertThat(review.path("start").path("workspace").path("path").asString())
         .isEqualTo("/w/eng/implement");
   }
@@ -1614,7 +1613,7 @@ class WorkflowEngineIT extends IntegrationTest {
     Runner runner = register("laptop");
     String runId = launch(definitionId, Map.of()).path("id").asString();
     Map<String, JsonNode> started = new LinkedHashMap<>();
-    runner.claim().forEach(c -> started.put(c.path("start").path("prompt").asString(), c));
+    runner.claim().forEach(c -> started.put(taskPrompt(c.path("start")), c));
     assertThat(started).containsOnlyKeys("Especifica", "Externo");
 
     // El outputSchema de la fase manda sobre el output del agente; el de un fichero va como $ref.
@@ -1630,7 +1629,7 @@ class WorkflowEngineIT extends IntegrationTest {
     complete(runner, externo, "/w/eng/externo", Map.of("nota", 7));
 
     JsonNode plan = runner.claim().getFirst();
-    assertThat(plan.path("start").path("prompt").asString())
+    assertThat(taskPrompt(plan.path("start")))
         .isEqualTo("Resumen: Hacer X\nRiesgos: [\"a\",\"b\"]\nExterno: SUCCEEDED 7\n");
     assertThat(plan.path("start").path("outputSchema").isNull()).isTrue();
     complete(runner, plan, "/w/eng/spec");
@@ -1645,7 +1644,7 @@ class WorkflowEngineIT extends IntegrationTest {
     JsonNode spec = runner.claim().getFirst();
     complete(runner, spec, "/w/eng/spec", Map.of("summary", "Hacer X", "risks", List.of()));
 
-    assertThat(runner.claim().getFirst().path("start").path("prompt").asString())
+    assertThat(taskPrompt(runner.claim().getFirst().path("start")))
         .isEqualTo("Resumen: Hacer X\nRiesgos: []\nExterno: SKIPPED \n");
   }
 
@@ -1707,7 +1706,7 @@ class WorkflowEngineIT extends IntegrationTest {
         .containsEntry("limpio", "SKIPPED")
         .containsEntry("final", "PENDING");
     JsonNode fix = runner.claim().getFirst();
-    assertThat(fix.path("start").path("prompt").asString()).isEqualTo("Corrige");
+    assertThat(taskPrompt(fix.path("start"))).isEqualTo("Corrige");
     assertThat(fix.path("start").path("outputSchema").isNull()).isTrue();
     assertThat(eventTypes(runId)).contains("stage.condition.evaluated");
   }
@@ -1966,7 +1965,7 @@ class WorkflowEngineIT extends IntegrationTest {
     assertThat(start.path("resume").path("sessionId").asString()).isEqualTo(session);
     assertThat(start.path("resume").path("fork").asBoolean()).isFalse();
     assertThat(start.path("resume").path("workspacePath").asString()).isEqualTo("/w/eng/plan");
-    assertThat(start.path("prompt").asString())
+    assertThat(taskPrompt(start))
         .contains("Aprobar el plan de ENG-1: Hacer X")
         .endsWith("Añade los tests de X");
     assertThat(start.path("outputSchema").asString()).contains("summary");
@@ -2009,8 +2008,7 @@ class WorkflowEngineIT extends IntegrationTest {
     // Al aprobar, implement lee la salida corregida y sigue en el mismo worktree.
     post("/api/approvals/" + second + "/decisions", Map.of("action", "APPROVE"));
     JsonNode implement = runner.claim().getFirst();
-    assertThat(implement.path("start").path("prompt").asString())
-        .isEqualTo("Implementa: Hacer X con tests");
+    assertThat(taskPrompt(implement.path("start"))).isEqualTo("Implementa: Hacer X con tests");
     assertThat(implement.path("start").path("workspace").path("path").asString())
         .isEqualTo("/w/eng/plan");
     assertThat(eventTypes(runId))

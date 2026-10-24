@@ -206,6 +206,15 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `${p('key')} v${p('version')} publicado`
     case 'workflow.definition.discarded':
       return `Borrador de ${p('key')} v${p('version')} descartado`
+    // Lo que una ejecución guarda en la memoria: la bitácora o lo que guardan sus agentes.
+    case 'memory.created':
+      return payload.kind === 'RUN_LOG'
+        ? 'Bitácora guardada en la memoria'
+        : `Memoria: «${p('title')}» guardada`
+    case 'memory.updated':
+      return payload.kind === 'RUN_LOG'
+        ? 'Bitácora actualizada en la memoria'
+        : `Memoria: «${p('title')}» actualizada (v${p('version')})`
     // El mismo tipo vale para un workflow (con `key`) y para una ejecución.
     case 'workflow.archived':
       return payload.key ? `Workflow ${p('key')} archivado` : 'Ejecución archivada'

@@ -1,6 +1,7 @@
 package dev.skynet.controlplane.workflow;
 
 import dev.skynet.controlplane.definition.AgentDefinition;
+import dev.skynet.controlplane.definition.StageDefinition;
 import dev.skynet.controlplane.project.AgentPolicy;
 import dev.skynet.protocol.AgentProviderKind;
 import dev.skynet.protocol.runner.AgentLimits;
@@ -19,6 +20,8 @@ import tools.jackson.databind.json.JsonMapper;
  * @param outputSchema JSON Schema de la salida estructurada que pide el agente ({@code output}), o
  *     {@code null}
  * @param provider proveedor que pide el agente; {@code null} para {@code claude-code}
+ * @param memory acceso a la memoria que pide la fase ({@code off}, {@code read} o {@code write});
+ *     {@code null} para {@code write}
  */
 record EffectivePolicy(
     List<String> allowedTools,
@@ -27,7 +30,8 @@ record EffectivePolicy(
     AgentLimits limits,
     String model,
     String outputSchema,
-    String provider) {
+    String provider,
+    String memory) {
 
   EffectivePolicy(
       List<String> allowedTools,
@@ -35,7 +39,25 @@ record EffectivePolicy(
       List<String> environment,
       AgentLimits limits,
       String model) {
-    this(allowedTools, permissionMode, environment, limits, model, null, null);
+    this(allowedTools, permissionMode, environment, limits, model, null, null, null);
+  }
+
+  /** Acceso efectivo a la memoria: {@code write} si la fase no dice otro. */
+  String memoryOrDefault() {
+    return memory == null ? StageDefinition.MEMORY_WRITE : memory;
+  }
+
+  /** La misma política con el acceso a la memoria de la fase. */
+  EffectivePolicy withMemory(String stageMemory) {
+    return new EffectivePolicy(
+        allowedTools,
+        permissionMode,
+        environment,
+        limits,
+        model,
+        outputSchema,
+        provider,
+        stageMemory);
   }
 
   /** Proveedor efectivo: {@code claude-code} si el agente no pide otro. */
@@ -88,7 +110,8 @@ record EffectivePolicy(
         limits,
         agent.model(),
         agent.output() == null ? null : JsonMapper.shared().writeValueAsString(agent.output()),
-        agent.provider());
+        agent.provider(),
+        null);
   }
 
   /**
@@ -99,13 +122,20 @@ record EffectivePolicy(
     return stageSchema == null
         ? this
         : new EffectivePolicy(
-            allowedTools, permissionMode, environment, limits, model, stageSchema, provider);
+            allowedTools,
+            permissionMode,
+            environment,
+            limits,
+            model,
+            stageSchema,
+            provider,
+            memory);
   }
 
   /** La misma política con otros límites. */
   EffectivePolicy withLimits(AgentLimits other) {
     return new EffectivePolicy(
-        allowedTools, permissionMode, environment, other, model, outputSchema, provider);
+        allowedTools, permissionMode, environment, other, model, outputSchema, provider, memory);
   }
 
   /**
@@ -120,7 +150,8 @@ record EffectivePolicy(
         limits,
         launch.model(),
         outputSchema,
-        launch.provider());
+        launch.provider(),
+        memory);
   }
 
   /** {@code Bash(git:*)} cabe en {@code Bash}; {@code Bash} no cabe en {@code Bash(git:*)}. */

@@ -27,6 +27,7 @@ const CAPABILITY_TEXT: Record<ProviderCapability, string> = {
   FORK: 'bifurcar una sesión',
   STRUCTURED_OUTPUT: 'salida estructurada',
   MAX_TURNS: 'limitar los turnos',
+  MEMORY_TOOLS: 'usar las herramientas de memoria',
 }
 
 /** «no lo admite Antigravity CLI», para lo que la política efectiva ignora. */

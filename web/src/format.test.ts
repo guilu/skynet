@@ -17,6 +17,18 @@ describe('describeEvent', () => {
     )
   })
 
+  it('describe lo que una ejecución guarda en la memoria', () => {
+    expect(describeEvent('memory.created', { kind: 'RUN_LOG', title: 'Ejecución adhoc' })).toBe(
+      'Bitácora guardada en la memoria',
+    )
+    expect(describeEvent('memory.created', { kind: 'DECISION', title: 'Squash' })).toBe(
+      'Memoria: «Squash» guardada',
+    )
+    expect(describeEvent('memory.updated', { kind: 'DECISION', title: 'Squash', version: 2 })).toBe(
+      'Memoria: «Squash» actualizada (v2)',
+    )
+  })
+
   it('describe las fases que mueve el motor', () => {
     expect(
       describeEvent('stage.retry.scheduled', {

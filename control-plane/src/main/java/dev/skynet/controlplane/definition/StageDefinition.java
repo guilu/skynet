@@ -40,6 +40,8 @@ import tools.jackson.databind.json.JsonMapper;
  * @param phase macrofase de la fase ({@code spec}, {@code plan}, {@code implement}, {@code test},
  *     {@code review} o {@code deliver}), que el grafo dibuja como carril (W7-C); {@code null} si no
  *     la dice
+ * @param memory acceso de su agente (o de los hijos de una {@code parallel}) a la memoria del
+ *     proyecto (ME-C): {@code off}, {@code read} o {@code write}; {@code null} para {@code write}
  */
 public record StageDefinition(
     String id,
@@ -59,16 +61,76 @@ public record StageDefinition(
     Approval approval,
     Retry retry,
     @JsonIgnore Duration timeout,
-    String phase) {
+    String phase,
+    String memory) {
 
   /** Las macrofases que admite {@code phase}, en el orden de los carriles del grafo. */
   public static final List<String> PHASES =
       List.of("spec", "plan", "implement", "test", "review", "deliver");
 
+  /** Sin memoria: ni bloque de contexto ni herramientas. */
+  public static final String MEMORY_OFF = "off";
+
+  /** Lee la memoria (contexto y búsqueda), pero no guarda. */
+  public static final String MEMORY_READ = "read";
+
+  /** Lee y guarda: lo predeterminado. */
+  public static final String MEMORY_WRITE = "write";
+
+  /** Los valores que admite {@code memory}. */
+  public static final List<String> MEMORY_MODES = List.of(MEMORY_OFF, MEMORY_READ, MEMORY_WRITE);
+
   public StageDefinition {
     dependsOn = List.copyOf(dependsOn);
     children = children == null ? List.of() : List.copyOf(children);
     checks = checks == null ? List.of() : List.copyOf(checks);
+  }
+
+  /** Una fase con la memoria predeterminada ({@code write}). */
+  public StageDefinition(
+      String id,
+      String name,
+      StageType type,
+      String agent,
+      String prompt,
+      List<Dependency> dependsOn,
+      WorkspaceMode workspace,
+      String workspaceFrom,
+      String command,
+      List<ChildDefinition> children,
+      String condition,
+      Map<String, Object> outputSchema,
+      String outputSchemaPath,
+      List<VerificationCheck> checks,
+      Approval approval,
+      Retry retry,
+      Duration timeout,
+      String phase) {
+    this(
+        id,
+        name,
+        type,
+        agent,
+        prompt,
+        dependsOn,
+        workspace,
+        workspaceFrom,
+        command,
+        children,
+        condition,
+        outputSchema,
+        outputSchemaPath,
+        checks,
+        approval,
+        retry,
+        timeout,
+        phase,
+        null);
+  }
+
+  /** Acceso efectivo a la memoria: el de {@code memory} o, si no lo dice, {@code write}. */
+  public String memoryOrDefault() {
+    return memory == null ? MEMORY_WRITE : memory;
   }
 
   /** Una fase sin tiempo máximo. */

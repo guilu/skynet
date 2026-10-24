@@ -72,6 +72,12 @@ public class AgentRun {
   /** La salida estructurada que devolvió (JSON), o {@code null}. */
   private String structuredOutput;
 
+  /**
+   * Acceso a la memoria del proyecto (ME-C): {@code READ}, {@code WRITE} o {@code null} sin memoria
+   * (un comando o una fase con {@code memory: off}).
+   */
+  private String memory;
+
   /** {@code HEAD} del worktree al empezar: la base de los checks {@code diff} y {@code commit}. */
   private String baseCommit;
 
@@ -533,6 +539,15 @@ public class AgentRun {
   /** Tiene que devolver una salida estructurada que cumpla {@code schema} (JSON). */
   void expectOutput(String schema) {
     this.outputSchema = schema;
+  }
+
+  public String getMemory() {
+    return memory;
+  }
+
+  /** Su acceso a la memoria: {@code READ}, {@code WRITE} o {@code null} sin memoria. */
+  void useMemory(String mode) {
+    this.memory = mode;
   }
 
   /** La salida estructurada del resultado, en JSON. */

@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 /**
@@ -27,16 +28,19 @@ class RunTransitions {
   private final StageRunRepository stageRuns;
   private final WorkflowRunRepository workflowRuns;
   private final EventStore events;
+  private final ApplicationEventPublisher publisher;
 
   RunTransitions(
       AgentRunRepository agentRuns,
       StageRunRepository stageRuns,
       WorkflowRunRepository workflowRuns,
-      EventStore events) {
+      EventStore events,
+      ApplicationEventPublisher publisher) {
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
     this.workflowRuns = workflowRuns;
     this.events = events;
+    this.publisher = publisher;
   }
 
   /** Transición obligatoria del agente: lanza {@code ConflictException} si no está permitida. */
@@ -133,6 +137,9 @@ class RunTransitions {
         run.getId(),
         statusChange(previous, next, reason),
         now);
+    if (next.isTerminal()) {
+      publisher.publishEvent(new WorkflowRunFinished(run.getId()));
+    }
     return saved;
   }
 

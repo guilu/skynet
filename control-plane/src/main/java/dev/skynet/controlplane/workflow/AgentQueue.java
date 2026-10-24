@@ -1,12 +1,17 @@
 package dev.skynet.controlplane.workflow;
 
+import dev.skynet.controlplane.definition.StageDefinition;
+import dev.skynet.controlplane.memory.MemoryAgents;
 import dev.skynet.controlplane.project.AgentDefaults;
 import dev.skynet.controlplane.project.CodeRepository;
 import dev.skynet.controlplane.workitem.WorkItem;
+import dev.skynet.protocol.AgentProviderKind;
+import dev.skynet.protocol.AgentProviderKind.Capability;
 import dev.skynet.protocol.runner.AgentLimits;
 import dev.skynet.protocol.runner.StartAgent;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
@@ -14,6 +19,10 @@ import org.springframework.stereotype.Component;
 /**
  * Pone en cola el agente de una fase: crea la invocación con su prompt, registra {@code
  * agent.spawned} y publica la orden para los runners, todo en la transacción en curso.
+ *
+ * <p>Una sesión nueva con memoria recibe antes de su prompt el bloque de memoria del proyecto
+ * (ME-C); el prompt que se guarda es el de la fase, y {@code agent.spawned} dice qué observaciones
+ * (y qué versión) llevaba el bloque.
  */
 @Component
 class AgentQueue {
@@ -23,18 +32,21 @@ class AgentQueue {
   private final RunTransitions transitions;
   private final AgentDefaults defaults;
   private final ApplicationEventPublisher publisher;
+  private final MemoryAgents memoryAgents;
 
   AgentQueue(
       AgentRunRepository agentRuns,
       PromptRepository prompts,
       RunTransitions transitions,
       AgentDefaults defaults,
-      ApplicationEventPublisher publisher) {
+      ApplicationEventPublisher publisher,
+      MemoryAgents memoryAgents) {
     this.agentRuns = agentRuns;
     this.prompts = prompts;
     this.transitions = transitions;
     this.defaults = defaults;
     this.publisher = publisher;
+    this.memoryAgents = memoryAgents;
   }
 
   AgentRun queue(
@@ -80,6 +92,8 @@ class AgentQueue {
                 limits,
                 now);
     queued.forChild(childKey);
+    String memory = memoryMode(invocation, policy);
+    queued.useMemory(memory);
     String outputSchema = invocation.command() == null ? policy.outputSchema() : null;
     queued.expectOutput(outputSchema);
     AgentRun agent = agentRuns.save(queued);
@@ -125,6 +139,31 @@ class AgentQueue {
         spawned.put("restoreSnapshot", invocation.workspace().restore());
       }
     }
+    String sent = invocation.prompt();
+    if (memory != null) {
+      Map<String, Object> memoryPayload = new LinkedHashMap<>();
+      memoryPayload.put("mode", memory);
+      // Solo una sesión nueva recibe el bloque: una continuación ya lo tiene en su conversación.
+      if (invocation.resume() == null) {
+        MemoryAgents.PromptBlock block =
+            memoryAgents.promptBlock(
+                agent.getId(),
+                workItem.getProjectId(),
+                repository.getId(),
+                MemoryAgents.Mode.valueOf(memory),
+                AgentProviderKind.byId(agent.getProvider())
+                    .map(k -> k.supports(Capability.MEMORY_TOOLS))
+                    .orElse(false));
+        sent = block.text() + "\n\n" + invocation.prompt();
+        memoryPayload.put(
+            "context",
+            block.observations().stream()
+                .map(r -> Map.of("id", r.id(), "version", r.version()))
+                .toList());
+        memoryPayload.put("omitted", block.omitted());
+      }
+      spawned.put("memory", memoryPayload);
+    }
     transitions.append("agent_run", agent.getId(), "agent.spawned", run.getId(), spawned, now);
     publisher.publishEvent(
         new AgentRunQueued(
@@ -135,7 +174,7 @@ class AgentQueue {
                 repository.getLocalPath(),
                 repository.getDefaultBranch(),
                 invocation.sessionId(),
-                invocation.prompt(),
+                sent,
                 policy.allowedTools(),
                 policy.permissionMode(),
                 model,
@@ -146,10 +185,21 @@ class AgentQueue {
                 invocation.command(),
                 outputSchema,
                 agent.isCommand() ? null : agent.getProvider(),
-                // ME-B: todos los agentes leen y escriben la memoria; ME-C añade `memory` al YAML.
-                agent.isCommand() ? null : StartAgent.MEMORY_WRITE),
+                memory == null ? null : memory.toLowerCase(Locale.ROOT)),
             invocation.runnerId()));
     return agent;
+  }
+
+  /**
+   * Acceso a la memoria de la invocación ({@code READ} o {@code WRITE}) según la clave {@code
+   * memory} de su fase, o {@code null} sin memoria: un comando o una fase con {@code memory: off}.
+   */
+  private static String memoryMode(Invocation invocation, EffectivePolicy policy) {
+    String mode = policy.memoryOrDefault();
+    if (invocation.command() != null || StageDefinition.MEMORY_OFF.equals(mode)) {
+      return null;
+    }
+    return mode.toUpperCase(Locale.ROOT);
   }
 
   /**

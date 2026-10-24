@@ -69,7 +69,33 @@ public class MemoryAgents {
 
   record Context(String text, List<Ref> observations, int omitted) {}
 
-  record Ref(UUID id, int version) {}
+  /** Una observación con la versión que recibió o leyó una invocación. */
+  public record Ref(UUID id, int version) {}
+
+  /**
+   * El bloque de memoria al principio del prompt de una invocación nueva (ME-C).
+   *
+   * @param text el bloque, ya delimitado, con las instrucciones de uso; va antes del prompt
+   * @param observations las observaciones que incluye, con su versión
+   * @param omitted las que no caben en el tope
+   */
+  public record PromptBlock(String text, List<Ref> observations, int omitted) {}
+
+  static final String BLOCK_START = "<memoria-del-proyecto>";
+  static final String BLOCK_END = "</memoria-del-proyecto>";
+
+  static final String TOOLS_WRITE =
+      "Tienes las herramientas de memoria `skynet_memoria`. Antes de decidir algo que pueda estar"
+          + " ya resuelto, busca con `mem_search` y lee la entrada entera con `mem_get`. Guarda con"
+          + " `mem_save` las decisiones, los bugs resueltos, los descubrimientos, los patrones, la"
+          + " configuración, las trampas y las restricciones que convenga recordar, con un"
+          + " `topic_key` estable si actualiza un tema; no guardes salidas de herramientas, cada"
+          + " paso ni secretos. Antes de terminar, llama a `mem_session_summary`.";
+
+  static final String TOOLS_READ =
+      "Tienes las herramientas de memoria `skynet_memoria` en modo de solo lectura. Antes de"
+          + " decidir algo que pueda estar ya resuelto, busca con `mem_search` y lee la entrada"
+          + " entera con `mem_get`. Esta fase no guarda en la memoria.";
 
   /**
    * Lo que el agente pide guardar. Sin {@code scope}, o con {@code repository}, va al repositorio.
@@ -114,16 +140,17 @@ public class MemoryAgents {
    */
   @Transactional
   public IssuedToken issue(UUID runnerId, UUID agentRunId) {
-    record Run(UUID runnerId, String status, String provider) {}
+    record Run(UUID runnerId, String status, String provider, String memory) {}
     Run run =
-        jdbc.sql("SELECT runner_id, status, provider FROM agent_run WHERE id = ?")
+        jdbc.sql("SELECT runner_id, status, provider, memory FROM agent_run WHERE id = ?")
             .param(agentRunId)
             .query(
                 (rs, n) ->
                     new Run(
                         rs.getObject("runner_id", UUID.class),
                         rs.getString("status"),
-                        rs.getString("provider")))
+                        rs.getString("provider"),
+                        rs.getString("memory")))
             .optional()
             .filter(r -> runnerId.equals(r.runnerId()))
             .orElseThrow(() -> new NotFoundException("Invocación", agentRunId));
@@ -133,7 +160,10 @@ public class MemoryAgents {
     if (PROVIDER_COMMAND.equals(run.provider())) {
       throw new ConflictException("Un comando no usa la memoria");
     }
-    Mode mode = Mode.WRITE;
+    if (run.memory() == null) {
+      throw new ConflictException("Esta invocación no usa la memoria (`memory: off`)");
+    }
+    Mode mode = Mode.valueOf(run.memory());
     byte[] bytes = new byte[32];
     RANDOM.nextBytes(bytes);
     String token = "skm_" + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
@@ -197,6 +227,29 @@ public class MemoryAgents {
               + " llamadas a la memoria, el máximo por invocación");
     }
     return row.caller();
+  }
+
+  /**
+   * El bloque de memoria de una invocación nueva de {@code mode}, que va al principio de su prompt:
+   * el contexto de su repositorio y su proyecto y, si su CLI tiene las herramientas de memoria
+   * ({@code tools}), cómo usarlas. Deja en {@code memory_access} lo que recibe ({@code PROMPT}).
+   */
+  @Transactional
+  public PromptBlock promptBlock(
+      UUID agentRunId, UUID projectId, UUID repositoryId, Mode mode, boolean tools) {
+    MemoryContext.Rendered rendered =
+        context.render(projectId, repositoryId, properties.contextMaxChars());
+    Instant now = time.now();
+    rendered.included().forEach(o -> record(agentRunId, o, "PROMPT", now));
+    StringBuilder text = new StringBuilder(BLOCK_START).append('\n').append(rendered.text());
+    if (tools) {
+      text.append("\n\n").append(mode == Mode.WRITE ? TOOLS_WRITE : TOOLS_READ);
+    }
+    text.append('\n').append(BLOCK_END);
+    return new PromptBlock(
+        text.toString(),
+        rendered.included().stream().map(o -> new Ref(o.id(), o.version())).toList(),
+        rendered.omitted());
   }
 
   /** El contexto con el que empieza el agente. */
@@ -360,10 +413,14 @@ public class MemoryAgents {
   }
 
   private void record(Caller caller, MemoryObservation o, String via) {
+    record(caller.agentRunId(), o, via, time.now());
+  }
+
+  private void record(UUID agentRunId, MemoryObservation o, String via, Instant now) {
     jdbc.sql(
             "INSERT INTO memory_access (agent_run_id, observation_id, version, via, accessed_at)"
                 + " VALUES (?, ?, ?, ?, ?)")
-        .params(caller.agentRunId(), o.id(), o.version(), via, Timestamp.from(time.now()))
+        .params(agentRunId, o.id(), o.version(), via, Timestamp.from(now))
         .update();
   }
 

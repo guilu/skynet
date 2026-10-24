@@ -232,6 +232,10 @@
           "description": "Macrofase de la fase. El grafo del workflow y el de la ejecución la dibujan como carril, en este orden; una fase sin phase va en el carril de su dependencia. Sin ninguna, no hay carriles.",
           "enum": ["spec", "plan", "implement", "test", "review", "deliver"]
         },
+        "memory": {
+          "description": "Acceso del agente (o de los hijos de una parallel) a la memoria del proyecto: write (por defecto) lee y guarda, read solo lee (contexto inicial, mem_search y mem_get) y off no recibe ni el bloque de memoria ni las herramientas. Solo vale en fases agent y parallel.",
+          "enum": ["off", "read", "write"]
+        },
         "timeout": {
           "description": "Tiempo máximo de cada intento de la fase, desde que está lista hasta que termina (s, m o h; hasta 168 h). Al vencer se paran sus agentes y la fase falla con `timeout`; en una human-approval, la petición caduca. No vale en fases conditional.",
           "type": "string",

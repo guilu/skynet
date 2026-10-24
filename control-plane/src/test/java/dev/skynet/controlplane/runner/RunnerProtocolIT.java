@@ -82,7 +82,7 @@ class RunnerProtocolIT extends IntegrationTest {
     assertThat(start.path("type").asString()).isEqualTo("START");
     assertThat(start.path("agentRunId").asString()).isEqualTo(run.agentId().toString());
     JsonNode payload = start.path("start");
-    assertThat(payload.path("prompt").asString()).isEqualTo("Arregla add()");
+    assertThat(taskPrompt(payload)).isEqualTo("Arregla add()");
     assertThat(payload.path("repositoryPath").asString()).isEqualTo("/repos/demo");
     assertThat(payload.path("baseBranch").asString()).isEqualTo("main");
     assertThat(payload.path("workItemKey").asString()).isEqualTo("RUN-1");
@@ -822,6 +822,7 @@ class RunnerProtocolIT extends IntegrationTest {
     JsonNode resume = commands.getFirst();
     assertThat(resume.path("type").asString()).isEqualTo("RESUME");
     JsonNode payload = resume.path("start");
+    // Una continuación no repite el bloque de memoria: ya lo tiene en su conversación.
     assertThat(payload.path("prompt").asString()).isEqualTo("Añade un test");
     assertThat(payload.path("sessionId").asString()).isEqualTo(session);
     assertThat(payload.path("workflowRunId").asString()).isEqualTo(resumed.runId().toString());
@@ -852,7 +853,7 @@ class RunnerProtocolIT extends IntegrationTest {
 
     JsonNode turns = get("/api/agent-runs/" + resumed.agentId() + "/conversation").path("turns");
     assertThat(turns)
-        .extracting(t -> t.path("prompt").asString())
+        .extracting(t -> taskPrompt(t))
         .containsExactly("Arregla add()", "Añade un test", "Ahora documenta");
     assertThat(turns)
         .extracting(t -> t.path("workflowRunId").asString())
@@ -904,7 +905,7 @@ class RunnerProtocolIT extends IntegrationTest {
     assertThat(retry.path("providerSessionId").asString()).isNotEqualTo(session);
     command = poll(owner, 0).getFirst();
     assertThat(command.path("type").asString()).isEqualTo("START");
-    assertThat(command.path("start").path("prompt").asString()).isEqualTo("Arregla add()");
+    assertThat(taskPrompt(command.path("start"))).isEqualTo("Arregla add()");
     assertThat(command.path("start").path("resume").isNull()).isTrue();
     ack(owner, command);
     completed(

@@ -80,7 +80,7 @@ class MemoryAgentIT extends IntegrationTest {
                 .params(agentId(other), UUID.fromString(id))
                 .query(String.class)
                 .list())
-        .containsExactly("SEARCH", "GET", "CONTEXT");
+        .containsExactly("PROMPT", "SEARCH", "GET", "CONTEXT");
   }
 
   @Test

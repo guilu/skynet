@@ -367,7 +367,8 @@ public class RunService {
             .withOutputSchema(
                 stageDefinition == null || origin.getChildKey() != null
                     ? null
-                    : stageDefinition.outputSchemaJson());
+                    : stageDefinition.outputSchemaJson())
+            .withMemory(stageDefinition == null ? null : stageDefinition.memory());
     return agent == null
         ? effective.withAgent(LaunchAgent.of(jdbc, stage.getWorkflowRunId()))
         : effective;
