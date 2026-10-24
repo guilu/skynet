@@ -77,11 +77,15 @@ class EventStreamIT extends IntegrationTest {
   void latestSkipsHistory() throws Exception {
     append("test.old");
     try (SseClient sse = new SseClient(streamUrl("?after=latest"), null)) {
-      sse.awaitOpen(TIMEOUT);
-      append("test.new");
-      SseClient.Message message = sse.await(1, TIMEOUT).getFirst();
-      assertThat(message.data().path("type").asString()).isEqualTo("test.new");
-      assertThat(message.id()).isEqualTo(baseline + 2);
+      // Hasta que el stream lee «latest» lo nuevo también se salta: se repite hasta que llega uno.
+      SseClient.Message first = null;
+      for (int i = 0; i < 50 && first == null; i++) {
+        append("test.new");
+        first = sse.poll(Duration.ofMillis(200));
+      }
+      assertThat(first).isNotNull();
+      assertThat(first.data().path("type").asString()).isEqualTo("test.new");
+      assertThat(first.id()).isGreaterThan(baseline + 1);
     }
   }
 
