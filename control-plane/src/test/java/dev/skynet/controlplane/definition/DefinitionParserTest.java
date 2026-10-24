@@ -1602,6 +1602,61 @@ class DefinitionParserTest {
   }
 
   @Test
+  void memorySaysHowTheAgentOfAStageUsesTheProjectMemory() {
+    Parsed parsed =
+        parse(
+            """
+            id: memoria
+            agents:
+              revisor:
+                prompt: Revisa
+            stages:
+              - id: investigar
+                type: agent
+                prompt: Investiga
+                memory: read
+              - id: revisar
+                type: parallel
+                dependsOn: [investigar]
+                memory: off
+                children:
+                  - id: seguridad
+                    agent: revisor
+              - id: implementar
+                type: agent
+                prompt: Implementa
+                dependsOn: [revisar]
+            """);
+    assertThat(parsed.validation().problems()).isEmpty();
+    WorkflowDefinition definition = parsed.definition();
+    assertThat(definition.stage("investigar").orElseThrow().memory()).isEqualTo("read");
+    // `off` es un texto, no el booleano de YAML 1.1.
+    assertThat(definition.stage("revisar").orElseThrow().memory()).isEqualTo("off");
+    assertThat(definition.stage("implementar").orElseThrow().memory()).isNull();
+    assertThat(definition.stage("implementar").orElseThrow().memoryOrDefault()).isEqualTo("write");
+
+    Parsed wrong =
+        parse(
+            """
+            id: memoria
+            stages:
+              - id: implementar
+                type: agent
+                prompt: Implementa
+                memory: raed
+              - id: tests
+                type: command
+                command: make test
+                dependsOn: [implementar]
+                memory: read
+            """);
+    assertThat(messages(wrong, Severity.ERROR))
+        .containsExactlyInAnyOrder(
+            "`memory: raed` no se conoce; ¿quisiste decir `read`?. Admite: off, read, write",
+            "`memory` solo vale en fases `agent` y `parallel`: las demás no tienen agente");
+  }
+
+  @Test
   void retryOnlyFitsStagesThatDoWorkAndSaysWhatIsWrong() {
     Parsed parsed =
         parse(

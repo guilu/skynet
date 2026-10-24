@@ -90,7 +90,8 @@ public final class DefinitionParser {
           "revise",
           "retry",
           "timeout",
-          "phase");
+          "phase",
+          "memory");
   static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt", "retry");
   static final Set<String> RETRY_KEYS = Set.of("maxAttempts", "on", "delay");
 
@@ -956,6 +957,7 @@ public final class DefinitionParser {
       Retry retry = stageRetry(fields, type, path);
       Duration timeout = timeout(fields, type, path);
       String phase = phase(fields, path);
+      String memory = memory(fields, type, path);
       Entry schemaEntry = fields.get("outputSchema");
       Map<String, Object> outputSchema = null;
       String outputSchemaPath = null;
@@ -993,7 +995,8 @@ public final class DefinitionParser {
               approval,
               retry,
               timeout,
-              phase);
+              phase,
+              memory);
       return new StageAt(stage, path, node, fields, dependencyNodes, children);
     }
 
@@ -1369,6 +1372,34 @@ public final class DefinitionParser {
                 + suggestion(value, StageDefinition.PHASES)
                 + ". Admite: "
                 + String.join(", ", StageDefinition.PHASES));
+        return null;
+      }
+      return value;
+    }
+
+    /** {@code memory} de una fase {@code agent} o {@code parallel} (ME-C). */
+    private String memory(Map<String, Entry> fields, StageType type, String path) {
+      Entry entry = fields.get("memory");
+      if (entry == null || isNull(entry.value())) return null;
+      if (type != StageType.AGENT && type != StageType.PARALLEL) {
+        error(
+            entry.key(),
+            path + ".memory",
+            "`memory` solo vale en fases `agent` y `parallel`: las demás no tienen agente");
+        return null;
+      }
+      String value = text(entry, path + ".memory");
+      if (value == null) return null;
+      if (!StageDefinition.MEMORY_MODES.contains(value)) {
+        error(
+            entry.value(),
+            path + ".memory",
+            "`memory: "
+                + value
+                + "` no se conoce"
+                + suggestion(value, StageDefinition.MEMORY_MODES)
+                + ". Admite: "
+                + String.join(", ", StageDefinition.MEMORY_MODES));
         return null;
       }
       return value;

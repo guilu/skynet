@@ -537,7 +537,8 @@ export interface Runner {
 }
 
 /** Lo que un proveedor admite además de arrancar una sesión. */
-export type ProviderCapability = 'RESUME' | 'FORK' | 'STRUCTURED_OUTPUT' | 'MAX_TURNS'
+export type ProviderCapability =
+  'RESUME' | 'FORK' | 'STRUCTURED_OUTPUT' | 'MAX_TURNS' | 'MEMORY_TOOLS'
 
 /** Un proveedor de agentes que Skynet sabe ejecutar. */
 export interface ProviderKind {
@@ -716,6 +717,8 @@ export interface StageDefinition {
   timeoutSeconds: number | null
   /** Macrofase de la fase, que el grafo dibuja como carril; null si no la dice. */
   phase: Phase | null
+  /** Acceso de su agente a la memoria del proyecto; null para `write`, lo predeterminado. */
+  memory: 'off' | 'read' | 'write' | null
 }
 
 /** Una comprobación de fase: `artifacts`, `tests`, `diff`, `commit`, `scope` o `command`. */

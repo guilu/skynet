@@ -142,6 +142,7 @@ const definition = (over: Partial<StageDefinition>): StageDefinition => ({
   retry: null,
   timeoutSeconds: null,
   phase: null,
+  memory: null,
   ...over,
 })
 

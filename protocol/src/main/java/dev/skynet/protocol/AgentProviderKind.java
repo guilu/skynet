@@ -17,12 +17,20 @@ public enum AgentProviderKind {
       "claude-code",
       "Claude Code",
       EnumSet.of(
-          Capability.RESUME, Capability.FORK, Capability.STRUCTURED_OUTPUT, Capability.MAX_TURNS)),
+          Capability.RESUME,
+          Capability.FORK,
+          Capability.STRUCTURED_OUTPUT,
+          Capability.MAX_TURNS,
+          Capability.MEMORY_TOOLS)),
   /** Codex de OpenAI ({@code codex exec --json}); no limita los turnos. */
   CODEX(
       "codex",
       "Codex",
-      EnumSet.of(Capability.RESUME, Capability.FORK, Capability.STRUCTURED_OUTPUT)),
+      EnumSet.of(
+          Capability.RESUME,
+          Capability.FORK,
+          Capability.STRUCTURED_OUTPUT,
+          Capability.MEMORY_TOOLS)),
   /**
    * Antigravity CLI de Google ({@code agy -p --output-format stream-json}): reanuda pero no
    * bifurca; la salida estructurada la valida el propio CLI ({@code --json-schema}).
@@ -46,7 +54,9 @@ public enum AgentProviderKind {
     /** Devolver una salida estructurada que cumple un JSON Schema ({@code output}). */
     STRUCTURED_OUTPUT,
     /** Limitar el número de turnos ({@code maxTurns}). */
-    MAX_TURNS
+    MAX_TURNS,
+    /** Usar las herramientas MCP de la memoria del proyecto ({@code skynet_memoria}, ME-B). */
+    MEMORY_TOOLS
   }
 
   private final String id;

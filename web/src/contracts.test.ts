@@ -541,6 +541,7 @@ const AGENT_DEFINITION: Keys<AgentDefinition> = {
 }
 const STAGE_DEFINITION: Keys<StageDefinition> = {
   phase: true,
+  memory: true,
   retry: true,
   timeoutSeconds: true,
   id: true,

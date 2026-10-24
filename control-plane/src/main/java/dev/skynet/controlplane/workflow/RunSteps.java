@@ -448,6 +448,7 @@ public class RunSteps {
                     child.agent(),
                     child.prompt(),
                     null,
+                    stageDefinition.memory(),
                     definition,
                     workItem,
                     repository);
@@ -466,6 +467,7 @@ public class RunSteps {
                   stageDefinition.agent(),
                   stageDefinition.prompt(),
                   stageDefinition.outputSchemaJson(),
+                  stageDefinition.memory(),
                   definition,
                   workItem,
                   repository);
@@ -748,7 +750,8 @@ public class RunSteps {
   /**
    * Un agente con su prompt (el propio o, si no tiene, el de {@code agentName}), con los datos de
    * otras fases que use, y lo que se le permite; {@code who} lo nombra en el error si se queda sin
-   * prompt. {@code outputSchema} es el de la fase, que manda sobre el {@code output} del agente.
+   * prompt. {@code outputSchema} es el de la fase, que manda sobre el {@code output} del agente, y
+   * {@code memory} su acceso a la memoria.
    */
   private Invocation agentInvocation(
       WorkflowRun run,
@@ -756,6 +759,7 @@ public class RunSteps {
       String agentName,
       String promptTemplate,
       String outputSchema,
+      String memory,
       WorkflowDefinition definition,
       WorkItem workItem,
       CodeRepository repository) {
@@ -776,7 +780,8 @@ public class RunSteps {
     }
     EffectivePolicy policy =
         EffectivePolicy.of(projects.agentPolicy(repository), agent, launchLimitsOf(run))
-            .withOutputSchema(outputSchema);
+            .withOutputSchema(outputSchema)
+            .withMemory(memory);
     if (agent == null) {
       policy = policy.withAgent(LaunchAgent.of(jdbc, run.getId()));
     }

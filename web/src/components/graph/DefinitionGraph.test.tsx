@@ -22,6 +22,7 @@ const stage = (id: string, dependsOn: string[] = []): StageDefinition => ({
   retry: null,
   timeoutSeconds: null,
   phase: null,
+  memory: null,
 })
 
 const definition: WorkflowModel = {

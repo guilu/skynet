@@ -104,7 +104,9 @@ class RunLifecycleIT extends IntegrationTest {
             "agent.spawned",
             "agent.status.changed",
             "stage.status.changed",
-            "workflow.status.changed");
+            "workflow.status.changed",
+            // La bitácora de la memoria (ME-C).
+            "memory.created");
     assertThat(events.get(4).path("payload").path("previousStatus").asString()).isEqualTo("QUEUED");
 
     // Un agente cancelado no admite más transiciones.

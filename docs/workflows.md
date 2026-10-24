@@ -81,6 +81,7 @@ stages:
 - `command`: solo en las fases `type: command`, y obligatorio en ellas. Ver abajo.
 - `children`: solo en las fases `type: parallel`, y obligatorio en ellas. Ver abajo.
 - `phase`: la macrofase de la fase, para el carril del grafo: `spec`, `plan`, `implement`, `test`, `review` o `deliver`. Opcional y solo visual: no cambia cómo se ejecuta.
+- `memory`: solo en las fases `agent` y `parallel` (vale para todos sus hijos). Cómo usa su agente la memoria del proyecto: `write` (por defecto) recibe el bloque de memoria al principio del prompt y tiene las herramientas para buscar y guardar; `read` recibe el bloque y puede buscar (`mem_search`, `mem_get`), pero no guardar, lo que viene bien en un revisor o un investigador; `off` no recibe ni el bloque ni las herramientas. Ver «Memoria del proyecto».
 - `condition`: la fase solo se ejecuta si es verdadera; si es falsa, se omite. Ver «Condiciones».
 - `artifacts`, `checks` y `scope`: lo que Skynet comprueba en el worktree de la fase antes de darla por buena. Ver «Verificación de una fase».
 - `action`, `risk` y `revise`: solo en las fases `type: human-approval`. Ver «Puertas de aprobación».
@@ -417,3 +418,14 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `POST` | `/api/approvals/{id}/decisions` | Decide (`{action: APPROVE \| REJECT \| REQUEST_CHANGES \| COMMENT, comment}`) |
 
 Cada problema lleva `severity` (`ERROR`, `UNSUPPORTED` o `WARNING`), `path` (p. ej. `stages.fix.dependsOn[0]`), `line`, `column` y `message`.
+
+## Memoria del proyecto
+
+Skynet recuerda lo que se hace en cada proyecto y repositorio, al estilo de [engram](https://github.com/Gentleman-Programming/engram) (hito ME). Lo guardan los propios agentes mientras trabajan y Skynet al terminar cada ejecución; las personas lo revisan después.
+
+- **Al empezar una sesión nueva**, el prompt de la fase va precedido de un bloque `<memoria-del-proyecto>`: las entradas fijadas, los últimos resúmenes de sesión, la bitácora y lo último guardado en el repositorio de la ejecución y en todo su proyecto, hasta 4 000 caracteres (`SKYNET_MEMORY_CONTEXT_MAX_CHARS`). Si no cabe todo, deja fuera entradas enteras, nunca medias, y avisa de que hay más con `mem_search`. Llega como contexto de referencia, no como instrucciones: si contradice el repositorio, manda el repositorio. Nunca incluye lo archivado ni lo de otro repositorio u otro proyecto.
+- **Al continuar una sesión** (un mensaje, una reanudación o una bifurcación) no se repite el bloque: ya está en la conversación. Las herramientas siguen disponibles.
+- **Herramientas:** Claude Code y Codex tienen `mem_context`, `mem_search`, `mem_get`, `mem_save` y `mem_session_summary` (las dos últimas solo con `memory: write`). Antigravity recibe el bloque, pero todavía no las herramientas.
+- **Trazabilidad:** el prompt que se guarda es el de la fase. `agent.spawned` lleva `memory` con el modo y las observaciones (id y versión) que recibió en el bloque, y `memory_access` registra cada observación que una invocación recibió (`PROMPT` o `CONTEXT`), buscó (`SEARCH`), leyó (`GET`) o guardó (`SAVE`).
+- **Bitácora:** al terminar una ejecución (bien, mal o cancelada), Skynet deja en cada repositorio en el que trabajó una observación `RUN_LOG` con el tema `bitacora/<ejecución>`: el workflow y su versión, el trabajo, el estado de cada fase, la rama con sus commits y archivos (del artefacto `GIT_CHANGES`, si ya ha llegado), la salida estructurada de sus agentes, el coste y el enlace a la ejecución. Se escribe sin modelo; si falla, la ejecución termina igual.
+

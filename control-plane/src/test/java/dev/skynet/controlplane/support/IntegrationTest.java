@@ -10,11 +10,22 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.JsonNode;
 
 /** Arranca la aplicación completa contra PostgreSQL y deja las tablas vacías antes de cada test. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @EnabledIf("dev.skynet.controlplane.support.TestDatabase#available")
 public abstract class IntegrationTest {
+
+  /** Fin del bloque de memoria que precede al prompt de una sesión nueva (ME-C). */
+  protected static final String MEMORY_BLOCK_END = "</memoria-del-proyecto>\n\n";
+
+  /** El prompt de la fase de una orden de arranque, sin el bloque de memoria que lo precede. */
+  protected static String taskPrompt(JsonNode start) {
+    String prompt = start.path("prompt").asString();
+    int end = prompt.indexOf(MEMORY_BLOCK_END);
+    return end < 0 ? prompt : prompt.substring(end + MEMORY_BLOCK_END.length());
+  }
 
   @Autowired protected JdbcClient jdbc;
   @Autowired private AuthThrottle authThrottle;

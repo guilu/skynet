@@ -70,6 +70,7 @@
       "approval" : null,
       "retry" : null,
       "phase" : null,
+      "memory" : null,
       "timeoutSeconds" : null
     }, {
       "id" : "fix",
@@ -96,6 +97,7 @@
         "delaySeconds" : 30
       },
       "phase" : null,
+      "memory" : null,
       "timeoutSeconds" : null
     }, {
       "id" : "verify",
@@ -134,6 +136,7 @@
       "approval" : null,
       "retry" : null,
       "phase" : null,
+      "memory" : null,
       "timeoutSeconds" : 1800
     } ]
   }
