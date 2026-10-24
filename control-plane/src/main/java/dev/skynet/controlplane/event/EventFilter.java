@@ -17,7 +17,7 @@ public record EventFilter(UUID workflowRunId, UUID aggregateId, List<String> typ
 
   public static final EventFilter ALL = new EventFilter(null, null);
 
-  private static final Pattern TYPE = Pattern.compile("[a-z0-9_]+(\\.[a-z0-9_]+)*(\\.\\*)?");
+  private static final Pattern TYPE = Pattern.compile("[a-z0-9_]++(?:\\.[a-z0-9_]++)*+(?:\\.\\*)?");
 
   public EventFilter {
     types = types == null || types.isEmpty() ? null : List.copyOf(types);
@@ -27,10 +27,12 @@ public record EventFilter(UUID workflowRunId, UUID aggregateId, List<String> typ
     this(workflowRunId, aggregateId, null);
   }
 
-  /** Lee la lista separada por comas de la petición; rechaza tipos mal formados. */
+  /**
+   * Lee la lista separada por comas de la petición (vacía: cualquiera); rechaza tipos mal formados.
+   */
   static List<String> parseTypes(String csv) {
     if (csv == null || csv.isBlank()) {
-      return null;
+      return List.of();
     }
     List<String> types = Arrays.stream(csv.split(",")).map(String::strip).toList();
     for (String type : types) {
