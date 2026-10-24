@@ -1,0 +1,113 @@
+name: E2E
+
+# En una PR corren solo las E2E rápidas, y solo si la PR toca algo que las afecta. Las @lento corren
+# con la etiqueta `e2e-completo`, a mano (Actions → E2E → Run workflow) y en cada push a main. Lo
+# decide scripts/ci/e2e-alcance.sh.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+
+concurrency:
+  # Poner otra etiqueta no cancela la ejecución en curso: va a su propio grupo y no hace nada.
+  group: >-
+    e2e-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'e2e-completo'
+    && format('-{0}', github.run_id) || '' }}
+  cancel-in-progress: true
+
+jobs:
+  alcance:
+    name: Qué E2E corren
+    if: github.event.action != 'labeled' || github.event.label.name == 'e2e-completo'
+    runs-on: ubuntu-latest
+    outputs:
+      matriz: ${{ steps.decide.outputs.matriz }}
+      rapidas: ${{ steps.decide.outputs.rapidas }}
+      lentas: ${{ steps.decide.outputs.lentas }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: decide
+        env:
+          EVENTO: ${{ github.event_name }}
+          ETIQUETAS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [[ $EVENTO == pull_request ]]; then
+            git diff --name-only "$BASE...$HEAD"
+          fi | scripts/ci/e2e-alcance.sh | tee -a "$GITHUB_OUTPUT"
+
+  playwright:
+    name: E2E ${{ matrix.nombre }}
+    needs: alcance
+    if: needs.alcance.outputs.rapidas == 'true' || needs.alcance.outputs.lentas == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.alcance.outputs.matriz) }}
+    env:
+      # Cada shard corre en su propia VM; dentro de ella ejercita que las E2E no dependan de :8080.
+      E2E_API_PORT: 18084
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: skynet
+          POSTGRES_PASSWORD: skynet
+          POSTGRES_DB: skynet
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U skynet" --health-interval 5s --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npx playwright install --with-deps chromium
+        working-directory: web
+      # Control plane + runner con fake-claude + vite preview + su parte de la suite Playwright.
+      - run: ./scripts/e2e.sh ${{ matrix.args }}
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report-${{ strategy.job-index }}
+          path: |
+            web/playwright-report/
+            web/test-results/
+            build/e2e/*.log
+
+  # Un único check que siempre termina: verde si las E2E pasan o no tocaban, rojo si alguna falla.
+  resumen:
+    name: E2E
+    needs: [alcance, playwright]
+    if: always() && needs.alcance.result != 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ALCANCE: ${{ needs.alcance.result }}
+          PLAYWRIGHT: ${{ needs.playwright.result }}
+          RAPIDAS: ${{ needs.alcance.outputs.rapidas }}
+          LENTAS: ${{ needs.alcance.outputs.lentas }}
+        run: |
+          echo "Rápidas: ${RAPIDAS:-?} · lentas: ${LENTAS:-?} · resultado: $PLAYWRIGHT"
+          [[ $ALCANCE == success ]] || { echo "No se pudo decidir qué E2E correr"; exit 1; }
+          case $PLAYWRIGHT in
+            success) ;;
+            skipped) echo "La PR no toca nada de las E2E: no se lanzan (etiqueta e2e-completo para forzarlas)" ;;
+            *) echo "Alguna E2E ha fallado"; exit 1 ;;
+          esac

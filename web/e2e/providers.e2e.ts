@@ -77,93 +77,100 @@ async function finished(page: Page, runId: string): Promise<RunStage[]> {
 
 const statuses = (stages: RunStage[]) => stages.map((s) => [s.stageKey, s.status])
 
-test('la revisión con Codex y Antigravity corrige solo cuando hay hallazgos', async ({ page }) => {
-  test.setTimeout(480_000)
-  const suffix = Date.now().toString(36)
-  const withFindings = `multi-con-hallazgos-${suffix}`
-  const clean = `multi-sin-hallazgos-${suffix}`
-  await page.goto('/')
-  await login(page)
-  await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible()
+// @lento: en una PR solo corre con la etiqueta e2e-completo (ver scripts/ci/e2e-alcance.sh).
+test(
+  'la revisión con Codex y Antigravity corrige solo cuando hay hallazgos',
+  { tag: '@lento' },
+  async ({ page }) => {
+    test.setTimeout(480_000)
+    const suffix = Date.now().toString(36)
+    const withFindings = `multi-con-hallazgos-${suffix}`
+    const clean = `multi-sin-hallazgos-${suffix}`
+    await page.goto('/')
+    await login(page)
+    await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible()
 
-  await test.step('el runner tiene los tres proveedores', async () => {
-    const providers = await (await page.request.get('/api/providers')).json()
-    expect(
-      providers.map((p: { id: string; onlineRunners: number }) => [p.id, p.onlineRunners > 0]),
-    ).toEqual([
-      ['claude-code', true],
-      ['codex', true],
-      ['antigravity', true],
-    ])
-  })
+    await test.step('el runner tiene los tres proveedores', async () => {
+      const providers = await (await page.request.get('/api/providers')).json()
+      expect(
+        providers.map((p: { id: string; onlineRunners: number }) => [p.id, p.onlineRunners > 0]),
+      ).toEqual([
+        ['claude-code', true],
+        ['codex', true],
+        ['antigravity', true],
+      ])
+    })
 
-  await test.step('elegir la plantilla en Nuevo workflow', async () => {
-    await page.goto('/workflows/new')
-    await page.getByLabel('Plantilla').selectOption({ label: 'Revisión con Codex y Antigravity' })
-    await expect(
-      page.locator('.monaco-editor').getByText('id: revision-con-codex-y-antigravity'),
-    ).toBeVisible()
-    const summary = page.getByRole('region', { name: 'Qué define' })
-    await expect(summary.getByRole('listitem').filter({ hasText: 'calidad' }).last()).toContainText(
-      'Codex',
-    )
-    await expect(
-      summary.getByRole('listitem').filter({ hasText: 'seguridad' }).last(),
-    ).toContainText('Antigravity CLI')
-    await expectAccessible(page, 'plantilla «Revisión con Codex y Antigravity»')
-  })
+    await test.step('elegir la plantilla en Nuevo workflow', async () => {
+      await page.goto('/workflows/new')
+      await page.getByLabel('Plantilla').selectOption({ label: 'Revisión con Codex y Antigravity' })
+      await expect(
+        page.locator('.monaco-editor').getByText('id: revision-con-codex-y-antigravity'),
+      ).toBeVisible()
+      const summary = page.getByRole('region', { name: 'Qué define' })
+      await expect(
+        summary.getByRole('listitem').filter({ hasText: 'calidad' }).last(),
+      ).toContainText('Codex')
+      await expect(
+        summary.getByRole('listitem').filter({ hasText: 'seguridad' }).last(),
+      ).toContainText('Antigravity CLI')
+      await expectAccessible(page, 'plantilla «Revisión con Codex y Antigravity»')
+    })
 
-  await publishWorkflowViaApi(page, yaml(withFindings, true))
-  await publishWorkflowViaApi(page, yaml(clean, false))
-  const { workItemId } = await workItemViaApi(page)
+    await publishWorkflowViaApi(page, yaml(withFindings, true))
+    await publishWorkflowViaApi(page, yaml(clean, false))
+    const { workItemId } = await workItemViaApi(page)
 
-  await test.step('con hallazgos, corrige y pasa los tests finales', async () => {
-    const runId = await launch(page, workItemId, withFindings)
-    const stages = await finished(page, runId)
-    expect(statuses(stages)).toEqual([
-      ['implement', 'SUCCEEDED'],
-      ['tests', 'SUCCEEDED'],
-      ['review', 'SUCCEEDED'],
-      ['fix', 'SUCCEEDED'],
-      ['tests-finales', 'SUCCEEDED'],
-    ])
-    const review = stages.find((s) => s.stageKey === 'review')!
-    expect(
-      review.agents.map((a) => [a.childKey, a.provider, a.structuredOutput?.hasBlockingFindings]),
-    ).toEqual(
-      expect.arrayContaining([
-        ['calidad', 'codex', true],
-        ['seguridad', 'antigravity', true],
-      ]),
-    )
+    await test.step('con hallazgos, corrige y pasa los tests finales', async () => {
+      const runId = await launch(page, workItemId, withFindings)
+      const stages = await finished(page, runId)
+      expect(statuses(stages)).toEqual([
+        ['implement', 'SUCCEEDED'],
+        ['tests', 'SUCCEEDED'],
+        ['review', 'SUCCEEDED'],
+        ['fix', 'SUCCEEDED'],
+        ['tests-finales', 'SUCCEEDED'],
+      ])
+      const review = stages.find((s) => s.stageKey === 'review')!
+      expect(
+        review.agents.map((a) => [a.childKey, a.provider, a.structuredOutput?.hasBlockingFindings]),
+      ).toEqual(
+        expect.arrayContaining([
+          ['calidad', 'codex', true],
+          ['seguridad', 'antigravity', true],
+        ]),
+      )
 
-    // El agente de Antigravity: su proveedor en la cabecera y bifurcar desactivado con el motivo.
-    const agy = review.agents.find((a) => a.provider === 'antigravity')!
-    await page.goto(`/runs/${runId}?agent=${agy.id}`)
-    const header = page.locator('header.run-header')
-    await expect(header.getByTitle('Proveedor')).toHaveText(/Antigravity CLI/)
-    await expect(header.getByRole('button', { name: 'Bifurcar…' })).toBeDisabled()
-    await expect(header.getByText('Antigravity CLI no permite bifurcar una sesión.')).toBeVisible()
-    await expectAccessible(page, 'agente de Antigravity')
+      // El agente de Antigravity: su proveedor en la cabecera y bifurcar desactivado con el motivo.
+      const agy = review.agents.find((a) => a.provider === 'antigravity')!
+      await page.goto(`/runs/${runId}?agent=${agy.id}`)
+      const header = page.locator('header.run-header')
+      await expect(header.getByTitle('Proveedor')).toHaveText(/Antigravity CLI/)
+      await expect(header.getByRole('button', { name: 'Bifurcar…' })).toBeDisabled()
+      await expect(
+        header.getByText('Antigravity CLI no permite bifurcar una sesión.'),
+      ).toBeVisible()
+      await expectAccessible(page, 'agente de Antigravity')
 
-    // El de Codex sí bifurca.
-    const codex = review.agents.find((a) => a.provider === 'codex')!
-    await page.goto(`/runs/${runId}?agent=${codex.id}`)
-    await expect(header.getByTitle('Proveedor')).toHaveText(/Codex/)
-    await expect(header.getByRole('button', { name: 'Bifurcar…' })).toBeEnabled()
-  })
+      // El de Codex sí bifurca.
+      const codex = review.agents.find((a) => a.provider === 'codex')!
+      await page.goto(`/runs/${runId}?agent=${codex.id}`)
+      await expect(header.getByTitle('Proveedor')).toHaveText(/Codex/)
+      await expect(header.getByRole('button', { name: 'Bifurcar…' })).toBeEnabled()
+    })
 
-  await test.step('sin hallazgos, omite la corrección y pasa los tests finales', async () => {
-    const stages = await finished(page, await launch(page, workItemId, clean))
-    expect(statuses(stages)).toEqual([
-      ['implement', 'SUCCEEDED'],
-      ['tests', 'SUCCEEDED'],
-      ['review', 'SUCCEEDED'],
-      ['fix', 'SKIPPED'],
-      ['tests-finales', 'SUCCEEDED'],
-    ])
-  })
-})
+    await test.step('sin hallazgos, omite la corrección y pasa los tests finales', async () => {
+      const stages = await finished(page, await launch(page, workItemId, clean))
+      expect(statuses(stages)).toEqual([
+        ['implement', 'SUCCEEDED'],
+        ['tests', 'SUCCEEDED'],
+        ['review', 'SUCCEEDED'],
+        ['fix', 'SKIPPED'],
+        ['tests-finales', 'SUCCEEDED'],
+      ])
+    })
+  },
+)
 
 test('un agente suelto con Antigravity y su modelo, lanzado desde la web', async ({ page }) => {
   test.setTimeout(240_000)
