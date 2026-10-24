@@ -1,5 +1,6 @@
 package dev.skynet.controlplane.event;
 
+import dev.skynet.controlplane.shared.InvalidRequestException;
 import dev.skynet.controlplane.shared.NotFoundException;
 import java.time.Duration;
 import java.util.List;
@@ -24,6 +25,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 class EventController implements SmartLifecycle {
 
   private static final int MAX_PAGE = 1000;
+  private static final String LATEST = "latest";
   private static final Duration STREAM_TIMEOUT = Duration.ofMinutes(30);
 
   private final EventRepository events;
@@ -49,10 +51,11 @@ class EventController implements SmartLifecycle {
   List<StoredEvent> list(
       @RequestParam(required = false) UUID workflowRunId,
       @RequestParam(required = false) UUID aggregateId,
+      @RequestParam(required = false) String types,
       @RequestParam(defaultValue = "0") long after,
       @RequestParam(required = false) Long before,
       @RequestParam(defaultValue = "200") int limit) {
-    EventFilter filter = new EventFilter(workflowRunId, aggregateId);
+    EventFilter filter = new EventFilter(workflowRunId, aggregateId, EventFilter.parseTypes(types));
     int size = Math.clamp(limit, 1, MAX_PAGE);
     return before != null
         ? events.listBefore(before, filter, size)
@@ -68,20 +71,22 @@ class EventController implements SmartLifecycle {
   /**
    * Stream SSE. Cada mensaje lleva como {@code id} la secuencia del evento; al reconectar, el
    * navegador envía {@code Last-Event-ID} y el stream continúa justo después.
+   *
+   * <p>Sin {@code Last-Event-ID}, empieza tras {@code after}: una secuencia, o {@code latest} para
+   * recibir solo lo nuevo (el companion global no quiere el histórico). {@code types} limita los
+   * tipos de evento (exactos o prefijos con {@code .*}), separados por comas.
    */
   @GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   SseEmitter stream(
       @RequestParam(required = false) UUID workflowRunId,
       @RequestParam(required = false) UUID aggregateId,
-      @RequestParam(defaultValue = "0") long after,
+      @RequestParam(required = false) String types,
+      @RequestParam(defaultValue = "0") String after,
       @RequestHeader(name = "Last-Event-ID", required = false) Long lastEventId) {
+    EventFilter filter = new EventFilter(workflowRunId, aggregateId, EventFilter.parseTypes(types));
+    long start = lastEventId != null ? lastEventId : parseAfter(after);
     SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT.toMillis());
-    SseSubscription subscription =
-        new SseSubscription(
-            emitter,
-            new EventFilter(workflowRunId, aggregateId),
-            lastEventId != null ? lastEventId : after,
-            queueCapacity);
+    SseSubscription subscription = new SseSubscription(emitter, filter, start, queueCapacity);
     Runnable cleanup =
         () -> {
           subscription.close();
@@ -96,6 +101,17 @@ class EventController implements SmartLifecycle {
     subscriptions.add(subscription);
     subscription.start(events::list);
     return emitter;
+  }
+
+  private long parseAfter(String after) {
+    if (LATEST.equals(after)) {
+      return events.lastSequence();
+    }
+    try {
+      return Long.parseLong(after);
+    } catch (NumberFormatException e) {
+      throw new InvalidRequestException("«after» debe ser una secuencia o «latest»");
+    }
   }
 
   @Scheduled(fixedDelay = 15_000)

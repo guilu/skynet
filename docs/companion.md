@@ -7,7 +7,7 @@ Plan del hito CO: `plans/estudio-companion.md` (carpeta de proyecto), aprobado e
 | PR | Qué añade |
 |---|---|
 | CO-A | la mascota, el motor de estados, la galería de Ajustes y los primeros usos estáticos (login, 404, estados vacíos) |
-| CO-B | el companion global: stream en vivo, mascota y menú en la barra, campana y avisos |
+| CO-B | el companion global: stream en vivo (`after=latest`, `types=`), mascota y menú en la barra, campana y avisos |
 | CO-C | la mascota en las páginas (Dashboard, proyecto, ejecución, listas, Uso) y los avisos fuera de la pestaña |
 
 ## Componente
@@ -53,6 +53,48 @@ La traducción a expresiones está en `components/companion/state.ts`: funciones
   - Con `still` (listas, nodos y galerías), salvo al pasar el ratón. Se quitan, no se pausan: una animación finita en pausa (el «pop» del éxito) no terminaría nunca, y las E2E de axe esperan a que acaben las finitas.
   - Con `prefers-reduced-motion`.
   - Con la pestaña oculta, el propio navegador las detiene.
+
+## Companion global (CO-B)
+
+`CompanionProvider` (en `AppShell`) es la única fuente: abre **un solo stream SSE** para toda la web y lo comparte por contexto (`useCompanion`).
+
+- **Stream.** `/api/events/stream?after=latest&types=…`: empieza desde ahora (sin reenviar el histórico) y solo trae los tipos de `COMPANION_EVENT_TYPES` (`notices.ts`): `workflow.*`, `run.resumed`, `stage.status.changed`, `stage.retry.scheduled`, `stage.verification.*`, `agent.status.changed`, `agent.rate_limit` y `approval.*`. Al reconectar, el navegador manda `Last-Event-ID` y el servidor sigue desde ahí; además se releen las ejecuciones y las aprobaciones.
+- **Estado de partida.** Las ejecuciones `PENDING` y `RUNNING` (`GET /api/workflow-runs?status=PENDING&status=RUNNING&size=50`, cada 30 s como red de seguridad) y las aprobaciones pendientes (`usePendingApprovals`, cada 10 s). Los cambios de fases y agentes se aplican en memoria con `applyEvent`, como en la página de ejecución.
+- **Cara global.** `globalExpression`: Sin conexión si el stream lleva más de 5 s caído, Error mientras haya un fallo sin ver (se da por visto al abrir esa ejecución o al cerrar la campana), Te necesita con aprobaciones pendientes, luego el trabajo en curso, Éxito durante 8 s y, tras 5 min sin nada, Inactivo.
+
+![Mascota de la barra, campana y avisos flotantes](ui/companion-avisos.png)
+
+### Barra superior
+
+- **Mascota (34 px).** Es un botón con nombre accesible («Skynet: Ejecutando. 2 ejecuciones activas»). Lleva un punto verde si hay algo en vivo, y al pasar el ratón dice lo mismo en un tooltip.
+- **Menú rápido:** Ejecuciones activas (n), Te necesitan (n), Avisos recientes (abre la campana), Silenciar 1 h / Quitar el silencio y Ajustes del companion.
+- **Campana.** Guarda los últimos 50 avisos, cada uno con su cara, su hora y un enlace. El número rojo cuenta los no leídos, que quedan leídos al cerrarla. «Vaciar los avisos» la deja limpia.
+
+### Avisos
+
+| Evento | Aviso | Se cierra |
+|---|---|---|
+| `approval.requested` | «Te necesito · La fase «aprobar» de DEMO-9 espera tu decisión» · Revisar | al decidir (`approval.granted`/`rejected`/`expired`) o cerrar |
+| agente `WAITING_FOR_INPUT` | «DEMO-9 te pregunta algo» · Ver | al cerrar |
+| ejecución `SUCCEEDED` | «Workflow completado · DEMO-11 · 8 min · 0,42 $» | solo, a los 6 s |
+| ejecución `FAILED` | «Ha ocurrido un error · DEMO-7 · fase «tests»» · Ver | al cerrar |
+| `workflow.started`, `run.resumed` | «Ejecutando workflow · DEMO-9 · Nombre del workflow» | solo, a los 4 s |
+| agente `UNRESPONSIVE` | «El agente de DEMO-12 no responde» · Ver | al cerrar |
+| `agent.rate_limit` (no `allowed`) | «Claude Code está al límite · DEMO-9 · reintento a las 18:40» | solo, a los 6 s |
+
+Reglas contra el ruido (`pushToast`):
+
+- **Nada de cambios internos.** Pensando ↔ ejecutando, herramientas o fases que avanzan no avisan.
+- **Agrupar.** Dos o más del mismo tipo con menos de 10 s entre ellos van en una tarjeta («3 ejecuciones completadas · DEMO-9, DEMO-11 y DEMO-12», con «Ver todas»).
+- **Como mucho 3 a la vez.** La más antigua sale, pero sigue en la campana.
+- **La ejecución que estás mirando** no avisa (el aviso entra leído en la campana), salvo las aprobaciones.
+- **Silenciar 1 h** y la opción «Avisos flotantes» de Ajustes quitan las tarjetas, no la campana.
+
+La zona de avisos es `aria-live="polite"` (sin `role="status"`, que ya usan los mensajes de las páginas). Abajo a la derecha; en el móvil, arriba.
+
+### Ajustes
+
+En Ajustes › Companion hay dos opciones que valen **solo para este navegador** (`localStorage`, `prefs.ts`): «Mostrar la mascota en la barra superior» y «Avisos flotantes». El silencio de 1 h se guarda en el mismo sitio.
 
 ## Dónde aparece (CO-A)
 

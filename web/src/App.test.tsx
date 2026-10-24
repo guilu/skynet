@@ -18,8 +18,9 @@ class FakeEventSource {
   onopen: (() => void) | null = null
   onerror: (() => void) | null = null
   onmessage: ((m: MessageEvent) => void) | null = null
-  constructor() {
-    FakeEventSource.last = this
+  constructor(url: string) {
+    // El stream global del companion (solo lo nuevo) no es el de la página que se prueba.
+    if (!url.includes('after=latest')) FakeEventSource.last = this
   }
   close() {}
   /** Entrega eventos como si llegaran por el stream. */

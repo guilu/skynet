@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.skynet.controlplane.support.IntegrationTest;
 import dev.skynet.controlplane.support.SseClient;
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -11,6 +12,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.ParameterizedTypeReference;
 
 class EventStreamIT extends IntegrationTest {
 
@@ -71,6 +73,75 @@ class EventStreamIT extends IntegrationTest {
     }
   }
 
+  @Test
+  void latestSkipsHistory() throws Exception {
+    append("test.old");
+    try (SseClient sse = new SseClient(streamUrl("?after=latest"), null)) {
+      sse.awaitOpen(TIMEOUT);
+      append("test.new");
+      SseClient.Message message = sse.await(1, TIMEOUT).getFirst();
+      assertThat(message.data().path("type").asString()).isEqualTo("test.new");
+      assertThat(message.id()).isEqualTo(baseline + 2);
+    }
+  }
+
+  @Test
+  void filtersByExactTypesAndPrefixes() throws Exception {
+    append("approval.requested");
+    append("agent.tool.started");
+    append("agent.rate_limit");
+    append("agent.rateXlimit");
+    append("workflow.status.changed");
+    try (SseClient sse =
+        new SseClient(
+            streamUrl("?types=approval.*,agent.rate_limit,workflow.status.changed"), null)) {
+      assertThat(sse.await(3, TIMEOUT))
+          .extracting(m -> m.data().path("type").asString())
+          .containsExactly("approval.requested", "agent.rate_limit", "workflow.status.changed");
+      append("agent.message.received");
+      append("approval.granted");
+      assertThat(sse.await(1, TIMEOUT).getFirst().data().path("type").asString())
+          .isEqualTo("approval.granted");
+      assertThat(sse.poll(Duration.ofMillis(800))).isNull();
+    }
+  }
+
+  @Test
+  void resumesWithTypesAfterLastEventId() throws Exception {
+    append("stage.ready");
+    append("agent.raw");
+    append("stage.status.changed");
+    try (SseClient resumed =
+        new SseClient(streamUrl("?after=latest&types=stage.*"), baseline + 1)) {
+      assertThat(resumed.await(1, TIMEOUT).getFirst().id()).isEqualTo(baseline + 3);
+      assertThat(resumed.poll(Duration.ofMillis(800))).isNull();
+    }
+  }
+
+  @Test
+  void historyFiltersByTypes() {
+    append("approval.requested");
+    append("agent.raw");
+    List<StoredEvent> page =
+        http.get()
+            .uri("/api/events?after={after}&types=approval.*", baseline)
+            .retrieve()
+            .body(new ParameterizedTypeReference<List<StoredEvent>>() {});
+    assertThat(page).extracting(StoredEvent::type).containsExactly("approval.requested");
+  }
+
+  @Test
+  void rejectsMalformedTypesAndAfter() {
+    for (String query : List.of("?types=approval.%25", "?types=a,,b", "?after=pronto")) {
+      assertThat(
+              http.get()
+                  .uri(URI.create(streamUrl(query)))
+                  .exchange((request, response) -> response.getStatusCode().value()))
+          .as(query)
+          .isEqualTo(400);
+    }
+  }
+
   private void append(String type) {
     store.append(EventDraft.of("test", UUID.randomUUID(), type, null, Map.of(), Instant.now()));
   }
@@ -85,7 +156,8 @@ class EventStreamIT extends IntegrationTest {
     UUID workItem = UUID.randomUUID();
     UUID run = UUID.randomUUID();
     jdbc.sql(
-            "INSERT INTO project (id, key, name, created_at, version) VALUES (?, 'EVT', 'e', now(), 0)")
+            "INSERT INTO project (id, key, name, created_at, version) VALUES (?, 'EVT', 'e', now(),"
+                + " 0)")
         .param(project)
         .update();
     jdbc.sql(
@@ -94,8 +166,9 @@ class EventStreamIT extends IntegrationTest {
         .params(workItem, project)
         .update();
     jdbc.sql(
-            "INSERT INTO workflow_run (id, work_item_id, definition_id, status, created_at, version)"
-                + " VALUES (?, ?, '00000000-0000-0000-0000-000000000001', 'RUNNING', now(), 0)")
+            "INSERT INTO workflow_run (id, work_item_id, definition_id, status, created_at,"
+                + " version) VALUES (?, ?, '00000000-0000-0000-0000-000000000001', 'RUNNING',"
+                + " now(), 0)")
         .params(run, workItem)
         .update();
     return run;

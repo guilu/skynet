@@ -59,6 +59,11 @@ public final class SseClient implements AutoCloseable {
     }
   }
 
+  /** Espera a las cabeceras: el servidor ya ha abierto la suscripción. */
+  public void awaitOpen(Duration timeout) throws Exception {
+    response.get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+  }
+
   /** Espera hasta recibir {@code count} mensajes o falla. */
   public List<Message> await(int count, Duration timeout) throws InterruptedException {
     List<Message> received = new ArrayList<>();

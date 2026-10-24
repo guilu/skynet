@@ -5,6 +5,11 @@ import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 import { api, SESSION_KEY, type Session } from '../api'
 import { useTheme } from '../theme'
+import { CompanionMenu } from './companion/CompanionMenu'
+import { CompanionProvider } from './companion/CompanionProvider'
+import { NoticeBell } from './companion/NoticeBell'
+import { useCompanionPrefs } from './companion/prefs'
+import { Toasts } from './companion/Toasts'
 import { Breadcrumbs } from './shell/Breadcrumbs'
 import { ThemeMenu, UserMenu } from './shell/Menus'
 import { MobileNav } from './shell/MobileNav'
@@ -27,7 +32,7 @@ function readCollapsed(): boolean {
 
 /**
  * Estructura común: barra lateral (plegable) con las secciones, barra superior con migas,
- * búsqueda ⌘K, tema y cuenta, y el contenido. En el móvil la barra lateral pasa a una barra
+ * búsqueda ⌘K, companion, avisos, tema y cuenta, y el contenido. En el móvil la barra lateral pasa a una barra
  * inferior con un cajón para el resto.
  */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -35,6 +40,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useTheme()
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [noticesOpen, setNoticesOpen] = useState(false)
+  const companion = useCompanionPrefs()
   const queryClient = useQueryClient()
   const session = useQuery<Session | null>({ queryKey: SESSION_KEY, enabled: false })
   const logout = useMutation({
@@ -69,46 +76,51 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <Tooltip.Provider delayDuration={200}>
-      <div className="shell" data-collapsed={collapsed || undefined}>
-        <a className="skip-link" href="#main">
-          Saltar al contenido
-        </a>
-        <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} />
-        <header className="topbar">
-          <Breadcrumbs />
-          <button
-            type="button"
-            className="search-btn"
-            onClick={() => setPaletteOpen(true)}
-            aria-label="Buscar o ejecutar una orden"
-            aria-keyshortcuts="Meta+K Control+K"
-          >
-            <Search size={20} strokeWidth={2.5} aria-hidden="true" />
-            <span className="search-label">Buscar ejecución, trabajo o runner…</span>
-            <kbd className="kbd">⌘K</kbd>
-          </button>
-          <ThemeMenu theme={theme} onChange={setTheme} />
-          {session.data && (
-            <UserMenu
-              username={session.data.username}
-              onLogout={() => logout.mutate()}
-              pending={logout.isPending}
-            />
+      <CompanionProvider>
+        <div className="shell" data-collapsed={collapsed || undefined}>
+          <a className="skip-link" href="#main">
+            Saltar al contenido
+          </a>
+          <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} />
+          <header className="topbar">
+            <Breadcrumbs />
+            <button
+              type="button"
+              className="search-btn"
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Buscar o ejecutar una orden"
+              aria-keyshortcuts="Meta+K Control+K"
+            >
+              <Search size={20} strokeWidth={2.5} aria-hidden="true" />
+              <span className="search-label">Buscar ejecución, trabajo o runner…</span>
+              <kbd className="kbd">⌘K</kbd>
+            </button>
+            {companion.mascot && <CompanionMenu onOpenNotices={() => setNoticesOpen(true)} />}
+            <NoticeBell open={noticesOpen} onOpenChange={setNoticesOpen} />
+            <ThemeMenu theme={theme} onChange={setTheme} />
+            {session.data && (
+              <UserMenu
+                username={session.data.username}
+                onLogout={() => logout.mutate()}
+                pending={logout.isPending}
+              />
+            )}
+          </header>
+          <main id="main" className="content" tabIndex={-1}>
+            {/* Con la clave, cada página nueva entra con una animación corta (UI-F). */}
+            <div key={pathname} className="page">
+              {children}
+            </div>
+          </main>
+          <MobileNav />
+          {paletteOpen && (
+            <Suspense fallback={null}>
+              <CommandPalette open onOpenChange={setPaletteOpen} onTheme={setTheme} />
+            </Suspense>
           )}
-        </header>
-        <main id="main" className="content" tabIndex={-1}>
-          {/* Con la clave, cada página nueva entra con una animación corta (UI-F). */}
-          <div key={pathname} className="page">
-            {children}
-          </div>
-        </main>
-        <MobileNav />
-        {paletteOpen && (
-          <Suspense fallback={null}>
-            <CommandPalette open onOpenChange={setPaletteOpen} onTheme={setTheme} />
-          </Suspense>
-        )}
-      </div>
+          <Toasts />
+        </div>
+      </CompanionProvider>
     </Tooltip.Provider>
   )
 }
