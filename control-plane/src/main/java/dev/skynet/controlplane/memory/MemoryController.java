@@ -113,6 +113,12 @@ class MemoryController {
     return service.get(id);
   }
 
+  /** Lo que una invocación de agente recibió, buscó, leyó y guardó. */
+  @GetMapping("/api/agent-runs/{id}/memory")
+  AgentMemory agentMemory(@PathVariable UUID id) {
+    return service.agentMemory(id);
+  }
+
   @PutMapping("/api/memory/{id}")
   MemoryObservation edit(
       @PathVariable UUID id, @RequestBody EditObservation request, Principal principal) {

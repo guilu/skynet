@@ -869,6 +869,124 @@ export interface CheckResult {
 }
 
 /** Lanzamiento de un agente; los límites que falten usan los valores por defecto del servidor. */
+export type MemoryKind =
+  | 'DECISION'
+  | 'BUGFIX'
+  | 'DISCOVERY'
+  | 'PATTERN'
+  | 'CONFIG'
+  | 'PITFALL'
+  | 'CONSTRAINT'
+  | 'SESSION_SUMMARY'
+  | 'RUN_LOG'
+
+export const MEMORY_KINDS: { value: MemoryKind; label: string }[] = [
+  { value: 'DECISION', label: 'Decisión' },
+  { value: 'BUGFIX', label: 'Bug resuelto' },
+  { value: 'DISCOVERY', label: 'Descubrimiento' },
+  { value: 'PATTERN', label: 'Patrón' },
+  { value: 'CONFIG', label: 'Configuración' },
+  { value: 'PITFALL', label: 'Trampa' },
+  { value: 'CONSTRAINT', label: 'Restricción' },
+  { value: 'SESSION_SUMMARY', label: 'Resumen de sesión' },
+  { value: 'RUN_LOG', label: 'Bitácora' },
+]
+
+export type MemoryOrigin = 'AGENT' | 'HUMAN' | 'SYSTEM'
+
+/** Una observación de la memoria del proyecto, en su versión actual. */
+export interface MemoryObservation {
+  id: string
+  projectId: string
+  /** `null`: es de todo el proyecto. */
+  repositoryId: string | null
+  kind: MemoryKind
+  title: string
+  topicKey: string | null
+  what: string
+  why: string | null
+  where: string | null
+  learned: string | null
+  tags: string[]
+  /** Quién escribió la versión actual. */
+  origin: MemoryOrigin
+  sourceWorkflowRunId: string | null
+  sourceAgentRunId: string | null
+  pinned: boolean
+  /** Se enmascaró algún secreto al guardarla. */
+  redacted: boolean
+  version: number
+  createdAt: string
+  updatedAt: string
+  updatedBy: string | null
+  archivedAt: string | null
+}
+
+export interface MemoryPage {
+  items: MemoryObservation[]
+  page: number
+  size: number
+  total: number
+}
+
+/** Una versión de una observación, tal como quedó al guardarla. */
+export interface MemoryRevision {
+  observationId: string
+  version: number
+  kind: MemoryKind
+  title: string
+  topicKey: string | null
+  what: string
+  why: string | null
+  where: string | null
+  learned: string | null
+  tags: string[]
+  origin: MemoryOrigin
+  sourceAgentRunId: string | null
+  changedBy: string | null
+  changedAt: string
+}
+
+/** Lo que se puede cambiar de una observación al editarla. */
+export type MemoryContent = Pick<
+  MemoryObservation,
+  'kind' | 'title' | 'topicKey' | 'what' | 'why' | 'where' | 'learned' | 'tags'
+>
+
+export interface MemoryQuery {
+  /** Id de un repositorio, `project` para lo de todo el proyecto, o nada para todo. */
+  repository?: string
+  kind?: MemoryKind
+  origin?: MemoryOrigin
+  pinned?: boolean
+  archived?: ArchivedFilter
+  q?: string
+  page?: number
+  size?: number
+}
+
+export type MemoryVia = 'PROMPT' | 'CONTEXT' | 'SEARCH' | 'GET' | 'SAVE'
+
+/** Lo que una invocación de agente hizo con la memoria. */
+export interface AgentMemory {
+  agentRunId: string
+  projectId: string
+  /** `null`: la invocación no usó la memoria. */
+  mode: 'READ' | 'WRITE' | null
+  accesses: {
+    observationId: string
+    version: number
+    via: MemoryVia
+    kind: MemoryKind
+    /** El título de esa versión. */
+    title: string
+    repositoryId: string | null
+    archived: boolean
+    times: number
+    firstAt: string
+  }[]
+}
+
 export interface LaunchRequest {
   repositoryId: string
   /** Versión publicada que se lanza; sin ella, la última de `adhoc`. */
@@ -1165,6 +1283,31 @@ export const api = {
   /** Aprueba, rechaza, pide cambios o comenta. */
   decideApproval: (id: string, action: ApprovalAction, comment?: string) =>
     request<ApprovalView>('POST', `/api/approvals/${id}/decisions`, { action, comment }),
+  /** Busca en la memoria del proyecto; sin texto, primero lo fijado y después lo más reciente. */
+  memory: (projectId: string, q: MemoryQuery = {}) =>
+    request<MemoryPage>(
+      'GET',
+      `/api/projects/${projectId}/memory${query({
+        repository: q.repository,
+        kind: q.kind,
+        origin: q.origin,
+        pinned: q.pinned == null ? undefined : String(q.pinned),
+        archived: q.archived && q.archived !== 'false' ? q.archived : undefined,
+        q: q.q || undefined,
+        page: q.page ? String(q.page) : undefined,
+        size: q.size == null ? undefined : String(q.size),
+      })}`,
+    ),
+  memoryEntry: (id: string) => request<MemoryObservation>('GET', `/api/memory/${id}`),
+  memoryHistory: (id: string) => request<MemoryRevision[]>('GET', `/api/memory/${id}/history`),
+  /** Guarda una versión nueva con lo que cambie una persona. */
+  editMemory: (id: string, content: MemoryContent) =>
+    request<MemoryObservation>('PUT', `/api/memory/${id}`, content),
+  /** Archivar, restaurar, fijar o desfijar una observación. */
+  memoryAction: (id: string, action: 'archive' | 'restore' | 'pin' | 'unpin') =>
+    request<MemoryObservation>('POST', `/api/memory/${id}/${action}`),
+  agentMemory: (agentId: string) =>
+    request<AgentMemory>('GET', `/api/agent-runs/${agentId}/memory`),
   /** Verificaciones del agente, la más reciente primero. */
   verifications: (agentId: string) =>
     request<VerificationResult[]>('GET', `/api/agent-runs/${agentId}/verifications`),

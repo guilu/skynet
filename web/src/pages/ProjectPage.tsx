@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FolderGit2, ListTodo, Plus, ShieldCheck, SlidersHorizontal } from 'lucide-react'
+import { Brain, FolderGit2, ListTodo, Plus, ShieldCheck, SlidersHorizontal } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api, WORK_ITEM_TYPES, type Repository, type WorkItem, type WorkItemType } from '../api'
@@ -7,6 +7,7 @@ import { ArchivedBanner, ArchiveMenu, ArchivedToggle } from '../components/archi
 import { ErrorMessage } from '../components/ErrorMessage'
 import { DataTable, EmptyState, type Column } from '../components/list/DataTable'
 import { ListToolbar } from '../components/list/Toolbar'
+import { ProjectMemory } from '../components/memory/ProjectMemory'
 import {
   AgentPolicyForm,
   RegisterRepositoryForm,
@@ -19,7 +20,9 @@ import { TabList, TabPanel } from '../components/ui/Tabs'
 import { formatDateTime } from '../format'
 import { CardsSkeleton, TableSkeleton } from '../components/ui/Skeleton'
 
-type ProjectTab = 'work' | 'repos'
+type ProjectTab = 'work' | 'repos' | 'memory'
+
+const TABS: ProjectTab[] = ['work', 'repos', 'memory']
 type SheetKind = 'work-item' | 'repository'
 
 const TYPE_LABEL = Object.fromEntries(WORK_ITEM_TYPES.map((t) => [t.value, t.label]))
@@ -55,14 +58,15 @@ const WORK_COLUMNS: Column<WorkItem>[] = [
 ]
 
 /**
- * Proyecto: sus trabajos y sus repositorios en pestañas (la elegida y el chip «Archivados», en la
- * URL). Crear un trabajo, registrar un repositorio y configurar su verificación o su política se
+ * Proyecto: sus trabajos, sus repositorios y su memoria en pestañas (la elegida, el chip
+ * «Archivados» y la entrada de memoria abierta, en la URL). Crear un trabajo, registrar un repositorio y configurar su verificación o su política se
  * hace en un panel lateral. Archivado, es de solo lectura: solo se puede restaurar o eliminar.
  */
 export function ProjectPage() {
   const { projectId = '' } = useParams()
   const [params, setParams] = useSearchParams()
-  const tab: ProjectTab = params.get('tab') === 'repos' ? 'repos' : 'work'
+  const tab = TABS.find((t) => t === params.get('tab')) ?? 'work'
+  const entryId = tab === 'memory' ? params.get('entry') : null
   const showArchived = params.get('archived') === 'true'
   const navigate = useNavigate()
   const [sheet, setSheet] = useState<SheetKind | null>(null)
@@ -79,10 +83,13 @@ export function ProjectPage() {
     queryKey: ['repositories', projectId, filter],
     queryFn: () => api.repositories(projectId, filter),
   })
-  const setView = (next: { tab?: ProjectTab; archived?: boolean }) => {
+  const setView = (next: { tab?: ProjectTab; archived?: boolean; entry?: string | null }) => {
     const p = new URLSearchParams()
-    if ((next.tab ?? tab) === 'repos') p.set('tab', 'repos')
+    const nextTab = next.tab ?? tab
+    if (nextTab !== 'work') p.set('tab', nextTab)
     if (next.archived ?? showArchived) p.set('archived', 'true')
+    const entry = next.entry === undefined ? entryId : next.entry
+    if (nextTab === 'memory' && entry) p.set('entry', entry)
     setParams(p, { replace: true })
   }
   const selectTab = (next: ProjectTab) => setView({ tab: next })
@@ -134,6 +141,7 @@ export function ProjectPage() {
         tabs={[
           { id: 'work', label: 'Trabajos', icon: ListTodo, count: items.data?.length },
           { id: 'repos', label: 'Repositorios', icon: FolderGit2, count: repos.data?.length },
+          { id: 'memory', label: 'Memoria', icon: Brain },
         ]}
         selected={tab}
         onSelect={selectTab}
@@ -141,10 +149,22 @@ export function ProjectPage() {
         panelId="project-panel"
       />
       <TabPanel id="project-panel" labelledBy={`project-tab-${tab}`} className="tab-body">
-        <ListToolbar>
-          <ArchivedToggle on={showArchived} onChange={(on) => setView({ archived: on })} />
-        </ListToolbar>
-        {tab === 'work' ? (
+        {tab !== 'memory' && (
+          <ListToolbar>
+            <ArchivedToggle on={showArchived} onChange={(on) => setView({ archived: on })} />
+          </ListToolbar>
+        )}
+        {tab === 'memory' ? (
+          <ProjectMemory
+            projectId={projectId}
+            repositories={repos.data ?? []}
+            editable={editable}
+            archived={showArchived}
+            onArchived={(on) => setView({ archived: on })}
+            entryId={entryId}
+            onEntry={(entry) => setView({ entry })}
+          />
+        ) : tab === 'work' ? (
           <>
             <ErrorMessage error={items.error} />
             {items.isPending && <TableSkeleton label="los trabajos" />}

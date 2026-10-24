@@ -125,7 +125,8 @@ public final class MemoryMcpServer {
         "mem_context",
         "Contexto de memoria para empezar: lo fijado, los últimos resúmenes de sesión, la bitácora"
             + " y lo último guardado en este repositorio y su proyecto.",
-        schema());
+        schema(),
+        true);
     ObjectNode search = schema();
     property(search, "query", "string", "Palabras a buscar en títulos, temas y contenido");
     kinds(property(search, "kinds", "array", "Solo estos tipos"));
@@ -137,11 +138,12 @@ public final class MemoryMcpServer {
         "mem_search",
         "Busca en la memoria del repositorio y de su proyecto. Devuelve vistas previas: lee la"
             + " entrada entera con mem_get.",
-        search);
+        search,
+        true);
     ObjectNode get = schema();
     property(get, "id", "string", "Id de la observación (de mem_search o mem_context)");
     get.putArray("required").add("id");
-    tool(tools, "mem_get", "Una observación entera, con todos sus campos.", get);
+    tool(tools, "mem_get", "Una observación entera, con todos sus campos.", get, true);
     if (writable) {
       ObjectNode save = schema();
       ArrayNode kinds = property(save, "kind", "string", "Tipo de observación").putArray("enum");
@@ -173,7 +175,8 @@ public final class MemoryMcpServer {
           "Guarda en la memoria una decisión, un bug resuelto, un descubrimiento, un patrón, una"
               + " configuración, una trampa o una restricción que convenga recordar. No guardes"
               + " secretos.",
-          save);
+          save,
+          false);
       ObjectNode summary = schema();
       property(summary, "goal", "string", "Objetivo de la sesión");
       property(summary, "accomplished", "string", "Qué se hizo");
@@ -187,7 +190,8 @@ public final class MemoryMcpServer {
           tools,
           "mem_session_summary",
           "Resumen de la sesión, antes de terminar. Llamarla otra vez lo actualiza.",
-          summary);
+          summary,
+          false);
     }
     return result;
   }
@@ -290,8 +294,18 @@ public final class MemoryMcpServer {
     values.add("SESSION_SUMMARY").add("RUN_LOG");
   }
 
-  private static void tool(ArrayNode tools, String name, String description, ObjectNode schema) {
-    tools.addObject().put("name", name).put("description", description).set("inputSchema", schema);
+  /**
+   * Una herramienta con sus anotaciones de MCP: las de lectura van con {@code readOnlyHint}, para
+   * que el CLI las trate como de solo lectura (también en {@code permissionMode: plan}).
+   */
+  private static void tool(
+      ArrayNode tools, String name, String description, ObjectNode schema, boolean readOnly) {
+    ObjectNode tool = tools.addObject().put("name", name).put("description", description);
+    tool.set("inputSchema", schema);
+    tool.putObject("annotations")
+        .put("readOnlyHint", readOnly)
+        .put("destructiveHint", false)
+        .put("openWorldHint", false);
   }
 
   private static ObjectNode result(JsonNode id, JsonNode result) {

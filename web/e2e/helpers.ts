@@ -113,15 +113,32 @@ export async function expectAccessible(page: Page, what: string) {
   expect(summary, `${what}: problemas de accesibilidad`).toEqual([])
 }
 
-/** Abre una pestaña de la ejecución, también si el detalle del agente la tiene en su menú «Más». */
+/**
+ * Abre una pestaña de la ejecución, también si el detalle del agente la tiene en su menú «Más». Lo
+ * reintenta: el reparto entre las pestañas y el menú se vuelve a medir cuando cambia el ancho del
+ * inspector (p. ej. al cargar su contenido), y una pestaña puede pasar de un sitio al otro a mitad.
+ */
 export async function openTab(page: Page, name: string) {
   const inspector = page.getByRole('region', { name: 'Inspector del agente' })
   await expect(inspector.getByRole('tab').first()).toBeVisible()
   const tab = page.getByRole('tab', { name, exact: true })
-  if (await tab.count()) {
-    if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click()
-    return
-  }
-  await inspector.locator('[role=tab][aria-haspopup=menu]').click()
-  await page.getByRole('menuitemradio', { name, exact: true }).click()
+  await expect(async () => {
+    if (await tab.count()) {
+      if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click({ timeout: 2_000 })
+    } else {
+      await inspector.locator('[role=tab][aria-haspopup=menu]').click({ timeout: 2_000 })
+      const item = page.getByRole('menuitemradio', { name, exact: true })
+      try {
+        await item.click({ timeout: 2_000 })
+      } catch (e) {
+        await page.keyboard.press('Escape')
+        throw e
+      }
+    }
+    await expect(
+      page.getByRole('tab', { name: new RegExp(`^${name}`), selected: true }),
+    ).toBeVisible({
+      timeout: 2_000,
+    })
+  }).toPass({ timeout: 30_000 })
 }

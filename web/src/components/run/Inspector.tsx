@@ -20,6 +20,7 @@ import { agentOutcome, toolCallsOf, type ToolCall } from './agentEvents'
 import { JsonView } from './JsonView'
 import { CostTab } from './CostTab'
 import { LongText } from './LongText'
+import { MemoryTab } from './MemoryTab'
 import { INSPECTOR_TABS, type InspectorTab } from './useRunSelection'
 import { VerificationTab } from './VerificationTab'
 import { Button } from '../ui/Button'
@@ -63,6 +64,7 @@ export function Inspector({ agent, events, tab, sequence, toolUseId, onTab, onSh
         {tab === 'artifacts' && <ArtifactsTab agent={agent} />}
         {tab === 'verification' && <VerificationTab agent={agent} events={events} />}
         {tab === 'cost' && <CostTab agent={agent} />}
+        {tab === 'memory' && <MemoryTab agent={agent} />}
         {tab === 'event' && <OriginalEvent sequence={sequence} />}
       </TabPanel>
     </section>
