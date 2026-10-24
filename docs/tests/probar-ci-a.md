@@ -1,12 +1,12 @@
 # Probar CI-A - E2E más rápidas y bajo demanda
 
 CI-A saca las E2E de `ci.yml` a su propio workflow, `.github/workflows/e2e.yml`. En una PR corren
-solo las rápidas (3 shards) y solo si la PR toca algo que afecta a las E2E; las cuatro `@lento`
+solo las rápidas (6 shards) y solo si la PR toca algo que afecta a las E2E; las cuatro `@lento`
 (4 shards, una por shard) corren en cada push a `main`, a mano o con la etiqueta `e2e-completo`.
 El check `E2E` resume el resultado.
 
-Antes, el shard 1/3 tardaba ~17,5 min porque le tocaban todas las pesadas. Ahora ningún shard
-debería pasar de ~7 min.
+Antes, el shard 1/3 tardaba ~17,5 min porque le tocaban todas las pesadas. Ahora ningún job de
+shard debería pasar de ~7 min (cada uno gasta ~2 min en preparar el entorno antes de las pruebas).
 
 ## 1. Pruebas del script que decide
 
@@ -24,22 +24,22 @@ lanza solo las rápidas; con `e2e-completo` (y solo con esa etiqueta exacta) cor
 ```bash
 cd web
 npx playwright test --list --grep @lento                 # approvals, nodes, providers (revisión), spec
-for s in 1 2 3; do npx playwright test --list --grep-invert @lento --shard=$s/3 | tail -1; done
+for s in 1 2 3 4 5 6; do npx playwright test --list --grep-invert @lento --shard=$s/6 | tail -1; done
 cd ..
 ```
 
-Las rápidas son 23 pruebas en 3 shards (8, 9 y 6) y las lentas 4, una por shard.
+Las rápidas son 23 pruebas en 6 shards (4, 4, 4, 4, 4 y 3) y las lentas 4, una por shard.
 
 ## 3. En la propia PR de CI-A
 
 1. La PR toca `web/` y `e2e.yml`, así que en **Checks** aparecen «Qué E2E corren», **E2E rápidas
-   1/3, 2/3, 3/3** y **E2E** (resumen). No aparece ningún shard de lentas. Los jobs Java, Web y
+   1/6…6/6** y **E2E** (resumen). No aparece ningún shard de lentas. Los jobs Java, Web y
    Compose siguen en el workflow CI.
-2. Pon la etiqueta **`e2e-completo`** en la PR. Se relanza solo el workflow E2E (CI no) con las 3
+2. Pon la etiqueta **`e2e-completo`** en la PR. Se relanza solo el workflow E2E (CI no) con las 6
    rápidas y **E2E lentas 1/4…4/4**. Ningún shard debería pasar de ~7 min.
 3. Pon otra etiqueta cualquiera (p. ej. `documentation`): no se cancela nada en curso y la ejecución
    nueva sale con todos los jobs omitidos.
-4. Actions → **E2E** → **Run workflow** → rama `claude/project-thread-y7sbg8`: corren las 7 partes.
+4. Actions → **E2E** → **Run workflow** → rama `claude/project-thread-y7sbg8`: corren las 10 partes.
 
 ## 4. Una PR que no toca las E2E
 
@@ -49,7 +49,7 @@ verde con «La PR no toca nada de las E2E».
 
 ## 5. Tras fusionar
 
-El push a `main` lanza las 7 partes. En las PRs siguientes, si quieres las lentas antes de fusionar
+El push a `main` lanza las 10 partes. En las PRs siguientes, si quieres las lentas antes de fusionar
 (p. ej. al tocar el motor, aprobaciones o plantillas), pon `e2e-completo`.
 
 ## 6. En local

@@ -32,11 +32,12 @@ else
   rapidas=false lentas=false
 fi
 
-# Las rápidas en 3 shards y las @lento (una de 4 a 10 minutos de límite cada una) en 4, para que
-# ningún shard cargue con todas las pesadas.
+# Las rápidas en 6 shards y las @lento (una de 4 a 10 minutos de límite cada una) en 4, para que
+# ningún shard cargue con todas las pesadas. Cada job gasta ~2 min en preparar el entorno; con 6
+# shards de rápidas ninguno pasa de ~7 min.
 entradas=()
 if [[ $rapidas == true ]]; then
-  for s in 1 2 3; do entradas+=("{\"nombre\":\"rápidas $s/3\",\"args\":\"--grep-invert @lento --shard=$s/3\"}"); done
+  for s in 1 2 3 4 5 6; do entradas+=("{\"nombre\":\"rápidas $s/6\",\"args\":\"--grep-invert @lento --shard=$s/6\"}"); done
 fi
 if [[ $lentas == true ]]; then
   for s in 1 2 3 4; do

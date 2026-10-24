@@ -48,7 +48,7 @@ espera 'etiqueta con nombre parecido' false false pull_request 'e2e-completo-no'
 espera 'e2e-completo con código' true true pull_request 'bug,e2e-completo' web/src/App.tsx
 espera 'e2e-completo solo con docs' true true pull_request 'e2e-completo' docs/a.md
 
-# La matriz: 3 shards de rápidas y 4 de lentas, JSON válido.
+# La matriz: 6 shards de rápidas y 4 de lentas, JSON válido.
 matriz() { printf '%s\n' "$@" | EVENTO=${EVENTO:-pull_request} "$SCRIPT" | sed -n 's/^matriz=//p'; }
 check_matriz() { # descripción entradas ficheros...
   local what=$1 n=$2; shift 2
@@ -60,9 +60,9 @@ check_matriz() { # descripción entradas ficheros...
   fi
 }
 check_matriz 'matriz vacía' 0 docs/a.md
-check_matriz 'matriz de rápidas' 3 web/src/App.tsx
-EVENTO=push check_matriz 'matriz completa' 7
-if EVENTO=push matriz | jq -e '[.include[].args] | map(select(test("@lento"))) | length == 7' > /dev/null \
+check_matriz 'matriz de rápidas' 6 web/src/App.tsx
+EVENTO=push check_matriz 'matriz completa' 10
+if EVENTO=push matriz | jq -e '[.include[].args] | map(select(test("@lento"))) | length == 10' > /dev/null \
   && EVENTO=push matriz | jq -e '[.include[] | select(.nombre | startswith("lentas"))][0].args | test("--grep @lento")' > /dev/null; then
   passed=$((passed + 1))
 else

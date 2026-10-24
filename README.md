@@ -73,7 +73,7 @@ docker compose -f deploy/docker-compose.yml up -d
 ./scripts/e2e.sh                    # logs en build/e2e/
 ```
 
-En CI corre en su propio workflow (`.github/workflows/e2e.yml`), con PostgreSQL como servicio. Las pruebas de más de ~2 minutos llevan la etiqueta `@lento` (aprobaciones, «Revisión en paralelo», revisión con Codex y Antigravity, «Especificar, planificar e implementar»). En una PR corren solo las rápidas, en 3 shards, y solo si la PR toca algo que afecta a las E2E (código, `fixtures/`, Gradle o los scripts de E2E; no `docs/`, `deploy/`, `workflows/` ni los `.md`). Las `@lento`, en 4 shards, corren en cada push a `main`, a mano (Actions → E2E → Run workflow) o en una PR con la etiqueta `e2e-completo`. Lo decide `scripts/ci/e2e-alcance.sh` y el check `E2E` resume el resultado: verde también cuando no tocaba lanzarlas. En local, `./scripts/e2e.sh --grep-invert @lento` corre solo las rápidas.
+En CI corre en su propio workflow (`.github/workflows/e2e.yml`), con PostgreSQL como servicio. Las pruebas de más de ~2 minutos llevan la etiqueta `@lento` (aprobaciones, «Revisión en paralelo», revisión con Codex y Antigravity, «Especificar, planificar e implementar»). En una PR corren solo las rápidas, en 6 shards, y solo si la PR toca algo que afecta a las E2E (código, `fixtures/`, Gradle o los scripts de E2E; no `docs/`, `deploy/`, `workflows/` ni los `.md`). Las `@lento`, en 4 shards, corren en cada push a `main`, a mano (Actions → E2E → Run workflow) o en una PR con la etiqueta `e2e-completo`. Lo decide `scripts/ci/e2e-alcance.sh` y el check `E2E` resume el resultado: verde también cuando no tocaba lanzarlas. En local, `./scripts/e2e.sh --grep-invert @lento` corre solo las rápidas.
 
 ### Contratos entre backend y web
 
