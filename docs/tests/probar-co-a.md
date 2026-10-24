@@ -49,7 +49,6 @@ Arranca como siempre (`docs/arranque-local.md`) y entra en `http://localhost:517
    - Uso sin datos: En pausa.
    - Con filtros que no dan resultados sigue el icono de antes, no la mascota.
 7. **404:** ve a `/no-existe`. Aparece la mascota pensando, con la burbuja «…».
-8. **Pestaña oculta:** con la galería abierta, cambia de pestaña y vuelve. Las animaciones siguen donde estaban, porque mientras la pestaña está oculta se pausan.
 
 ## 3. Qué no cambia
 

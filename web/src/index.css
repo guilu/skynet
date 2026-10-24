@@ -6438,12 +6438,13 @@
     animation: companion-swap 220ms ease-in-out both;
   }
 
-  /* Quietas en listas y galerías (se animan al pasar el ratón) y con la pestaña oculta */
+  /*
+   * Quietas en listas y galerías (se animan al pasar el ratón). Sin animación, no en pausa: una
+   * finita en pausa (el «pop» del éxito) no terminaría nunca.
+   */
   .companion[data-still]:not(:hover),
-  .companion[data-still]:not(:hover) *,
-  :root[data-hidden] .companion,
-  :root[data-hidden] .companion * {
-    animation-play-state: paused;
+  .companion[data-still]:not(:hover) * {
+    animation: none;
   }
 
   @keyframes companion-breathe {

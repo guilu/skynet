@@ -49,10 +49,10 @@ La traducción a expresiones está en `components/companion/state.ts`: funciones
 
 - **Animaciones.** Solo `transform` y `opacity`. «Ejecutando» repite un ciclo de 4 fotogramas en 1,2 s.
 - **Cambio de expresión.** El visor parpadea: se cierra en 110 ms (`SWAP_MS`), cambian los ojos y se abre. Si la expresión cambia otra vez durante el parpadeo, se queda la última.
-- **Animaciones en pausa.**
-  - Con `still` (listas, nodos y galerías), salvo al pasar el ratón.
-  - Con la pestaña oculta.
-  - Con `prefers-reduced-motion`, no hay ninguna animación.
+- **Sin animación.**
+  - Con `still` (listas, nodos y galerías), salvo al pasar el ratón. Se quitan, no se pausan: una animación finita en pausa (el «pop» del éxito) no terminaría nunca, y las E2E de axe esperan a que acaben las finitas.
+  - Con `prefers-reduced-motion`.
+  - Con la pestaña oculta, el propio navegador las detiene.
 
 ## Dónde aparece (CO-A)
 

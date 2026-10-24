@@ -7,12 +7,6 @@ const SMALL = 32
 /** Lo que tarda en cerrarse el visor al cambiar de expresión; el cambio queda tapado. */
 export const SWAP_MS = 110
 
-// Pausa todas las animaciones con la pestaña oculta.
-if (typeof document !== 'undefined') {
-  const sync = () => document.documentElement.toggleAttribute('data-hidden', document.hidden)
-  document.addEventListener('visibilitychange', sync)
-}
-
 /**
  * La mascota: el isotipo de Skynet hecho personaje. El nodo de arriba es la cabeza, los de abajo
  * las manos y el anillo la cara, con un visor donde cambian los ojos. Pinta con los tokens, así
