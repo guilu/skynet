@@ -81,7 +81,11 @@ public class CodexProvider implements AgentProvider {
     return command(start, files, null);
   }
 
-  /** Con memoria, el servidor MCP va en {@code -c mcp_servers.<nombre>.*} (TOML). */
+  /**
+   * Con memoria, el servidor MCP va en {@code -c mcp_servers.<nombre>.*} (TOML), con sus
+   * herramientas aprobadas: {@code codex exec} no puede preguntar ({@code approval_policy=never}) y
+   * rechaza las llamadas MCP que piden aprobación, como {@code mem_save}.
+   */
   @Override
   public List<String> command(StartAgent start, Path files, MemoryBridge memory)
       throws IOException {
@@ -96,6 +100,7 @@ public class CodexProvider implements AgentProvider {
                   + "args=["
                   + String.join(", ", memory.args().stream().map(CodexProvider::toml).toList())
                   + "]"));
+      command.addAll(List.of("-c", prefix + "default_tools_approval_mode=" + toml("approve")));
     }
     command.addAll(sandbox(start.permissionMode()));
     if (start.model() != null) {

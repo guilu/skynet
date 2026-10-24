@@ -120,7 +120,7 @@ class CodexProviderTest {
     List<String> command =
         provider.command(start(null, null, null, null), dir.resolve("a"), memory);
 
-    assertThat(command.subList(0, 7))
+    assertThat(command.subList(0, 9))
         .containsExactly(
             "codex",
             "exec",
@@ -128,7 +128,9 @@ class CodexProviderTest {
             "-c",
             "mcp_servers.skynet_memoria.command=\"/jdk/bin/java\"",
             "-c",
-            "mcp_servers.skynet_memoria.args=[\"-cp\", \"/r/lib/\\\"x\\\"\", \"memory-mcp\"]");
+            "mcp_servers.skynet_memoria.args=[\"-cp\", \"/r/lib/\\\"x\\\"\", \"memory-mcp\"]",
+            "-c",
+            "mcp_servers.skynet_memoria.default_tools_approval_mode=\"approve\"");
     assertThat(command.subList(command.size() - 2, command.size()))
         .containsExactly("--", "-arregla add");
     assertThat(provider.command(start(null, null, null, null), dir.resolve("b"), null))

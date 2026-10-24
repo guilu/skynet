@@ -22,7 +22,7 @@ ME-B ([#151](https://github.com/guilu/skynet/issues/151), parte de [#141](https:
 
 Configuración en cada CLI:
 - **Claude Code:** `--mcp-config logs/<id>.mcp.json` con el servidor `skynet_memoria`, y `mcp__skynet_memoria` se añade a `--allowedTools`.
-- **Codex:** `-c mcp_servers.skynet_memoria.command=…` y `-c mcp_servers.skynet_memoria.args=[…]` tras `exec --json`.
+- **Codex:** `-c mcp_servers.skynet_memoria.command=…`, `-c mcp_servers.skynet_memoria.args=[…]` y `-c mcp_servers.skynet_memoria.default_tools_approval_mode="approve"` tras `exec --json`. Sin esta última, `codex exec` rechaza las herramientas con «MCP tool call requires approval, but approval policy is never», porque en modo headless no puede preguntar.
 - **Antigravity:** todavía sin herramientas de memoria; arranca sin ellas. No he podido comprobar aquí si `agy` admite servidores MCP en modo headless. En ME-C recibirá el bloque de contexto inicial en el prompt, como los demás.
 
 En ME-B **todos los agentes tienen lectura y escritura**. La clave `memory: off | read | write` del YAML y el bloque de contexto al principio del prompt llegan en ME-C.
@@ -74,7 +74,7 @@ P=$(api localhost:8080/api/projects | jq -r '.[] | select(.key=="DEMO") | .id')
 
    La respuesta debe citar lo guardado en el paso 1.
 
-3. **Codex.** Repite el paso 2 con un agente `provider: codex`. Si Codex no llega a llamar a la herramienta, mira en su log si la cancela por falta de aprobación: dímelo y lo ajusto.
+3. **Codex.** Repite los pasos 1 y 2 con un agente `provider: codex`. En su log, las llamadas a `mem_context`, `mem_search`, `mem_save` y `mem_session_summary` deben terminar bien, sin «requires approval». Si tu versión de Codex no conoce `default_tools_approval_mode`, avisará al arrancar de que ignora la clave: dime la versión (`codex --version`).
 
 4. **El token caduca y no se queda en disco.** Al terminar cualquiera de las ejecuciones:
 
