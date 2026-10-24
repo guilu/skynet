@@ -62,6 +62,16 @@ class MemoryMcpServerTest {
         .containsExactly("mem_context", "mem_search", "mem_get", "mem_save", "mem_session_summary");
     assertThat(names(server(false).tools()))
         .containsExactly("mem_context", "mem_search", "mem_get");
+    // Las de lectura se anuncian como tales, para que el CLI las deje usar en modo plan.
+    assertThat(server(true).tools().path("tools"))
+        .extracting(
+            t -> t.path("name").asString() + "=" + t.path("annotations").path("readOnlyHint"))
+        .containsExactly(
+            "mem_context=true",
+            "mem_search=true",
+            "mem_get=true",
+            "mem_save=false",
+            "mem_session_summary=false");
 
     JsonNode refused = call(server(false), "mem_save", "{\"kind\":\"DECISION\"}");
     assertThat(refused.path("isError").asBoolean()).isTrue();

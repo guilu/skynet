@@ -35,7 +35,7 @@ Cada entrada es una **observación**:
    | `mem_save` | Guarda una observación, con `topic_key` opcional. Solo con `memory: write`. |
    | `mem_session_summary` | El resumen de la sesión: objetivo, qué se hizo, descubrimientos, siguientes pasos y ficheros. Llamarla otra vez lo actualiza. Solo con `memory: write`. |
 
-   Antigravity recibe el bloque, pero todavía no las herramientas: no está comprobado que `agy` admita servidores MCP en modo headless.
+   Las tres de lectura se anuncian con la anotación MCP `readOnlyHint: true`, así que el CLI las trata como de solo lectura también en `permissionMode: plan`. Antigravity recibe el bloque, pero todavía no las herramientas: no está comprobado que `agy` admita servidores MCP en modo headless.
 3. **Al terminar la ejecución** (bien, mal o cancelada), Skynet deja en cada repositorio en el que trabajó una observación `RUN_LOG` con el tema `bitacora/<ejecución>`: el workflow y su versión, el trabajo, el estado de cada fase, la rama con sus commits y archivos, la salida estructurada de los agentes, el coste y el enlace a la ejecución. Se escribe sin modelo, con lo que ya está en la base de datos. Si falla, la ejecución termina igual.
 
 ### La clave `memory` de una fase

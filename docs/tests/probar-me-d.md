@@ -17,6 +17,7 @@ Qué trae:
 
   Para eso, el runner de las E2E pasa `FAKE_MCP_CALLS=@.memoria.json` a los fakes.
 - **Documentación:** [`docs/memoria.md`](../memoria.md) y la [ADR-0002](../adr/0002-memoria-de-proyecto.md).
+- **Herramientas de lectura anotadas:** `mem_context`, `mem_search` y `mem_get` se anuncian con `readOnlyHint: true`, para que el CLI las trate como de solo lectura también en `permissionMode: plan`. Y el prompt de `investigar-mejoras` pide expresamente buscar con `mem_search` y leer con `mem_get`, porque el bloque inicial es solo un resumen.
 
 No hay migraciones nuevas ni dependencias nuevas, y no cambia la exposición de red.
 
@@ -71,6 +72,6 @@ En un agente de una fase con `memory: off`, o en un comando, dice que no usó la
 ## 5. `investigar-mejoras` con un agente real (demo-repo)
 
 Publica los workflows iniciales si aún no está (`scripts/seed-workflows.sh`) y lanza **Investigar mejoras** en un trabajo de DEMO sobre demo-repo, con el foco vacío:
-- el agente busca en la memoria (en su pestaña Memoria salen búsquedas y lecturas) y no guarda nada;
+- el agente busca en la memoria y no guarda nada. En su pestaña Memoria, «Lo que buscó o leyó» tiene entradas, además de las que recibió en el bloque. Si sale vacío, mira en la pestaña Herramientas si intentó llamar a `mcp__skynet_memoria__mem_search` y qué le respondieron;
 - su resultado estructurado tiene `summary` y una lista de `improvements` con prioridad, esfuerzo y las entradas de la memoria en las que se basa;
 - no cambia ningún fichero del repositorio.

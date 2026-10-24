@@ -39,7 +39,7 @@ stages:
     prompt: |
       Investiga qué conviene mejorar en este repositorio para {{workItem.key}} ({{workItem.title}}). Foco: {{inputs.foco}}.
 
-      1. Empieza por la memoria del proyecto: el bloque del principio y, con mem_search y mem_get, la bitácora de las ejecuciones anteriores (tema bitacora/…), los hallazgos de las revisiones, las decisiones, las trampas y las restricciones.
+      1. Empieza por la memoria del proyecto. El bloque del principio es solo un resumen recortado: busca con mem_search (al menos «bitacora», «hallazgos» y las palabras del foco) y lee con mem_get las entradas en las que te vayas a basar. Fíjate en la bitácora de las ejecuciones anteriores (tema bitacora/…), los hallazgos de las revisiones, las decisiones, las trampas y las restricciones.
       2. Comprueba en el código cuáles de esos hallazgos siguen abiertos y cuáles ya se arreglaron. Respeta las decisiones y las restricciones guardadas.
       3. Propón las siguientes mejoras, ordenadas por prioridad: primero lo que más valor da con menos esfuerzo.
 
