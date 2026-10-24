@@ -92,88 +92,91 @@ async function openStage(page: Page, position: number, key: string) {
 
 const statuses = (stages: RunStage[]) => stages.map((s) => [s.stageKey, s.status])
 
-test('la plantilla «Especificar, planificar e implementar» exige la propuesta', async ({
-  page,
-}) => {
-  test.setTimeout(480_000)
-  const suffix = Date.now().toString(36)
-  const withProposal = `con-propuesta-${suffix}`
-  const withoutProposal = `sin-propuesta-${suffix}`
-  await page.goto('/')
-  await login(page)
-  await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible()
+// @lento: en una PR solo corre con la etiqueta e2e-completo (ver scripts/ci/e2e-alcance.sh).
+test(
+  'la plantilla «Especificar, planificar e implementar» exige la propuesta',
+  { tag: '@lento' },
+  async ({ page }) => {
+    test.setTimeout(480_000)
+    const suffix = Date.now().toString(36)
+    const withProposal = `con-propuesta-${suffix}`
+    const withoutProposal = `sin-propuesta-${suffix}`
+    await page.goto('/')
+    await login(page)
+    await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible()
 
-  await test.step('elegir la plantilla en Nuevo workflow', async () => {
-    await page.goto('/workflows/new')
-    await page
-      .getByLabel('Plantilla')
-      .selectOption({ label: 'Especificar, planificar e implementar' })
-    await expect(
-      page.locator('.monaco-editor').getByText('id: especificar-planificar-implementar'),
-    ).toBeVisible()
-    const stages = page
-      .getByRole('region', { name: 'Qué define' })
-      .getByRole('list')
-      .first()
-      .getByRole('listitem')
-    await expect(stages).toHaveCount(4)
-    await expect(stages.nth(0)).toContainText('Comprueba artifacts openspec/proposal.md')
-    await expect(stages.nth(2)).toContainText('Pide aprobar')
-    await expect(stages.nth(3)).toContainText('Comprueba tests, diff')
-    await expectAccessible(page, 'plantilla «Especificar, planificar e implementar»')
-  })
+    await test.step('elegir la plantilla en Nuevo workflow', async () => {
+      await page.goto('/workflows/new')
+      await page
+        .getByLabel('Plantilla')
+        .selectOption({ label: 'Especificar, planificar e implementar' })
+      await expect(
+        page.locator('.monaco-editor').getByText('id: especificar-planificar-implementar'),
+      ).toBeVisible()
+      const stages = page
+        .getByRole('region', { name: 'Qué define' })
+        .getByRole('list')
+        .first()
+        .getByRole('listitem')
+      await expect(stages).toHaveCount(4)
+      await expect(stages.nth(0)).toContainText('Comprueba artifacts openspec/proposal.md')
+      await expect(stages.nth(2)).toContainText('Pide aprobar')
+      await expect(stages.nth(3)).toContainText('Comprueba tests, diff')
+      await expectAccessible(page, 'plantilla «Especificar, planificar e implementar»')
+    })
 
-  await publishWorkflowViaApi(page, yaml(withProposal, true))
-  await publishWorkflowViaApi(page, yaml(withoutProposal, false))
-  const { workItemId } = await workItemViaApi(page, { validationCommand: 'sh check.sh' })
+    await publishWorkflowViaApi(page, yaml(withProposal, true))
+    await publishWorkflowViaApi(page, yaml(withoutProposal, false))
+    const { workItemId } = await workItemViaApi(page, { validationCommand: 'sh check.sh' })
 
-  await test.step('sin propuesta, spec falla con el motivo y plan no arranca', async () => {
-    const stages = await finished(page, await launch(page, workItemId, withoutProposal), 'FAILED')
-    expect(statuses(stages)).toEqual([
-      ['preparar', 'SUCCEEDED'],
-      ['spec', 'FAILED'],
-      ['plan', 'CANCELLED'],
-      ['implement', 'CANCELLED'],
-    ])
-    expect(stages.find((s) => s.stageKey === 'plan')!.agents).toHaveLength(0)
-    const spec = await openStage(page, 2, 'spec')
-    await expect(spec).toContainText('No pasó artifacts: `openspec/proposal.md` no existe')
-    const checks = spec.getByRole('list', { name: 'Comprobaciones de la fase' })
-    await expect(checks.getByRole('listitem')).toHaveText([
-      /artifacts openspec\/proposal\.md: no pasa · `openspec\/proposal\.md` no existe/,
-    ])
-    await expectAccessible(page, 'fase que no pasó sus comprobaciones')
+    await test.step('sin propuesta, spec falla con el motivo y plan no arranca', async () => {
+      const stages = await finished(page, await launch(page, workItemId, withoutProposal), 'FAILED')
+      expect(statuses(stages)).toEqual([
+        ['preparar', 'SUCCEEDED'],
+        ['spec', 'FAILED'],
+        ['plan', 'CANCELLED'],
+        ['implement', 'CANCELLED'],
+      ])
+      expect(stages.find((s) => s.stageKey === 'plan')!.agents).toHaveLength(0)
+      const spec = await openStage(page, 2, 'spec')
+      await expect(spec).toContainText('No pasó artifacts: `openspec/proposal.md` no existe')
+      const checks = spec.getByRole('list', { name: 'Comprobaciones de la fase' })
+      await expect(checks.getByRole('listitem')).toHaveText([
+        /artifacts openspec\/proposal\.md: no pasa · `openspec\/proposal\.md` no existe/,
+      ])
+      await expectAccessible(page, 'fase que no pasó sus comprobaciones')
 
-    await openTab(page, 'Verificación')
-    const verified = page
-      .getByRole('heading', { name: 'Verificado por Skynet' })
-      .locator('xpath=ancestor::section[1]')
-    await expect(verified.getByText('Comprobaciones de la fase')).toBeVisible()
-    await expect(verified.getByText('`openspec/proposal.md` no existe')).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Salida declarada' })).toBeVisible()
-    await expectAccessible(page, 'verificación de una fase')
-  })
+      await openTab(page, 'Verificación')
+      const verified = page
+        .getByRole('heading', { name: 'Verificado por Skynet' })
+        .locator('xpath=ancestor::section[1]')
+      await expect(verified.getByText('Comprobaciones de la fase')).toBeVisible()
+      await expect(verified.getByText('`openspec/proposal.md` no existe')).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Salida declarada' })).toBeVisible()
+      await expectAccessible(page, 'verificación de una fase')
+    })
 
-  await test.step('con propuesta, plan recibe el resumen y la ejecución termina', async () => {
-    const stages = await finished(page, await launch(page, workItemId, withProposal), 'SUCCEEDED')
-    expect(statuses(stages)).toEqual([
-      ['preparar', 'SUCCEEDED'],
-      ['spec', 'SUCCEEDED'],
-      ['plan', 'SUCCEEDED'],
-      ['implement', 'SUCCEEDED'],
-    ])
-    const planAgent = stages.find((s) => s.stageKey === 'plan')!.agents[0].id
-    const detail = await (await page.request.get(`/api/agent-runs/${planAgent}`)).json()
-    const prompt = detail.prompts.map((p: { content: string }) => p.content).join('\n')
-    expect(prompt).toContain(`Planifica`)
-    expect(prompt).toContain(OUTPUT.summary)
-    expect(prompt).toContain('Riesgos: ["ninguno"]')
+    await test.step('con propuesta, plan recibe el resumen y la ejecución termina', async () => {
+      const stages = await finished(page, await launch(page, workItemId, withProposal), 'SUCCEEDED')
+      expect(statuses(stages)).toEqual([
+        ['preparar', 'SUCCEEDED'],
+        ['spec', 'SUCCEEDED'],
+        ['plan', 'SUCCEEDED'],
+        ['implement', 'SUCCEEDED'],
+      ])
+      const planAgent = stages.find((s) => s.stageKey === 'plan')!.agents[0].id
+      const detail = await (await page.request.get(`/api/agent-runs/${planAgent}`)).json()
+      const prompt = detail.prompts.map((p: { content: string }) => p.content).join('\n')
+      expect(prompt).toContain(`Planifica`)
+      expect(prompt).toContain(OUTPUT.summary)
+      expect(prompt).toContain('Riesgos: ["ninguno"]')
 
-    const plan = await openStage(page, 3, 'plan')
-    await expect(plan).toContainText('Recibe spec.output.summary, spec.output.risks')
-    const implement = await openStage(page, 4, 'implement')
-    await expect(
-      implement.getByRole('list', { name: 'Comprobaciones de la fase' }).getByRole('listitem'),
-    ).toHaveText([/tests: pasa/])
-  })
-})
+      const plan = await openStage(page, 3, 'plan')
+      await expect(plan).toContainText('Recibe spec.output.summary, spec.output.risks')
+      const implement = await openStage(page, 4, 'implement')
+      await expect(
+        implement.getByRole('list', { name: 'Comprobaciones de la fase' }).getByRole('listitem'),
+      ).toHaveText([/tests: pasa/])
+    })
+  },
+)

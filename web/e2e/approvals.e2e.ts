@@ -78,108 +78,115 @@ async function finished(page: Page, runId: string, status: string) {
     .toBe(status)
 }
 
-test('una puerta se aprueba, pide cambios y se rechaza desde el centro de aprobaciones', async ({
-  page,
-}) => {
-  test.setTimeout(600_000)
-  const key = `con-puerta-${Date.now().toString(36)}`
-  await page.goto('/')
-  await login(page)
-  await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible()
-  await publishWorkflowViaApi(page, yaml(key))
-  const { workItemId } = await workItemViaApi(page, { validationCommand: 'sh check.sh' })
-
-  const runId = await launch(page, workItemId, key)
-  const first = await pending(page, runId, 1)
-  expect(first.action).toMatch(/^Aprobar el plan de .+ \(openspec\/tasks\.md\): Que add\(\) sume$/)
-
-  await test.step('la puerta espera en el progreso, el dashboard y el menú', async () => {
-    await page.goto(`/runs/${runId}`)
-    const progress = page.getByRole('navigation', { name: 'Fases y agentes' })
-    const gate = progress.getByRole('button', { name: /^4\. aprobar-plan: Esperando aprobación/ })
-    await expect(gate).toBeVisible()
-    await gate.click()
-    const detail = progress.locator('.step-detail')
-    await expect(detail).toContainText(first.action)
-    await expect(detail).toContainText('Riesgo medio')
-    await expect(detail.getByRole('link', { name: 'Revisar' })).toHaveAttribute(
-      'href',
-      `/approvals/${first.id}`,
-    )
-    await expectAccessible(page, 'puerta en el progreso')
-
+// @lento: en una PR solo corre con la etiqueta e2e-completo (ver scripts/ci/e2e-alcance.sh).
+test(
+  'una puerta se aprueba, pide cambios y se rechaza desde el centro de aprobaciones',
+  { tag: '@lento' },
+  async ({ page }) => {
+    test.setTimeout(600_000)
+    const key = `con-puerta-${Date.now().toString(36)}`
     await page.goto('/')
-    const attention = page.getByRole('region', { name: /Necesita tu atención/ })
-    await expect(
-      attention.getByRole('link', { name: new RegExp(first.action.replace(/[()]/g, '\\$&')) }),
-    ).toBeVisible()
-    await expect(
-      page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', {
-        name: /^Aprobaciones\s*\d+\s*pendientes?$/,
-      }),
-    ).toBeVisible()
-  })
+    await login(page)
+    await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible()
+    await publishWorkflowViaApi(page, yaml(key))
+    const { workItemId } = await workItemViaApi(page, { validationCommand: 'sh check.sh' })
 
-  await test.step('el centro lista la petición y su página enseña la evidencia', async () => {
-    await page.goto('/approvals?status=PENDING')
-    const table = page.getByRole('table', { name: 'Aprobaciones' })
-    await expect(table.getByRole('link', { name: first.action })).toBeVisible()
-    await expectAccessible(page, 'centro de aprobaciones')
-
-    await table.getByRole('link', { name: first.action }).click()
-    await expect(page.getByRole('heading', { level: 1, name: first.action })).toBeVisible()
-    const evidence = page.getByRole('region', { name: 'Lo que dejaron sus dependencias' })
-    await expect(evidence).toContainText('plan')
-    await expect(page.getByRole('region', { name: 'Qué pasa con cada decisión' })).toContainText(
-      'Pueden arrancar: implement.',
+    const runId = await launch(page, workItemId, key)
+    const first = await pending(page, runId, 1)
+    expect(first.action).toMatch(
+      /^Aprobar el plan de .+ \(openspec\/tasks\.md\): Que add\(\) sume$/,
     )
-    await expectAccessible(page, 'página de una aprobación')
-  })
 
-  await test.step('pedir cambios: plan recibe el comentario y la puerta pregunta otra vez', async () => {
-    await page.getByRole('button', { name: 'Pedir cambios' }).click()
-    await expect(page.getByRole('alert')).toContainText('escribe qué cambiar')
-    await page.getByLabel(/Comentario/).fill('Añade también los casos negativos')
-    await page.getByRole('button', { name: 'Pedir cambios' }).click()
-    await expect(page.getByRole('heading', { name: /Corrigiendo|Corregido/ })).toBeVisible()
+    await test.step('la puerta espera en el progreso, el dashboard y el menú', async () => {
+      await page.goto(`/runs/${runId}`)
+      const progress = page.getByRole('navigation', { name: 'Fases y agentes' })
+      const gate = progress.getByRole('button', { name: /^4\. aprobar-plan: Esperando aprobación/ })
+      await expect(gate).toBeVisible()
+      await gate.click()
+      const detail = progress.locator('.step-detail')
+      await expect(detail).toContainText(first.action)
+      await expect(detail).toContainText('Riesgo medio')
+      await expect(detail.getByRole('link', { name: 'Revisar' })).toHaveAttribute(
+        'href',
+        `/approvals/${first.id}`,
+      )
+      await expectAccessible(page, 'puerta en el progreso')
 
-    const second = await pending(page, runId, 2)
-    const run = await (await page.request.get(`/api/workflow-runs/${runId}`)).json()
-    const plan = run.stages.find((s: { stageKey: string }) => s.stageKey === 'plan')
-    expect(plan.status).toBe('SUCCEEDED')
-    expect(plan.agents).toHaveLength(2)
-    const correction = await (await page.request.get(`/api/agent-runs/${plan.agents[1].id}`)).json()
-    const prompt = correction.prompts.map((p: { content: string }) => p.content).join('\n')
-    expect(prompt).toContain('Añade también los casos negativos')
+      await page.goto('/')
+      const attention = page.getByRole('region', { name: /Necesita tu atención/ })
+      await expect(
+        attention.getByRole('link', { name: new RegExp(first.action.replace(/[()]/g, '\\$&')) }),
+      ).toBeVisible()
+      await expect(
+        page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', {
+          name: /^Aprobaciones\s*\d+\s*pendientes?$/,
+        }),
+      ).toBeVisible()
+    })
 
-    await page.goto(`/approvals/${second.id}`)
-    await expect(page.getByRole('region', { name: 'Cambios pedidos en la ronda 1' })).toContainText(
-      'Añade también los casos negativos',
-    )
-    await expectAccessible(page, 'segunda ronda de una aprobación')
+    await test.step('el centro lista la petición y su página enseña la evidencia', async () => {
+      await page.goto('/approvals?status=PENDING')
+      const table = page.getByRole('table', { name: 'Aprobaciones' })
+      await expect(table.getByRole('link', { name: first.action })).toBeVisible()
+      await expectAccessible(page, 'centro de aprobaciones')
 
-    await page.getByRole('button', { name: 'Aprobar' }).click()
-    await expect(page.getByText('Aprobada', { exact: true })).toBeVisible()
-    await finished(page, runId, 'SUCCEEDED')
-  })
+      await table.getByRole('link', { name: first.action }).click()
+      await expect(page.getByRole('heading', { level: 1, name: first.action })).toBeVisible()
+      const evidence = page.getByRole('region', { name: 'Lo que dejaron sus dependencias' })
+      await expect(evidence).toContainText('plan')
+      await expect(page.getByRole('region', { name: 'Qué pasa con cada decisión' })).toContainText(
+        'Pueden arrancar: implement.',
+      )
+      await expectAccessible(page, 'página de una aprobación')
+    })
 
-  await test.step('rechazar hace fallar la ejecución', async () => {
-    const other = await launch(page, workItemId, key)
-    const approval = await pending(page, other, 1)
-    await page.goto(`/approvals/${approval.id}`)
-    await page.getByLabel(/Comentario/).fill('No es lo que pedí')
-    await page.getByRole('button', { name: 'Rechazar' }).click()
-    await expect(page.getByText('Rechazada', { exact: true })).toBeVisible()
-    await finished(page, other, 'FAILED')
-    const run = await (await page.request.get(`/api/workflow-runs/${other}`)).json()
-    expect(
-      run.stages.map((s: { stageKey: string; status: string }) => [s.stageKey, s.status]),
-    ).toEqual([
-      ['preparar', 'SUCCEEDED'],
-      ['spec', 'SUCCEEDED'],
-      ['plan', 'SUCCEEDED'],
-      ['aprobar-plan', 'FAILED'],
-      ['implement', 'CANCELLED'],
-    ])
-  })
-})
+    await test.step('pedir cambios: plan recibe el comentario y la puerta pregunta otra vez', async () => {
+      await page.getByRole('button', { name: 'Pedir cambios' }).click()
+      await expect(page.getByRole('alert')).toContainText('escribe qué cambiar')
+      await page.getByLabel(/Comentario/).fill('Añade también los casos negativos')
+      await page.getByRole('button', { name: 'Pedir cambios' }).click()
+      await expect(page.getByRole('heading', { name: /Corrigiendo|Corregido/ })).toBeVisible()
+
+      const second = await pending(page, runId, 2)
+      const run = await (await page.request.get(`/api/workflow-runs/${runId}`)).json()
+      const plan = run.stages.find((s: { stageKey: string }) => s.stageKey === 'plan')
+      expect(plan.status).toBe('SUCCEEDED')
+      expect(plan.agents).toHaveLength(2)
+      const correction = await (
+        await page.request.get(`/api/agent-runs/${plan.agents[1].id}`)
+      ).json()
+      const prompt = correction.prompts.map((p: { content: string }) => p.content).join('\n')
+      expect(prompt).toContain('Añade también los casos negativos')
+
+      await page.goto(`/approvals/${second.id}`)
+      await expect(
+        page.getByRole('region', { name: 'Cambios pedidos en la ronda 1' }),
+      ).toContainText('Añade también los casos negativos')
+      await expectAccessible(page, 'segunda ronda de una aprobación')
+
+      await page.getByRole('button', { name: 'Aprobar' }).click()
+      await expect(page.getByText('Aprobada', { exact: true })).toBeVisible()
+      await finished(page, runId, 'SUCCEEDED')
+    })
+
+    await test.step('rechazar hace fallar la ejecución', async () => {
+      const other = await launch(page, workItemId, key)
+      const approval = await pending(page, other, 1)
+      await page.goto(`/approvals/${approval.id}`)
+      await page.getByLabel(/Comentario/).fill('No es lo que pedí')
+      await page.getByRole('button', { name: 'Rechazar' }).click()
+      await expect(page.getByText('Rechazada', { exact: true })).toBeVisible()
+      await finished(page, other, 'FAILED')
+      const run = await (await page.request.get(`/api/workflow-runs/${other}`)).json()
+      expect(
+        run.stages.map((s: { stageKey: string; status: string }) => [s.stageKey, s.status]),
+      ).toEqual([
+        ['preparar', 'SUCCEEDED'],
+        ['spec', 'SUCCEEDED'],
+        ['plan', 'SUCCEEDED'],
+        ['aprobar-plan', 'FAILED'],
+        ['implement', 'CANCELLED'],
+      ])
+    })
+  },
+)

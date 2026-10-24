@@ -25,6 +25,9 @@ jobs:
       # reset-local.sh con Docker y systemctl simulados: no borra nada fuera de una carpeta temporal.
       - name: Pruebas de scripts/reset-local.sh
         run: scripts/tests/reset-local.test.sh
+      # Qué E2E lanza cada PR (.github/workflows/e2e.yml).
+      - name: Pruebas de scripts/ci/e2e-alcance.sh
+        run: scripts/tests/e2e-alcance.test.sh
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -49,55 +52,6 @@ jobs:
       - run: npm run format:check
       - run: npm test
       - run: npm run build
-
-  e2e:
-    name: E2E (Playwright) ${{ matrix.shard }}/3
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
-    env:
-      # Cada shard corre en su propia VM; dentro de ella ejercita que las E2E no dependan de :8080.
-      E2E_API_PORT: 18084
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: skynet
-          POSTGRES_PASSWORD: skynet
-          POSTGRES_DB: skynet
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U skynet" --health-interval 5s --health-timeout 5s
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: gradle/actions/setup-gradle@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
-        working-directory: web
-      - run: npx playwright install --with-deps chromium
-        working-directory: web
-      # Control plane + runner con fake-claude + vite preview + un tercio de la suite Playwright.
-      - run: ./scripts/e2e.sh --shard=${{ matrix.shard }}/3
-      - if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-report-shard-${{ matrix.shard }}
-          path: |
-            web/playwright-report/
-            web/test-results/
-            build/e2e/*.log
 
   compose:
     name: Docker Compose (app)
