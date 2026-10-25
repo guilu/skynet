@@ -170,8 +170,9 @@ GET/POST   /api/work-items/{id}/runs         # POST lanza un WorkflowRun adhoc c
 GET        /api/workflow-runs/{id}           # ejecución con fases y agentes
 GET        /api/agent-runs/{id}              # agente y sus prompts
 POST       /api/agent-runs/{id}/cancel
-GET        /api/events?workflowRunId=&aggregateId=&after=&limit=
-GET        /api/events/stream?workflowRunId=&aggregateId=   # SSE; reanuda con Last-Event-ID
+GET        /api/events?workflowRunId=&aggregateId=&types=&after=&limit=
+GET        /api/events/stream?workflowRunId=&aggregateId=&types=&after=   # SSE; reanuda con Last-Event-ID
+# CO-B: after=latest empieza desde ahora; types= limita los tipos (exactos o prefijos «approval.*»)
 ```
 
 Añadido en M4-A (cada acción crea una ejecución `adhoc` nueva enlazada al agente padre; la terminada no se modifica):

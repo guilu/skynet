@@ -19,6 +19,11 @@ class EventRepository {
       "sequence, event_id, workflow_run_id, aggregate_type, aggregate_id, event_type, payload,"
           + " occurred_at, recorded_at";
 
+  /** Tipos exactos o prefijos, como patrones de {@code LIKE} separados por comas (EventFilter). */
+  private static final String TYPES =
+      " AND (CAST(:types AS text) IS NULL"
+          + " OR event_type LIKE ANY (string_to_array(CAST(:types AS text), ',')))";
+
   private final JdbcClient jdbc;
   private final ObjectMapper json;
 
@@ -34,10 +39,12 @@ class EventRepository {
                 + " FROM event WHERE sequence > :after"
                 + " AND (CAST(:run AS uuid) IS NULL OR workflow_run_id = :run)"
                 + " AND (CAST(:aggregate AS uuid) IS NULL OR aggregate_id = :aggregate)"
+                + TYPES
                 + " ORDER BY sequence LIMIT :limit")
         .param("after", after)
         .param("run", filter.workflowRunId())
         .param("aggregate", filter.aggregateId())
+        .param("types", filter.likePatterns())
         .param("limit", limit)
         .query(this::map)
         .list();
@@ -53,10 +60,12 @@ class EventRepository {
                         + " FROM event WHERE sequence < :before"
                         + " AND (CAST(:run AS uuid) IS NULL OR workflow_run_id = :run)"
                         + " AND (CAST(:aggregate AS uuid) IS NULL OR aggregate_id = :aggregate)"
+                        + TYPES
                         + " ORDER BY sequence DESC LIMIT :limit")
                 .param("before", before)
                 .param("run", filter.workflowRunId())
                 .param("aggregate", filter.aggregateId())
+                .param("types", filter.likePatterns())
                 .param("limit", limit)
                 .query(this::map)
                 .list());
