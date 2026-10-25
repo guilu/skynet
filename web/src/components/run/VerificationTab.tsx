@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, RotateCw, ShieldCheck } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { api, type AgentRun, type StoredEvent, type VerificationResult } from '../../api'
 import { elapsed, formatDateTime, formatDuration, isTerminal, workspaceUsable } from '../../format'
@@ -12,6 +11,7 @@ import { JsonView } from './JsonView'
 import { LongText } from './LongText'
 import { Button } from '../ui/Button'
 import { LinesSkeleton } from '../ui/Skeleton'
+import { Icon } from '../icons/Icon'
 
 /**
  * Lo que declara el agente (su respuesta y su salida estructurada) frente a lo que comprobó Skynet
@@ -40,7 +40,7 @@ export function VerificationTab({ agent, events }: { agent: AgentRun; events: St
       <div className="side-by-side">
         <section className="verify-card" aria-labelledby="declared-title">
           <h3 id="declared-title">
-            <Bot size={18} strokeWidth={2.5} aria-hidden="true" /> Declarado por el agente
+            <Icon name="agent" size={18} strokeWidth={2.5} /> Declarado por el agente
           </h3>
           <p className="small">
             Resultado: <code>{agent.resultSubtype ?? '—'}</code>
@@ -59,7 +59,7 @@ export function VerificationTab({ agent, events }: { agent: AgentRun; events: St
         </section>
         <section className="verify-card" aria-labelledby="verified-title">
           <h3 id="verified-title">
-            <ShieldCheck size={18} strokeWidth={2.5} aria-hidden="true" /> Verificado por Skynet
+            <Icon name="verification" size={18} strokeWidth={2.5} /> Verificado por Skynet
           </h3>
           <ErrorMessage error={verifications.error} />
           {verifications.data == null && !verifications.error && (
@@ -81,7 +81,7 @@ export function VerificationTab({ agent, events }: { agent: AgentRun; events: St
           onClick={() => rerun.mutate()}
           disabled={!canRerun || rerun.isPending}
         >
-          <RotateCw size={16} strokeWidth={2.5} aria-hidden="true" />
+          <Icon name="refresh" size={16} strokeWidth={2.5} />
           {rerun.isPending ? 'Encolando…' : 'Reejecutar verificación'}
         </Button>{' '}
         {live && <span className="muted small">Hay una verificación en curso.</span>}

@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, FileText, GitBranch, GitCommitHorizontal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { api, type AgentRun, type ArtifactSummary } from '../../api'
 import { formatBytes, formatDateTime, isTerminal } from '../../format'
@@ -21,6 +20,7 @@ import { GeneratedFiles } from './GeneratedFiles'
 import { Button } from '../ui/Button'
 import { Pill } from '../ui/Pill'
 import { LinesSkeleton } from '../ui/Skeleton'
+import { Icon } from '../icons/Icon'
 
 const sum = (files: FileChange[], key: 'insertions' | 'deletions') =>
   files.reduce((n, f) => n + (f[key] ?? 0), 0)
@@ -96,7 +96,7 @@ function Changes({ changes, diff }: { changes: ArtifactSummary; diff?: ArtifactS
       <h3>Cambios</h3>
       <div className="git-summary">
         <span className="tag">
-          <GitBranch size={14} strokeWidth={2.5} aria-hidden="true" /> {git.branch}
+          <Icon name="branch" size={14} strokeWidth={2.5} /> {git.branch}
         </span>
         <span className="small">
           <code>{git.baseCommit.slice(0, 8)}</code> → <code>{git.headCommit.slice(0, 8)}</code>
@@ -159,7 +159,7 @@ function Changes({ changes, diff }: { changes: ArtifactSummary; diff?: ArtifactS
         <ol className="commit-list small">
           {git.commits.map((c) => (
             <li key={c.sha}>
-              <GitCommitHorizontal size={18} strokeWidth={2.5} aria-hidden="true" />
+              <Icon name="commit" size={18} strokeWidth={2.5} />
               <code className="sha">{c.sha.slice(0, 8)}</code>
               <span className="commit-subject">{c.subject}</span>
               <span className="muted">
@@ -212,13 +212,8 @@ function Logs({ artifacts }: { artifacts: ArtifactSummary[] }) {
               aria-expanded={open === a.id}
               onClick={() => setOpen(open === a.id ? null : a.id)}
             >
-              <ChevronRight
-                className="log-chevron"
-                size={16}
-                strokeWidth={2.75}
-                aria-hidden="true"
-              />
-              <FileText size={16} strokeWidth={2.5} aria-hidden="true" />
+              <Icon name="chevron-right" className="log-chevron" size={16} strokeWidth={2.75} />
+              <Icon name="file" size={16} strokeWidth={2.5} />
               {artifactLabel(a)}
             </Button>{' '}
             <span className="muted">
