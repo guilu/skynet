@@ -13,7 +13,8 @@ Cómo se ve y cómo se construye la web de Skynet tras el rediseño (UI-A a UI-F
 - **Primero lo que pide atención.** El dashboard empieza por lo que falla o no responde; las listas filtran por estado; una ejecución abre en la conversación del agente que importa.
 - **Todo enlazable.** Filtros, pestañas, la vista de actividad, el agente y la herramienta elegidos viven en la URL. Copiar la dirección comparte exactamente lo que se ve.
 - **Formularios aparte.** Crear, configurar, lanzar y confirmar se hace en un panel lateral; la página de fondo no cambia hasta que se guarda.
-- **Táctil y redondeado.** Esquinas grandes, bordes de 2 px, sombras cortas sin desenfoque y botones con volumen que se hunden al pulsarlos.
+- **Claro y con aire.** Fondo casi blanco, paneles planos con borde de 1 px y sin sombra, esquinas redondeadas y mucho espacio entre bloques. El color lo ponen los iconos y los estados, no las cajas.
+- **Nunca negro.** Los textos son una escala de grises azulados (`--fg`, `--muted`), con pesos contenidos: títulos en 600, texto en 400 y nada en mayúsculas salvo las cabeceras de tabla.
 
 ## 2. Tokens
 
@@ -26,15 +27,15 @@ Todos los colores, radios y profundidades son variables CSS en `web/src/index.cs
 | Acento | `--primary`, `--primary-shade`, `--primary-soft`, `--primary-ink`, `--on-primary` | Botón principal, selección, foco y enlaces |
 | Estados | `--ok`, `--warn`, `--bad`, `--live`, `--idle`, cada uno con `-shade`, `-soft` e `-ink` | Píldoras, puntos del árbol, barras de la cascada y avisos |
 | Botones de estado | `--ok-btn`, `--bad-btn` y sus `-shade` | Más oscuros que el estado, para que el texto blanco llegue a AA |
-| Formas | `--r-sm` (12), `--r-md` (16), `--r-lg` (22) | Campos, bloques internos y tarjetas |
-| Profundidad | `--lift` (4 px), `--lift-card` (3 px) | Sombra firme de botones y tarjetas |
+| Formas | `--r-sm` (10), `--r-md` (12), `--r-lg` (16) | Campos y botones, bloques internos y tarjetas |
+| Profundidad | `--lift`, `--lift-card` (0 px) | Antes, la sombra firme de botones y tarjetas; desde el rediseño ligero son planos |
 | Movimiento | `--ease-pop`, `--animate-pop`, `--animate-pulse-ring` | Entradas con rebote y el latido de lo vivo |
 
 Para cada estado: el color sólido (`--ok`) va en iconos y barras; `-soft` es el fondo de la píldora; `-ink` es el texto sobre ese fondo; `-shade` es la sombra o el borde.
 
 ## 3. Tipografía
 
-- **Barlow** para títulos y texto (`--font-display` y `--font-sans` apuntan a la misma familia). Es la fuente libre (OFL) más parecida a Duolingo Sans, la referencia de estilo, que no se puede usar porque su licencia es exclusiva de Duolingo. El texto va en 500 y lo destacado en 600–900: la interfaz es densa y el peso ayuda a leerla.
+- **Barlow** para títulos y texto (`--font-display` y `--font-sans` apuntan a la misma familia). Es la fuente libre (OFL) más parecida a Duolingo Sans, la referencia de estilo, que no se puede usar porque su licencia es exclusiva de Duolingo. El texto va en 400 a 14 px, las etiquetas y la navegación en 500, y los títulos, botones y cifras en 600 (700 solo en alguna cifra grande). Nada en mayúsculas salvo las cabeceras de tabla.
 - **JetBrains Mono** (`--font-mono`) solo para IDs, claves, hashes, comandos, rutas y payloads.
 
 Las dos van empaquetadas con la web (`@fontsource`), sin peticiones a terceros.
@@ -139,7 +140,7 @@ El logo sale del estudio de imagen corporativa de octubre de 2026, variante «Pr
 - **Un solo dibujo.** La geometría del isotipo está en `web/src/lib/brand.ts`. De ahí salen el componente `Logo` (SVG con `currentColor`) y el favicon (`faviconSvg`). No se usa el PNG del estudio.
 - **Baldosa.** `BrandMark` pone el isotipo sobre `--brand-tile` con un degradado blanco suave y la sombra corta de siempre (`--brand-tile-shade`). En claro, la baldosa es el acento y el isotipo va en `--on-primary`. En oscuro baja al tono sombra para que el isotipo siga en blanco. Como todo sale de los tokens, sigue a los colores personalizables.
 - **Dónde aparece.** En la barra lateral, como enlace al Dashboard (se ilumina al pasar el ratón, se hunde al pulsar y tiene foco visible; con la barra plegada solo queda la baldosa). En el login, en lugar de la baldosa grande aparece la mascota (sección 11), y bajo el nombre va el lema «Agentes · Flujos · Ejecuciones».
-- **Nombre.** «Skynet» en Barlow 800, la tipografía de títulos.
+- **Nombre.** «Skynet» en Barlow 600, la tipografía de títulos.
 - **Favicon e iconos.** `public/favicon.svg` es `faviconSvg` con el azul por defecto, y un test lo comprueba. `public/apple-touch-icon.png`, `icon-192.png` e `icon-512.png` (los del manifiesto) se generan desde él con `node scripts/iconos.mjs`. Con un acento propio, `appearance.ts` cambia el favicon por uno generado al vuelo con ese color.
 - **Tamaño mínimo.** 16 px en el favicon y 36 px de baldosa en la interfaz. Por debajo de eso, el hueco del anillo deja de leerse.
 - **Fuera.** Las demás variantes del estudio (minimalista, oscura, acento IA, outline, horizontal) no se usan. La oscura y la neutra ya salen con las paletas.

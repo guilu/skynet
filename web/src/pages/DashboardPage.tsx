@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { CirclePlay, Server } from 'lucide-react'
+import { ArrowRight, CirclePlay, Server } from 'lucide-react'
 import { Link } from 'react-router'
 import { api, SESSION_KEY, type ApprovalSummary, type DashboardSummary, type Runner } from '../api'
 import { RISK_LABEL, approvalWork } from '../components/approval/approvalFormat'
@@ -37,6 +37,11 @@ export function DashboardPage() {
     refetchInterval: 15_000,
   })
   const session = useQuery({ queryKey: SESSION_KEY, queryFn: api.session })
+  const recent = useQuery({
+    queryKey: ['runs', 'list', 'recent'],
+    queryFn: () => api.listRuns({ size: RECENT_RUNS }),
+    refetchInterval: 10_000,
+  })
   const approvals = usePendingApprovals()
   const now = useNow(true)
   const data = summary.data
@@ -76,17 +81,23 @@ export function DashboardPage() {
       <ErrorMessage error={summary.error} />
       {summary.isPending && <TableSkeleton label="lo que requiere atención" columns={5} rows={3} />}
       <CompanionHello approvals={approvals.data ?? []} />
-      <AttentionList alerts={alerts} className="dash-section" />
-      <DashboardMetrics />
-      {data && data.activeRunsTotal > 0 && (
-        <section className="dash-section">
-          <div className="section-head">
-            <h2>Ejecuciones activas ({data.activeRunsTotal})</h2>
-            <Link to="/runs?status=PENDING&status=RUNNING">Ver todas las activas</Link>
-          </div>
-          <RunsTable runs={data.activeRuns} now={now} label="Ejecuciones activas" />
-        </section>
-      )}
+      <DashboardMetrics between={<AttentionList alerts={alerts} className="dash-section" />} />
+      <section className="dash-section" aria-labelledby="recent-title">
+        <div className="section-head">
+          <h2 id="recent-title">Ejecuciones recientes</h2>
+          <Link to="/runs" className="section-link">
+            Ver todas
+            <ArrowRight size={16} strokeWidth={2.25} aria-hidden="true" />
+          </Link>
+        </div>
+        <ErrorMessage error={recent.error} />
+        {recent.isPending && (
+          <TableSkeleton label="las ejecuciones recientes" columns={5} rows={3} />
+        )}
+        {recent.data && (
+          <RunsTable runs={recent.data.items} now={now} label="Ejecuciones recientes" />
+        )}
+      </section>
       <section className="dash-section" aria-labelledby="runners-title">
         <div className="section-head">
           <h2 id="runners-title">Runners</h2>
@@ -109,6 +120,9 @@ export function DashboardPage() {
     </>
   )
 }
+
+/** Cuántas ejecuciones recientes se ven en el dashboard. */
+const RECENT_RUNS = 5
 
 function greeting(date: Date) {
   const h = date.getHours()

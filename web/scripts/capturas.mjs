@@ -317,10 +317,13 @@ const SHOTS = [
   ['ajustes', '/settings', null, 'Frambuesa'],
   ['ajustes-iconos', '/settings?tab=icons'],
 ]
+// Con SOLO=dashboard,ajustes se hacen solo esas capturas.
+const only = process.env.SOLO?.split(',')
+const pick = (shots) => (only ? shots.filter(([name]) => only.includes(name)) : shots)
 const MODES = [
-  ['claro', { width: 1440, height: 900 }, 'light', SHOTS],
-  ['oscuro', { width: 1440, height: 900 }, 'dark', SHOTS],
-  ['movil', { width: 400, height: 860 }, 'light', [SHOTS[0], SHOTS[2]]],
+  ['claro', { width: 1440, height: 900 }, 'light', pick(SHOTS)],
+  ['oscuro', { width: 1440, height: 900 }, 'dark', pick(SHOTS)],
+  ['movil', { width: 400, height: 860 }, 'light', pick([SHOTS[0], SHOTS[2]])],
 ]
 
 fs.mkdirSync(out, { recursive: true })
@@ -352,7 +355,10 @@ for (const [mode, viewport, colorScheme, shots] of MODES) {
     if (button) await page.getByRole('button', { name: button }).click()
     if (radio) await page.getByText(radio, { exact: true }).click()
     await page.waitForTimeout(800)
-    await page.screenshot({ path: path.join(out, `${mode}-${name}${suffix}.png`) })
+    await page.screenshot({
+      path: path.join(out, `${mode}-${name}${suffix}.png`),
+      fullPage: !!process.env.COMPLETA,
+    })
     console.log(`${mode}-${name}${suffix}.png`)
   }
   await context.close()

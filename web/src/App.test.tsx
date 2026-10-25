@@ -188,7 +188,11 @@ describe('App', () => {
   })
 
   it('el dashboard saluda y lista lo que necesita atención, enlazado', async () => {
-    stubApi({ '/api/dashboard': dashboardSummary, '/api/runners': runners })
+    stubApi({
+      '/api/dashboard': dashboardSummary,
+      '/api/runners': runners,
+      '/api/workflow-runs?size=5': runPage,
+    })
     renderAt('/', <App />)
     expect(await screen.findByRole('heading', { level: 1, name: /^Buen.*, admin$/ })).toBeVisible()
     const attention = await screen.findByRole('region', { name: 'Necesita tu atención (4)' })
@@ -216,11 +220,10 @@ describe('App', () => {
     expect(
       await screen.findByText('1 agente trabajando y 4 cosas que necesitan tu atención.'),
     ).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Ejecuciones activas (1)' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Ver todas las activas' })).toHaveAttribute(
-      'href',
-      '/runs?status=PENDING&status=RUNNING',
-    )
+    // Las últimas ejecuciones, como en la lista, con el enlace a todas.
+    const recent = screen.getByRole('region', { name: 'Ejecuciones recientes' })
+    expect(await within(recent).findByRole('link', { name: /TKM-1/ })).toBeVisible()
+    expect(within(recent).getByRole('link', { name: 'Ver todas' })).toHaveAttribute('href', '/runs')
     expect(screen.getByRole('link', { name: /Lanzar agente/ })).toHaveAttribute('href', '/projects')
     // Los runners, en tarjetas con su estado.
     const runnersSection = screen.getByRole('region', { name: 'Runners' })
@@ -263,7 +266,7 @@ describe('App', () => {
       [`/api/dashboard/metrics?period=24h&tz=${tz}`]: dashboardMetrics,
     })
     renderAt('/', <App />)
-    const metrics = await screen.findByRole('region', { name: 'Métricas' })
+    const metrics = await screen.findByRole('region', { name: 'Resumen (últimos 7 días)' })
     await within(metrics).findByText('Fallidas', { selector: 'dt' })
     expect(
       within(metrics)
@@ -279,16 +282,19 @@ describe('App', () => {
     expect(within(metrics).getByText('Duración mediana').nextElementSibling).toHaveTextContent(
       '1 min 35 s',
     )
-    expect(
-      within(metrics).getByRole('img', { name: /Ejecuciones por día: 3 en total/ }),
-    ).toBeInTheDocument()
+    expect(within(metrics).getByRole('link', { name: 'Ver más detalles' })).toHaveAttribute(
+      'href',
+      `/runs?since=${encodeURIComponent(dashboardMetrics.since)}`,
+    )
+    const chart = screen.getByRole('img', { name: /Ejecuciones por día: 3 en total/ })
     // La misma información, en tabla.
-    expect(within(metrics).getAllByRole('row')).toHaveLength(3)
+    expect(within(chart.closest('figure')!).getAllByRole('row')).toHaveLength(3)
 
     fireEvent.click(screen.getByRole('button', { name: '24 horas' }))
     expect(
-      await within(metrics).findByRole('img', { name: /Ejecuciones por hora/ }),
+      await screen.findByRole('region', { name: 'Resumen (últimas 24 horas)' }),
     ).toBeInTheDocument()
+    expect(await screen.findByRole('img', { name: /Ejecuciones por hora/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '24 horas' })).toHaveAttribute('aria-pressed', 'true')
     expect(fetch).toHaveBeenCalledWith(
       `/api/dashboard/metrics?period=24h&tz=${tz}`,

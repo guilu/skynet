@@ -1068,7 +1068,7 @@ svg.ico {
 /* Insignia grande de la ejecución: el disco del estado sobre una baldosa neutra. */
 .hero-badge:has(> .ico) {
   background: var(--surface-2);
-  box-shadow: 0 5px 0 var(--border-strong);
+  box-shadow: none;
 }
 .hero-badge > .ico {
   width: 58px;

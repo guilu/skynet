@@ -11,9 +11,10 @@ Qué trae:
 - **Ajustes** pasa a tener pestañas: **Colores**, **Iconos** y **Companion**. En Iconos hay una tarjeta por paquete con su vista previa y una galería con todos los iconos.
 - Con `<Icon name=…>` se pintan la barra lateral, la barra inferior del móvil, la barra superior, los menús de tema, usuario y mascota, la campana, las migas, ⌘K, las píldoras de estado, las pestañas, la lista «Necesita tu atención» y la insignia grande de la ejecución.
 - El resto de la web sigue con Lucide hasta IC-B (acciones y controles) e IC-C (dominio).
-- **Documentación:** [`docs/ui.md`](../ui.md), sección 12.
+- **Rediseño ligero** (boceto de ChatGPT): textos más pequeños y en grises, sin negritas pesadas ni mayúsculas, paneles planos con borde fino y sin sombra, y más aire. El dashboard empieza por el **Resumen** del periodo, sigue con lo que necesita atención y el gráfico, y termina con las **Ejecuciones recientes** y los runners.
+- **Documentación:** [`docs/ui.md`](../ui.md), secciones 1 a 3 y 12.
 
-> **Para despliegues automáticos:** los pasos 1 y 2 no tocan nada fuera del repositorio. Los pasos 3 a 7 usan la web del control plane local, y al final hay que volver a Lucide (paso 7). No hace falta lanzar ejecuciones reales; si se lanza alguna, sobre **demo-repo (proyecto DEMO), nunca sobre skynet**.
+> **Para despliegues automáticos:** los pasos 1 y 2 no tocan nada fuera del repositorio. Los pasos 3 a 8 usan la web del control plane local, y al final hay que volver a Lucide (paso 7). No hace falta lanzar ejecuciones reales; si se lanza alguna, sobre **demo-repo (proyecto DEMO), nunca sobre skynet**.
 
 ## 1. Tests
 
@@ -26,6 +27,7 @@ cd web && npm run lint && npm run format:check && npm run typecheck && npx vites
 - **`Icon.test.tsx`:** todos los nombres se pintan en los tres paquetes y son decorativos. ChatGPT tiene dibujo para todos, sus degradados se ponen una sola vez y cada `url(#cg-…)` existe. Ilustrados usa su dibujo y, si falta, el de Lucide. La variante sale del tamaño (ilustrado, compacto o trazo) y las insignias toman el tono que se les da. `ilustrados.css` solo anima `transform`, `opacity` y el trazo que se dibuja, y con movimiento reducido no se mueve nada.
 - **`SettingsPage.test.tsx`:** elegir Ilustrados y guardarlo cambia los iconos de la barra lateral y lo recuerda en el navegador. La galería avisa de los iconos sin dibujo, y `#companion` abre la pestaña del companion.
 - **`AppearanceIT`:** el paquete por defecto es Lucide, se guardan Ilustrados y ChatGPT sin tocar la paleta (y al revés), y un paquete desconocido da 400.
+- **`App.test.tsx`:** el dashboard enseña el Resumen del periodo con «Ver más detalles», el gráfico con su tabla y las Ejecuciones recientes con «Ver todas».
 - **E2E `review.e2e.ts`:** guarda Ilustrados, la barra lateral cambia, y Ajustes y el Dashboard pasan axe en claro y en oscuro.
 
 ## 2. Por defecto no cambia nada
@@ -71,3 +73,11 @@ cd web && npm run lint && npm run format:check && npm run typecheck && npx vites
 
 1. **Ajustes › Iconos**, elige **Lucide** y guarda: todo vuelve a como estaba, sin recargar.
 2. Con la API: `PUT /api/settings/appearance` con `{"icons": "emoji"}` da 400; con `{"icons": "lucide"}`, vuelve a Lucide sin tocar la paleta.
+
+## 8. Rediseño ligero
+
+1. En toda la web: fondo casi blanco, paneles con borde fino y **sin sombra**, textos en gris (nunca negro), la barra lateral y los botones en minúsculas y sin negrita gruesa, y más espacio entre bloques.
+2. **Dashboard**, de arriba abajo: saludo con la mascota y «Lanzar agente»; el aviso de Skynet con «Lanzar un workflow» como botón principal; **Resumen (últimos 7 días)** con «Ver más detalles →» y las ocho tarjetas; **Necesita tu atención**; el gráfico; **Ejecuciones recientes** (las 5 últimas, con «Ver todas →»); y los runners.
+3. Con los paquetes **Ilustrados** o **ChatGPT**, las tarjetas del Resumen llevan el icono grande y suelto, sin baldosa; con **Lucide**, el icono va sobre su baldosa de color.
+4. Cambia el periodo a **24 horas**: el título pasa a «Resumen (últimas 24 horas)» y el gráfico, a horas.
+5. **Tema oscuro** y **móvil** (390 px): se lee bien, sin cortes ni scroll horizontal.

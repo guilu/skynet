@@ -18,13 +18,13 @@ export function MobileNav() {
     <nav className="mobile-nav" aria-label="Navegación móvil">
       {NAV.filter((n) => n.mobile).map((n) => (
         <NavLink key={n.to} to={n.to} end={n.end}>
-          <Icon name={n.icon} size={26} strokeWidth={2.25} />
+          <Icon name={n.icon} size={24} strokeWidth={1.9} />
           {n.label}
         </NavLink>
       ))}
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Trigger className="mobile-more">
-          <Icon name="menu" size={26} strokeWidth={2.25} />
+          <Icon name="menu" size={24} strokeWidth={1.9} />
           Más
           {NAV.some((n) => n.pendingApprovals && !n.mobile) && <PendingCount />}
         </Dialog.Trigger>
@@ -42,7 +42,7 @@ export function MobileNav() {
                 {NAV.map((n) => (
                   <li key={n.to}>
                     <NavLink to={n.to} end={n.end} onClick={close}>
-                      <Icon name={n.icon} size={26} strokeWidth={2.25} />
+                      <Icon name={n.icon} size={24} strokeWidth={1.9} />
                       {n.label}
                       {n.pendingApprovals && <PendingCount />}
                     </NavLink>

@@ -27,7 +27,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             <li key={item.to}>
               <Hint label={item.label} enabled={collapsed}>
                 <NavLink to={item.to} end={item.end}>
-                  <Icon name={item.icon} size={26} strokeWidth={2.25} />
+                  <Icon name={item.icon} size={24} strokeWidth={1.9} />
                   <span className="nav-label">{item.label}</span>
                   {item.pendingApprovals && <PendingCount />}
                 </NavLink>
@@ -48,9 +48,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             aria-label={collapsed ? 'Desplegar la barra lateral' : 'Plegar la barra lateral'}
           >
             {collapsed ? (
-              <Icon name="sidebar-expand" size={22} strokeWidth={2.25} />
+              <Icon name="sidebar-expand" size={22} strokeWidth={1.9} />
             ) : (
-              <Icon name="sidebar-collapse" size={22} strokeWidth={2.25} />
+              <Icon name="sidebar-collapse" size={22} strokeWidth={1.9} />
             )}
             <span className="nav-label">Plegar</span>
           </button>
