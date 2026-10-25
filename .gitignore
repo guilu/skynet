@@ -33,7 +33,8 @@ test-results/
 # Kotlin (build-logic)
 .kotlin/
 
-# Galería visual (VS-A): en Git solo la combinación canónica (desktop/light) y el índice
+# Galería visual (VS-A, VS-B): en Git solo la combinación canónica (desktop/light), el índice y el mapa sin submapas
 docs/screenshots/desktop/dark/
 docs/screenshots/mobile/
 docs/screenshots/skynet-screenshots.zip
+docs/screenshots/map/groups/
