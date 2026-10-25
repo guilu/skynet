@@ -13,7 +13,8 @@
     "test": "vitest run",
     "preview": "vite preview",
     "e2e": "playwright test",
-    "screenshots": "../scripts/screenshots.sh"
+    "screenshots": "../scripts/screenshots.sh",
+    "screenshots:verify": "node visual/verify.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",

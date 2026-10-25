@@ -1,93 +1,101 @@
 # Probar VS-A - Generador de capturas y galería
 
-Issue #175 (parte de #174). Comprueba que `npm run screenshots` genera la galería completa en un
-entorno aislado, que no toca la instalación normal y que la Action produce el mismo paquete.
+Issue #175 (parte de #174). Una sola generación completa, verificada entera de forma automática;
+lo demás (orden estable, ZIP, privacidad) lo cubren tests unitarios, y la Action es la segunda
+ejecución independiente. Nada de esta guía modifica ficheros versionados.
 
 ## Requisitos
 
 - Java 21, Node 22 y las dependencias de `web/` (`npm ci`).
 - Chromium de Playwright: `cd web && npx playwright install chromium`.
 - Docker en marcha, **o** PostgreSQL con `initdb` en el PATH (como usuario normal, no root), **o**
-  una base **vacía** solo para capturas en `SCREENSHOTS_DB_URL` (no puede llamarse `skynet`;
-  hay que vaciarla antes de cada ejecución).
+  una base **vacía** solo para capturas en `SCREENSHOTS_DB_URL` (no puede llamarse `skynet`).
 - Puertos libres: 55432 (base desechable), 18090 (API) y 4174 (web).
 
-## 1. La instalación normal no se toca
+Anota el commit desplegado: `SHA=$(git rev-parse HEAD)`.
 
-1. Si tienes Skynet arrancado en local, apunta cuántas ejecuciones tiene:
-   `psql -h localhost -U skynet -d skynet -c 'select count(*) from workflow_run'`.
-2. Al terminar el paso 2, repite la consulta: **el número es el mismo**.
-
-## 2. Generar la galería
+## 1. Tests unitarios (sin navegador)
 
 ```bash
 cd web
-npm run screenshots
+npm run lint && npm run format:check && npm run typecheck && npm test
 ```
 
-Esperado (unos 10-15 minutos):
+Pasan, incluido `visual/visual.test.ts`, que comprueba:
 
-- La primera línea dice `Base de datos desechable (docker)` (o `initdb` / `external`).
-- Pasa el proyecto `fixture` (siembra) y los cuatro de captura: `desktop-light`, `desktop-dark`,
-  `mobile-light` y `mobile-dark`, 40 pantallas cada uno.
-- Termina con `Galería lista: 160 capturas en ../docs/screenshots, ZIP de … MB`.
-- Al acabar no queda nada: `docker ps` no muestra `skynet-screenshots-db` y `/tmp/skynet-visual`
-  no existe.
+- inventario: sin ids, órdenes ni nombres repetidos, sin enlaces rotos ni huérfanos, cada
+  pantalla con su preparador;
+- el mismo manifiesto da siempre las mismas 160 rutas en el mismo orden;
+- ZIP determinista: mismos bytes con las entradas en otro orden, ordenado, exactamente 160 PNG y el
+  README;
+- cabeceras PNG: falta una captura, mide mal o el tema no es el de su carpeta → falla;
+- **privacidad, prueba negativa**: sobre una galería sintética en un directorio temporal, un
+  correo, un token de GitHub, una clave de AWS, una ruta de home (en el texto) y un token de Slack
+  (en la API) hacen fallar el cierre con el patrón y la captura (`privacidad: correo «…» en
+desktop-dark/dashboard (texto)`) y **sin crear el ZIP**; el caso limpio pasa y crea el ZIP.
 
-## 3. Revisar la galería
+## 2. Una generación completa, fuera del repositorio
 
-1. `ls docs/screenshots/*/*` muestra `desktop/light`, `desktop/dark`, `mobile/light` y
-   `mobile/dark`, cada una con `01-login.png` … `40-not-found.png`.
-2. Dimensiones reales: `file docs/screenshots/desktop/light/02-dashboard.png` dice 1440 de ancho y
-   `file docs/screenshots/mobile/dark/30-run-active.png` dice `390 x 844`.
-3. Abre al 100 % una muestra de cada combinación: `02-dashboard`, `16-workflow-editor`,
-   `20-run-completed`, `30-run-active`, `39-companion-menu`. Comprueba:
-   - datos del proyecto `DEMO` / `analizador-texto`, sin nombres de tus proyectos ni rutas de tu
-     equipo;
-   - el tema es el de la carpeta;
-   - sin cursores, tooltips ni animaciones a medias;
-   - la ejecución activa sale «En curso», la fallida «Fallida» y la aprobación en «Necesita tu
-     atención».
-4. Abre `docs/screenshots/README.md` en GitHub o en un visor de Markdown: índice por grupos, con
-   miniatura, ruta y enlaces a las otras combinaciones, las notas de vistas que no existen como
-   tales y cómo regenerar.
-
-## 4. Reproducibilidad
-
-1. Copia la galería: `cp -r docs/screenshots /tmp/galeria-1`.
-2. Vuelve a ejecutar `npm run screenshots`.
-3. `diff <(cd /tmp/galeria-1 && find . -name '*.png' | sort) <(cd docs/screenshots && find . -name '*.png' | sort)`
-   no muestra diferencias: mismos nombres y mismo orden.
-4. Las imágenes son equivalentes (las fechas relativas y duraciones coinciden; las absolutas y los
-   ids son del día).
-
-## 5. ZIP
+Si tienes Skynet arrancado en local, anota cuántas ejecuciones tiene:
+`psql -h localhost -U skynet -d skynet -c 'select count(*) from workflow_run'`.
 
 ```bash
-unzip -l docs/screenshots/skynet-screenshots.zip | tail -3
-unzip -l docs/screenshots/skynet-screenshots.zip | grep -Ev '\.(png|md)$|Archive|Length|---|files'
+cd web
+SCREENSHOTS_OUT=/tmp/galeria-vs-a npm run screenshots
 ```
 
-- El primero da 161 ficheros (160 PNG + README).
-- El segundo no lista nada: ni traces, ni vídeos, ni logs, ni `auth.json`, ni `fixture.json`.
+`SCREENSHOTS_OUT` escribe la galería en `/tmp/galeria-vs-a` en vez de `docs/screenshots`, así que
+no toca las capturas versionadas. Esperado (unos 6-10 minutos):
 
-## 6. Privacidad
+- primera línea: `Base de datos desechable (docker)` (o `initdb` / `external`);
+- `161 passed`: la siembra y las 40 pantallas en cada una de `desktop-light`, `desktop-dark`,
+  `mobile-light` y `mobile-dark`;
+- puede avisar de páginas que desbordan en horizontal en el móvil (`Aviso: …`): es información
+  para el rediseño, no un fallo;
+- última línea: `Galería lista: 160 capturas comprobadas en …, ZIP de … MB`.
 
-1. Comprueba que el escaneo funciona: en `web/visual/fixture.setup.ts` cambia temporalmente la
-   descripción del proyecto `DEMO` por `contacto: ana@gmail.com` y ejecuta
-   `npm run screenshots -- --project=fixture --project=desktop-light`.
-2. Esperado: falla con `privacidad: correo «ana@gmail.com» en desktop-light/…` y **no** escribe el
-   ZIP. Deshaz el cambio.
+Ese cierre ya ha comprobado **todas** las salidas: las 160 rutas del manifiesto, sin faltantes ni
+sobrantes; ancho y alto de cada PNG leídos de su cabecera; que cada captura se hizo con su tema y
+su ancho de ventana; el escaneo de privacidad del texto y la API de cada pantalla; y que el ZIP
+lleva exactamente los 160 PNG y el README, ordenados.
 
-## 7. CI y E2E
+## 3. Verificación independiente de la salida
 
-- `cd web && npm run lint && npm run format:check && npm run typecheck && npm test`: pasa, incluido
-  `visual/visual.test.ts` (inventario sin duplicados, enlaces rotos ni huérfanos; escaneo; ZIP).
-- `npm run e2e` (o el workflow E2E) sigue igual: no ejecuta nada de `web/visual`.
+```bash
+npm run screenshots:verify /tmp/galeria-vs-a
+```
 
-## 8. Action manual
+Esperado: `160 PNG (40 en cada una de desktop/light, desktop/dark, mobile/light, mobile/dark),
+tamaños correctos, README y ZIP con 161 ficheros`.
 
-1. GitHub → Actions → **Galería visual** → _Run workflow_ sobre la rama de la PR.
-2. Termina en verde y deja el artifact `skynet-screenshots` con las cuatro carpetas, el README y el
-   ZIP.
-3. La ejecución no crea commits ni ramas (`git log origin/<rama>` igual que antes).
+## 4. Limpieza
+
+- `docker ps -a | grep skynet-screenshots-db` no muestra nada y `/tmp/skynet-visual` no existe.
+- Si anotaste el número de ejecuciones de tu Skynet, sigue siendo el mismo.
+
+## 5. Inspección visual de una muestra
+
+Abre al 100 % `02-dashboard`, `20-run-completed` y `30-run-active` de cada combinación en
+`/tmp/galeria-vs-a`, y el `README.md` de esa carpeta. Comprueba:
+
+- datos del proyecto `DEMO` / `analizador-texto`, sin nombres de tus proyectos ni rutas de tu
+  equipo;
+- el tema es el de la carpeta; sin cursores, tooltips ni animaciones a medias;
+- la ejecución activa sale «En curso» y hay una aprobación en «Necesita tu atención»;
+- el README agrupa las pantallas con miniatura, ruta y enlaces a las otras combinaciones.
+
+## 6. Action
+
+GitHub → Actions → **Galería visual** → _Run workflow_ (cuando esté en main) o etiqueta
+`galeria-visual` en la PR. Termina en verde y deja el artifact `skynet-screenshots` con las cuatro
+carpetas, el README y el ZIP. Es la segunda ejecución completa, en otro entorno; no hace commit ni
+push.
+
+## 7. Checkout limpio
+
+```bash
+rm -rf /tmp/galeria-vs-a
+test "$(git rev-parse HEAD)" = "$SHA" && test -z "$(git status --porcelain)" && echo limpio
+```
+
+Esperado: `limpio`.

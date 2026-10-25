@@ -6,8 +6,13 @@ export const authFile = join(tmpDir, 'auth.json')
 export const fixtureFile = join(tmpDir, 'fixture.json')
 /** Texto visible y respuestas de la API de cada captura, para el escaneo de privacidad. */
 export const renderedDir = join(tmpDir, 'rendered')
-export const galleryDir = resolve(import.meta.dirname, '../../docs/screenshots')
-export const zipName = 'skynet-screenshots.zip'
+/**
+ * Dónde se escribe la galería: docs/screenshots, o SCREENSHOTS_OUT para generarla fuera del
+ * repositorio (una aceptación no debe tocar las capturas versionadas).
+ */
+export const galleryDir = process.env.SCREENSHOTS_OUT
+  ? resolve(process.env.SCREENSHOTS_OUT)
+  : resolve(import.meta.dirname, '../../docs/screenshots')
 
 /** Ids que deja fixture.setup.ts para los preparadores. */
 export interface Fixture {

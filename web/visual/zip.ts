@@ -53,3 +53,22 @@ export function buildZip(files: { name: string; data: Uint8Array }[]): Buffer {
   end.writeUInt32LE(offset, 16)
   return Buffer.concat([...locals, ...centrals, end])
 }
+
+/** Nombres de las entradas de un ZIP, en el orden de su directorio central. */
+export function zipEntries(zip: Buffer): string[] {
+  const end = zip.length - 22
+  if (end < 0 || zip.readUInt32LE(end) !== 0x06054b50)
+    throw new Error('no es un ZIP sin comentario')
+  const count = zip.readUInt16LE(end + 10)
+  let at = zip.readUInt32LE(end + 16)
+  const names: string[] = []
+  for (let i = 0; i < count; i++) {
+    if (zip.readUInt32LE(at) !== 0x02014b50) throw new Error('directorio central roto')
+    const nameLength = zip.readUInt16LE(at + 28)
+    const extra = zip.readUInt16LE(at + 30)
+    const comment = zip.readUInt16LE(at + 32)
+    names.push(zip.subarray(at + 46, at + 46 + nameLength).toString('utf8'))
+    at += 46 + nameLength + extra + comment
+  }
+  return names
+}

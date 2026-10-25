@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { capturedScreens, fileName, type ThemeId, type ViewportId } from './inventory.ts'
 import { fixtureFile, galleryDir, renderedDir, type Fixture } from './paths.ts'
 import { PREPARERS } from './screens.ts'
+import type { Rendered } from './gallery.ts'
 
 /**
  * Captura cada pantalla del inventario en la combinación de este proyecto (`desktop-light`…).
@@ -59,10 +60,21 @@ for (const screen of capturedScreens()) {
       caret: 'hide',
     })
 
-    const text = await page.evaluate(`document.body.innerText`)
-    const rendered = join(renderedDir, info.project.name, `${screen.id}.json`)
-    await mkdir(dirname(rendered), { recursive: true })
-    await writeFile(rendered, JSON.stringify({ screen: screen.id, text, api }))
+    const rendered: Rendered = {
+      screen: screen.id,
+      viewport,
+      theme,
+      // Sin `data-theme` (el login, fuera del AppShell) manda la preferencia del sistema.
+      dataTheme: await page.evaluate(
+        `document.documentElement.getAttribute('data-theme') ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')`,
+      ),
+      innerWidth: await page.evaluate(`window.innerWidth`),
+      text: await page.evaluate(`document.body.innerText`),
+      api,
+    }
+    const renderedFile = join(renderedDir, info.project.name, `${screen.id}.json`)
+    await mkdir(dirname(renderedFile), { recursive: true })
+    await writeFile(renderedFile, JSON.stringify(rendered))
 
     expect(errors, `${screen.id}: errores en la página`).toEqual([])
   })

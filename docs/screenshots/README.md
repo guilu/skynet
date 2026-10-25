@@ -117,6 +117,10 @@ Necesita Java 21, Node 22 y Docker (o PostgreSQL con `initdb` en el PATH). Siemb
 una base desechable, nunca en la normal, y lo borra todo al terminar. Detalles en
 [`docs/tests/probar-vs-a.md`](../tests/probar-vs-a.md).
 
+Para generarla fuera del repositorio (sin tocar estas capturas), `SCREENSHOTS_OUT=/tmp/galeria
+npm run screenshots`. Para revisar una galería ya generada sin volver a capturar,
+`npm run screenshots:verify [carpeta]`.
+
 Sin máquina preparada: Actions → **Galería visual** → *Run workflow*, y descarga el artifact
 `skynet-screenshots` (no hace commit ni push).
 
