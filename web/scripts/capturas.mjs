@@ -4,7 +4,8 @@
 //   npm run build && npx vite preview --port 4174 &
 //   node scripts/capturas.mjs http://localhost:4174
 //
-// Con ICONS=ilustrados salen con ese paquete de iconos, con «-ilustrados» al final del nombre.
+// Con ICONS=ilustrados (o chatgpt) salen con ese paquete de iconos, con «-ilustrados» (o «-chatgpt»)
+// al final del nombre.
 import { chromium } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'

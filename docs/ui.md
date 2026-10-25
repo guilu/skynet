@@ -163,12 +163,13 @@ Los iconos se piden por lo que significan, con `<Icon name="runs" size={22} />` 
 
 - **Lucide**, por defecto: los iconos de trazo de siempre.
 - **Ilustrados**: formas lisas sin contorno, al estilo de las ilustraciones de Duolingo, con un «labio» más oscuro debajo de cada forma (como los botones) y un gesto propio al pasar el ratón. Siguen a la paleta y al tema. Si a un nombre aún le falta su dibujo, se pinta el de Lucide y la galería lo marca.
+- **ChatGPT**: los iconos de unas láminas que diseñó ChatGPT, redibujados en SVG. Tienen volumen (degradados de claro a intenso y un brillo) y cada objeto lleva sus propios colores (casa roja y amarilla, carpeta amarilla…), así que no siguen a la paleta. Hay dibujo para todos los nombres, y hacen los mismos gestos que Ilustrados.
 
 Cómo funciona:
 
 - **Nombres.** `registry.ts` lista todos los nombres, con su etiqueta, su grupo y el icono de Lucide que les toca (el paquete Lucide y el respaldo de los demás). Ningún componente importa un icono de `lucide-react` por su cuenta: lo que queda se pasa a `Icon` en IC-B e IC-C.
-- **Dibujos.** `ilustrados.tsx`, en un lienzo de 32 × 32: cada `Part` pinta su forma dos veces (labio y cara), y los colores salen de clases (`m` vivo, `w` claro, `k` profundo, `warn`…) que resuelve `ilustrados.css` con los tokens.
-- **Variantes por tamaño.** 32 px o más: ilustrado con brillos y detalles. 18–28 px: compacto, sin detalles. 16 px o menos: trazo, la misma geometría en `currentColor`. Los controles pequeños (cerrar, chevrons, menú) son siempre de trazo, y los estados son insignias: un disco del tono con el glifo en blanco.
+- **Dibujos.** `ilustrados.tsx`, en un lienzo de 32 × 32: cada `Part` pinta su forma dos veces (labio y cara), y los colores salen de clases (`m` vivo, `w` claro, `k` profundo, `warn`…) que resuelve `ilustrados.css` con los tokens. Los de ChatGPT están en `chatgpt.tsx` y usan unos degradados (`chatgptColors.ts`) que se ponen una sola vez en la página, en un SVG invisible (`#cg-defs`); las insignias de estado toman el color del disco del tono (`chatgpt.css`).
+- **Variantes por tamaño** (Ilustrados). 32 px o más: ilustrado con brillos y detalles. 18–28 px: compacto, sin detalles. 16 px o menos: trazo, la misma geometría en `currentColor`. Los controles pequeños (cerrar, chevrons, menú) son siempre de trazo, y los estados son insignias: un disco del tono con el glifo en blanco.
 - **Gestos.** Salen al pasar el ratón o enfocar el control que lleva el icono (enlace, botón, pestaña, opción de menú o cualquier `.ico-host`), una vez al volverse la página actual o la pestaña elegida, y en bucle solo con `loop` (la píldora y la insignia grande de la ejecución abierta mientras está en marcha). Solo animan `transform` y `opacity` (y el trazo que se dibuja). Con «reducir movimiento» del sistema no se mueve nada.
 - **Guardado.** `PUT /api/settings/appearance` con `{ "icons": "ilustrados" }`, en `app_setting` con la clave `icons`. Se lee sin sesión, como la paleta, y la última elección se recuerda en el navegador (`skynet.icons`) para que la carga siguiente no parpadee.
 

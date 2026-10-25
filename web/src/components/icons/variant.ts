@@ -1,3 +1,4 @@
+import { CHATGPT } from './chatgpt'
 import { ILUSTRADOS } from './ilustrados'
 import type { IconPack } from './pack'
 import type { IconName } from './registry'
@@ -13,4 +14,4 @@ export function variantFor(size: number): IconVariant {
 
 /** ¿Tiene este paquete un dibujo propio para el nombre? Si no, se pinta el de Lucide. */
 export const hasOwnDrawing = (pack: IconPack, name: IconName) =>
-  pack === 'lucide' || ILUSTRADOS[name] !== undefined
+  pack === 'lucide' || (pack === 'ilustrados' ? ILUSTRADOS[name] : CHATGPT[name]) !== undefined

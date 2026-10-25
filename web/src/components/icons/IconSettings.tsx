@@ -7,6 +7,7 @@ import { ErrorMessage } from '../ErrorMessage'
 import { StatusBadge } from '../StatusBadge'
 import { Button } from '../ui/Button'
 import { Icon } from './Icon'
+import { CHATGPT } from './chatgpt'
 import { ILUSTRADOS } from './ilustrados'
 import { ICON_PACKS, IconPackContext, type IconPack } from './pack'
 import { GROUPS, ICON_NAMES, ICONS, type IconName } from './registry'
@@ -36,8 +37,8 @@ export function IconSettings({ saved }: { saved: IconPack }) {
         <h2 id="packs-title">Paquete de iconos</h2>
         <p className="hint">
           Vale para toda la web y en todos los navegadores. Los ilustrados siguen a los colores y al
-          tema, y hacen su gesto al pasar el ratón; con «reducir movimiento» del sistema se quedan
-          quietos.
+          tema; los de ChatGPT llevan sus propios colores. Ambos hacen su gesto al pasar el ratón y,
+          con «reducir movimiento» del sistema, se quedan quietos.
         </p>
         <fieldset className="icon-packs">
           <legend className="visually-hidden">Paquete de iconos</legend>
@@ -126,8 +127,10 @@ function IconGallery({ initial }: { initial: IconPack }) {
       <h2 id="gallery-title">Galería</h2>
       <p className="hint">
         Pasa el ratón por un icono para ver su gesto.
-        {pack === 'ilustrados' &&
-          ` ${own} de ${ICON_NAMES.length} tienen ya su dibujo; el resto se pinta con Lucide hasta que lo tengan.`}
+        {pack !== 'lucide' &&
+          (own === ICON_NAMES.length
+            ? ' Todos tienen su dibujo.'
+            : ` ${own} de ${ICON_NAMES.length} tienen ya su dibujo; el resto se pinta con Lucide hasta que lo tengan.`)}
       </p>
       <div className="icon-gallery-controls">
         <div className="segmented" role="group" aria-label="Paquete de la galería">
@@ -170,7 +173,7 @@ function IconGallery({ initial }: { initial: IconPack }) {
 }
 
 function IconCell({ name, pack }: { name: IconName; pack: IconPack }) {
-  const drawing = pack === 'ilustrados' ? ILUSTRADOS[name] : undefined
+  const drawing = { lucide: undefined, ilustrados: ILUSTRADOS[name], chatgpt: CHATGPT[name] }[pack]
   const fallback = !hasOwnDrawing(pack, name)
   return (
     <li className={cn('icon-cell ico-host', fallback && 'icon-cell-fallback')}>

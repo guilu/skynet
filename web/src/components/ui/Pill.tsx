@@ -26,9 +26,9 @@ export function Pill({
   className?: string
   children: ReactNode
 }) {
-  // Sin dibujo propio en Ilustrados, se queda el icono de Lucide sobre su círculo de color.
+  // Sin dibujo propio en el paquete elegido, se queda el icono de Lucide sobre su círculo de color.
   const pack = useIconPack()
-  const ilustrados = pack === 'ilustrados' && hasOwnDrawing(pack, icon)
+  const ilustrados = pack !== 'lucide' && hasOwnDrawing(pack, icon)
   return (
     <span className={cn('pill', tone !== 'neutral' && `pill-${tone}`, className)}>
       <span className={cn('pill-icon', ilustrados && 'pill-icon-ilustrado')} aria-hidden="true">

@@ -35,6 +35,9 @@ class AppearanceIT extends IntegrationTest {
     put(Map.of("ok", "#1f9d55"));
     assertThat(get().path("icons").asString()).isEqualTo("ilustrados");
 
+    send(Map.of("icons", "chatgpt"));
+    assertThat(get().path("icons").asString()).isEqualTo("chatgpt");
+
     send(Map.of("icons", "lucide"));
     assertThat(get().path("icons").asString()).isEqualTo("lucide");
   }

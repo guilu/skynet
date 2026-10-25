@@ -1,6 +1,6 @@
 import { createContext, useContext, useSyncExternalStore } from 'react'
 
-export type IconPack = 'lucide' | 'ilustrados'
+export type IconPack = 'lucide' | 'ilustrados' | 'chatgpt'
 
 export const ICON_PACKS: { id: IconPack; label: string; hint: string }[] = [
   { id: 'lucide', label: 'Lucide', hint: 'De trazo fino y neutro. Los de siempre.' },
@@ -8,6 +8,11 @@ export const ICON_PACKS: { id: IconPack; label: string; hint: string }[] = [
     id: 'ilustrados',
     label: 'Ilustrados',
     hint: 'Formas lisas y de colores, como la mascota, con un gesto propio al pasar el ratón.',
+  },
+  {
+    id: 'chatgpt',
+    label: 'ChatGPT',
+    hint: 'Con volumen y colores propios de cada objeto, como las láminas que diseñó ChatGPT.',
   },
 ]
 

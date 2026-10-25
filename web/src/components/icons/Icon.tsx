@@ -1,4 +1,8 @@
+import { useEffect } from 'react'
 import { cn } from '../../lib/cn'
+import { CHATGPT } from './chatgpt'
+import './chatgpt.css'
+import { ensureChatgptDefs } from './chatgptDefs'
 import { ILUSTRADOS, type DrawingTone } from './ilustrados'
 import './ilustrados.css'
 import { useIconPack } from './pack'
@@ -35,6 +39,32 @@ export function Icon({
   className?: string
 }) {
   const pack = useIconPack()
+  const chatgpt = pack === 'chatgpt' ? CHATGPT[name] : undefined
+  useEffect(() => {
+    if (chatgpt) ensureChatgptDefs()
+  }, [chatgpt])
+  if (chatgpt) {
+    const badgeTone = chatgpt.badge ? (tone ?? chatgpt.tone) : undefined
+    return (
+      <svg
+        className={cn(
+          'ico ico-cg',
+          size <= 20 && 'small',
+          badgeTone && `tone-${badgeTone}`,
+          loop && 'loop',
+          className,
+        )}
+        width={size}
+        height={size}
+        viewBox="0 0 32 32"
+        aria-hidden="true"
+        focusable="false"
+        data-icon={name}
+      >
+        {chatgpt.body}
+      </svg>
+    )
+  }
   const drawing = pack === 'ilustrados' ? ILUSTRADOS[name] : undefined
   if (!drawing) {
     const Lucide = ICONS[name].lucide

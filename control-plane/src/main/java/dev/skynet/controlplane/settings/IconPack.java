@@ -7,7 +7,8 @@ import java.util.Locale;
 /** Paquete de iconos de la web (IC-A). La web sabe pintar cada uno; aquí solo se guarda cuál. */
 public enum IconPack {
   LUCIDE,
-  ILUSTRADOS;
+  ILUSTRADOS,
+  CHATGPT;
 
   static final IconPack DEFAULT = LUCIDE;
 
