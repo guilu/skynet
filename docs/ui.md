@@ -34,11 +34,10 @@ Para cada estado: el color sólido (`--ok`) va en iconos y barras; `-soft` es el
 
 ## 3. Tipografía
 
-- **Baloo 2** para títulos (`h1`–`h3`, `--font-display`).
-- **Nunito** para el texto (`--font-sans`), con pesos 600–800: la interfaz es densa y el peso ayuda a leerla.
+- **Barlow** para títulos y texto (`--font-display` y `--font-sans` apuntan a la misma familia). Es la fuente libre (OFL) más parecida a Duolingo Sans, la referencia de estilo, que no se puede usar porque su licencia es exclusiva de Duolingo. El texto va en 500 y lo destacado en 600–900: la interfaz es densa y el peso ayuda a leerla.
 - **JetBrains Mono** (`--font-mono`) solo para IDs, claves, hashes, comandos, rutas y payloads.
 
-Las tres van empaquetadas con la web (`@fontsource`), sin peticiones a terceros.
+Las dos van empaquetadas con la web (`@fontsource`), sin peticiones a terceros.
 
 ## 4. Componentes
 
@@ -140,7 +139,7 @@ El logo sale del estudio de imagen corporativa de octubre de 2026, variante «Pr
 - **Un solo dibujo.** La geometría del isotipo está en `web/src/lib/brand.ts`. De ahí salen el componente `Logo` (SVG con `currentColor`) y el favicon (`faviconSvg`). No se usa el PNG del estudio.
 - **Baldosa.** `BrandMark` pone el isotipo sobre `--brand-tile` con un degradado blanco suave y la sombra corta de siempre (`--brand-tile-shade`). En claro, la baldosa es el acento y el isotipo va en `--on-primary`. En oscuro baja al tono sombra para que el isotipo siga en blanco. Como todo sale de los tokens, sigue a los colores personalizables.
 - **Dónde aparece.** En la barra lateral, como enlace al Dashboard (se ilumina al pasar el ratón, se hunde al pulsar y tiene foco visible; con la barra plegada solo queda la baldosa). En el login, en lugar de la baldosa grande aparece la mascota (sección 11), y bajo el nombre va el lema «Agentes · Flujos · Ejecuciones».
-- **Nombre.** «Skynet» en Baloo 2 800, la tipografía de títulos.
+- **Nombre.** «Skynet» en Barlow 800, la tipografía de títulos.
 - **Favicon e iconos.** `public/favicon.svg` es `faviconSvg` con el azul por defecto, y un test lo comprueba. `public/apple-touch-icon.png`, `icon-192.png` e `icon-512.png` (los del manifiesto) se generan desde él con `node scripts/iconos.mjs`. Con un acento propio, `appearance.ts` cambia el favicon por uno generado al vuelo con ese color.
 - **Tamaño mínimo.** 16 px en el favicon y 36 px de baldosa en la interfaz. Por debajo de eso, el hueco del anillo deja de leerse.
 - **Fuera.** Las demás variantes del estudio (minimalista, oscura, acento IA, outline, horizontal) no se usan. La oscura y la neutra ya salen con las paletas.
