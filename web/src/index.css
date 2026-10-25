@@ -184,8 +184,9 @@
 
 /* Los tokens, disponibles como utilidades de Tailwind (bg-surface, text-ok-ink, rounded-md…). */
 @theme inline {
-  --font-display: 'Baloo 2', 'Nunito', ui-rounded, system-ui, sans-serif;
-  --font-sans: 'Nunito', ui-rounded, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Una sola familia, Barlow (OFL), la libre más parecida a Duolingo Sans: títulos y texto. */
+  --font-display: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
   --color-bg: var(--bg);
@@ -263,7 +264,7 @@
     margin: 0;
     color: var(--fg);
     font-family: var(--font-sans);
-    font-weight: 600;
+    font-weight: 500;
     font-size: 15px;
     line-height: 1.45;
   }
