@@ -151,4 +151,8 @@ La mascota de Skynet es el isotipo convertido en personaje (CO-A): el nodo de ar
 
 Desde CO-B vive también en la barra superior, junto a una campana nueva: la mascota muestra el estado de toda la web y abre un menú rápido, la campana guarda los avisos y abajo a la derecha salen los avisos flotantes, con la cara de la mascota y el color suave del estado.
 
+Con CO-C asoma también en las páginas: en la cabecera del Dashboard, de cada proyecto y de Uso, con un bocadillo; en una tarjeta de saludo con atajos bajo la cabecera del Dashboard; en la banda «Qué pasa ahora» de cada ejecución, y como cara pequeña y quieta en la tabla de ejecuciones y en el grafo. Fuera de la pestaña, el título cuenta los avisos sin leer, el favicon pone su cara cuando algo te necesita o falla y, si lo activas, salen avisos del navegador.
+
+![La mascota en el Dashboard](ui/companion-dashboard.png)
+
 ![Expresiones de la mascota en Ajustes](ui/companion-expresiones.png)

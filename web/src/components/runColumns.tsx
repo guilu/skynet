@@ -1,6 +1,8 @@
 import { Link } from 'react-router'
 import type { Run } from '../api'
 import { elapsed, formatCost, formatDateTime, formatDuration, formatNumber } from '../format'
+import { Companion } from './companion/Companion'
+import { runExpression } from './companion/state'
 import type { Column } from './list/DataTable'
 import { headlineAgent } from './run/headlineAgent'
 import { StatusBadge } from './StatusBadge'
@@ -18,7 +20,16 @@ export function runColumns(now: number): Column<Run>[] {
         </Link>
       ),
     },
-    { id: 'status', header: 'Estado', cell: (run) => <StatusBadge status={run.status} /> },
+    {
+      id: 'status',
+      header: 'Estado',
+      cell: (run) => (
+        <span className="status-face">
+          <Companion state={runExpression(run, run.stages, now)} size={30} still />
+          <StatusBadge status={run.status} />
+        </span>
+      ),
+    },
     {
       id: 'agent',
       header: 'Agente',

@@ -23,6 +23,7 @@ import {
 import { PERIODS, usePeriod } from '../components/usePeriod'
 import { formatCompact } from '../format'
 import { useNow } from '../useNow'
+import { CompanionPeek } from '../components/companion/CompanionPeek'
 
 const UsageChart = lazy(() => import('../components/usage/UsageChart'))
 
@@ -85,6 +86,14 @@ export function UsagePage() {
           <h1>Uso de los CLIs</h1>
           {windows.data && <p className="muted">{summaryLine(own, now)}</p>}
         </div>
+        {windows.data && own.length > 0 && (
+          <CompanionPeek
+            state={alerts.length > 0 ? 'paused' : 'ready'}
+            text={alerts.length > 0 ? 'Vamos justos de cuota' : 'Hay cuota de sobra'}
+            size={72}
+            className="page-peek"
+          />
+        )}
         <div className="usage-actions">
           {runners.length > 1 ? (
             <label className="usage-runner">

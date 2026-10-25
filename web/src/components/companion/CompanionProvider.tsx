@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useLocation } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { api, type Run, type RunPage, type StoredEvent } from '../../api'
 import { useNow } from '../../useNow'
 import type { StreamState } from '../../useEventStream'
@@ -18,6 +18,7 @@ import {
 } from './notices'
 import { useCompanionPrefs } from './prefs'
 import { globalExpression, runExpression } from './state'
+import { browserNotice, useTabSignals } from './tab'
 
 /** Tras cuánto tiempo sin stream la mascota pasa a «Sin conexión». */
 const OFFLINE_AFTER_MS = 5_000
@@ -35,6 +36,7 @@ const viewedRun = (pathname: string) => /^\/runs\/([^/]+)/.exec(pathname)?.[1] ?
 export function CompanionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const prefs = useCompanionPrefs()
   const active = useQuery({
     queryKey: ACTIVE_KEY,
@@ -87,16 +89,23 @@ export function CompanionProvider({ children }: { children: ReactNode }) {
     }, 300)
   }, [queryClient])
 
-  const notify = useCallback((notice: Notice) => {
-    const { viewed: watching, prefs: current } = live.current
-    const quiet = notice.kind !== 'approval' && notice.runId != null && notice.runId === watching
-    setNotices((list) => [{ ...notice, read: quiet }, ...list].slice(0, HISTORY))
-    if (notice.kind === 'error' && notice.runId && !quiet)
-      setUnseenErrors((s) => new Set(s).add(notice.runId!))
-    if (notice.kind === 'success') setSuccessUntil(Date.now() + SUCCESS_MS)
-    const muted = current.mutedUntil != null && current.mutedUntil > Date.now()
-    if (!quiet && current.toasts && !muted) setToasts((t) => pushToast(t, notice))
-  }, [])
+  const notify = useCallback(
+    (notice: Notice) => {
+      const { viewed: watching, prefs: current } = live.current
+      const quiet = notice.kind !== 'approval' && notice.runId != null && notice.runId === watching
+      setNotices((list) => [{ ...notice, read: quiet }, ...list].slice(0, HISTORY))
+      if (notice.kind === 'error' && notice.runId && !quiet)
+        setUnseenErrors((s) => new Set(s).add(notice.runId!))
+      if (notice.kind === 'success') setSuccessUntil(Date.now() + SUCCESS_MS)
+      const muted = current.mutedUntil != null && current.mutedUntil > Date.now()
+      if (muted) return
+      // Con la pestaña oculta no la estás mirando: el aviso del navegador sale aunque sea de la
+      // ejecución abierta.
+      if (current.browser) browserNotice(notice, (href) => void navigate(href))
+      if (!quiet && current.toasts) setToasts((t) => pushToast(t, notice))
+    },
+    [navigate],
+  )
 
   const onEvent = useCallback(
     async (event: StoredEvent) => {
@@ -200,13 +209,16 @@ export function CompanionProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const unread = notices.filter((n) => !n.read).length
+  useTabSignals(expression, unread)
+
   const value: CompanionContextValue = {
     expression,
     summary: summarize(runs.length, pendingCount, offline),
     activeRuns: runs,
     pendingApprovals: pendingCount,
     notices,
-    unread: notices.filter((n) => !n.read).length,
+    unread,
     markRead,
     clearNotices,
     toasts,

@@ -14,6 +14,10 @@ import { api, SESSION_KEY, type ApprovalSummary, type DashboardSummary, type Run
 import { RISK_LABEL, approvalWork } from '../components/approval/approvalFormat'
 import { usePendingApprovals } from '../components/approval/usePendingApprovals'
 import { AttentionList, type Alert } from '../components/AttentionList'
+import { CompanionPeek } from '../components/companion/CompanionPeek'
+import { useCompanion } from '../components/companion/context'
+import { CompanionHello } from '../components/companion/CompanionHello'
+import { peekText } from '../components/companion/peek'
 import { DashboardMetrics, PeriodSelector } from '../components/DashboardMetrics'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { RunsTable } from '../components/RunsTable'
@@ -26,8 +30,8 @@ import { useNow } from '../useNow'
 import { TableSkeleton } from '../components/ui/Skeleton'
 
 /**
- * Dashboard (ADR-0001 §3.2): saludo y resumen con el periodo y «Lanzar agente»; después lo que
- * requiere atención (solo si hay algo), las métricas del periodo, las ejecuciones activas y los
+ * Dashboard (ADR-0001 §3.2): saludo y resumen con el periodo y «Lanzar agente», con la mascota
+ * asomando y su tarjeta de atajos (CO-C); después lo que requiere atención (solo si hay algo), las métricas del periodo, las ejecuciones activas y los
  * runners.
  */
 export function DashboardPage() {
@@ -48,6 +52,7 @@ export function DashboardPage() {
   const alerts = data
     ? [...attentionItems(data, approvals.data ?? [], now), ...simulatedAlerts(runners.data ?? [])]
     : []
+  const companion = useCompanion()
   const working = (runners.data ?? [])
     .filter((r) => r.status === 'ONLINE')
     .reduce((n, r) => n + r.activeAgents, 0)
@@ -64,6 +69,11 @@ export function DashboardPage() {
             <p className="dash-summary">{summaryLine(working, alerts.length)}</p>
           )}
         </div>
+        <CompanionPeek
+          state={companion.expression}
+          text={peekText(companion.expression, companion.pendingApprovals)}
+          className="dash-peek"
+        />
         <div className="dash-actions">
           <PeriodSelector />
           <Link to="/projects" className="btn">
@@ -74,6 +84,7 @@ export function DashboardPage() {
       </div>
       <ErrorMessage error={summary.error} />
       {summary.isPending && <TableSkeleton label="lo que requiere atención" columns={5} rows={3} />}
+      <CompanionHello approvals={approvals.data ?? []} />
       <AttentionList alerts={alerts} className="dash-section" />
       <DashboardMetrics />
       {data && data.activeRunsTotal > 0 && (

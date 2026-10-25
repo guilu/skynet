@@ -6,12 +6,19 @@ export interface CompanionPrefs {
   mascot: boolean
   /** Los avisos flotantes; la campana guarda los avisos igualmente. */
   toasts: boolean
-  /** Hasta cuándo (ms) no salen avisos flotantes; null si no está silenciado. */
+  /** Avisos del navegador con la pestaña oculta (hay que dar permiso). */
+  browser: boolean
+  /** Hasta cuándo (ms) no salen avisos flotantes ni del navegador; null si no está silenciado. */
   mutedUntil: number | null
 }
 
 const KEY = 'skynet.companion'
-export const DEFAULT_PREFS: CompanionPrefs = { mascot: true, toasts: true, mutedUntil: null }
+export const DEFAULT_PREFS: CompanionPrefs = {
+  mascot: true,
+  toasts: true,
+  browser: false,
+  mutedUntil: null,
+}
 /** «Silenciar 1 h». */
 export const MUTE_MS = 60 * 60 * 1000
 
