@@ -76,7 +76,7 @@ cd web && npm run lint && npm run format:check && npm run typecheck && npx vites
 
 ## 8. Rediseño ligero
 
-1. En toda la web: fondo **blanco**, paneles con borde fino y **sin sombra**, los botones (y enlaces con forma de botón) con su sombra inferior de Duolingo que se hunde al pulsarlos, textos en gris (nunca negro), la barra lateral y los botones en minúsculas y sin negrita gruesa, y más espacio entre bloques.
+1. En toda la web: fondo **blanco** (en oscuro, **#171f30**), paneles con borde fino y **sin sombra**, los botones (y enlaces con forma de botón) con su sombra inferior de Duolingo que se hunde al pulsarlos, textos en gris (nunca negro), la barra lateral y los botones en minúsculas y sin negrita gruesa, y más espacio entre bloques.
 2. **Dashboard**, de arriba abajo: saludo con la mascota y «Lanzar agente»; el aviso de Skynet con «Lanzar un workflow» como botón principal; **Resumen (últimos 7 días)** con «Ver más detalles →» y las ocho tarjetas; **Necesita tu atención**; el gráfico; **Ejecuciones recientes** (las 5 últimas, con «Ver todas →»); y los runners.
 3. Con los paquetes **Ilustrados** o **ChatGPT**, las tarjetas del Resumen llevan el icono grande y suelto, sin baldosa; con **Lucide**, el icono va sobre su baldosa de color.
 4. **Página de una ejecución** con Ilustrados o ChatGPT: las tarjetas (Duración, Tokens, Coste, Cuota, Tests) llevan el icono grande del paquete, y las etiquetas de la cabecera (workflow, runner, agente, modelo, rama) y las pestañas (conversación, archivos, artefactos, verificación, reintentar) usan los iconos del paquete. Con Lucide se ve como antes.

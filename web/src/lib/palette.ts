@@ -103,10 +103,10 @@ const DEFAULTS: Record<Mode, Tokens> = {
   },
 }
 
-/** Fondos sobre los que va la tinta (superficie, superficie 2 y página). */
+/** Fondos sobre los que va la tinta (superficie, que también es la página, y superficie 2). */
 const SURFACES: Record<Mode, string[]> = {
-  light: ['#ffffff', '#edf2fb', '#f4f7fc'],
-  dark: ['#171f30', '#1f2a40', '#0f1420'],
+  light: ['#ffffff', '#f1f4f9'],
+  dark: ['#171f30', '#1f2a40'],
 }
 
 /** Texto sobre los botones de estado (`--on-state-btn`). */
@@ -275,17 +275,17 @@ export function previewStyle(derived: DerivedPalette, mode: Mode): Record<string
 
 const SURFACE_TOKENS: Record<Mode, Record<string, string>> = {
   light: {
-    '--bg': '#f4f7fc',
+    '--bg': '#ffffff',
     '--surface': '#ffffff',
-    '--surface-2': '#edf2fb',
-    '--border': '#d9e1ef',
-    '--border-strong': '#c3cee2',
-    '--fg': '#1a2233',
-    '--muted': '#56627b',
+    '--surface-2': '#f1f4f9',
+    '--border': '#e3e8f0',
+    '--border-strong': '#d0d8e5',
+    '--fg': '#343c4e',
+    '--muted': '#5b667c',
     colorScheme: 'light',
   },
   dark: {
-    '--bg': '#0f1420',
+    '--bg': '#171f30',
     '--surface': '#171f30',
     '--surface-2': '#1f2a40',
     '--border': '#2b3854',

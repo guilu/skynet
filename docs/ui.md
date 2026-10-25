@@ -14,7 +14,7 @@ Cómo se ve y cómo se construye la web de Skynet tras el rediseño (UI-A a UI-F
 - **Todo enlazable.** Filtros, pestañas, la vista de actividad, el agente y la herramienta elegidos viven en la URL. Copiar la dirección comparte exactamente lo que se ve.
 - **Formularios aparte.** Crear, configurar, lanzar y confirmar se hace en un panel lateral; la página de fondo no cambia hasta que se guarda.
 - **Claro y con aire.** Fondo casi blanco, paneles planos con borde de 1 px y sin sombra (los botones sí conservan su «labio» inferior, como en Duolingo), esquinas redondeadas y mucho espacio entre bloques. El color lo ponen los iconos y los estados, no las cajas.
-- **Fondo blanco.** El contenido va sobre blanco (`--bg`) en el tema claro; las tarjetas se separan por su borde.
+- **Fondo del color de las tarjetas.** El contenido va sobre blanco (`--bg`) en el tema claro y sobre `#171f30` en el oscuro, el mismo color que las tarjetas, que se separan por su borde.
 - **Nunca negro.** Los textos son una escala de grises azulados (`--fg`, `--muted`), con pesos contenidos: títulos en 600, texto en 400 y nada en mayúsculas salvo las cabeceras de tabla.
 
 ## 2. Tokens
