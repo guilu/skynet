@@ -28,12 +28,14 @@ start() {
       ;;
     runner)
       local FAKE=$ROOT/tools/fake-claude/build/install/fake-claude/bin
-      SKYNET_RUNNER_HOME=$OUT/runner-home \
-      SKYNET_RUNNER_NAME=${E2E_RUNNER_NAME:-e2e} \
       # Los tres proveedores con sus fakes; cada revisor devuelve lo que dejó en .revision.json la
       # fase anterior del worktree (web/e2e/nodes.e2e.ts y providers.e2e.ts). Cada sesión de
       # fake-codex gasta cuota de la cuenta, como la de verdad (web/e2e/usage.e2e.ts). El agente
       # llama a la memoria con el guion que dejó en .memoria.json la fase anterior (memory.e2e.ts).
+      # (El comentario va antes: entre líneas con `\` cortaría la orden y el runner usaría el
+      # directorio y el nombre por defecto, los del runner normal del equipo.)
+      SKYNET_RUNNER_HOME=$OUT/runner-home \
+      SKYNET_RUNNER_NAME=${E2E_RUNNER_NAME:-e2e} \
       SKYNET_CLAUDE_BIN=$FAKE/fake-claude SKYNET_CODEX_BIN=$FAKE/fake-codex \
       SKYNET_AGY_BIN=$FAKE/fake-agy \
       SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE,FAKE_CLAUDE_DELAY_MS,FAKE_CLAUDE_APPLY,FAKE_CLAUDE_STRUCTURED_OUTPUT,FAKE_CODEX_FIXTURE,FAKE_CODEX_DELAY_MS,FAKE_CODEX_STRUCTURED_OUTPUT,FAKE_AGY_FIXTURE,FAKE_AGY_DELAY_MS,FAKE_AGY_STRUCTURED_OUTPUT,FAKE_AGY_HOME,FAKE_CODEX_QUOTA_STEP,FAKE_MCP_CALLS \

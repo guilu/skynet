@@ -1,0 +1,460 @@
+{
+  "$comment": "Inventario único de la galería visual (VS-A) y del mapa de navegación (VS-B). Cada pantalla se captura como NN-id.png; cada id tiene su preparador en screens.ts.",
+  "canonical": { "viewport": "desktop", "theme": "light" },
+  "viewports": {
+    "desktop": { "width": 1440, "height": 1000 },
+    "mobile": { "width": 390, "height": 844 }
+  },
+  "themes": ["light", "dark"],
+  "linkTypes": {
+    "navigation": "Navegación normal",
+    "tab": "Cambio de pestaña",
+    "dialog": "Abre un diálogo",
+    "menu": "Abre un menú",
+    "action": "Acción que crea o lanza algo",
+    "return": "Retorno o cierre"
+  },
+  "groups": [
+    { "id": "access", "title": "Acceso" },
+    { "id": "overview", "title": "Inicio y supervisión" },
+    { "id": "work", "title": "Trabajo" },
+    { "id": "automation", "title": "Automatización" },
+    { "id": "execution", "title": "Ejecución" },
+    { "id": "decisions", "title": "Decisiones" },
+    { "id": "settings", "title": "Configuración" },
+    { "id": "overlays", "title": "Overlays y estados transversales" }
+  ],
+  "screens": [
+    {
+      "id": "login",
+      "order": 1,
+      "title": "Login",
+      "group": "access",
+      "route": "/ (sin sesión)",
+      "capture": "viewport",
+      "entry": true,
+      "links": [{ "to": "dashboard", "type": "action", "label": "Entrar" }]
+    },
+    {
+      "id": "dashboard",
+      "order": 2,
+      "title": "Dashboard",
+      "group": "overview",
+      "route": "/",
+      "capture": "fullPage",
+      "notes": "Con actividad y con una aprobación en «Necesita tu atención»: una sola captura cubre los dos estados.",
+      "links": [
+        { "to": "projects", "type": "navigation" },
+        { "to": "workflows", "type": "navigation" },
+        { "to": "runs", "type": "navigation" },
+        { "to": "approvals", "type": "navigation" },
+        { "to": "runners", "type": "navigation" },
+        { "to": "usage", "type": "navigation" },
+        { "to": "activity", "type": "navigation" },
+        { "to": "settings-colors", "type": "navigation" },
+        { "to": "approval-pending", "type": "navigation", "label": "Necesita tu atención" },
+        { "to": "run-active", "type": "navigation", "label": "Ejecuciones recientes" },
+        { "to": "command-palette", "type": "dialog", "label": "⌘K" },
+        { "to": "theme-menu", "type": "menu" },
+        { "to": "companion-menu", "type": "menu" }
+      ]
+    },
+    {
+      "id": "usage",
+      "order": 3,
+      "title": "Uso",
+      "group": "overview",
+      "route": "/usage",
+      "capture": "fullPage",
+      "links": [{ "to": "dashboard", "type": "return" }]
+    },
+    {
+      "id": "activity",
+      "order": 4,
+      "title": "Actividad",
+      "group": "overview",
+      "route": "/activity",
+      "capture": "fullPage",
+      "links": [{ "to": "run-completed", "type": "navigation" }]
+    },
+    {
+      "id": "runners",
+      "order": 5,
+      "title": "Runners",
+      "group": "overview",
+      "route": "/runners",
+      "capture": "fullPage",
+      "links": []
+    },
+    {
+      "id": "projects",
+      "order": 6,
+      "title": "Proyectos",
+      "group": "work",
+      "route": "/projects",
+      "capture": "fullPage",
+      "links": [
+        { "to": "project-work", "type": "navigation", "label": "DEMO" },
+        { "to": "project-empty", "type": "navigation", "label": "PROTO" }
+      ]
+    },
+    {
+      "id": "project-work",
+      "order": 7,
+      "title": "Proyecto: trabajos",
+      "group": "work",
+      "route": "/projects/:id",
+      "capture": "fullPage",
+      "notes": "El proyecto no tiene pestaña «Resumen»: su cabecera y la pestaña Trabajos (la de entrada) hacen de resumen.",
+      "links": [
+        { "to": "project-repos", "type": "tab" },
+        { "to": "project-memory", "type": "tab" },
+        { "to": "work-item", "type": "navigation" },
+        { "to": "new-work-item", "type": "dialog", "label": "Nuevo trabajo" }
+      ]
+    },
+    {
+      "id": "project-repos",
+      "order": 8,
+      "title": "Proyecto: repositorios",
+      "group": "work",
+      "route": "/projects/:id?tab=repos",
+      "capture": "fullPage",
+      "links": [{ "to": "project-work", "type": "tab" }]
+    },
+    {
+      "id": "project-memory",
+      "order": 9,
+      "title": "Proyecto: memoria",
+      "group": "work",
+      "route": "/projects/:id?tab=memory",
+      "capture": "fullPage",
+      "links": [{ "to": "run-memory", "type": "navigation", "label": "Ver la ejecución" }]
+    },
+    {
+      "id": "project-empty",
+      "order": 10,
+      "title": "Proyecto vacío",
+      "group": "work",
+      "route": "/projects/:id (sin trabajos)",
+      "capture": "viewport",
+      "notes": "Estado vacío: un proyecto recién creado.",
+      "links": [{ "to": "new-work-item", "type": "dialog", "label": "Nuevo trabajo" }]
+    },
+    {
+      "id": "new-work-item",
+      "order": 11,
+      "title": "Diálogo: nuevo trabajo",
+      "group": "work",
+      "route": "/projects/:id → Nuevo trabajo",
+      "capture": "viewport",
+      "links": [{ "to": "work-item", "type": "action", "label": "Crear" }]
+    },
+    {
+      "id": "work-item",
+      "order": 12,
+      "title": "Trabajo",
+      "group": "work",
+      "route": "/work-items/:id",
+      "capture": "fullPage",
+      "links": [
+        { "to": "launch-workflow", "type": "dialog", "label": "Lanzar workflow" },
+        { "to": "run-completed", "type": "navigation" },
+        { "to": "project-work", "type": "return" }
+      ]
+    },
+    {
+      "id": "workflows",
+      "order": 13,
+      "title": "Workflows",
+      "group": "automation",
+      "route": "/workflows",
+      "capture": "fullPage",
+      "links": [
+        { "to": "workflow-summary", "type": "navigation" },
+        { "to": "workflow-new", "type": "action", "label": "Nuevo workflow" }
+      ]
+    },
+    {
+      "id": "workflow-summary",
+      "order": 14,
+      "title": "Workflow: resumen",
+      "group": "automation",
+      "route": "/workflows/:key?view=graph",
+      "capture": "viewport",
+      "notes": "Versión publicada, con su grafo.",
+      "links": [
+        { "to": "workflow-yaml", "type": "tab" },
+        { "to": "workflow-editor", "type": "action", "label": "Editar" }
+      ]
+    },
+    {
+      "id": "workflow-yaml",
+      "order": 15,
+      "title": "Workflow: YAML",
+      "group": "automation",
+      "route": "/workflows/:key",
+      "capture": "viewport",
+      "links": [{ "to": "workflow-summary", "type": "tab" }]
+    },
+    {
+      "id": "workflow-editor",
+      "order": 16,
+      "title": "Workflow: editor visual",
+      "group": "automation",
+      "route": "/workflows/:key?version=:borrador&view=graph",
+      "capture": "viewport",
+      "notes": "Borrador v2 abierto en el grafo editable. En el móvil el grafo no se edita (solo se ve).",
+      "links": [{ "to": "workflow-summary", "type": "return" }]
+    },
+    {
+      "id": "workflow-new",
+      "order": 17,
+      "title": "Nuevo workflow",
+      "group": "automation",
+      "route": "/workflows/new",
+      "capture": "fullPage",
+      "links": [{ "to": "workflow-editor", "type": "action", "label": "Crear" }]
+    },
+    {
+      "id": "launch-workflow",
+      "order": 18,
+      "title": "Diálogo: lanzar workflow",
+      "group": "automation",
+      "route": "/work-items/:id → Lanzar workflow",
+      "capture": "viewport",
+      "links": [{ "to": "run-active", "type": "action", "label": "Lanzar" }]
+    },
+    {
+      "id": "runs",
+      "order": 19,
+      "title": "Ejecuciones",
+      "group": "execution",
+      "route": "/runs",
+      "capture": "fullPage",
+      "links": [
+        { "to": "run-completed", "type": "navigation" },
+        { "to": "run-active", "type": "navigation" },
+        { "to": "run-failed", "type": "navigation" }
+      ]
+    },
+    {
+      "id": "run-completed",
+      "order": 20,
+      "title": "Ejecución: resumen (completada)",
+      "group": "execution",
+      "route": "/runs/:id",
+      "capture": "viewport",
+      "notes": "Ejecución completada de «Revisión con Codex y Antigravity». La conversación es la vista por defecto del panel central, así que esta captura también es «Ejecución: conversación».",
+      "links": [
+        { "to": "run-waterfall", "type": "tab" },
+        { "to": "run-events", "type": "tab" },
+        { "to": "run-prompt", "type": "tab" },
+        { "to": "run-tools", "type": "tab" },
+        { "to": "run-verification", "type": "tab" },
+        { "to": "run-cost", "type": "tab" },
+        { "to": "runs", "type": "return" }
+      ]
+    },
+    {
+      "id": "run-waterfall",
+      "order": 21,
+      "title": "Ejecución: cascada",
+      "group": "execution",
+      "route": "/runs/:id?view=waterfall",
+      "capture": "viewport",
+      "links": [{ "to": "run-completed", "type": "tab" }]
+    },
+    {
+      "id": "run-events",
+      "order": 22,
+      "title": "Ejecución: eventos",
+      "group": "execution",
+      "route": "/runs/:id?view=events",
+      "capture": "viewport",
+      "links": [{ "to": "run-completed", "type": "tab" }]
+    },
+    {
+      "id": "run-prompt",
+      "order": 23,
+      "title": "Ejecución: prompt",
+      "group": "execution",
+      "route": "/runs/:id?agent=:id&tab=prompt",
+      "capture": "viewport",
+      "links": [{ "to": "run-completed", "type": "tab" }]
+    },
+    {
+      "id": "run-tools",
+      "order": 24,
+      "title": "Ejecución: herramientas",
+      "group": "execution",
+      "route": "/runs/:id?agent=:id&tab=tools",
+      "capture": "viewport",
+      "links": [{ "to": "run-completed", "type": "tab" }]
+    },
+    {
+      "id": "run-verification",
+      "order": 25,
+      "title": "Ejecución: verificación",
+      "group": "execution",
+      "route": "/runs/:id?agent=:id&tab=verification",
+      "capture": "viewport",
+      "links": [{ "to": "run-completed", "type": "tab" }]
+    },
+    {
+      "id": "run-cost",
+      "order": 26,
+      "title": "Ejecución: coste",
+      "group": "execution",
+      "route": "/runs/:id?agent=:id&tab=cost",
+      "capture": "viewport",
+      "links": [{ "to": "run-completed", "type": "tab" }]
+    },
+    {
+      "id": "run-artifacts",
+      "order": 27,
+      "title": "Ejecución: artefactos",
+      "group": "execution",
+      "route": "/runs/:id?agent=:id&tab=artifacts",
+      "capture": "viewport",
+      "notes": "Ejecución de «Documentar el repositorio», con un informe declarado.",
+      "links": [
+        { "to": "run-artifact-open", "type": "action", "label": "Abrir" },
+        { "to": "run-memory", "type": "tab" }
+      ]
+    },
+    {
+      "id": "run-artifact-open",
+      "order": 28,
+      "title": "Ejecución: artefacto abierto",
+      "group": "execution",
+      "route": "/runs/:id?agent=:id&tab=artifacts → Abrir",
+      "capture": "viewport",
+      "links": [{ "to": "run-artifacts", "type": "return" }]
+    },
+    {
+      "id": "run-memory",
+      "order": 29,
+      "title": "Ejecución: memoria",
+      "group": "execution",
+      "route": "/runs/:id?agent=:id&tab=memory",
+      "capture": "viewport",
+      "links": [
+        { "to": "run-artifacts", "type": "tab" },
+        { "to": "project-memory", "type": "navigation" }
+      ]
+    },
+    {
+      "id": "run-active",
+      "order": 30,
+      "title": "Ejecución activa",
+      "group": "execution",
+      "route": "/runs/:id",
+      "capture": "viewport",
+      "notes": "Una fase de comando larga mantiene la ejecución en curso mientras se captura.",
+      "links": [{ "to": "runs", "type": "return" }]
+    },
+    {
+      "id": "run-failed",
+      "order": 31,
+      "title": "Ejecución fallida",
+      "group": "execution",
+      "route": "/runs/:id",
+      "capture": "viewport",
+      "notes": "La verificación del repositorio falla.",
+      "links": [{ "to": "runs", "type": "return" }]
+    },
+    {
+      "id": "approvals",
+      "order": 32,
+      "title": "Aprobaciones",
+      "group": "decisions",
+      "route": "/approvals",
+      "capture": "fullPage",
+      "links": [{ "to": "approval-pending", "type": "navigation" }]
+    },
+    {
+      "id": "approval-pending",
+      "order": 33,
+      "title": "Aprobación pendiente",
+      "group": "decisions",
+      "route": "/approvals/:id",
+      "capture": "fullPage",
+      "links": [{ "to": "approvals", "type": "return" }]
+    },
+    {
+      "id": "settings-colors",
+      "order": 34,
+      "title": "Ajustes: apariencia y colores",
+      "group": "settings",
+      "route": "/settings",
+      "capture": "fullPage",
+      "links": [
+        { "to": "settings-icons", "type": "tab" },
+        { "to": "settings-companion", "type": "tab" }
+      ]
+    },
+    {
+      "id": "settings-icons",
+      "order": 35,
+      "title": "Ajustes: iconos",
+      "group": "settings",
+      "route": "/settings?tab=icons",
+      "capture": "fullPage",
+      "links": [{ "to": "settings-colors", "type": "tab" }]
+    },
+    {
+      "id": "settings-companion",
+      "order": 36,
+      "title": "Ajustes: companion",
+      "group": "settings",
+      "route": "/settings?tab=companion",
+      "capture": "fullPage",
+      "links": [{ "to": "settings-colors", "type": "tab" }]
+    },
+    {
+      "id": "command-palette",
+      "order": 37,
+      "title": "Paleta ⌘K",
+      "group": "overlays",
+      "route": "cualquier página → ⌘K",
+      "capture": "viewport",
+      "links": [
+        { "to": "run-completed", "type": "navigation" },
+        { "to": "dashboard", "type": "return" }
+      ]
+    },
+    {
+      "id": "theme-menu",
+      "order": 38,
+      "title": "Menú de tema",
+      "group": "overlays",
+      "route": "barra superior → tema",
+      "capture": "viewport",
+      "links": [{ "to": "dashboard", "type": "return" }]
+    },
+    {
+      "id": "companion-menu",
+      "order": 39,
+      "title": "Companion abierto",
+      "group": "overlays",
+      "route": "barra superior → Skyny",
+      "capture": "viewport",
+      "notes": "Con una aprobación pendiente, Skyny avisa de que te necesita.",
+      "links": [
+        { "to": "approval-pending", "type": "navigation" },
+        { "to": "settings-companion", "type": "navigation" }
+      ]
+    },
+    {
+      "id": "not-found",
+      "order": 40,
+      "title": "Página 404",
+      "group": "overlays",
+      "route": "/no-existe",
+      "capture": "viewport",
+      "isolated": true,
+      "links": [{ "to": "dashboard", "type": "return" }]
+    }
+  ]
+}
