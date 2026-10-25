@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { RotateCcw } from 'lucide-react'
 import { useState } from 'react'
 import { api, type Run, type StageRun } from '../../api'
 import { ErrorMessage } from '../ErrorMessage'
 import { Button } from '../ui/Button'
 import { joinNames, retryScope } from './stageNotes'
+import { Icon } from '../icons/Icon'
 
 /**
  * «Reintentar fase» en una ejecución fallida o cancelada (W6-C). Antes de confirmar dice el alcance:
@@ -29,7 +29,7 @@ export function StageRetry({ stage, run }: { stage: StageRun; run: Run }) {
     return (
       <div className="stage-retry">
         <Button variant="secondary" onClick={() => setConfirming(true)}>
-          <RotateCcw size={16} strokeWidth={2.75} aria-hidden="true" />
+          <Icon name="retry" size={16} strokeWidth={2.75} />
           Reintentar fase
         </Button>
       </div>

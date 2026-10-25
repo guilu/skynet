@@ -1,5 +1,6 @@
 import { CirclePlay, ListChecks, ShieldCheck } from 'lucide-react'
 import { Link } from 'react-router'
+import { cn } from '../../lib/cn'
 import type { ApprovalSummary } from '../../api'
 import { Companion } from './Companion'
 import { useCompanion } from './context'
@@ -13,10 +14,10 @@ export function CompanionHello({ approvals }: { approvals: ApprovalSummary[] }) 
   const { activeRuns } = useCompanion()
   const latest = activeRuns[0]
   return (
-    <section className="card companion-hello" aria-label="Skynet">
+    <section className="card companion-hello" aria-label="Skyny">
       <Companion state={approvals.length > 0 ? 'waiting' : 'ready'} size={80} />
       <div className="companion-hello-text">
-        <p>{helloText(activeRuns.length, approvals.length)}</p>
+        <Hello text={helloText(activeRuns.length, approvals.length)} />
         <div className="companion-hello-links">
           {approvals.length > 0 && (
             <Link
@@ -27,7 +28,10 @@ export function CompanionHello({ approvals }: { approvals: ApprovalSummary[] }) 
               {approvals.length === 1 ? 'Revisar la aprobación' : 'Revisar las aprobaciones'}
             </Link>
           )}
-          <Link className="btn btn-sm btn-secondary" to="/projects">
+          <Link
+            className={cn('btn btn-sm', approvals.length > 0 && 'btn-secondary')}
+            to="/projects"
+          >
             <CirclePlay size={16} strokeWidth={2.5} aria-hidden="true" />
             Lanzar un workflow
           </Link>
@@ -38,5 +42,16 @@ export function CompanionHello({ approvals }: { approvals: ApprovalSummary[] }) 
         </div>
       </div>
     </section>
+  )
+}
+
+/** El saludo («Hola, soy Skyny.») en negrita y el resto, normal. */
+function Hello({ text }: { text: string }) {
+  const cut = text.indexOf('. ') + 1
+  return (
+    <p>
+      <strong>{text.slice(0, cut)}</strong>
+      {text.slice(cut)}
+    </p>
   )
 }

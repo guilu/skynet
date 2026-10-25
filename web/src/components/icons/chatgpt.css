@@ -1,0 +1,31 @@
+/*
+ * Paquete «ChatGPT»: los colores van en el propio dibujo (degradados `#cg-…`), así que aquí solo
+ * queda el disco de las insignias, que toma el color del tono. Los gestos son los de Ilustrados
+ * (`.ico .a-…`, ilustrados.css), con sus mismos disparadores y su movimiento reducido.
+ */
+.ico-cg .cg-disc {
+  fill: var(--cg-disc, url(#cg-violet));
+}
+:root .ico-cg.tone-ok {
+  --cg-disc: url(#cg-green);
+}
+:root .ico-cg.tone-warn {
+  --cg-disc: url(#cg-orange);
+}
+:root .ico-cg.tone-bad {
+  --cg-disc: url(#cg-red);
+}
+:root .ico-cg.tone-live {
+  --cg-disc: url(#cg-violet);
+}
+:root .ico-cg.tone-idle {
+  --cg-disc: url(#cg-slate);
+}
+/* Un poco de relieve, como en las láminas; no en tamaños de texto, donde emborrona. */
+.ico-cg:not(.small) {
+  filter: drop-shadow(0 1px 1px rgb(20 30 60 / 0.18));
+}
+/* La aguja del cronómetro gira sobre el centro de su esfera. */
+.ico-cg .a-needle {
+  transform-origin: 16px 17.5px;
+}

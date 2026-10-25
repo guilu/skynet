@@ -1,4 +1,3 @@
-import { Gauge } from 'lucide-react'
 import type { QuotaShare, QuotaWarning, QuotaWindowKind, UsageWindow } from '../../api'
 import type { StatusTone } from '../../format'
 import type { Alert } from '../AttentionList'
@@ -132,7 +131,7 @@ export function quotaAlerts(warnings: QuotaWarning[], now: number): Alert[] {
   return warnings.map((w) => ({
     key: `quota-${w.runnerId}-${w.provider}-${w.bucket}-${w.window}`,
     to: '/usage',
-    icon: Gauge,
+    icon: 'usage' as const,
     ...warningText(w, now, runners > 1),
   }))
 }

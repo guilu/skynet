@@ -3,6 +3,9 @@
 //
 //   npm run build && npx vite preview --port 4174 &
 //   node scripts/capturas.mjs http://localhost:4174
+//
+// Con ICONS=ilustrados (o chatgpt) salen con ese paquete de iconos, con «-ilustrados» (o «-chatgpt»)
+// al final del nombre.
 import { chromium } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -11,6 +14,8 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const out = path.join(root, 'docs/ui/capturas')
 const base = process.argv[2] ?? 'http://localhost:4174'
+const icons = process.env.ICONS ?? 'lucide'
+const suffix = icons === 'lucide' ? '' : `-${icons}`
 const fixture = (name) =>
   JSON.parse(fs.readFileSync(path.join(root, 'fixtures/contracts', `${name}.json`), 'utf8'))
 
@@ -188,7 +193,7 @@ const repository = {
 // La primera ruta que encaja responde; el orden importa.
 const ROUTES = [
   [/\/api\/auth\/session/, { username: 'admin' }],
-  [/\/api\/settings\/appearance/, { colors: {}, updatedAt: null }],
+  [/\/api\/settings\/appearance/, { colors: {}, icons, updatedAt: null }],
   [/\/api\/dashboard\/metrics/, fixture('dashboard-metrics')],
   [/\/api\/dashboard$/, fixture('dashboard-summary')],
   [/\/api\/runners$/, fixture('runners')],
@@ -310,11 +315,15 @@ const SHOTS = [
   ['workflow', '/workflows/revisar-y-corregir'],
   // Ajustes con la paleta Frambuesa elegida (sin guardar), para que se vea la vista previa.
   ['ajustes', '/settings', null, 'Frambuesa'],
+  ['ajustes-iconos', '/settings?tab=icons'],
 ]
+// Con SOLO=dashboard,ajustes se hacen solo esas capturas.
+const only = process.env.SOLO?.split(',')
+const pick = (shots) => (only ? shots.filter(([name]) => only.includes(name)) : shots)
 const MODES = [
-  ['claro', { width: 1440, height: 900 }, 'light', SHOTS],
-  ['oscuro', { width: 1440, height: 900 }, 'dark', SHOTS],
-  ['movil', { width: 400, height: 860 }, 'light', [SHOTS[0], SHOTS[2]]],
+  ['claro', { width: 1440, height: 900 }, 'light', pick(SHOTS)],
+  ['oscuro', { width: 1440, height: 900 }, 'dark', pick(SHOTS)],
+  ['movil', { width: 400, height: 860 }, 'light', pick([SHOTS[0], SHOTS[2]])],
 ]
 
 fs.mkdirSync(out, { recursive: true })
@@ -346,8 +355,11 @@ for (const [mode, viewport, colorScheme, shots] of MODES) {
     if (button) await page.getByRole('button', { name: button }).click()
     if (radio) await page.getByText(radio, { exact: true }).click()
     await page.waitForTimeout(800)
-    await page.screenshot({ path: path.join(out, `${mode}-${name}.png`) })
-    console.log(`${mode}-${name}.png`)
+    await page.screenshot({
+      path: path.join(out, `${mode}-${name}${suffix}.png`),
+      fullPage: !!process.env.COMPLETA,
+    })
+    console.log(`${mode}-${name}${suffix}.png`)
   }
   await context.close()
 }

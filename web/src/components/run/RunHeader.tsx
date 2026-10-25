@@ -1,18 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Bot,
-  Clock,
-  Coins,
-  Cpu,
-  FlaskConical,
-  Gauge,
-  GitBranch,
-  Server,
-  Sparkles,
-  Square,
-  Workflow,
-  type LucideIcon,
-} from 'lucide-react'
+import { Square } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { api, type AgentRun, type Run } from '../../api'
@@ -24,6 +11,7 @@ import {
   isTerminal,
   providerName,
   statusTone,
+  type StatusTone,
 } from '../../format'
 import { cn } from '../../lib/cn'
 import { useNow } from '../../useNow'
@@ -35,7 +23,10 @@ import { StatusBadge } from '../StatusBadge'
 import { Button } from '../ui/Button'
 import { Pill } from '../ui/Pill'
 import { SimulatedPill } from '../ui/SimulatedPill'
-import { statusIcon } from '../ui/statusIcons'
+import { statusIcon, TONE_BADGE } from '../ui/statusIcons'
+import { Icon } from '../icons/Icon'
+import { useIconPack } from '../icons/pack'
+import type { IconName } from '../icons/registry'
 import { headlineShare, sharesByProvider, sharesLine } from '../usage/quotaFormat'
 import { AgentActions } from './AgentActions'
 import { headlineAgent } from './headlineAgent'
@@ -126,7 +117,7 @@ export function RunHeader({
                 {run.workItemKey}
               </Link>
             )}
-            <StatusBadge status={cancelling ? 'CANCELLING' : run.status} />
+            <StatusBadge status={cancelling ? 'CANCELLING' : run.status} live />
             <span className="connection" role="status">
               <Pill tone={connection.tone} icon={connection.icon}>
                 <span className="visually-hidden">Conexión: </span>
@@ -148,18 +139,18 @@ export function RunHeader({
           <h1>{run.workItemTitle ?? 'Ejecución'}</h1>
           <ul className="hero-chips" aria-label="Detalles de la ejecución">
             {run.workflow && (
-              <Chip icon={Workflow} label="Workflow">
+              <Chip icon="workflows" label="Workflow">
                 <Link to={`/workflows/${encodeURIComponent(run.workflow.key)}`}>
                   {run.workflow.name ?? run.workflow.key}
                 </Link>{' '}
                 v{run.workflow.version}
               </Chip>
             )}
-            <Chip icon={Server} label="Runner">
+            <Chip icon="runners" label="Runner">
               {runner?.name ?? (runnerId ? runnerId.slice(0, 8) : 'sin asignar')}
             </Chip>
             {provider && (
-              <Chip icon={Bot} label="Proveedor">
+              <Chip icon="agent" label="Proveedor">
                 {providerName(provider)}
                 {simulated && (
                   <>
@@ -170,12 +161,12 @@ export function RunHeader({
               </Chip>
             )}
             {model && (
-              <Chip icon={Cpu} label="Modelo">
+              <Chip icon="model" label="Modelo">
                 {model}
               </Chip>
             )}
             {branch && (
-              <Chip icon={GitBranch} label="Rama">
+              <Chip icon="branch" label="Rama">
                 <span className="mono">{branch}</span>
               </Chip>
             )}
@@ -231,11 +222,11 @@ export function RunHeader({
         />
       )}
       <dl className="kpis run-kpis">
-        <Kpi icon={Clock} tone="live" label="Duración">
+        <Kpi icon="duration" tone="live" label="Duración">
           {formatDuration(elapsed(run.startedAt ?? run.createdAt, run.finishedAt, now))}
         </Kpi>
         <Kpi
-          icon={Sparkles}
+          icon="prompt"
           tone="primary"
           label="Tokens"
           sub={
@@ -256,7 +247,7 @@ export function RunHeader({
           {noTokens ? '—' : formatNumber((totals.inputTokens ?? 0) + (totals.outputTokens ?? 0))}
         </Kpi>
         <Kpi
-          icon={Coins}
+          icon="cost"
           tone="warn"
           label="Coste"
           sub={totals.costUsd == null && running && 'Llega al terminar'}
@@ -264,7 +255,7 @@ export function RunHeader({
           {formatCost(totals.costUsd)}
         </Kpi>
         <Kpi
-          icon={Gauge}
+          icon="usage"
           tone="warn"
           label="Cuota"
           sub={
@@ -288,7 +279,7 @@ export function RunHeader({
         {/* Sin verificación, los tests no aplican: el hueco se queda vacío. */}
         {verification ? (
           <Kpi
-            icon={FlaskConical}
+            icon="simulated"
             tone={statusTone(verification.status) === 'bad' ? 'bad' : 'ok'}
             label="Tests"
             sub={<StatusBadge status={verification.status} />}
@@ -304,26 +295,24 @@ export function RunHeader({
 }
 
 /** Insignia grande con el icono del estado de la ejecución. */
-function HeroBadge({ tone, icon: Icon }: { tone: string; icon: LucideIcon }) {
+function HeroBadge({ tone, icon }: { tone: StatusTone; icon: IconName }) {
   return (
     <span className={cn('hero-badge', `hero-${tone}`)} aria-hidden="true">
-      <Icon size={38} strokeWidth={2.75} />
+      <Icon
+        name={icon}
+        size={38}
+        strokeWidth={2.75}
+        tone={TONE_BADGE[tone]}
+        loop={tone === 'active'}
+      />
     </span>
   )
 }
 
-function Chip({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: LucideIcon
-  label: string
-  children: ReactNode
-}) {
+function Chip({ icon, label, children }: { icon: IconName; label: string; children: ReactNode }) {
   return (
     <li className="chip" title={label}>
-      <Icon size={16} strokeWidth={2.5} aria-hidden="true" />
+      <Icon name={icon} size={18} strokeWidth={2.25} />
       <span className="visually-hidden">{label}: </span>
       {children}
     </li>
@@ -331,22 +320,24 @@ function Chip({
 }
 
 function Kpi({
-  icon: Icon,
+  icon,
   tone,
   label,
   sub,
   children,
 }: {
-  icon: LucideIcon
+  icon: IconName
   tone: 'live' | 'primary' | 'warn' | 'ok' | 'bad'
   label: string
   sub?: ReactNode
   children: ReactNode
 }) {
+  // Con un paquete ilustrado, el dibujo va suelto y grande, como en el dashboard.
+  const art = useIconPack() !== 'lucide'
   return (
     <div className={cn('kpi kpi-main', `kpi-${tone}`)}>
-      <span className="kpi-icon" aria-hidden="true">
-        <Icon size={24} strokeWidth={2.5} />
+      <span className={cn('kpi-icon', art && 'kpi-icon-art')} aria-hidden="true">
+        <Icon name={icon} size={art ? 44 : 24} strokeWidth={2.5} />
       </span>
       <dt>{label}</dt>
       <dd>{children}</dd>

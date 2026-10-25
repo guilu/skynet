@@ -13,7 +13,9 @@ Cómo se ve y cómo se construye la web de Skynet tras el rediseño (UI-A a UI-F
 - **Primero lo que pide atención.** El dashboard empieza por lo que falla o no responde; las listas filtran por estado; una ejecución abre en la conversación del agente que importa.
 - **Todo enlazable.** Filtros, pestañas, la vista de actividad, el agente y la herramienta elegidos viven en la URL. Copiar la dirección comparte exactamente lo que se ve.
 - **Formularios aparte.** Crear, configurar, lanzar y confirmar se hace en un panel lateral; la página de fondo no cambia hasta que se guarda.
-- **Táctil y redondeado.** Esquinas grandes, bordes de 2 px, sombras cortas sin desenfoque y botones con volumen que se hunden al pulsarlos.
+- **Claro y con aire.** Fondo casi blanco, paneles planos con borde de 1 px y sin sombra (los botones sí conservan su «labio» inferior, como en Duolingo), esquinas redondeadas y mucho espacio entre bloques. El color lo ponen los iconos y los estados, no las cajas.
+- **Fondo del color de las tarjetas.** El contenido va sobre blanco (`--bg`) en el tema claro y sobre `#171f30` en el oscuro, el mismo color que las tarjetas, que se separan por su borde.
+- **Nunca negro.** Los textos son una escala de grises azulados (`--fg`, `--muted`), con pesos contenidos: títulos en 600, texto en 400 y nada en mayúsculas salvo las cabeceras de tabla.
 
 ## 2. Tokens
 
@@ -26,15 +28,15 @@ Todos los colores, radios y profundidades son variables CSS en `web/src/index.cs
 | Acento | `--primary`, `--primary-shade`, `--primary-soft`, `--primary-ink`, `--on-primary` | Botón principal, selección, foco y enlaces |
 | Estados | `--ok`, `--warn`, `--bad`, `--live`, `--idle`, cada uno con `-shade`, `-soft` e `-ink` | Píldoras, puntos del árbol, barras de la cascada y avisos |
 | Botones de estado | `--ok-btn`, `--bad-btn` y sus `-shade` | Más oscuros que el estado, para que el texto blanco llegue a AA |
-| Formas | `--r-sm` (12), `--r-md` (16), `--r-lg` (22) | Campos, bloques internos y tarjetas |
-| Profundidad | `--lift` (4 px), `--lift-card` (3 px) | Sombra firme de botones y tarjetas |
+| Formas | `--r-sm` (10), `--r-md` (12), `--r-lg` (16) | Campos y botones, bloques internos y tarjetas |
+| Profundidad | `--lift` (4 px; 3 px en `.btn-sm`), `--lift-card` (0 px) | El «labio» inferior de los botones, como en Duolingo; los paneles van planos |
 | Movimiento | `--ease-pop`, `--animate-pop`, `--animate-pulse-ring` | Entradas con rebote y el latido de lo vivo |
 
 Para cada estado: el color sólido (`--ok`) va en iconos y barras; `-soft` es el fondo de la píldora; `-ink` es el texto sobre ese fondo; `-shade` es la sombra o el borde.
 
 ## 3. Tipografía
 
-- **Barlow** para títulos y texto (`--font-display` y `--font-sans` apuntan a la misma familia). Es la fuente libre (OFL) más parecida a Duolingo Sans, la referencia de estilo, que no se puede usar porque su licencia es exclusiva de Duolingo. El texto va en 500 y lo destacado en 600–900: la interfaz es densa y el peso ayuda a leerla.
+- **Barlow** para títulos y texto (`--font-display` y `--font-sans` apuntan a la misma familia). Es la fuente libre (OFL) más parecida a Duolingo Sans, la referencia de estilo, que no se puede usar porque su licencia es exclusiva de Duolingo. El texto va en 400 a 14 px, las etiquetas y la navegación en 500, y los títulos, botones y cifras en 600 (700 solo en alguna cifra grande). Nada en mayúsculas salvo las cabeceras de tabla.
 - **JetBrains Mono** (`--font-mono`) solo para IDs, claves, hashes, comandos, rutas y payloads.
 
 Las dos van empaquetadas con la web (`@fontsource`), sin peticiones a terceros.
@@ -118,7 +120,7 @@ Al cambiar una pantalla, vuelve a generarlas en la misma PR.
 
 ## 9. Colores personalizables
 
-En **Ajustes** (`/settings`) se elige una paleta predefinida o un color base para el acento y cada estado. Lo guardado vale para toda la web y para todos los navegadores (UI-G).
+En **Ajustes › Colores** (`/settings`) se elige una paleta predefinida o un color base para el acento y cada estado. Lo guardado vale para toda la web y para todos los navegadores (UI-G).
 
 | Claro | Oscuro |
 | --- | --- |
@@ -139,7 +141,7 @@ El logo sale del estudio de imagen corporativa de octubre de 2026, variante «Pr
 - **Un solo dibujo.** La geometría del isotipo está en `web/src/lib/brand.ts`. De ahí salen el componente `Logo` (SVG con `currentColor`) y el favicon (`faviconSvg`). No se usa el PNG del estudio.
 - **Baldosa.** `BrandMark` pone el isotipo sobre `--brand-tile` con un degradado blanco suave y la sombra corta de siempre (`--brand-tile-shade`). En claro, la baldosa es el acento y el isotipo va en `--on-primary`. En oscuro baja al tono sombra para que el isotipo siga en blanco. Como todo sale de los tokens, sigue a los colores personalizables.
 - **Dónde aparece.** En la barra lateral, como enlace al Dashboard (se ilumina al pasar el ratón, se hunde al pulsar y tiene foco visible; con la barra plegada solo queda la baldosa). En el login, en lugar de la baldosa grande aparece la mascota (sección 11), y bajo el nombre va el lema «Agentes · Flujos · Ejecuciones».
-- **Nombre.** «Skynet» en Barlow 800, la tipografía de títulos.
+- **Nombre.** «Skynet» en Barlow 600, la tipografía de títulos.
 - **Favicon e iconos.** `public/favicon.svg` es `faviconSvg` con el azul por defecto, y un test lo comprueba. `public/apple-touch-icon.png`, `icon-192.png` e `icon-512.png` (los del manifiesto) se generan desde él con `node scripts/iconos.mjs`. Con un acento propio, `appearance.ts` cambia el favicon por uno generado al vuelo con ese color.
 - **Tamaño mínimo.** 16 px en el favicon y 36 px de baldosa en la interfaz. Por debajo de eso, el hueco del anillo deja de leerse.
 - **Fuera.** Las demás variantes del estudio (minimalista, oscura, acento IA, outline, horizontal) no se usan. La oscura y la neutra ya salen con las paletas.
@@ -155,3 +157,20 @@ Con CO-C asoma también en las páginas: en la cabecera del Dashboard, de cada p
 ![La mascota en el Dashboard](ui/companion-dashboard.png)
 
 ![Expresiones de la mascota en Ajustes](ui/companion-expresiones.png)
+
+## 12. Iconos
+
+Los iconos se piden por lo que significan, con `<Icon name="runs" size={22} />` (`web/src/components/icons/`), y los pinta el **paquete** elegido en **Ajustes › Iconos** (`/settings?tab=icons`), igual que los colores (IC-A, plan `plans/estudio-iconos.md`):
+
+- **Lucide**, por defecto: los iconos de trazo de siempre.
+- **Ilustrados**: formas lisas sin contorno, al estilo de las ilustraciones de Duolingo, con un «labio» más oscuro debajo de cada forma (como los botones) y un gesto propio al pasar el ratón. Siguen a la paleta y al tema. Si a un nombre aún le falta su dibujo, se pinta el de Lucide y la galería lo marca.
+- **ChatGPT**: los iconos de unas láminas que diseñó ChatGPT, redibujados en SVG. Tienen volumen (degradados de claro a intenso y un brillo) y cada objeto lleva sus propios colores (casa roja y amarilla, carpeta amarilla…), así que no siguen a la paleta. Hay dibujo para todos los nombres, y hacen los mismos gestos que Ilustrados.
+
+Cómo funciona:
+
+- **Nombres.** `registry.ts` lista todos los nombres, con su etiqueta, su grupo y el icono de Lucide que les toca (el paquete Lucide y el respaldo de los demás). Ningún componente importa un icono de `lucide-react` por su cuenta: lo que queda se pasa a `Icon` en IC-B e IC-C.
+- **Dibujos.** `ilustrados.tsx`, en un lienzo de 32 × 32: cada `Part` pinta su forma dos veces (labio y cara), y los colores salen de clases (`m` vivo, `w` claro, `k` profundo, `warn`…) que resuelve `ilustrados.css` con los tokens. Los de ChatGPT están en `chatgpt.tsx` y usan unos degradados (`chatgptColors.ts`) que se ponen una sola vez en la página, en un SVG invisible (`#cg-defs`); las insignias de estado toman el color del disco del tono (`chatgpt.css`).
+- **Variantes por tamaño** (Ilustrados). 32 px o más: ilustrado con brillos y detalles. 18–28 px: compacto, sin detalles. 16 px o menos: trazo, la misma geometría en `currentColor`. Los controles pequeños (cerrar, chevrons, menú) son siempre de trazo, y los estados son insignias: un disco del tono con el glifo en blanco.
+- **Gestos.** Salen al pasar el ratón o enfocar el control que lleva el icono (enlace, botón, pestaña, opción de menú o cualquier `.ico-host`), una vez al volverse la página actual o la pestaña elegida, y en bucle solo con `loop` (la píldora y la insignia grande de la ejecución abierta mientras está en marcha). Solo animan `transform` y `opacity` (y el trazo que se dibuja). Con «reducir movimiento» del sistema no se mueve nada.
+- **Guardado.** `PUT /api/settings/appearance` con `{ "icons": "ilustrados" }`, en `app_setting` con la clave `icons`. Se lee sin sesión, como la paleta, y la última elección se recuerda en el navegador (`skynet.icons`) para que la carga siguiente no parpadee.
+

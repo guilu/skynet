@@ -1,4 +1,3 @@
-import { FileCheck2, FilePen, FileWarning } from 'lucide-react'
 import type { DefinitionStatus, VersionView } from '../../api'
 import { Pill } from '../ui/Pill'
 
@@ -22,19 +21,19 @@ export function VersionPill({
   switch (version.status) {
     case 'PUBLISHED':
       return (
-        <Pill tone="ok" icon={FileCheck2}>
+        <Pill tone="ok" icon="file-ok">
           {text}
         </Pill>
       )
     case 'VALIDATED':
       return (
-        <Pill tone="neutral" icon={FilePen}>
+        <Pill tone="neutral" icon="draft">
           {text}
         </Pill>
       )
     case 'DRAFT':
       return (
-        <Pill tone="warn" icon={FileWarning}>
+        <Pill tone="warn" icon="file-warning">
           {text}
         </Pill>
       )

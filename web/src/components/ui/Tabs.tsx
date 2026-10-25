@@ -1,12 +1,13 @@
 import * as Menu from '@radix-ui/react-dropdown-menu'
-import { Check, ChevronDown, type LucideIcon } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { fitTabs } from './tabsFit'
+import { Icon } from '../icons/Icon'
+import type { IconName } from '../icons/registry'
 
 export interface TabItem<T extends string> {
   id: T
   label: string
-  icon?: LucideIcon
+  icon?: IconName
   /** Número junto a la etiqueta, p. ej. los eventos que hay. */
   count?: number
 }
@@ -116,7 +117,7 @@ export function TabList<T extends string>({
               tabIndex={selectedHidden ? 0 : -1}
             >
               {selectedHidden ? <TabLabel tab={tabs[current]} /> : 'Más'}
-              <ChevronDown size={16} strokeWidth={2.5} aria-hidden="true" />
+              <Icon name="chevron-down" size={16} strokeWidth={2.5} />
             </button>
           </Menu.Trigger>
           <Menu.Portal>
@@ -126,7 +127,7 @@ export function TabList<T extends string>({
                   <Menu.RadioItem key={t.id} value={t.id} className="menu-item">
                     <TabLabel tab={t} />
                     <Menu.ItemIndicator className="menu-check">
-                      <Check size={16} strokeWidth={3} aria-hidden="true" />
+                      <Icon name="check" size={16} strokeWidth={3} />
                     </Menu.ItemIndicator>
                   </Menu.RadioItem>
                 ))}
@@ -152,12 +153,12 @@ export function TabList<T extends string>({
           {tabs.map((t) => (
             <span key={t.id} role="tab">
               <TabLabel tab={t} />
-              <ChevronDown size={16} strokeWidth={2.5} />
+              <Icon name="chevron-down" size={16} strokeWidth={2.5} />
             </span>
           ))}
           <span role="tab">
             Más
-            <ChevronDown size={16} strokeWidth={2.5} />
+            <Icon name="chevron-down" size={16} strokeWidth={2.5} />
           </span>
         </div>
       </div>
@@ -167,10 +168,9 @@ export function TabList<T extends string>({
 }
 
 function TabLabel<T extends string>({ tab }: { tab: TabItem<T> }) {
-  const Icon = tab.icon
   return (
     <>
-      {Icon && <Icon size={16} aria-hidden="true" />}
+      {tab.icon && <Icon name={tab.icon} size={16} />}
       {tab.label}
       {tab.count != null && <span className="tab-count">{tab.count}</span>}
     </>

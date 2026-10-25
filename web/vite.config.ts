@@ -38,7 +38,8 @@ export default defineConfig({
     // Por encima de los 5 s de espera de Testing Library (src/test/setup.ts), que un test lento
     // por carga no se corte antes de que su findBy termine.
     testTimeout: 20_000,
-    // palette.test.ts lee los tokens de index.css (?raw) para compararlos con los suyos.
-    css: { include: [/index\.css/] },
+    // palette.test.ts lee los tokens de index.css (?raw) para compararlos con los suyos, e
+    // Icon.test.tsx comprueba las animaciones de ilustrados.css.
+    css: { include: [/index\.css/, /ilustrados\.css/] },
   },
 })

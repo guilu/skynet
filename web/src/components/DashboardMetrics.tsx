@@ -1,21 +1,14 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import {
-  CircleCheck,
-  CirclePlay,
-  CircleX,
-  Coins,
-  Layers,
-  Square,
-  Timer,
-  Type,
-  type LucideIcon,
-} from 'lucide-react'
-import { lazy, Suspense } from 'react'
+import { ArrowRight } from 'lucide-react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { api, type MetricsPeriod, type RunMetrics } from '../api'
 import { formatCompact, formatCost, formatDuration, formatNumber } from '../format'
 import { cn } from '../lib/cn'
 import { ErrorMessage } from './ErrorMessage'
+import { Icon } from './icons/Icon'
+import { useIconPack } from './icons/pack'
+import type { IconName } from './icons/registry'
 import { bucketTitle } from './metricsFormat'
 import { TilesSkeleton } from './ui/Skeleton'
 import { PERIODS, usePeriod } from './usePeriod'
@@ -48,9 +41,10 @@ export function PeriodSelector() {
  * Métricas de las ejecuciones creadas en el periodo elegido (24 h, 7 o 30 días): ocho tarjetas
  * con cuántas hay por estado, su duración mediana, tokens y coste, y un panel con las
  * ejecuciones por hora o por día. Las cifras de ejecuciones enlazan a la lista con el mismo
- * filtro. El selector del periodo está en la cabecera del dashboard.
+ * filtro. El selector del periodo está en la cabecera del dashboard. `between` va entre las
+ * tarjetas y el gráfico.
  */
-export function DashboardMetrics() {
+export function DashboardMetrics({ between }: { between?: ReactNode }) {
   const [period] = usePeriod()
   const metrics = useQuery({
     queryKey: ['dashboard', 'metrics', period],
@@ -61,12 +55,24 @@ export function DashboardMetrics() {
 
   const data = metrics.data
   return (
-    <section className="dashboard-metrics" aria-label="Métricas">
-      <ErrorMessage error={metrics.error} />
-      {metrics.isPending && <TilesSkeleton />}
-      {data && <Tiles data={data} period={period} />}
+    <>
+      <section className="dashboard-metrics" aria-labelledby="summary-title">
+        <div className="section-head">
+          <h2 id="summary-title">Resumen ({PERIOD_TEXT[period]})</h2>
+          {data && (
+            <Link to={runsLink(data.since)} className="section-link">
+              Ver más detalles
+              <ArrowRight size={16} strokeWidth={2.25} aria-hidden="true" />
+            </Link>
+          )}
+        </div>
+        <ErrorMessage error={metrics.error} />
+        {metrics.isPending && <TilesSkeleton />}
+        {data && <Tiles data={data} period={period} />}
+      </section>
+      {between}
       {data && <RunsChartFigure data={data} />}
-    </section>
+    </>
   )
 }
 
@@ -80,7 +86,7 @@ function runsLink(since: string, status: string[] = []) {
 interface Tile {
   label: string
   value: string
-  icon: LucideIcon
+  icon: IconName
   tone: 'live' | 'bad' | 'ok' | 'warn' | 'idle' | 'primary'
   to?: string
   /** Línea secundaria bajo la cifra. */
@@ -101,7 +107,7 @@ function Tiles({ data, period }: { data: RunMetrics; period: MetricsPeriod }) {
     {
       label: 'Activas',
       value: formatNumber(data.active),
-      icon: CirclePlay,
+      icon: 'play',
       tone: 'live',
       sub: 'pendientes o en curso',
       to: runsLink(data.since, ['PENDING', 'RUNNING']),
@@ -109,7 +115,7 @@ function Tiles({ data, period }: { data: RunMetrics; period: MetricsPeriod }) {
     {
       label: 'Completadas',
       value: formatNumber(data.succeeded),
-      icon: CircleCheck,
+      icon: 'status-ok',
       tone: 'ok',
       sub: share(data.succeeded),
       to: runsLink(data.since, ['SUCCEEDED']),
@@ -117,7 +123,7 @@ function Tiles({ data, period }: { data: RunMetrics; period: MetricsPeriod }) {
     {
       label: 'Fallidas',
       value: formatNumber(data.failed),
-      icon: CircleX,
+      icon: 'status-error',
       tone: 'bad',
       sub: share(data.failed),
       to: runsLink(data.since, ['FAILED']),
@@ -125,7 +131,7 @@ function Tiles({ data, period }: { data: RunMetrics; period: MetricsPeriod }) {
     {
       label: 'Coste',
       value: formatCost(data.costUsd),
-      icon: Coins,
+      icon: 'cost',
       tone: 'warn',
       sub:
         data.costUsd != null && data.total > 0
@@ -135,7 +141,7 @@ function Tiles({ data, period }: { data: RunMetrics; period: MetricsPeriod }) {
     {
       label: 'Ejecuciones',
       value: formatNumber(data.total),
-      icon: Layers,
+      icon: 'stages',
       tone: 'primary',
       sub: PERIOD_TEXT[period],
       to: runsLink(data.since),
@@ -143,7 +149,7 @@ function Tiles({ data, period }: { data: RunMetrics; period: MetricsPeriod }) {
     {
       label: 'Canceladas',
       value: formatNumber(data.cancelled),
-      icon: Square,
+      icon: 'status-cancelled',
       tone: 'idle',
       sub: share(data.cancelled),
       to: runsLink(data.since, ['CANCELLED']),
@@ -154,24 +160,26 @@ function Tiles({ data, period }: { data: RunMetrics; period: MetricsPeriod }) {
         data.medianDurationSeconds == null
           ? '—'
           : formatDuration(Math.round(data.medianDurationSeconds * 1000)),
-      icon: Timer,
+      icon: 'duration',
       tone: 'primary',
       sub: 'de las terminadas',
     },
     {
       label: 'Tokens',
       value: `${formatCompact(data.inputTokens)} / ${formatCompact(data.outputTokens)}`,
-      icon: Type,
+      icon: 'prompt',
       tone: 'primary',
       sub: 'entrada / salida',
     },
   ]
+  // Con un paquete ilustrado, el dibujo va suelto y grande; con Lucide, sobre su baldosa de color.
+  const art = useIconPack() !== 'lucide'
   return (
     <dl className="kpis dash-kpis">
       {tiles.map((t) => (
         <div key={t.label} className={cn('kpi kpi-main', `kpi-${t.tone}`)}>
-          <span className="kpi-icon" aria-hidden="true">
-            <t.icon size={24} strokeWidth={2.5} />
+          <span className={cn('kpi-icon', art && 'kpi-icon-art')} aria-hidden="true">
+            <Icon name={t.icon} size={art ? 44 : 24} strokeWidth={2.5} />
           </span>
           <dt>{t.label}</dt>
           <dd>{t.to ? <Link to={t.to}>{t.value}</Link> : t.value}</dd>

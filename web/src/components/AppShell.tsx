@@ -1,6 +1,5 @@
 import * as Tooltip from '@radix-ui/react-tooltip'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Search } from 'lucide-react'
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 import { api, SESSION_KEY, type Session } from '../api'
@@ -14,6 +13,7 @@ import { Breadcrumbs } from './shell/Breadcrumbs'
 import { ThemeMenu, UserMenu } from './shell/Menus'
 import { MobileNav } from './shell/MobileNav'
 import { Sidebar } from './shell/Sidebar'
+import { Icon } from './icons/Icon'
 
 // La paleta (cmdk) se descarga la primera vez que se abre.
 const CommandPalette = lazy(() =>
@@ -91,7 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               aria-label="Buscar o ejecutar una orden"
               aria-keyshortcuts="Meta+K Control+K"
             >
-              <Search size={20} strokeWidth={2.5} aria-hidden="true" />
+              <Icon name="search" size={20} strokeWidth={2.5} />
               <span className="search-label">Buscar ejecución, trabajo o runner…</span>
               <kbd className="kbd">⌘K</kbd>
             </button>

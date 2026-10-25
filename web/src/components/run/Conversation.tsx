@@ -1,5 +1,4 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Bot, ChevronDown, User, Wrench } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { api, type AgentRun, type ConversationTurn, type StoredEvent } from '../../api'
@@ -12,6 +11,7 @@ import { LongText } from './LongText'
 import { Button } from '../ui/Button'
 import { Pill } from '../ui/Pill'
 import { unsupportedReason, useProviders } from '../providers'
+import { Icon } from '../icons/Icon'
 
 const KIND_LABELS: Record<AgentRun['kind'], string> = {
   START: 'Lanzamiento',
@@ -82,7 +82,7 @@ export function Conversation({
               {turn.prompt && (
                 <div className="msg msg-user">
                   <span className="avatar avatar-user" aria-hidden="true">
-                    <User size={20} />
+                    <Icon name="user" size={20} />
                   </span>
                   <div className="bubble bubble-user">
                     <p className="bubble-meta">Tú</p>
@@ -94,7 +94,7 @@ export function Conversation({
                 item.kind === 'message' ? (
                   <div key={item.sequence} className="msg">
                     <span className="avatar avatar-agent" aria-hidden="true">
-                      <Bot size={20} />
+                      <Icon name="agent" size={20} />
                     </span>
                     <div className="bubble bubble-agent">
                       <p className="bubble-meta">
@@ -152,14 +152,14 @@ function ToolCard({
     <details className="tool-card">
       <summary>
         <span className={`tool-card-icon icon-${tone}`} aria-hidden="true">
-          <Wrench size={16} />
+          <Icon name="tool" size={16} />
         </span>
         <span className="tool-card-name">
           <strong>{call.name}</strong>
           <span className="tool-card-arg">{toolSummary(call.input).replace(/^: /, '')}</span>
         </span>
         <Pill tone={tone}>{running ? 'En curso' : call.isError ? 'Error' : 'Hecha'}</Pill>
-        <ChevronDown size={18} className="tool-card-chevron" aria-hidden="true" />
+        <Icon name="chevron-down" size={18} className="tool-card-chevron" />
       </summary>
       <div className="tool-card-body">
         <JsonView value={call.input} label="Entrada" />

@@ -1,11 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink } from 'react-router'
 import { HealthIndicator } from '../../HealthIndicator'
 import { PendingCount } from '../approval/PendingCount'
 import { NAV } from './nav'
 import { RunnerSummary } from './Sidebar'
+import { Icon } from '../icons/Icon'
 
 /**
  * Navegación del móvil: las cuatro secciones más usadas en una barra inferior y el resto, con el
@@ -18,13 +18,13 @@ export function MobileNav() {
     <nav className="mobile-nav" aria-label="Navegación móvil">
       {NAV.filter((n) => n.mobile).map((n) => (
         <NavLink key={n.to} to={n.to} end={n.end}>
-          <n.icon size={26} strokeWidth={2.25} aria-hidden="true" />
+          <Icon name={n.icon} size={24} strokeWidth={1.9} />
           {n.label}
         </NavLink>
       ))}
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Trigger className="mobile-more">
-          <Menu size={26} strokeWidth={2.25} aria-hidden="true" />
+          <Icon name="menu" size={24} strokeWidth={1.9} />
           Más
           {NAV.some((n) => n.pendingApprovals && !n.mobile) && <PendingCount />}
         </Dialog.Trigger>
@@ -34,7 +34,7 @@ export function MobileNav() {
             <div className="drawer-head">
               <Dialog.Title className="drawer-title">Más</Dialog.Title>
               <Dialog.Close className="icon-btn" aria-label="Cerrar">
-                <X size={22} strokeWidth={2.5} aria-hidden="true" />
+                <Icon name="close" size={22} strokeWidth={2.5} />
               </Dialog.Close>
             </div>
             <nav className="sidenav" aria-label="Todas las secciones">
@@ -42,7 +42,7 @@ export function MobileNav() {
                 {NAV.map((n) => (
                   <li key={n.to}>
                     <NavLink to={n.to} end={n.end} onClick={close}>
-                      <n.icon size={26} strokeWidth={2.25} aria-hidden="true" />
+                      <Icon name={n.icon} size={24} strokeWidth={1.9} />
                       {n.label}
                       {n.pendingApprovals && <PendingCount />}
                     </NavLink>

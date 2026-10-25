@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Brain, FolderGit2, ListTodo, Plus, ShieldCheck, SlidersHorizontal } from 'lucide-react'
+import { FolderGit2, ListTodo, Plus, ShieldCheck, SlidersHorizontal } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api, WORK_ITEM_TYPES, type Repository, type WorkItem, type WorkItemType } from '../api'
@@ -143,9 +143,9 @@ export function ProjectPage() {
       <TabList
         label="Secciones del proyecto"
         tabs={[
-          { id: 'work', label: 'Trabajos', icon: ListTodo, count: items.data?.length },
-          { id: 'repos', label: 'Repositorios', icon: FolderGit2, count: repos.data?.length },
-          { id: 'memory', label: 'Memoria', icon: Brain },
+          { id: 'work', label: 'Trabajos', icon: 'work-items', count: items.data?.length },
+          { id: 'repos', label: 'Repositorios', icon: 'repo', count: repos.data?.length },
+          { id: 'memory', label: 'Memoria', icon: 'memory' },
         ]}
         selected={tab}
         onSelect={selectTab}

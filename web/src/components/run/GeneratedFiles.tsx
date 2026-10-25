@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, Download, FileText } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -10,6 +9,7 @@ import { MAX_CHUNK, previewKind, safeLink, type PreviewKind } from './artifacts'
 import { CodeView } from './CodeView'
 import { Button } from '../ui/Button'
 import { LinesSkeleton } from '../ui/Skeleton'
+import { Icon } from '../icons/Icon'
 
 const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 
@@ -37,18 +37,13 @@ export function GeneratedFiles({ files }: { files: ArtifactSummary[] }) {
                   aria-label={`Abrir ${f.name}`}
                   onClick={() => setOpen(open === f.id ? null : f.id)}
                 >
-                  <ChevronRight
-                    className="log-chevron"
-                    size={16}
-                    strokeWidth={2.75}
-                    aria-hidden="true"
-                  />
-                  <FileText size={16} strokeWidth={2.5} aria-hidden="true" />
+                  <Icon name="chevron-right" className="log-chevron" size={16} strokeWidth={2.75} />
+                  <Icon name="file" size={16} strokeWidth={2.5} />
                   <span className="file-path">{f.name}</span>
                 </Button>
               ) : (
                 <span className="file-path">
-                  <FileText size={16} strokeWidth={2.5} aria-hidden="true" /> {f.name}
+                  <Icon name="file" size={16} strokeWidth={2.5} /> {f.name}
                 </span>
               )}{' '}
               <span className="muted">
@@ -63,7 +58,7 @@ export function GeneratedFiles({ files }: { files: ArtifactSummary[] }) {
                   download={baseName(f.name)}
                   aria-label={`Descargar ${f.name}`}
                 >
-                  <Download size={14} strokeWidth={2.5} aria-hidden="true" /> Descargar
+                  <Icon name="download" size={14} strokeWidth={2.5} /> Descargar
                 </a>
               )}
               {!previewable && <NoPreview kind={kind} size={f.size} />}

@@ -1,5 +1,4 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { Code, Network } from 'lucide-react'
 import { lazy, Suspense, useRef, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { api, type Validation, type WorkflowModel } from '../../api'
@@ -22,8 +21,8 @@ const DefinitionGraph = lazy(() => import('../graph/DefinitionGraph'))
 const GraphEditor = lazy(() => import('./GraphEditor').then((m) => ({ default: m.GraphEditor })))
 
 const VIEWS = [
-  { id: 'yaml', label: 'YAML', icon: Code },
-  { id: 'graph', label: 'Grafo', icon: Network },
+  { id: 'yaml', label: 'YAML', icon: 'code' },
+  { id: 'graph', label: 'Grafo', icon: 'graph' },
 ] as const
 type View = (typeof VIEWS)[number]['id']
 

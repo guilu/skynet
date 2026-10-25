@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { mockFetch, renderAt } from './test/render'
@@ -93,5 +93,76 @@ describe('Ajustes > Apariencia', () => {
     localStorage.setItem('skynet.palette', JSON.stringify({ live: '#2f9bd6' }))
     applyCachedPalette()
     expect(paletteStyle()).toContain('--live: #2f9bd6;')
+  })
+})
+
+describe('Ajustes > Iconos', () => {
+  afterEach(async () => {
+    vi.unstubAllGlobals()
+    localStorage.clear()
+    const { setIconPack } = await import('./components/icons/pack')
+    act(() => setIconPack('lucide'))
+  })
+
+  it('elige el paquete Ilustrados y al guardarlo cambia los iconos de toda la web', async () => {
+    const fetch = stubApi({
+      'PUT /api/settings/appearance': { colors: NONE, icons: 'ilustrados', updatedAt: null },
+    })
+    renderAt('/settings?tab=icons', <App />)
+
+    const lucide = await screen.findByRole('radio', { name: /Lucide/ })
+    expect(lucide).toBeChecked()
+    const nav = screen.getByRole('navigation', { name: 'Navegación principal' })
+    expect(within(nav).getByRole('link', { name: 'Ejecuciones' }).querySelector('svg')).toHaveClass(
+      'lucide',
+    )
+    // Cada vista previa se pinta con su paquete, aunque no sea el elegido.
+    const ilustrados = screen.getByRole('radio', { name: /Ilustrados/ })
+    expect(ilustrados.closest('label')!.querySelector('[data-icon="dashboard"]')).not.toBeNull()
+
+    fireEvent.click(ilustrados)
+    expect(screen.getByText('Cambios sin guardar.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(await screen.findByText('Guardado.')).toHaveAttribute('role', 'status')
+    const put = fetch.mock.calls.find(([, init]) => init?.method === 'PUT')!
+    expect(JSON.parse(put[1]!.body as string)).toEqual({ icons: 'ilustrados' })
+    await waitFor(() =>
+      expect(
+        within(nav).getByRole('link', { name: 'Ejecuciones' }).querySelector('svg'),
+      ).toHaveAttribute('data-icon', 'runs'),
+    )
+    expect(localStorage.getItem('skynet.icons')).toBe('ilustrados')
+  })
+
+  it('la galería enseña cada icono y avisa de los que aún no tienen dibujo', async () => {
+    stubApi({
+      '/api/settings/appearance': { colors: NONE, icons: 'ilustrados', updatedAt: null },
+    })
+    renderAt('/settings?tab=icons', <App />)
+
+    const gallery = await screen.findByRole('region', { name: 'Galería' })
+    expect(within(gallery).getByText('la puerta se abre y sale humo')).toBeInTheDocument()
+    expect(within(gallery).getAllByText('Sin dibujo: usa Lucide').length).toBeGreaterThan(0)
+    fireEvent.click(within(gallery).getByRole('checkbox', { name: 'Animar todo' }))
+    expect(gallery.querySelector('.icon-gallery')).toHaveClass('ico-play')
+    fireEvent.click(within(gallery).getByRole('button', { name: 'Lucide' }))
+    expect(within(gallery).queryByText('Sin dibujo: usa Lucide')).toBeNull()
+  })
+
+  it('el paquete cacheado en el navegador se aplica antes de que responda el servidor', async () => {
+    const { applyCachedPalette } = await import('./appearance')
+    localStorage.setItem('skynet.icons', 'ilustrados')
+    applyCachedPalette()
+    expect(document.documentElement).toHaveAttribute('data-icons', 'ilustrados')
+  })
+
+  it('el companion tiene su pestaña, también desde el antiguo #companion', async () => {
+    stubApi()
+    renderAt('/settings#companion', <App />)
+    expect(await screen.findByRole('tab', { name: 'Companion' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(screen.getByRole('heading', { name: 'Skyny, tu companion' })).toBeInTheDocument()
   })
 })
