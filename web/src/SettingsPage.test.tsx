@@ -163,6 +163,6 @@ describe('Ajustes > Iconos', () => {
       'aria-selected',
       'true',
     )
-    expect(screen.getByRole('heading', { name: 'Companion' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Skyny, tu companion' })).toBeInTheDocument()
   })
 })

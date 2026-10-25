@@ -8,7 +8,7 @@
 
 :root {
   /* Superficies y texto (neutros con un ligero tinte azul) */
-  --bg: #f7f9fc;
+  --bg: #ffffff;
   --surface: #ffffff;
   --surface-2: #f1f4f9;
   --border: #e3e8f0;
@@ -69,8 +69,8 @@
   --r-sm: 10px;
   --r-md: 12px;
   --r-lg: 16px;
-  /* Planos: sin «labio» bajo botones y paneles. */
-  --lift: 0px;
+  /* Paneles planos; los botones conservan su «labio» inferior, como en Duolingo. */
+  --lift: 4px;
   --lift-card: 0px;
   --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
 
@@ -697,7 +697,7 @@
     border-radius: 12px;
     background: var(--surface);
     color: var(--fg);
-    box-shadow: none;
+    box-shadow: 0 3px 0 var(--border);
     cursor: pointer;
     transition: transform 80ms;
   }
@@ -1219,7 +1219,7 @@
     font-size: 0.875rem;
     white-space: nowrap;
     cursor: pointer;
-    box-shadow: none;
+    box-shadow: 0 var(--lift) 0 var(--c-shade);
     transition:
       transform 90ms ease,
       box-shadow 90ms ease,
@@ -1270,6 +1270,7 @@
   }
 
   .btn-sm {
+    --lift: 3px;
     min-height: 32px;
     padding: 0 12px;
     font-size: 0.8125rem;
@@ -1501,7 +1502,7 @@
   .segmented button[aria-pressed='true'] {
     background: var(--surface);
     color: var(--fg);
-    box-shadow: none;
+    box-shadow: 0 3px 0 var(--border-strong);
   }
 
   /* ---------- Ejecución ---------- */
@@ -4678,7 +4679,7 @@
     width: 34px;
     height: 34px;
     border-radius: 11px;
-    box-shadow: none;
+    box-shadow: 0 2px 0 var(--border);
   }
 
   .menu-danger {
@@ -6709,7 +6710,7 @@
     border: 1px solid var(--border);
     border-radius: 14px;
     background: var(--surface);
-    box-shadow: none;
+    box-shadow: 0 3px 0 var(--border);
     cursor: pointer;
   }
 

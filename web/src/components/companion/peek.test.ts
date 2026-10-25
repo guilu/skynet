@@ -32,14 +32,14 @@ describe('Bocadillo de la mascota', () => {
 describe('Saludo del dashboard', () => {
   it('resume ejecuciones y aprobaciones', () => {
     expect(helloText(2, 1)).toBe(
-      'Hola, soy Skynet. Hay 2 ejecuciones en marcha y 1 aprobación esperándote.',
+      'Hola, soy Skyny. Hay 2 ejecuciones en marcha y 1 aprobación esperándote.',
     )
-    expect(helloText(1, 0)).toBe('Hola, soy Skynet. Hay 1 ejecución en marcha.')
-    expect(helloText(0, 2)).toBe('Hola, soy Skynet. Hay 2 aprobaciones esperándote.')
+    expect(helloText(1, 0)).toBe('Hola, soy Skyny. Hay 1 ejecución en marcha.')
+    expect(helloText(0, 2)).toBe('Hola, soy Skyny. Hay 2 aprobaciones esperándote.')
   })
 
   it('propone lanzar algo si no hay nada', () => {
-    expect(helloText(0, 0)).toBe('Hola, soy Skynet. No hay nada en marcha: ¿lanzamos algo?')
+    expect(helloText(0, 0)).toBe('Hola, soy Skyny. No hay nada en marcha: ¿lanzamos algo?')
   })
 })
 

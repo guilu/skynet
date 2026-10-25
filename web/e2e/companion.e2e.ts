@@ -40,7 +40,7 @@ test('la mascota, la campana y los avisos siguen las ejecuciones en vivo', async
     await expectAccessible(page, 'aviso flotante')
     // CO-C: la pestaña cuenta los avisos sin leer y el Dashboard saluda.
     await expect(page).toHaveTitle(/^\(\d+\) /)
-    await expect(page.locator('.companion-hello')).toContainText('Hola, soy Skynet.')
+    await expect(page.locator('.companion-hello')).toContainText('Hola, soy Skyny.')
   })
 
   await test.step('la campana guarda el aviso y lo marca leído al cerrarla', async () => {

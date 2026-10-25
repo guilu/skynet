@@ -14,7 +14,7 @@ export function CompanionHello({ approvals }: { approvals: ApprovalSummary[] }) 
   const { activeRuns } = useCompanion()
   const latest = activeRuns[0]
   return (
-    <section className="card companion-hello" aria-label="Skynet">
+    <section className="card companion-hello" aria-label="Skyny">
       <Companion state={approvals.length > 0 ? 'waiting' : 'ready'} size={80} />
       <div className="companion-hello-text">
         <Hello text={helloText(activeRuns.length, approvals.length)} />
@@ -45,7 +45,7 @@ export function CompanionHello({ approvals }: { approvals: ApprovalSummary[] }) 
   )
 }
 
-/** El saludo («Hola, soy Skynet.») en negrita y el resto, normal. */
+/** El saludo («Hola, soy Skyny.») en negrita y el resto, normal. */
 function Hello({ text }: { text: string }) {
   const cut = text.indexOf('. ') + 1
   return (

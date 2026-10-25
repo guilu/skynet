@@ -34,10 +34,11 @@ export function CompanionGallery() {
       className="card settings-section"
       aria-labelledby="companion-title"
     >
-      <h2 id="companion-title">Companion</h2>
+      <h2 id="companion-title">Skyny, tu companion</h2>
       <p className="hint">
-        La mascota de Skynet cuenta cómo van tus agentes. Toca una expresión para ver el cambio.
-        Sigue al color de acento y al tema; con «reducir movimiento» del sistema se queda quieta.
+        Skyny (de Skynet) es la mascota que te cuenta cómo van tus agentes. Toca una expresión para
+        ver el cambio. Sigue al color de acento y al tema; con «reducir movimiento» del sistema se
+        queda quieta.
       </p>
       <fieldset className="companion-prefs">
         <legend className="visually-hidden">Preferencias del companion en este navegador</legend>

@@ -1,6 +1,6 @@
 # Companion
 
-La mascota de Skynet cuenta cómo van los agentes. Es el isotipo convertido en personaje: el nodo de arriba es la cabeza, los dos de abajo son las manos y el anillo es la cara, con un visor oscuro donde cambian los ojos. Es plana y en pastel, como el resto de la web, y no usa imágenes, solo SVG con CSS.
+La mascota de Skynet se llama **Skyny** (diminutivo de Skynet) y cuenta cómo van los agentes. Se presenta por su nombre en el saludo del Dashboard y en Ajustes › Companion. Es el isotipo convertido en personaje: el nodo de arriba es la cabeza, los dos de abajo son las manos y el anillo es la cara, con un visor oscuro donde cambian los ojos. Es plana y en pastel, como el resto de la web, y no usa imágenes, solo SVG con CSS.
 
 Plan del hito CO: `plans/estudio-companion.md` (carpeta de proyecto), aprobado el 2026-10-24. Solo web; la app de escritorio que planteaba la issue #140 queda descartada.
 
@@ -106,7 +106,7 @@ En la cabecera, a la derecha del título, asoma una mascota de 92 px (80 px en P
 - **Proyecto:** la cara más fuerte de sus ejecuciones en marcha y «2 ejecuciones en marcha» o «Nada en marcha».
 - **Uso:** En pausa y «Vamos justos de cuota» si hay alertas de cuota; si no, En espera y «Hay cuota de sobra». Solo cuando hay datos.
 
-Bajo la cabecera del Dashboard va la tarjeta de saludo (`CompanionHello`): «Hola, soy Skynet. Hay 1 ejecución en marcha y 1 aprobación esperándote.» con atajos a revisar la aprobación, lanzar un workflow y ver la última ejecución.
+Bajo la cabecera del Dashboard va la tarjeta de saludo (`CompanionHello`): «Hola, soy Skyny. Hay 1 ejecución en marcha y 1 aprobación esperándote.» con atajos a revisar la aprobación, lanzar un workflow y ver la última ejecución.
 
 ### Ejecución, tabla y grafo
 

@@ -30,15 +30,15 @@ export function peekText(state: CompanionState, approvals: number): string {
   }
 }
 
-/** «Hola, soy Skynet. Hay 2 ejecuciones en marcha y 1 aprobación esperándote.» */
+/** «Hola, soy Skyny. Hay 2 ejecuciones en marcha y 1 aprobación esperándote.» */
 export function helloText(runs: number, approvals: number): string {
   const parts = [
     runs > 0 && `${runs} ${runs === 1 ? 'ejecución en marcha' : 'ejecuciones en marcha'}`,
     approvals > 0 &&
       `${approvals} ${approvals === 1 ? 'aprobación esperándote' : 'aprobaciones esperándote'}`,
   ].filter(Boolean)
-  if (parts.length === 0) return 'Hola, soy Skynet. No hay nada en marcha: ¿lanzamos algo?'
-  return `Hola, soy Skynet. Hay ${parts.join(' y ')}.`
+  if (parts.length === 0) return 'Hola, soy Skyny. No hay nada en marcha: ¿lanzamos algo?'
+  return `Hola, soy Skyny. Hay ${parts.join(' y ')}.`
 }
 
 /** La cara de un grupo de ejecuciones (un proyecto): la más fuerte de las que están en marcha. */

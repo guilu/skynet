@@ -13,7 +13,8 @@ Cómo se ve y cómo se construye la web de Skynet tras el rediseño (UI-A a UI-F
 - **Primero lo que pide atención.** El dashboard empieza por lo que falla o no responde; las listas filtran por estado; una ejecución abre en la conversación del agente que importa.
 - **Todo enlazable.** Filtros, pestañas, la vista de actividad, el agente y la herramienta elegidos viven en la URL. Copiar la dirección comparte exactamente lo que se ve.
 - **Formularios aparte.** Crear, configurar, lanzar y confirmar se hace en un panel lateral; la página de fondo no cambia hasta que se guarda.
-- **Claro y con aire.** Fondo casi blanco, paneles planos con borde de 1 px y sin sombra, esquinas redondeadas y mucho espacio entre bloques. El color lo ponen los iconos y los estados, no las cajas.
+- **Claro y con aire.** Fondo casi blanco, paneles planos con borde de 1 px y sin sombra (los botones sí conservan su «labio» inferior, como en Duolingo), esquinas redondeadas y mucho espacio entre bloques. El color lo ponen los iconos y los estados, no las cajas.
+- **Fondo blanco.** El contenido va sobre blanco (`--bg`) en el tema claro; las tarjetas se separan por su borde.
 - **Nunca negro.** Los textos son una escala de grises azulados (`--fg`, `--muted`), con pesos contenidos: títulos en 600, texto en 400 y nada en mayúsculas salvo las cabeceras de tabla.
 
 ## 2. Tokens
@@ -28,7 +29,7 @@ Todos los colores, radios y profundidades son variables CSS en `web/src/index.cs
 | Estados | `--ok`, `--warn`, `--bad`, `--live`, `--idle`, cada uno con `-shade`, `-soft` e `-ink` | Píldoras, puntos del árbol, barras de la cascada y avisos |
 | Botones de estado | `--ok-btn`, `--bad-btn` y sus `-shade` | Más oscuros que el estado, para que el texto blanco llegue a AA |
 | Formas | `--r-sm` (10), `--r-md` (12), `--r-lg` (16) | Campos y botones, bloques internos y tarjetas |
-| Profundidad | `--lift`, `--lift-card` (0 px) | Antes, la sombra firme de botones y tarjetas; desde el rediseño ligero son planos |
+| Profundidad | `--lift` (4 px; 3 px en `.btn-sm`), `--lift-card` (0 px) | El «labio» inferior de los botones, como en Duolingo; los paneles van planos |
 | Movimiento | `--ease-pop`, `--animate-pop`, `--animate-pulse-ring` | Entradas con rebote y el latido de lo vivo |
 
 Para cada estado: el color sólido (`--ok`) va en iconos y barras; `-soft` es el fondo de la píldora; `-ink` es el texto sobre ese fondo; `-shade` es la sombra o el borde.
