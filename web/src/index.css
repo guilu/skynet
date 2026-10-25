@@ -6944,4 +6944,140 @@
     gap: 10px;
     font-weight: 800;
   }
+
+  /* ---- Companion en las páginas (CO-C) ---- */
+
+  .companion-peek {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+  }
+
+  .peek-bubble {
+    position: relative;
+    margin: 0 0 40px;
+    padding: 8px 14px;
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: 0 3px 0 var(--border);
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  /* El pico del bocadillo apunta a la mascota. */
+  .peek-bubble::before {
+    content: '';
+    position: absolute;
+    left: -9px;
+    bottom: 10px;
+    width: 14px;
+    height: 14px;
+    border-left: 2px solid var(--border);
+    border-bottom: 2px solid var(--border);
+    background: var(--surface);
+    transform: rotate(45deg);
+  }
+
+  .page-peek {
+    margin-block: -10px;
+  }
+
+  .companion-hello {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-top: var(--space-6);
+    padding: 16px 20px;
+    background: linear-gradient(120deg, var(--primary-soft), var(--surface) 70%);
+  }
+
+  .companion-hello-text {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .companion-hello-text p {
+    margin: 0;
+    font-size: 1.0625rem;
+    font-weight: 800;
+  }
+
+  .companion-hello-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .run-band {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-block: var(--space-3);
+    padding-block: 10px;
+    background: var(--primary-soft);
+    border-color: color-mix(in oklab, var(--primary) 30%, var(--border));
+  }
+
+  .run-band[data-state='success'] {
+    background: var(--ok-soft);
+  }
+
+  .run-band[data-state='error'] {
+    background: var(--bad-soft);
+  }
+
+  .run-band:is([data-state='waiting'], [data-state='paused']) {
+    background: var(--warn-soft);
+  }
+
+  .run-band:is([data-state='cancelled'], [data-state='offline']) {
+    background: var(--idle-soft);
+  }
+
+  .run-band-text {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .run-band-text strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .status-face {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Más alta que la línea: sin el margen negativo, empujaría la tercera línea fuera del nodo. */
+  .graph-state .companion {
+    flex: none;
+    margin-block: -4px;
+  }
+
+  @media (max-width: 720px) {
+    .companion-peek .companion {
+      width: 56px;
+      height: 56px;
+    }
+
+    .dash-peek,
+    .page-peek {
+      margin: 0;
+    }
+
+    .peek-bubble {
+      margin-bottom: 20px;
+    }
+
+    .companion-hello > .companion {
+      display: none;
+    }
+  }
 }

@@ -19,6 +19,9 @@ import { Sheet } from '../components/ui/Sheet'
 import { TabList, TabPanel } from '../components/ui/Tabs'
 import { formatDateTime } from '../format'
 import { CardsSkeleton, TableSkeleton } from '../components/ui/Skeleton'
+import { CompanionPeek } from '../components/companion/CompanionPeek'
+import { useCompanion } from '../components/companion/context'
+import { groupExpression } from '../components/companion/peek'
 
 type ProjectTab = 'work' | 'repos' | 'memory'
 
@@ -105,6 +108,7 @@ export function ProjectPage() {
           <h1>{project.data ? `${project.data.key} · ${project.data.name}` : 'Proyecto'}</h1>
           {project.data?.description && <p className="muted">{project.data.description}</p>}
         </div>
+        <ProjectPeek projectId={projectId} />
         <div className="page-actions">
           {editable && (
             <>
@@ -445,5 +449,24 @@ function NewWorkItemForm({ projectId, onDone }: { projectId: string; onDone: () 
       </div>
       <ErrorMessage error={create.error} />
     </form>
+  )
+}
+
+/** La mascota asoma en la cabecera con el estado agregado de las ejecuciones del proyecto. */
+function ProjectPeek({ projectId }: { projectId: string }) {
+  const { activeRuns } = useCompanion()
+  const runs = activeRuns.filter((r) => r.projectId === projectId)
+  const n = runs.length
+  return (
+    <CompanionPeek
+      state={groupExpression(runs)}
+      text={
+        n === 0
+          ? 'Nada en marcha'
+          : `${n} ${n === 1 ? 'ejecución en marcha' : 'ejecuciones en marcha'}`
+      }
+      size={80}
+      className="page-peek"
+    />
   )
 }

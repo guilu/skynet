@@ -5,6 +5,8 @@ import { formatDuration, statusLabel } from '../../format'
 import { cn } from '../../lib/cn'
 import { spanDuration, type Span } from '../run/runSpans'
 import { stageNote } from '../run/stageNotes'
+import { Companion } from '../companion/Companion'
+import { agentExpression, stageExpression } from '../companion/state'
 import { stageActivity, stepState } from '../run/stageState'
 import { TYPE_ICON } from './definitionNodes'
 import type { GraphStage } from './layout'
@@ -47,7 +49,6 @@ export default function RunGraph({
         if (!found) return key
         const { stage, index } = found
         const Icon = TYPE_ICON[stage.type ?? ''] ?? Workflow
-        const { icon: StateIcon } = stepState(stage.status)
         const name = stage.name ?? stage.stageKey
         const activity = stageActivity(
           stage,
@@ -72,7 +73,7 @@ export default function RunGraph({
               </span>
             </span>
             <span className="graph-state">
-              {StateIcon && <StateIcon size={14} strokeWidth={3} aria-hidden="true" />}
+              <Companion state={stageExpression(stage, now)} size={22} still />
               <span className="graph-activity">
                 {activity === status ? status : `${status} · ${activity}`}
               </span>
@@ -90,7 +91,6 @@ export default function RunGraph({
         const agent = stage?.agents.findLast((a) => a.childKey === childId)
         const span = agent && spans.find((s) => s.id === agent.id)
         const status = agent?.status ?? 'PENDING'
-        const { icon: StateIcon } = stepState(status)
         const text =
           agent?.currentTool && !agent.finishedAt
             ? agent.currentTool
@@ -106,7 +106,7 @@ export default function RunGraph({
               </span>
             </span>
             <span className="graph-state">
-              {StateIcon && <StateIcon size={12} strokeWidth={3} aria-hidden="true" />}
+              <Companion state={agent ? agentExpression(agent) : 'ready'} size={18} still />
               <span className="graph-activity">{text}</span>
             </span>
           </>

@@ -14,6 +14,7 @@ import { applyEvent } from '../components/run/applyEvent'
 import { headlineAgent } from '../components/run/headlineAgent'
 import { Inspector } from '../components/run/Inspector'
 import { RunHeader } from '../components/run/RunHeader'
+import { RunBand } from '../components/companion/RunBand'
 import { ACTIVITY_VIEWS, useRunSelection, type RunPane } from '../components/run/useRunSelection'
 import { TabList, TabPanel, type TabItem } from '../components/ui/Tabs'
 import { Timeline } from '../components/timeline/Timeline'
@@ -208,6 +209,7 @@ export function RunPage() {
             selectedAgentId={agent?.id}
             onSelectAgent={selectAgent}
           />
+          <RunBand run={run.data} now={now} />
           {narrow ? (
             <div className="run-mobile">
               <TabList

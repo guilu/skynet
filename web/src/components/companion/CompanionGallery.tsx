@@ -12,6 +12,15 @@ export function CompanionGallery() {
   const [selected, setSelected] = useState<CompanionState>('ready')
   const info = COMPANION_STATES.find((s) => s.state === selected)
   const prefs = useCompanionPrefs()
+  const [permission, setPermission] = useState(notificationPermission)
+  const toggleBrowser = async (on: boolean) => {
+    if (on && permission !== 'granted') {
+      const answer = await Notification.requestPermission()
+      setPermission(answer)
+      if (answer !== 'granted') return
+    }
+    setCompanionPrefs({ browser: on })
+  }
   const { hash } = useLocation()
   const section = useRef<HTMLElement>(null)
   // Desde el menú de la mascota se llega con #companion: el router no baja solo hasta aquí.
@@ -48,7 +57,23 @@ export function CompanionGallery() {
           />
           Avisos flotantes (la campana los guarda igualmente)
         </label>
-        <p className="hint">Estas dos opciones valen solo para este navegador.</p>
+        <label>
+          <input
+            type="checkbox"
+            checked={prefs.browser && permission === 'granted'}
+            disabled={permission === 'unsupported' || permission === 'denied'}
+            onChange={(e) => void toggleBrowser(e.target.checked)}
+          />
+          Avisos del navegador con la pestaña oculta (te necesita, errores y éxitos)
+        </label>
+        {permission === 'denied' && (
+          <p className="hint">
+            El navegador tiene bloqueados los avisos de esta web: permítelos en la configuración del
+            sitio para activarlos.
+          </p>
+        )}
+        {permission === 'unsupported' && <p className="hint">Este navegador no admite avisos.</p>}
+        <p className="hint">Estas opciones valen solo para este navegador.</p>
       </fieldset>
       <div className="companion-stage">
         <Companion state={selected} size={144} label="Mascota de Skynet" />
@@ -74,4 +99,8 @@ export function CompanionGallery() {
       </ul>
     </section>
   )
+}
+
+function notificationPermission(): NotificationPermission | 'unsupported' {
+  return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
 }

@@ -11,7 +11,8 @@ import {
 /**
  * Companion global (CO-B): con ejecuciones simuladas (fake-claude), la mascota de la barra, la
  * campana y los avisos flotantes siguen lo que pasa sin recargar, por el stream global
- * (`after=latest` y filtro de tipos).
+ * (`after=latest` y filtro de tipos). Con CO-C, además, el saludo del dashboard, la banda de la
+ * ejecución y el número de avisos sin leer en el título de la pestaña.
  */
 
 test.use({ baseURL: 'http://localhost:4173' })
@@ -37,6 +38,9 @@ test('la mascota, la campana y los avisos siguen las ejecuciones en vivo', async
     await expect(toast).toContainText(run.workItemKey)
     await expect(page.getByRole('button', { name: /^Avisos: \d+ sin leer$/ })).toBeVisible()
     await expectAccessible(page, 'aviso flotante')
+    // CO-C: la pestaña cuenta los avisos sin leer y el Dashboard saluda.
+    await expect(page).toHaveTitle(/^\(\d+\) /)
+    await expect(page.locator('.companion-hello')).toContainText('Hola, soy Skynet.')
   })
 
   await test.step('la campana guarda el aviso y lo marca leído al cerrarla', async () => {
@@ -63,6 +67,9 @@ test('la mascota, la campana y los avisos siguen las ejecuciones en vivo', async
     await expect(page.getByRole('button', { name: /^Skynet: Error/ })).toBeVisible()
     await toast.getByRole('link', { name: 'Ver' }).click()
     await page.waitForURL(`**/runs/${run.id}`)
+    await expect(page.getByRole('region', { name: 'Qué pasa ahora' })).toContainText(
+      'Ha fallado la fase «falla»',
+    )
     await expect(page.getByRole('button', { name: /^Skynet: Error/ })).toHaveCount(0)
   })
 

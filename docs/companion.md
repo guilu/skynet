@@ -94,7 +94,33 @@ La zona de avisos es `aria-live="polite"` (sin `role="status"`, que ya usan los 
 
 ### Ajustes
 
-En Ajustes › Companion hay dos opciones que valen **solo para este navegador** (`localStorage`, `prefs.ts`): «Mostrar la mascota en la barra superior» y «Avisos flotantes». El silencio de 1 h se guarda en el mismo sitio.
+En Ajustes › Companion hay opciones que valen **solo para este navegador** (`localStorage`, `prefs.ts`): «Mostrar la mascota en la barra superior» y «Avisos flotantes». El silencio de 1 h se guarda en el mismo sitio.
+
+## En las páginas y fuera de la pestaña (CO-C)
+
+### Mascota que asoma
+
+En la cabecera, a la derecha del título, asoma una mascota de 92 px (80 px en Proyecto) con un bocadillo corto (`CompanionPeek`, textos en `peek.ts`):
+
+- **Dashboard:** la cara global y «1 aprobación te espera», «¡Todo en marcha! 🚀», «Algo ha fallado» o «Todo al día».
+- **Proyecto:** la cara más fuerte de sus ejecuciones en marcha y «2 ejecuciones en marcha» o «Nada en marcha».
+- **Uso:** En pausa y «Vamos justos de cuota» si hay alertas de cuota; si no, En espera y «Hay cuota de sobra». Solo cuando hay datos.
+
+Bajo la cabecera del Dashboard va la tarjeta de saludo (`CompanionHello`): «Hola, soy Skynet. Hay 1 ejecución en marcha y 1 aprobación esperándote.» con atajos a revisar la aprobación, lanzar un workflow y ver la última ejecución.
+
+### Ejecución, tabla y grafo
+
+- **Banda «Qué pasa ahora»** (`RunBand`), bajo el progreso de la ejecución: la mascota de 56 px y quién trabaja y en qué («Claude Code está usando Read», «La fase «Plan» espera tu decisión», «Ha fallado la fase «tests»»), con fase, duración y coste debajo. Se queda quieta cuando la ejecución termina.
+- **Tabla de ejecuciones:** la columna Estado lleva la cara de 30 px de cada ejecución junto a la pastilla.
+- **Grafo:** las fases y los agentes llevan la cara (22 y 18 px) en lugar del icono de estado.
+
+Las caras pequeñas van quietas (`still`) para que una lista no se mueva entera.
+
+### Fuera de la pestaña
+
+- **Título:** con avisos sin leer, «(2) Skynet»; al leerlos vuelve a «Skynet».
+- **Favicon:** con Te necesita o Error, la cara de la mascota (SVG con colores fijos, porque el favicon no ve los tokens); si no, el logo.
+- **Avisos del navegador** (opcional, Ajustes › Companion › «Avisos del navegador con la pestaña oculta»): al activarlo se pide permiso. Solo salen con la pestaña oculta y para aprobaciones, preguntas, fallos y éxitos. Llevan clave, nombre y fase, nunca prompts ni salidas, y uno por ejecución (`tag`), así que el siguiente sustituye al anterior. Al pulsarlo se enfoca la pestaña y se abre su enlace. El silencio de 1 h también los calla.
 
 ## Dónde aparece (CO-A)
 
