@@ -23,7 +23,7 @@ cd web && npm run lint && npm run format:check && npm run typecheck && npx vites
 
 - **`peek.test.ts`:** los bocadillos, el saludo, la cara de un grupo de ejecuciones y la banda (quién usa qué herramienta, la fase que espera decisión, el fallo, el final y el coste).
 - **`tab.test.ts`:** el «(n)» del título, la cara como favicon y los avisos del navegador (solo con la pestaña oculta, con permiso y para lo que importa; al pulsarlo abre su enlace).
-- **E2E `companion.e2e.ts`:** además de lo de CO-B, el título con «(n)» tras el aviso, el saludo del Dashboard y la banda «Ejecución completada».
+- **E2E `companion.e2e.ts`:** además de lo de CO-B, el título con «(n)» tras el aviso, el saludo del Dashboard y la banda «Ha fallado la fase «falla»» al abrir la ejecución que falla.
 
 ## 2. Dashboard
 

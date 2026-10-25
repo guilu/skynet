@@ -38,14 +38,9 @@ test('la mascota, la campana y los avisos siguen las ejecuciones en vivo', async
     await expect(toast).toContainText(run.workItemKey)
     await expect(page.getByRole('button', { name: /^Avisos: \d+ sin leer$/ })).toBeVisible()
     await expectAccessible(page, 'aviso flotante')
-    // CO-C: la pestaña cuenta los avisos sin leer y la banda de la ejecución dice cómo acabó.
+    // CO-C: la pestaña cuenta los avisos sin leer y el Dashboard saluda.
     await expect(page).toHaveTitle(/^\(\d+\) /)
     await expect(page.locator('.companion-hello')).toContainText('Hola, soy Skynet.')
-    await page.goto(`/runs/${runId}`)
-    await expect(page.getByRole('region', { name: 'Qué pasa ahora' })).toContainText(
-      'Ejecución completada',
-    )
-    await page.goto('/')
   })
 
   await test.step('la campana guarda el aviso y lo marca leído al cerrarla', async () => {
@@ -72,6 +67,9 @@ test('la mascota, la campana y los avisos siguen las ejecuciones en vivo', async
     await expect(page.getByRole('button', { name: /^Skynet: Error/ })).toBeVisible()
     await toast.getByRole('link', { name: 'Ver' }).click()
     await page.waitForURL(`**/runs/${run.id}`)
+    await expect(page.getByRole('region', { name: 'Qué pasa ahora' })).toContainText(
+      'Ha fallado la fase «falla»',
+    )
     await expect(page.getByRole('button', { name: /^Skynet: Error/ })).toHaveCount(0)
   })
 
