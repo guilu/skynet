@@ -33,7 +33,7 @@ export default defineConfig({
   build: { chunkSizeWarningLimit: 3000 },
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx}', 'visual/**/*.test.ts'],
     setupFiles: ['./src/test/setup.ts'],
     // Por encima de los 5 s de espera de Testing Library (src/test/setup.ts), que un test lento
     // por carga no se corte antes de que su findBy termine.

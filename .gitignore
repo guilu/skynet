@@ -32,3 +32,8 @@ test-results/
 
 # Kotlin (build-logic)
 .kotlin/
+
+# Galería visual (VS-A): en Git solo la combinación canónica (desktop/light) y el índice
+docs/screenshots/desktop/dark/
+docs/screenshots/mobile/
+docs/screenshots/skynet-screenshots.zip
