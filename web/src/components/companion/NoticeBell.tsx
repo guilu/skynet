@@ -1,10 +1,10 @@
 import * as Menu from '@radix-ui/react-dropdown-menu'
-import { Bell } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { formatTime } from '../../format'
 import { Companion } from './Companion'
 import { useCompanion } from './context'
 import { NOTICE_FACE } from './notices'
+import { Icon } from '../icons/Icon'
 
 /** La campana: los últimos avisos con su cara; al abrirla quedan leídos. */
 export function NoticeBell({
@@ -27,7 +27,7 @@ export function NoticeBell({
         className="icon-btn bell-btn"
         aria-label={unread ? `Avisos: ${unread} sin leer` : 'Avisos'}
       >
-        <Bell size={22} strokeWidth={2.25} aria-hidden="true" />
+        <Icon name="notices" size={22} strokeWidth={2.25} />
         {unread > 0 && (
           <span className="bell-count" aria-hidden="true">
             {unread > 9 ? '9+' : unread}

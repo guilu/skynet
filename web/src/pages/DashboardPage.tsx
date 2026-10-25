@@ -1,14 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import {
-  CirclePlay,
-  CircleX,
-  FlaskConical,
-  Hand,
-  Hourglass,
-  Pause,
-  Plug,
-  Server,
-} from 'lucide-react'
+import { CirclePlay, Server } from 'lucide-react'
 import { Link } from 'react-router'
 import { api, SESSION_KEY, type ApprovalSummary, type DashboardSummary, type Runner } from '../api'
 import { RISK_LABEL, approvalWork } from '../components/approval/approvalFormat'
@@ -146,7 +137,7 @@ function attentionItems(
     ...approvals.map((a) => ({
       key: `approval-${a.id}`,
       to: `/approvals/${a.id}`,
-      icon: Hand,
+      icon: 'approvals' as const,
       tone: 'warn' as const,
       title: a.action,
       detail: `${approvalWork(a)} · ${RISK_LABEL[a.risk]} · pedida el ${formatDateTime(a.createdAt)}`,
@@ -155,7 +146,7 @@ function attentionItems(
     ...data.recentFailures.map((r) => ({
       key: `run-${r.id}`,
       to: `/runs/${r.id}`,
-      icon: CircleX,
+      icon: 'circle-error' as const,
       tone: 'bad' as const,
       title: workTitle(r.workItemKey, r.workItemTitle, r.id),
       detail: `Fallida el ${formatDateTime(r.finishedAt ?? r.createdAt)}`,
@@ -164,7 +155,7 @@ function attentionItems(
     ...data.unresponsiveAgents.map((a) => ({
       key: `agent-${a.agentRunId}`,
       to: `/runs/${a.workflowRunId}?agent=${a.agentRunId}`,
-      icon: Pause,
+      icon: 'status-paused' as const,
       tone: 'warn' as const,
       title: a.workItemKey ?? a.workflowRunId,
       detail: `Sin actividad desde el ${formatDateTime(a.lastActivityAt)}`,
@@ -174,7 +165,7 @@ function attentionItems(
     ...data.staleRunners.map((r) => ({
       key: `runner-${r.id}`,
       to: '/runners',
-      icon: Plug,
+      icon: 'status-offline' as const,
       tone: 'bad' as const,
       title: `Runner «${r.name}»`,
       detail: `Sin latido desde el ${formatDateTime(r.lastHeartbeatAt)}`,
@@ -183,7 +174,7 @@ function attentionItems(
     ...data.providerShortages.map((p) => ({
       key: `provider-${p.provider}`,
       to: '/runners',
-      icon: Hourglass,
+      icon: 'status-pending' as const,
       tone: 'warn' as const,
       title: p.displayName,
       detail:
@@ -210,7 +201,7 @@ function simulatedAlerts(runners: Runner[]): Alert[] {
         {
           key: `simulated-${r.id}`,
           to: '/runners',
-          icon: FlaskConical,
+          icon: 'simulated' as const,
           tone: 'warn' as const,
           title: `Runner «${r.name}»`,
           detail: `Usa ${names.join(' y ')} simulado${names.length > 1 ? 's' : ''}: sus agentes reproducen sesiones grabadas`,
@@ -237,7 +228,7 @@ function RunnerCard({ runner }: { runner: Runner }) {
       </span>
       <span className="kpi-label">{runner.name}</span>
       <span className="kpi-value">
-        <Pill tone={online ? 'ok' : 'bad'} icon={online ? undefined : Plug}>
+        <Pill tone={online ? 'ok' : 'bad'} icon={online ? undefined : 'status-offline'}>
           {online ? 'En línea' : 'Desconectado'}
         </Pill>
       </span>

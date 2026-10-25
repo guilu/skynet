@@ -9,14 +9,41 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
 
-/** La paleta de la web: por defecto vacía, se guarda entera y valida los colores. */
+/**
+ * La apariencia de la web: la paleta, por defecto vacía, se guarda entera y valida los colores; el
+ * paquete de iconos, por defecto Lucide, se guarda aparte.
+ */
 class AppearanceIT extends IntegrationTest {
 
   @Test
   void withoutAPaletteEveryColorIsTheDefault() {
     JsonNode appearance = get();
     assertThat(appearance.path("colors").path("primary").isNull()).isTrue();
+    assertThat(appearance.path("icons").asString()).isEqualTo("lucide");
     assertThat(appearance.path("updatedAt").isNull()).isTrue();
+  }
+
+  @Test
+  void theIconPackIsSavedWithoutTouchingThePalette() {
+    put(Map.of("primary", "#0e8a8c"));
+    send(Map.of("icons", "ilustrados"));
+    JsonNode saved = get();
+    assertThat(saved.path("icons").asString()).isEqualTo("ilustrados");
+    assertThat(saved.path("colors").path("primary").asString()).isEqualTo("#0e8a8c");
+    assertThat(saved.path("updatedAt").isNull()).isFalse();
+
+    put(Map.of("ok", "#1f9d55"));
+    assertThat(get().path("icons").asString()).isEqualTo("ilustrados");
+
+    send(Map.of("icons", "lucide"));
+    assertThat(get().path("icons").asString()).isEqualTo("lucide");
+  }
+
+  @Test
+  void anUnknownIconPackIsRejected() {
+    assertThatThrownBy(() -> send(Map.of("icons", "emoji")))
+        .isInstanceOf(HttpClientErrorException.BadRequest.class);
+    assertThat(get().path("icons").asString()).isEqualTo("lucide");
   }
 
   @Test
@@ -50,10 +77,10 @@ class AppearanceIT extends IntegrationTest {
   }
 
   private void put(Map<String, String> colors) {
-    http.put()
-        .uri("/api/settings/appearance")
-        .body(Map.of("colors", colors))
-        .retrieve()
-        .toBodilessEntity();
+    send(Map.of("colors", colors));
+  }
+
+  private void send(Map<String, Object> body) {
+    http.put().uri("/api/settings/appearance").body(body).retrieve().toBodilessEntity();
   }
 }

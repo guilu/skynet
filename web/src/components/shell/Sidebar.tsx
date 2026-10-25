@@ -1,6 +1,5 @@
 import * as Tooltip from '@radix-ui/react-tooltip'
 import { useQuery } from '@tanstack/react-query'
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import type { ReactElement } from 'react'
 import { Link, NavLink } from 'react-router'
 import { api } from '../../api'
@@ -8,6 +7,7 @@ import { HealthIndicator } from '../../HealthIndicator'
 import { PendingCount } from '../approval/PendingCount'
 import { BrandMark } from '../brand/Logo'
 import { NAV } from './nav'
+import { Icon } from '../icons/Icon'
 
 /**
  * Barra lateral del escritorio: marca, secciones y, al pie, el estado del control plane y de los
@@ -27,7 +27,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             <li key={item.to}>
               <Hint label={item.label} enabled={collapsed}>
                 <NavLink to={item.to} end={item.end}>
-                  <item.icon size={26} strokeWidth={2.25} aria-hidden="true" />
+                  <Icon name={item.icon} size={26} strokeWidth={2.25} />
                   <span className="nav-label">{item.label}</span>
                   {item.pendingApprovals && <PendingCount />}
                 </NavLink>
@@ -48,9 +48,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             aria-label={collapsed ? 'Desplegar la barra lateral' : 'Plegar la barra lateral'}
           >
             {collapsed ? (
-              <PanelLeftOpen size={22} strokeWidth={2.25} aria-hidden="true" />
+              <Icon name="sidebar-expand" size={22} strokeWidth={2.25} />
             ) : (
-              <PanelLeftClose size={22} strokeWidth={2.25} aria-hidden="true" />
+              <Icon name="sidebar-collapse" size={22} strokeWidth={2.25} />
             )}
             <span className="nav-label">Plegar</span>
           </button>

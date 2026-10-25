@@ -24,6 +24,7 @@ import {
   isTerminal,
   providerName,
   statusTone,
+  type StatusTone,
 } from '../../format'
 import { cn } from '../../lib/cn'
 import { useNow } from '../../useNow'
@@ -35,7 +36,9 @@ import { StatusBadge } from '../StatusBadge'
 import { Button } from '../ui/Button'
 import { Pill } from '../ui/Pill'
 import { SimulatedPill } from '../ui/SimulatedPill'
-import { statusIcon } from '../ui/statusIcons'
+import { statusIcon, TONE_BADGE } from '../ui/statusIcons'
+import { Icon } from '../icons/Icon'
+import type { IconName } from '../icons/registry'
 import { headlineShare, sharesByProvider, sharesLine } from '../usage/quotaFormat'
 import { AgentActions } from './AgentActions'
 import { headlineAgent } from './headlineAgent'
@@ -126,7 +129,7 @@ export function RunHeader({
                 {run.workItemKey}
               </Link>
             )}
-            <StatusBadge status={cancelling ? 'CANCELLING' : run.status} />
+            <StatusBadge status={cancelling ? 'CANCELLING' : run.status} live />
             <span className="connection" role="status">
               <Pill tone={connection.tone} icon={connection.icon}>
                 <span className="visually-hidden">Conexión: </span>
@@ -304,10 +307,16 @@ export function RunHeader({
 }
 
 /** Insignia grande con el icono del estado de la ejecución. */
-function HeroBadge({ tone, icon: Icon }: { tone: string; icon: LucideIcon }) {
+function HeroBadge({ tone, icon }: { tone: StatusTone; icon: IconName }) {
   return (
     <span className={cn('hero-badge', `hero-${tone}`)} aria-hidden="true">
-      <Icon size={38} strokeWidth={2.75} />
+      <Icon
+        name={icon}
+        size={38}
+        strokeWidth={2.75}
+        tone={TONE_BADGE[tone]}
+        loop={tone === 'active'}
+      />
     </span>
   )
 }

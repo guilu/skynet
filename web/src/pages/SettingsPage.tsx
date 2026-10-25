@@ -1,11 +1,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState, type CSSProperties } from 'react'
+import { useLocation, useSearchParams } from 'react-router'
 import { api, type Appearance } from '../api'
 import { APPEARANCE_KEY, useAppearance } from '../appearance'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { CompanionGallery } from '../components/companion/CompanionGallery'
+import { IconSettings } from '../components/icons/IconSettings'
+import { DEFAULT_PACK } from '../components/icons/pack'
 import { Button } from '../components/ui/Button'
 import { Pill } from '../components/ui/Pill'
+import { TabList, TabPanel, type TabItem } from '../components/ui/Tabs'
 import { LinesSkeleton } from '../components/ui/Skeleton'
 import {
   cleanPalette,
@@ -20,17 +24,56 @@ import {
   type Palette,
 } from '../lib/palette'
 
-/** Ajustes de la web que valen para todos los navegadores: la apariencia y el companion. */
+type SettingsTab = 'colors' | 'icons' | 'companion'
+
+const TABS: TabItem<SettingsTab>[] = [
+  { id: 'colors', label: 'Colores', icon: 'palette' },
+  { id: 'icons', label: 'Iconos', icon: 'icons' },
+  { id: 'companion', label: 'Companion', icon: 'agent' },
+]
+
+/**
+ * Ajustes de la web, en pestañas: los colores y los iconos valen para todos los navegadores; el
+ * companion, en parte, solo para este. La pestaña va en `?tab=`; `#companion` (el menú de la
+ * mascota) abre la del companion.
+ */
 export function SettingsPage() {
   const appearance = useAppearance()
+  const [params, setParams] = useSearchParams()
+  const { hash } = useLocation()
+  const tab =
+    TABS.find((t) => t.id === params.get('tab'))?.id ??
+    (hash === '#companion' ? 'companion' : 'colors')
+  const selectTab = (next: SettingsTab) =>
+    setParams(next === 'colors' ? {} : { tab: next }, { replace: true })
   return (
     <>
       <h1>Ajustes</h1>
       <p className="muted">Lo que cambies aquí vale para toda la web y en todos los navegadores.</p>
-      <ErrorMessage error={appearance.error} />
-      {appearance.isPending && <LinesSkeleton label="la apariencia" />}
-      {appearance.data && <AppearanceForm saved={appearance.data.colors} />}
-      <CompanionGallery />
+      <TabList
+        label="Ajustes"
+        tabs={TABS}
+        selected={tab}
+        onSelect={selectTab}
+        idPrefix="settings-tab"
+        panelId="settings-panel"
+      />
+      <TabPanel id="settings-panel" labelledBy={`settings-tab-${tab}`} className="tab-body">
+        {tab === 'companion' ? (
+          <CompanionGallery />
+        ) : (
+          <>
+            <ErrorMessage error={appearance.error} />
+            {appearance.isPending && <LinesSkeleton label="la apariencia" />}
+            {appearance.data &&
+              (tab === 'icons' ? (
+                <IconSettings saved={appearance.data.icons ?? DEFAULT_PACK} />
+              ) : (
+                <AppearanceForm saved={appearance.data.colors} />
+              ))}
+          </>
+        )}
+      </TabPanel>
     </>
   )
 }

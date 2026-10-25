@@ -1,4 +1,3 @@
-import { FlaskConical } from 'lucide-react'
 import { Pill } from './Pill'
 
 /** Aviso de que un CLI de agentes es un simulador de pruebas (fake-claude, fake-codex…). */
@@ -9,7 +8,7 @@ export const SIMULATED_HINT =
 export function SimulatedPill() {
   return (
     <span className="simulated" title={SIMULATED_HINT}>
-      <Pill tone="warn" icon={FlaskConical}>
+      <Pill tone="warn" icon="simulated">
         Simulado
         <span className="visually-hidden">: {SIMULATED_HINT}</span>
       </Pill>

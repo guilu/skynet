@@ -1,13 +1,15 @@
-import type { LucideIcon } from 'lucide-react'
 import { Link } from 'react-router'
 import type { StatusTone } from '../format'
 import { cn } from '../lib/cn'
+import { Icon } from './icons/Icon'
+import type { IconName } from './icons/registry'
+import { TONE_BADGE } from './ui/statusIcons'
 import { Pill } from './ui/Pill'
 
 export interface Alert {
   key: string
   to: string
-  icon: LucideIcon
+  icon: IconName
   tone: StatusTone
   title: string
   detail: string
@@ -27,7 +29,13 @@ export function AttentionList({ alerts, className }: { alerts: Alert[]; classNam
           <li key={a.key}>
             <Link to={a.to} className="attn-item">
               <span className={cn('attn-icon', `attn-${a.tone}`)} aria-hidden="true">
-                <a.icon size={24} strokeWidth={2.75} fill={a.filled ? 'currentColor' : 'none'} />
+                <Icon
+                  name={a.icon}
+                  size={24}
+                  strokeWidth={2.75}
+                  filled={a.filled}
+                  tone={TONE_BADGE[a.tone]}
+                />
               </span>
               <span className="attn-text">
                 <strong>{a.title}</strong>

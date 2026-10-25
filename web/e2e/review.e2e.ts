@@ -237,3 +237,36 @@ test('una paleta personalizada se guarda, se aplica a toda la web y pasa axe', a
     })
   }
 })
+
+test('el paquete de iconos Ilustrados se guarda, cambia toda la web y pasa axe', async ({
+  page,
+}) => {
+  test.setTimeout(120_000)
+  await page.goto('/settings?tab=icons')
+  await login(page)
+  await expect(page.getByRole('heading', { name: 'Paquete de iconos' })).toBeVisible()
+  try {
+    // El radio está oculto dentro de su tarjeta: se pulsa la tarjeta, como las paletas.
+    await page.locator('label.icon-pack', { hasText: 'Ilustrados' }).click()
+    await expect(page.getByRole('radio', { name: /Ilustrados/ })).toBeChecked()
+    await page.getByRole('button', { name: 'Guardar' }).click()
+    await expect(page.getByText('Guardado.')).toBeVisible()
+    const nav = page.getByRole('navigation', { name: 'Navegación principal' })
+    await expect(nav.locator('svg[data-icon="runs"]')).toBeVisible()
+    await expectAccessible(page, 'ajustes · iconos ilustrados')
+
+    // Tras recargar sigue aplicado, también en el Dashboard y en oscuro.
+    await page.goto('/')
+    await expect(page.getByRole('heading', { level: 1, name: /^Buen/ })).toBeVisible()
+    await expect(nav.locator('svg[data-icon="dashboard"]')).toBeVisible()
+    await expectAccessible(page, 'dashboard con iconos ilustrados')
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await expectAccessible(page, 'oscuro · dashboard con iconos ilustrados')
+  } finally {
+    // El paquete es de todo el servidor: se deja Lucide para el resto de tests.
+    await page.request.put('/api/settings/appearance', {
+      data: { icons: 'lucide' },
+      headers: await csrf(page),
+    })
+  }
+})

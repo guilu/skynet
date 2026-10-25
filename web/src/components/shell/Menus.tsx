@@ -1,7 +1,7 @@
 import * as Menu from '@radix-ui/react-dropdown-menu'
-import { Check, LogOut } from 'lucide-react'
 import type { ThemeChoice } from '../../theme'
 import { THEMES } from './nav'
+import { Icon } from '../icons/Icon'
 
 /** Botón redondo con el icono del tema elegido y un menú con las tres opciones. */
 export function ThemeMenu({
@@ -15,7 +15,7 @@ export function ThemeMenu({
   return (
     <Menu.Root modal={false}>
       <Menu.Trigger className="icon-btn" aria-label={`Tema: ${current.label}`}>
-        <current.icon size={22} strokeWidth={2.25} aria-hidden="true" />
+        <Icon name={current.icon} size={22} strokeWidth={2.25} />
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Content className="menu" align="end" sideOffset={8}>
@@ -23,10 +23,10 @@ export function ThemeMenu({
           <Menu.RadioGroup value={theme} onValueChange={(v) => onChange(v as ThemeChoice)}>
             {THEMES.map((t) => (
               <Menu.RadioItem key={t.value} value={t.value} className="menu-item">
-                <t.icon size={18} strokeWidth={2.25} aria-hidden="true" />
+                <Icon name={t.icon} size={18} strokeWidth={2.25} />
                 {t.label}
                 <Menu.ItemIndicator className="menu-check">
-                  <Check size={16} strokeWidth={3} aria-hidden="true" />
+                  <Icon name="check" size={16} strokeWidth={3} />
                 </Menu.ItemIndicator>
               </Menu.RadioItem>
             ))}
@@ -58,7 +58,7 @@ export function UserMenu({
         <Menu.Content className="menu" align="end" sideOffset={8}>
           <Menu.Label className="menu-label menu-user">{username}</Menu.Label>
           <Menu.Item className="menu-item" disabled={pending} onSelect={onLogout}>
-            <LogOut size={18} strokeWidth={2.25} aria-hidden="true" />
+            <Icon name="logout" size={18} strokeWidth={2.25} />
             Salir
           </Menu.Item>
         </Menu.Content>

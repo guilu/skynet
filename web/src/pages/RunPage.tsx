@@ -1,5 +1,4 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChartGantt, List, MessagesSquare, PanelRight } from 'lucide-react'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import { useEffect, useMemo, useRef } from 'react'
 import { useParams } from 'react-router'
@@ -247,11 +246,11 @@ export function RunPage() {
   )
 }
 
-const VIEW_ICONS = { conversation: MessagesSquare, waterfall: ChartGantt, events: List }
+const VIEW_ICONS = { conversation: 'conversation', waterfall: 'timeline', events: 'list' } as const
 
 const PANES: TabItem<RunPane>[] = [
-  { id: 'activity', label: 'Actividad', icon: MessagesSquare },
-  { id: 'inspector', label: 'Detalle', icon: PanelRight },
+  { id: 'activity', label: 'Actividad', icon: 'conversation' },
+  { id: 'inspector', label: 'Detalle', icon: 'panel-right' },
 ]
 
 /** El tamaño de los paneles se recuerda en este navegador; sin almacenamiento, no pasa nada. */

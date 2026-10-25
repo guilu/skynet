@@ -1,12 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { api } from './api'
+import { DEFAULT_PACK, isIconPack, setIconPack, type IconPack } from './components/icons/pack'
 import { faviconSvg } from './lib/brand'
 import { cleanPalette, derivePalette, paletteCss, type Palette } from './lib/palette'
 
 export const APPEARANCE_KEY = ['appearance']
 
 const STORAGE_KEY = 'skynet.palette'
+const ICONS_KEY = 'skynet.icons'
 const STYLE_ID = 'skynet-palette'
 const FAVICON_HREF = '/favicon.svg'
 
@@ -50,17 +52,30 @@ function applyFavicon(palette: Palette) {
   icon.href = `data:image/svg+xml,${encodeURIComponent(faviconSvg(light.primary, light['on-primary']))}`
 }
 
-/** La última paleta vista en este navegador, al arrancar. */
+/** Aplica el paquete de iconos (IC-A) y lo recuerda en este navegador, como la paleta. */
+export function applyIconPack(pack: IconPack) {
+  setIconPack(pack)
+  try {
+    if (pack === DEFAULT_PACK) localStorage.removeItem(ICONS_KEY)
+    else localStorage.setItem(ICONS_KEY, pack)
+  } catch {
+    // Sin almacenamiento: el paquete llega del servidor en cada carga.
+  }
+}
+
+/** La última paleta y el último paquete de iconos vistos en este navegador, al arrancar. */
 export function applyCachedPalette() {
   try {
     const cached = localStorage.getItem(STORAGE_KEY)
     if (cached) applyPalette(JSON.parse(cached) as Palette)
+    const icons = localStorage.getItem(ICONS_KEY)
+    if (isIconPack(icons)) setIconPack(icons)
   } catch {
     // Valor corrupto o sin almacenamiento: se queda la de Skynet hasta que responda el servidor.
   }
 }
 
-/** Pide la paleta guardada y la aplica; si no llega, se queda la que hubiera. */
+/** Pide la apariencia guardada y la aplica; si no llega, se queda la que hubiera. */
 export function useAppearance() {
   const appearance = useQuery({
     queryKey: APPEARANCE_KEY,
@@ -69,7 +84,9 @@ export function useAppearance() {
     staleTime: Infinity,
   })
   useEffect(() => {
-    if (appearance.data) applyPalette(appearance.data.colors)
+    if (!appearance.data) return
+    applyPalette(appearance.data.colors)
+    applyIconPack(appearance.data.icons ?? DEFAULT_PACK)
   }, [appearance.data])
   return appearance
 }

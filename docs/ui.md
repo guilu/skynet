@@ -119,7 +119,7 @@ Al cambiar una pantalla, vuelve a generarlas en la misma PR.
 
 ## 9. Colores personalizables
 
-En **Ajustes** (`/settings`) se elige una paleta predefinida o un color base para el acento y cada estado. Lo guardado vale para toda la web y para todos los navegadores (UI-G).
+En **Ajustes › Colores** (`/settings`) se elige una paleta predefinida o un color base para el acento y cada estado. Lo guardado vale para toda la web y para todos los navegadores (UI-G).
 
 | Claro | Oscuro |
 | --- | --- |
@@ -156,3 +156,19 @@ Con CO-C asoma también en las páginas: en la cabecera del Dashboard, de cada p
 ![La mascota en el Dashboard](ui/companion-dashboard.png)
 
 ![Expresiones de la mascota en Ajustes](ui/companion-expresiones.png)
+
+## 12. Iconos
+
+Los iconos se piden por lo que significan, con `<Icon name="runs" size={22} />` (`web/src/components/icons/`), y los pinta el **paquete** elegido en **Ajustes › Iconos** (`/settings?tab=icons`), igual que los colores (IC-A, plan `plans/estudio-iconos.md`):
+
+- **Lucide**, por defecto: los iconos de trazo de siempre.
+- **Ilustrados**: formas lisas sin contorno, al estilo de las ilustraciones de Duolingo, con un «labio» más oscuro debajo de cada forma (como los botones) y un gesto propio al pasar el ratón. Siguen a la paleta y al tema. Si a un nombre aún le falta su dibujo, se pinta el de Lucide y la galería lo marca.
+
+Cómo funciona:
+
+- **Nombres.** `registry.ts` lista todos los nombres, con su etiqueta, su grupo y el icono de Lucide que les toca (el paquete Lucide y el respaldo de los demás). Ningún componente importa un icono de `lucide-react` por su cuenta: lo que queda se pasa a `Icon` en IC-B e IC-C.
+- **Dibujos.** `ilustrados.tsx`, en un lienzo de 32 × 32: cada `Part` pinta su forma dos veces (labio y cara), y los colores salen de clases (`m` vivo, `w` claro, `k` profundo, `warn`…) que resuelve `ilustrados.css` con los tokens.
+- **Variantes por tamaño.** 32 px o más: ilustrado con brillos y detalles. 18–28 px: compacto, sin detalles. 16 px o menos: trazo, la misma geometría en `currentColor`. Los controles pequeños (cerrar, chevrons, menú) son siempre de trazo, y los estados son insignias: un disco del tono con el glifo en blanco.
+- **Gestos.** Salen al pasar el ratón o enfocar el control que lleva el icono (enlace, botón, pestaña, opción de menú o cualquier `.ico-host`), una vez al volverse la página actual o la pestaña elegida, y en bucle solo con `loop` (la píldora y la insignia grande de la ejecución abierta mientras está en marcha). Solo animan `transform` y `opacity` (y el trazo que se dibuja). Con «reducir movimiento» del sistema no se mueve nada.
+- **Guardado.** `PUT /api/settings/appearance` con `{ "icons": "ilustrados" }`, en `app_setting` con la clave `icons`. Se lee sin sesión, como la paleta, y la última elección se recuerda en el navegador (`skynet.icons`) para que la carga siguiente no parpadee.
+

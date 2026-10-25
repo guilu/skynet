@@ -1,5 +1,7 @@
 // Cliente de la API del control plane. Los tipos reflejan las vistas REST del backend.
 
+import type { IconPack } from './components/icons/pack'
+
 export type WorkItemType =
   'FEATURE' | 'BUG' | 'REFACTOR' | 'DEPENDENCY_UPDATE' | 'INCIDENT' | 'SECURITY_REVIEW'
 
@@ -1007,6 +1009,8 @@ export interface LaunchRequest {
 /** Paleta guardada en el servidor: un color base `#rrggbb` por pieza, o `null` para el de Skynet. */
 export interface Appearance {
   colors: Partial<Record<'primary' | 'ok' | 'warn' | 'bad' | 'live' | 'idle', string | null>>
+  /** Paquete de iconos (IC-A); los servidores anteriores no lo mandan. */
+  icons?: IconPack
   updatedAt: string | null
 }
 
@@ -1154,6 +1158,8 @@ export const api = {
   appearance: () => request<Appearance>('GET', '/api/settings/appearance'),
   saveAppearance: (colors: Appearance['colors']) =>
     request<Appearance>('PUT', '/api/settings/appearance', { colors }),
+  saveIconPack: (icons: IconPack) =>
+    request<Appearance>('PUT', '/api/settings/appearance', { icons }),
   login: (username: string, password: string) =>
     request<Session>('POST', '/api/auth/login', { username, password }),
   logout: () => request<void>('POST', '/api/auth/logout'),

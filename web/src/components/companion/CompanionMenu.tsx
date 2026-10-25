@@ -1,12 +1,12 @@
 import * as Menu from '@radix-ui/react-dropdown-menu'
 import * as Tooltip from '@radix-ui/react-tooltip'
-import { Bell, BellOff, Inbox, Play, Settings, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { useNow } from '../../useNow'
 import { Companion } from './Companion'
 import { useCompanion } from './context'
 import { MUTE_MS, setCompanionPrefs, useCompanionPrefs } from './prefs'
 import { companionLabel } from './state'
+import { Icon } from '../icons/Icon'
 
 /**
  * La mascota de la barra superior con el estado global. Al pasar el ratón dice qué hay en marcha;
@@ -45,17 +45,17 @@ export function CompanionMenu({ onOpenNotices }: { onOpenNotices: () => void }) 
           </div>
           <Menu.Separator className="menu-sep" />
           <Menu.Item className="menu-item" onSelect={() => navigate('/runs?status=RUNNING')}>
-            <Play size={18} strokeWidth={2.25} aria-hidden="true" />
+            <Icon name="play" size={18} strokeWidth={2.25} />
             Ejecuciones activas
             <span className="menu-count">{activeRuns.length}</span>
           </Menu.Item>
           <Menu.Item className="menu-item" onSelect={() => navigate('/approvals')}>
-            <ShieldCheck size={18} strokeWidth={2.25} aria-hidden="true" />
+            <Icon name="verification" size={18} strokeWidth={2.25} />
             Te necesitan
             <span className="menu-count">{pendingApprovals}</span>
           </Menu.Item>
           <Menu.Item className="menu-item" onSelect={onOpenNotices}>
-            <Inbox size={18} strokeWidth={2.25} aria-hidden="true" />
+            <Icon name="inbox" size={18} strokeWidth={2.25} />
             Avisos recientes
           </Menu.Item>
           <Menu.Item
@@ -63,14 +63,14 @@ export function CompanionMenu({ onOpenNotices }: { onOpenNotices: () => void }) 
             onSelect={() => setCompanionPrefs({ mutedUntil: muted ? null : Date.now() + MUTE_MS })}
           >
             {muted ? (
-              <Bell size={18} strokeWidth={2.25} aria-hidden="true" />
+              <Icon name="notices" size={18} strokeWidth={2.25} />
             ) : (
-              <BellOff size={18} strokeWidth={2.25} aria-hidden="true" />
+              <Icon name="notices-off" size={18} strokeWidth={2.25} />
             )}
             {muted ? 'Quitar el silencio' : 'Silenciar 1 h'}
           </Menu.Item>
-          <Menu.Item className="menu-item" onSelect={() => navigate('/settings#companion')}>
-            <Settings size={18} strokeWidth={2.25} aria-hidden="true" />
+          <Menu.Item className="menu-item" onSelect={() => navigate('/settings?tab=companion')}>
+            <Icon name="settings" size={18} strokeWidth={2.25} />
             Ajustes del companion
           </Menu.Item>
         </Menu.Content>

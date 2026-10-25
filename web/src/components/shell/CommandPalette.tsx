@@ -1,13 +1,14 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Command } from 'cmdk'
-import { FileText, Folder, Search, Server } from 'lucide-react'
+import { FileText, Folder, Server } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { api } from '../../api'
 import { formatDateTime } from '../../format'
 import type { ThemeChoice } from '../../theme'
 import { StatusBadge } from '../StatusBadge'
 import { NAV, THEMES } from './nav'
+import { Icon } from '../icons/Icon'
 
 /**
  * Paleta de órdenes (⌘K o Ctrl+K): ir a cualquier sección, proyecto, trabajo, ejecución reciente
@@ -57,7 +58,7 @@ export function CommandPalette({
           <Dialog.Title className="visually-hidden">Buscar o ejecutar una orden</Dialog.Title>
           <Command label="Buscar o ejecutar una orden">
             <div className="palette-search">
-              <Search size={20} strokeWidth={2.5} aria-hidden="true" />
+              <Icon name="search" size={20} strokeWidth={2.5} />
               <Command.Input placeholder="Buscar ejecución, trabajo, proyecto o runner…" />
               <kbd className="kbd">Esc</kbd>
             </div>
@@ -69,7 +70,7 @@ export function CommandPalette({
               <Command.Group heading="Ir a">
                 {NAV.map((n) => (
                   <Command.Item key={n.to} value={`ir a ${n.label}`} onSelect={() => go(n.to)}>
-                    <n.icon size={20} strokeWidth={2.25} aria-hidden="true" />
+                    <Icon name={n.icon} size={20} strokeWidth={2.25} />
                     {n.label}
                   </Command.Item>
                 ))}
@@ -147,7 +148,7 @@ export function CommandPalette({
                       onOpenChange(false)
                     }}
                   >
-                    <t.icon size={20} strokeWidth={2.25} aria-hidden="true" />
+                    <Icon name={t.icon} size={20} strokeWidth={2.25} />
                     Tema {t.label.toLowerCase()}
                   </Command.Item>
                 ))}

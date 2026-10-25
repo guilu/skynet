@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight } from 'lucide-react'
 import { Link, matchPath, useLocation } from 'react-router'
 import { api } from '../../api'
 import { NAV } from './nav'
+import { Icon } from '../icons/Icon'
 
 interface Crumb {
   label: string
@@ -81,7 +81,7 @@ export function Breadcrumbs() {
                 <span aria-current={last ? 'page' : undefined}>{c.label}</span>
               )}
               {!last && (
-                <ChevronRight className="crumbs-sep" size={16} strokeWidth={3} aria-hidden="true" />
+                <Icon name="chevron-right" className="crumbs-sep" size={16} strokeWidth={3} />
               )}
             </li>
           )
