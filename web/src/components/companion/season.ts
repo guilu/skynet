@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useCompanionPrefs } from './prefs'
 
-/** Accesorios de temporada de Skyny: un sombrero sobre la cabeza. */
+/** Accesorios de temporada de Skyny: un sombrero ladeado a la izquierda de la cabeza. */
 export type Season = 'halloween' | 'christmas' | 'summer'
 
 export const SEASONS: { season: Season; label: string; when: string }[] = [

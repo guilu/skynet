@@ -103,7 +103,7 @@ En Ajustes › Companion hay opciones que valen **solo para este navegador** (`l
 
 ### Accesorios de temporada (SY-A)
 
-Skyny lleva un sombrero según la fecha (`season.ts`, hora local, se mira al montar):
+Skyny lleva un sombrero según la fecha (`season.ts`, hora local, se mira al montar). Va ladeado sobre el lado izquierdo de la cabeza, para no chocar con los bocadillos, que salen arriba a la derecha:
 
 | Accesorio | Cuándo |
 |---|---|

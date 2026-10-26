@@ -38,7 +38,7 @@ Comprueban:
 
 ## 2. En la web
 
-Arranca como siempre (`docs/arranque-local.md`) y entra en `http://localhost:5173`. Si la prueba cae entre el 24 de octubre y el 2 de noviembre, Skyny lleva el sombrero de bruja en tamaño mediano y grande: es lo esperado.
+Arranca como siempre (`docs/arranque-local.md`) y entra en `http://localhost:5173`. Si la prueba cae entre el 24 de octubre y el 2 de noviembre, Skyny lleva el sombrero de bruja, ladeado a la izquierda de la cabeza, en tamaño mediano y grande: es lo esperado. El sombrero no debe tapar los bocadillos («!», «?», pausa), que salen arriba a la derecha.
 
 1. **Ajustes › Companion:** la mascota grande y 12 casillas.
    - **Casillas y colores:** Reposo (azul del acento), Inactivo (gris), En espera (gris, «?»), Pensando (morado), Ejecutando (naranja), Revisando (azul, lupa), Éxito (verde), Error (rojo), Te necesita (amarillo, «!»), En pausa (gris), Sin conexión (gris, prohibido) y Cancelado (gris).

@@ -141,8 +141,9 @@ export function Companion({
         <g className="companion-head">
           <Node cx={60} cy={12} r={16} small={small} fill={ref('node')} />
           {hat && (
-            // Los sombreros se dibujan a escala de la cabeza y se agrandan desde el ala.
-            <g transform="translate(60 -1) scale(1.4) translate(-60 1)">
+            // Ladeado sobre el lado izquierdo de la cabeza, lejos de los bocadillos (arriba a la
+            // derecha). Se dibuja centrado arriba, se agranda desde el ala y se gira con la cabeza.
+            <g transform="rotate(-50 60 12) translate(60 0) scale(1.2) translate(-60 0)">
               <Hat season={hat} />
             </g>
           )}
@@ -388,7 +389,7 @@ function Effects({ state }: { state: CompanionState }) {
   }
 }
 
-/** Accesorio de temporada: un sombrero sentado sobre la cabeza. */
+/** Accesorio de temporada: un sombrero, dibujado centrado sobre la cabeza (luego se ladea). */
 function Hat({ season }: { season: Season }) {
   switch (season) {
     case 'halloween':
