@@ -7,7 +7,7 @@ import { galleryReadme } from './readme.ts'
 import { buildZip, zipEntries } from './zip.ts'
 
 /**
- * Comprobaciones y empaquetado de la galería, sin navegador: las usan finish.ts (al terminar de
+ * Comprobaciones y empaquetado de la galería y su mapa, sin navegador: las usan finish.ts (al terminar de
  * capturar), verify.ts (sobre una galería ya generada) y los tests.
  */
 
@@ -116,10 +116,71 @@ export async function checkRendered(
   return [...new Set(problems)]
 }
 
-/** El ZIP lleva exactamente las capturas y el README, nada más. */
+/** Ficheros del mapa de navegación (VS-B), relativos a la galería. */
+export function mapFiles(inv: Inventory): string[] {
+  const screens = capturedScreens(inv)
+  return [
+    'map/README.md',
+    ...['html', 'json', 'pdf', 'png', 'svg'].map((ext) => `map/navigation-map.${ext}`),
+    ...screens.map((s) => `map/thumbs/${fileName(s).replace(/\.png$/, '.jpg')}`),
+    ...inv.groups.flatMap((g, i) =>
+      screens.some((s) => s.group === g.id)
+        ? [`map/groups/${String(i + 1).padStart(2, '0')}-${g.id}.svg`]
+        : [],
+    ),
+  ]
+}
+
+/** Lo que va en el ZIP: capturas, índice y mapa, ordenado. */
+export function zipFiles(inv: Inventory): string[] {
+  return [...expectedFiles(inv), 'README.md', ...mapFiles(inv)].sort()
+}
+
+/** Sin las miniaturas y fuentes incrustadas: el texto que hay que escanear. */
+const withoutDataUris = (text: string) =>
+  text.replace(/data:[a-z/+-]+;base64,[A-Za-z0-9+/=]+/g, 'data:…')
+
+/**
+ * El mapa está completo y es coherente: todos sus ficheros, cada captura canónica una sola vez,
+ * conectores con destino y nada privado en sus textos.
+ */
+export async function checkMap(
+  galleryDir: string,
+  inv: Inventory,
+  secrets: string[],
+): Promise<string[]> {
+  const problems: string[] = []
+  for (const rel of mapFiles(inv)) {
+    if (!(await readFile(join(galleryDir, rel)).catch(() => null))) problems.push(`falta ${rel}`)
+  }
+  if (problems.length) return problems
+  const ids = capturedScreens(inv).map((s) => s.id)
+  const json = JSON.parse(await readFile(join(galleryDir, 'map/navigation-map.json'), 'utf8')) as {
+    screens: { id: string; links: { to: string }[] }[]
+  }
+  const inMap = json.screens.map((s) => s.id)
+  if ([...inMap].sort().join() !== [...ids].sort().join() || new Set(inMap).size !== inMap.length)
+    problems.push('el mapa no tiene cada captura canónica exactamente una vez')
+  for (const s of json.screens)
+    for (const l of s.links)
+      if (!inMap.includes(l.to)) problems.push(`conector sin destino en el mapa: ${s.id} → ${l.to}`)
+  const svg = await readFile(join(galleryDir, 'map/navigation-map.svg'), 'utf8')
+  for (const id of ids) {
+    const n = svg.split(`class="node" data-id="${id}"`).length - 1
+    if (n !== 1) problems.push(`el SVG tiene ${n} veces la pantalla ${id}`)
+  }
+  for (const rel of mapFiles(inv).filter((f) => /\.(md|html|svg|json)$/.test(f))) {
+    const text = withoutDataUris(await readFile(join(galleryDir, rel), 'utf8'))
+    for (const f of scanText(rel, text, secrets))
+      problems.push(`privacidad: ${f.rule} «${f.match}» en ${f.where}`)
+  }
+  return problems
+}
+
+/** El ZIP lleva exactamente las capturas, el README y el mapa, nada más. */
 export function checkZip(zip: Buffer, inv: Inventory): string[] {
   const names = zipEntries(zip)
-  const expected = [...expectedFiles(inv), 'README.md'].sort()
+  const expected = zipFiles(inv)
   const problems: string[] = []
   for (const n of names) if (!expected.includes(n)) problems.push(`el ZIP lleva ${n}`)
   for (const n of expected) if (!names.includes(n)) problems.push(`al ZIP le falta ${n}`)
@@ -144,6 +205,7 @@ export async function finishGallery(options: {
   const problems = [
     ...(await checkCaptures(galleryDir, inv)),
     ...(await checkRendered(renderedDir, inv, secrets, warnings)),
+    ...(await checkMap(galleryDir, inv, secrets)),
     ...scanText('README.md', readme, secrets).map(
       (f) => `privacidad: ${f.rule} «${f.match}» en ${f.where}`,
     ),
@@ -154,7 +216,7 @@ export async function finishGallery(options: {
   }
   await mkdir(galleryDir, { recursive: true })
   await writeFile(join(galleryDir, 'README.md'), readme)
-  const files = [...expectedFiles(inv), 'README.md']
+  const files = zipFiles(inv)
   const zip = buildZip(
     await Promise.all(
       files.map(async (name) => ({ name, data: await readFile(join(galleryDir, name)) })),

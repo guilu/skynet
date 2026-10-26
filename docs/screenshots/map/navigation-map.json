@@ -1,0 +1,1408 @@
+{
+  "canonical": {
+    "viewport": "desktop",
+    "theme": "light"
+  },
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 1000
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844
+    }
+  },
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "linkTypes": {
+    "navigation": "Navegación normal",
+    "tab": "Cambio de pestaña",
+    "dialog": "Abre un diálogo",
+    "menu": "Abre un menú",
+    "action": "Acción que crea o lanza algo",
+    "return": "Retorno o cierre"
+  },
+  "groups": [
+    {
+      "id": "access",
+      "title": "Acceso"
+    },
+    {
+      "id": "overview",
+      "title": "Inicio y supervisión"
+    },
+    {
+      "id": "work",
+      "title": "Trabajo"
+    },
+    {
+      "id": "automation",
+      "title": "Automatización"
+    },
+    {
+      "id": "execution",
+      "title": "Ejecución"
+    },
+    {
+      "id": "decisions",
+      "title": "Decisiones"
+    },
+    {
+      "id": "settings",
+      "title": "Configuración"
+    },
+    {
+      "id": "overlays",
+      "title": "Overlays y estados transversales"
+    }
+  ],
+  "screens": [
+    {
+      "id": "login",
+      "order": 1,
+      "title": "Login",
+      "group": "access",
+      "route": "/ (sin sesión)",
+      "capture": "viewport",
+      "notes": null,
+      "entry": true,
+      "isolated": false,
+      "thumbnail": "thumbs/01-login.jpg",
+      "files": {
+        "desktop/light": "desktop/light/01-login.png",
+        "desktop/dark": "desktop/dark/01-login.png",
+        "mobile/light": "mobile/light/01-login.png",
+        "mobile/dark": "mobile/dark/01-login.png"
+      },
+      "position": {
+        "x": 48,
+        "y": 218,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "dashboard",
+          "type": "action",
+          "label": "Entrar"
+        }
+      ]
+    },
+    {
+      "id": "dashboard",
+      "order": 2,
+      "title": "Dashboard",
+      "group": "overview",
+      "route": "/",
+      "capture": "fullPage",
+      "notes": "Con actividad y con una aprobación en «Necesita tu atención»: una sola captura cubre los dos estados.",
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/02-dashboard.jpg",
+      "files": {
+        "desktop/light": "desktop/light/02-dashboard.png",
+        "desktop/dark": "desktop/dark/02-dashboard.png",
+        "mobile/light": "mobile/light/02-dashboard.png",
+        "mobile/dark": "mobile/dark/02-dashboard.png"
+      },
+      "position": {
+        "x": 498,
+        "y": 218,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "projects",
+          "type": "navigation"
+        },
+        {
+          "to": "workflows",
+          "type": "navigation"
+        },
+        {
+          "to": "runs",
+          "type": "navigation"
+        },
+        {
+          "to": "approvals",
+          "type": "navigation"
+        },
+        {
+          "to": "runners",
+          "type": "navigation"
+        },
+        {
+          "to": "usage",
+          "type": "navigation"
+        },
+        {
+          "to": "activity",
+          "type": "navigation"
+        },
+        {
+          "to": "settings-colors",
+          "type": "navigation"
+        },
+        {
+          "to": "approval-pending",
+          "type": "navigation",
+          "label": "Necesita tu atención"
+        },
+        {
+          "to": "run-active",
+          "type": "navigation",
+          "label": "Ejecuciones recientes"
+        },
+        {
+          "to": "command-palette",
+          "type": "dialog",
+          "label": "⌘K"
+        },
+        {
+          "to": "theme-menu",
+          "type": "menu"
+        },
+        {
+          "to": "companion-menu",
+          "type": "menu"
+        }
+      ]
+    },
+    {
+      "id": "usage",
+      "order": 3,
+      "title": "Uso",
+      "group": "overview",
+      "route": "/usage",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/03-usage.jpg",
+      "files": {
+        "desktop/light": "desktop/light/03-usage.png",
+        "desktop/dark": "desktop/dark/03-usage.png",
+        "mobile/light": "mobile/light/03-usage.png",
+        "mobile/dark": "mobile/dark/03-usage.png"
+      },
+      "position": {
+        "x": 498,
+        "y": 518,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "dashboard",
+          "type": "return"
+        }
+      ]
+    },
+    {
+      "id": "activity",
+      "order": 4,
+      "title": "Actividad",
+      "group": "overview",
+      "route": "/activity",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/04-activity.jpg",
+      "files": {
+        "desktop/light": "desktop/light/04-activity.png",
+        "desktop/dark": "desktop/dark/04-activity.png",
+        "mobile/light": "mobile/light/04-activity.png",
+        "mobile/dark": "mobile/dark/04-activity.png"
+      },
+      "position": {
+        "x": 498,
+        "y": 818,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-completed",
+          "type": "navigation"
+        }
+      ]
+    },
+    {
+      "id": "runners",
+      "order": 5,
+      "title": "Runners",
+      "group": "overview",
+      "route": "/runners",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/05-runners.jpg",
+      "files": {
+        "desktop/light": "desktop/light/05-runners.png",
+        "desktop/dark": "desktop/dark/05-runners.png",
+        "mobile/light": "mobile/light/05-runners.png",
+        "mobile/dark": "mobile/dark/05-runners.png"
+      },
+      "position": {
+        "x": 498,
+        "y": 1118,
+        "width": 300,
+        "height": 266
+      },
+      "links": []
+    },
+    {
+      "id": "projects",
+      "order": 6,
+      "title": "Proyectos",
+      "group": "work",
+      "route": "/projects",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/06-projects.jpg",
+      "files": {
+        "desktop/light": "desktop/light/06-projects.png",
+        "desktop/dark": "desktop/dark/06-projects.png",
+        "mobile/light": "mobile/light/06-projects.png",
+        "mobile/dark": "mobile/dark/06-projects.png"
+      },
+      "position": {
+        "x": 948,
+        "y": 218,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "project-work",
+          "type": "navigation",
+          "label": "DEMO"
+        },
+        {
+          "to": "project-empty",
+          "type": "navigation",
+          "label": "PROTO"
+        }
+      ]
+    },
+    {
+      "id": "project-work",
+      "order": 7,
+      "title": "Proyecto: trabajos",
+      "group": "work",
+      "route": "/projects/:id",
+      "capture": "fullPage",
+      "notes": "El proyecto no tiene pestaña «Resumen»: su cabecera y la pestaña Trabajos (la de entrada) hacen de resumen.",
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/07-project-work.jpg",
+      "files": {
+        "desktop/light": "desktop/light/07-project-work.png",
+        "desktop/dark": "desktop/dark/07-project-work.png",
+        "mobile/light": "mobile/light/07-project-work.png",
+        "mobile/dark": "mobile/dark/07-project-work.png"
+      },
+      "position": {
+        "x": 948,
+        "y": 518,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "project-repos",
+          "type": "tab"
+        },
+        {
+          "to": "project-memory",
+          "type": "tab"
+        },
+        {
+          "to": "work-item",
+          "type": "navigation"
+        },
+        {
+          "to": "new-work-item",
+          "type": "dialog",
+          "label": "Nuevo trabajo"
+        }
+      ]
+    },
+    {
+      "id": "project-repos",
+      "order": 8,
+      "title": "Proyecto: repositorios",
+      "group": "work",
+      "route": "/projects/:id?tab=repos",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/08-project-repos.jpg",
+      "files": {
+        "desktop/light": "desktop/light/08-project-repos.png",
+        "desktop/dark": "desktop/dark/08-project-repos.png",
+        "mobile/light": "mobile/light/08-project-repos.png",
+        "mobile/dark": "mobile/dark/08-project-repos.png"
+      },
+      "position": {
+        "x": 948,
+        "y": 818,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "project-work",
+          "type": "tab"
+        }
+      ]
+    },
+    {
+      "id": "project-memory",
+      "order": 9,
+      "title": "Proyecto: memoria",
+      "group": "work",
+      "route": "/projects/:id?tab=memory",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/09-project-memory.jpg",
+      "files": {
+        "desktop/light": "desktop/light/09-project-memory.png",
+        "desktop/dark": "desktop/dark/09-project-memory.png",
+        "mobile/light": "mobile/light/09-project-memory.png",
+        "mobile/dark": "mobile/dark/09-project-memory.png"
+      },
+      "position": {
+        "x": 948,
+        "y": 1118,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-memory",
+          "type": "navigation",
+          "label": "Ver la ejecución"
+        }
+      ]
+    },
+    {
+      "id": "project-empty",
+      "order": 10,
+      "title": "Proyecto vacío",
+      "group": "work",
+      "route": "/projects/:id (sin trabajos)",
+      "capture": "viewport",
+      "notes": "Estado vacío: un proyecto recién creado.",
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/10-project-empty.jpg",
+      "files": {
+        "desktop/light": "desktop/light/10-project-empty.png",
+        "desktop/dark": "desktop/dark/10-project-empty.png",
+        "mobile/light": "mobile/light/10-project-empty.png",
+        "mobile/dark": "mobile/dark/10-project-empty.png"
+      },
+      "position": {
+        "x": 948,
+        "y": 1418,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "new-work-item",
+          "type": "dialog",
+          "label": "Nuevo trabajo"
+        }
+      ]
+    },
+    {
+      "id": "new-work-item",
+      "order": 11,
+      "title": "Diálogo: nuevo trabajo",
+      "group": "work",
+      "route": "/projects/:id → Nuevo trabajo",
+      "capture": "viewport",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/11-new-work-item.jpg",
+      "files": {
+        "desktop/light": "desktop/light/11-new-work-item.png",
+        "desktop/dark": "desktop/dark/11-new-work-item.png",
+        "mobile/light": "mobile/light/11-new-work-item.png",
+        "mobile/dark": "mobile/dark/11-new-work-item.png"
+      },
+      "position": {
+        "x": 948,
+        "y": 1718,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "work-item",
+          "type": "action",
+          "label": "Crear"
+        }
+      ]
+    },
+    {
+      "id": "work-item",
+      "order": 12,
+      "title": "Trabajo",
+      "group": "work",
+      "route": "/work-items/:id",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/12-work-item.jpg",
+      "files": {
+        "desktop/light": "desktop/light/12-work-item.png",
+        "desktop/dark": "desktop/dark/12-work-item.png",
+        "mobile/light": "mobile/light/12-work-item.png",
+        "mobile/dark": "mobile/dark/12-work-item.png"
+      },
+      "position": {
+        "x": 948,
+        "y": 2018,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "launch-workflow",
+          "type": "dialog",
+          "label": "Lanzar workflow"
+        },
+        {
+          "to": "run-completed",
+          "type": "navigation"
+        },
+        {
+          "to": "project-work",
+          "type": "return"
+        }
+      ]
+    },
+    {
+      "id": "workflows",
+      "order": 13,
+      "title": "Workflows",
+      "group": "automation",
+      "route": "/workflows",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/13-workflows.jpg",
+      "files": {
+        "desktop/light": "desktop/light/13-workflows.png",
+        "desktop/dark": "desktop/dark/13-workflows.png",
+        "mobile/light": "mobile/light/13-workflows.png",
+        "mobile/dark": "mobile/dark/13-workflows.png"
+      },
+      "position": {
+        "x": 1398,
+        "y": 218,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "workflow-summary",
+          "type": "navigation"
+        },
+        {
+          "to": "workflow-new",
+          "type": "action",
+          "label": "Nuevo workflow"
+        }
+      ]
+    },
+    {
+      "id": "workflow-summary",
+      "order": 14,
+      "title": "Workflow: resumen",
+      "group": "automation",
+      "route": "/workflows/:key?view=graph",
+      "capture": "viewport",
+      "notes": "Versión publicada, con su grafo.",
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/14-workflow-summary.jpg",
+      "files": {
+        "desktop/light": "desktop/light/14-workflow-summary.png",
+        "desktop/dark": "desktop/dark/14-workflow-summary.png",
+        "mobile/light": "mobile/light/14-workflow-summary.png",
+        "mobile/dark": "mobile/dark/14-workflow-summary.png"
+      },
+      "position": {
+        "x": 1398,
+        "y": 518,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "workflow-yaml",
+          "type": "tab"
+        },
+        {
+          "to": "workflow-editor",
+          "type": "action",
+          "label": "Editar"
+        }
+      ]
+    },
+    {
+      "id": "workflow-yaml",
+      "order": 15,
+      "title": "Workflow: YAML",
+      "group": "automation",
+      "route": "/workflows/:key",
+      "capture": "viewport",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/15-workflow-yaml.jpg",
+      "files": {
+        "desktop/light": "desktop/light/15-workflow-yaml.png",
+        "desktop/dark": "desktop/dark/15-workflow-yaml.png",
+        "mobile/light": "mobile/light/15-workflow-yaml.png",
+        "mobile/dark": "mobile/dark/15-workflow-yaml.png"
+      },
+      "position": {
+        "x": 1398,
+        "y": 818,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "workflow-summary",
+          "type": "tab"
+        }
+      ]
+    },
+    {
+      "id": "workflow-editor",
+      "order": 16,
+      "title": "Workflow: editor visual",
+      "group": "automation",
+      "route": "/workflows/:key?version=:borrador&view=graph",
+      "capture": "viewport",
+      "notes": "Borrador v2 abierto en el grafo editable. En el móvil el grafo no se edita (solo se ve).",
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/16-workflow-editor.jpg",
+      "files": {
+        "desktop/light": "desktop/light/16-workflow-editor.png",
+        "desktop/dark": "desktop/dark/16-workflow-editor.png",
+        "mobile/light": "mobile/light/16-workflow-editor.png",
+        "mobile/dark": "mobile/dark/16-workflow-editor.png"
+      },
+      "position": {
+        "x": 1398,
+        "y": 1118,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "workflow-summary",
+          "type": "return"
+        }
+      ]
+    },
+    {
+      "id": "workflow-new",
+      "order": 17,
+      "title": "Nuevo workflow",
+      "group": "automation",
+      "route": "/workflows/new",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/17-workflow-new.jpg",
+      "files": {
+        "desktop/light": "desktop/light/17-workflow-new.png",
+        "desktop/dark": "desktop/dark/17-workflow-new.png",
+        "mobile/light": "mobile/light/17-workflow-new.png",
+        "mobile/dark": "mobile/dark/17-workflow-new.png"
+      },
+      "position": {
+        "x": 1398,
+        "y": 1418,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "workflow-editor",
+          "type": "action",
+          "label": "Crear"
+        }
+      ]
+    },
+    {
+      "id": "launch-workflow",
+      "order": 18,
+      "title": "Diálogo: lanzar workflow",
+      "group": "automation",
+      "route": "/work-items/:id → Lanzar workflow",
+      "capture": "viewport",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/18-launch-workflow.jpg",
+      "files": {
+        "desktop/light": "desktop/light/18-launch-workflow.png",
+        "desktop/dark": "desktop/dark/18-launch-workflow.png",
+        "mobile/light": "mobile/light/18-launch-workflow.png",
+        "mobile/dark": "mobile/dark/18-launch-workflow.png"
+      },
+      "position": {
+        "x": 1398,
+        "y": 1718,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-active",
+          "type": "action",
+          "label": "Lanzar"
+        }
+      ]
+    },
+    {
+      "id": "runs",
+      "order": 19,
+      "title": "Ejecuciones",
+      "group": "execution",
+      "route": "/runs",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/19-runs.jpg",
+      "files": {
+        "desktop/light": "desktop/light/19-runs.png",
+        "desktop/dark": "desktop/dark/19-runs.png",
+        "mobile/light": "mobile/light/19-runs.png",
+        "mobile/dark": "mobile/dark/19-runs.png"
+      },
+      "position": {
+        "x": 1848,
+        "y": 218,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-completed",
+          "type": "navigation"
+        },
+        {
+          "to": "run-active",
+          "type": "navigation"
+        },
+        {
+          "to": "run-failed",
+          "type": "navigation"
+        }
+      ]
+    },
+    {
+      "id": "run-completed",
+      "order": 20,
+      "title": "Ejecución: resumen (completada)",
+      "group": "execution",
+      "route": "/runs/:id",
+      "capture": "viewport",
+      "notes": "Ejecución completada de «Revisión con Codex y Antigravity». La conversación es la vista por defecto del panel central, así que esta captura también es «Ejecución: conversación».",
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/20-run-completed.jpg",
+      "files": {
+        "desktop/light": "desktop/light/20-run-completed.png",
+        "desktop/dark": "desktop/dark/20-run-completed.png",
+        "mobile/light": "mobile/light/20-run-completed.png",
+        "mobile/dark": "mobile/dark/20-run-completed.png"
+      },
+      "position": {
+        "x": 1848,
+        "y": 518,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-waterfall",
+          "type": "tab"
+        },
+        {
+          "to": "run-events",
+          "type": "tab"
+        },
+        {
+          "to": "run-prompt",
+          "type": "tab"
+        },
+        {
+          "to": "run-tools",
+          "type": "tab"
+        },
+        {
+          "to": "run-verification",
+          "type": "tab"
+        },
+        {
+          "to": "run-cost",
+          "type": "tab"
+        },
+        {
+          "to": "runs",
+          "type": "return"
+        }
+      ]
+    },
+    {
+      "id": "run-waterfall",
+      "order": 21,
+      "title": "Ejecución: cascada",
+      "group": "execution",
+      "route": "/runs/:id?view=waterfall",
+      "capture": "viewport",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/21-run-waterfall.jpg",
+      "files": {
+        "desktop/light": "desktop/light/21-run-waterfall.png",
+        "desktop/dark": "desktop/dark/21-run-waterfall.png",
+        "mobile/light": "mobile/light/21-run-waterfall.png",
+        "mobile/dark": "mobile/dark/21-run-waterfall.png"
+      },
+      "position": {
+        "x": 1848,
+        "y": 818,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-completed",
+          "type": "tab"
+        }
+      ]
+    },
+    {
+      "id": "run-events",
+      "order": 22,
+      "title": "Ejecución: eventos",
+      "group": "execution",
+      "route": "/runs/:id?view=events",
+      "capture": "viewport",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/22-run-events.jpg",
+      "files": {
+        "desktop/light": "desktop/light/22-run-events.png",
+        "desktop/dark": "desktop/dark/22-run-events.png",
+        "mobile/light": "mobile/light/22-run-events.png",
+        "mobile/dark": "mobile/dark/22-run-events.png"
+      },
+      "position": {
+        "x": 1848,
+        "y": 1118,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-completed",
+          "type": "tab"
+        }
+      ]
+    },
+    {
+      "id": "run-prompt",
+      "order": 23,
+      "title": "Ejecución: prompt",
+      "group": "execution",
+      "route": "/runs/:id?agent=:id&tab=prompt",
+      "capture": "viewport",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/23-run-prompt.jpg",
+      "files": {
+        "desktop/light": "desktop/light/23-run-prompt.png",
+        "desktop/dark": "desktop/dark/23-run-prompt.png",
+        "mobile/light": "mobile/light/23-run-prompt.png",
+        "mobile/dark": "mobile/dark/23-run-prompt.png"
+      },
+      "position": {
+        "x": 1848,
+        "y": 1418,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-completed",
+          "type": "tab"
+        }
+      ]
+    },
+    {
+      "id": "run-tools",
+      "order": 24,
+      "title": "Ejecución: herramientas",
+      "group": "execution",
+      "route": "/runs/:id?agent=:id&tab=tools",
+      "capture": "viewport",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/24-run-tools.jpg",
+      "files": {
+        "desktop/light": "desktop/light/24-run-tools.png",
+        "desktop/dark": "desktop/dark/24-run-tools.png",
+        "mobile/light": "mobile/light/24-run-tools.png",
+        "mobile/dark": "mobile/dark/24-run-tools.png"
+      },
+      "position": {
+        "x": 1848,
+        "y": 1718,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-completed",
+          "type": "tab"
+        }
+      ]
+    },
+    {
+      "id": "run-verification",
+      "order": 25,
+      "title": "Ejecución: verificación",
+      "group": "execution",
+      "route": "/runs/:id?agent=:id&tab=verification",
+      "capture": "viewport",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/25-run-verification.jpg",
+      "files": {
+        "desktop/light": "desktop/light/25-run-verification.png",
+        "desktop/dark": "desktop/dark/25-run-verification.png",
+        "mobile/light": "mobile/light/25-run-verification.png",
+        "mobile/dark": "mobile/dark/25-run-verification.png"
+      },
+      "position": {
+        "x": 1848,
+        "y": 2018,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-completed",
+          "type": "tab"
+        }
+      ]
+    },
+    {
+      "id": "run-cost",
+      "order": 26,
+      "title": "Ejecución: coste",
+      "group": "execution",
+      "route": "/runs/:id?agent=:id&tab=cost",
+      "capture": "viewport",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/26-run-cost.jpg",
+      "files": {
+        "desktop/light": "desktop/light/26-run-cost.png",
+        "desktop/dark": "desktop/dark/26-run-cost.png",
+        "mobile/light": "mobile/light/26-run-cost.png",
+        "mobile/dark": "mobile/dark/26-run-cost.png"
+      },
+      "position": {
+        "x": 2188,
+        "y": 218,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-completed",
+          "type": "tab"
+        }
+      ]
+    },
+    {
+      "id": "run-artifacts",
+      "order": 27,
+      "title": "Ejecución: artefactos",
+      "group": "execution",
+      "route": "/runs/:id?agent=:id&tab=artifacts",
+      "capture": "viewport",
+      "notes": "Ejecución de «Documentar el repositorio», con un informe declarado.",
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/27-run-artifacts.jpg",
+      "files": {
+        "desktop/light": "desktop/light/27-run-artifacts.png",
+        "desktop/dark": "desktop/dark/27-run-artifacts.png",
+        "mobile/light": "mobile/light/27-run-artifacts.png",
+        "mobile/dark": "mobile/dark/27-run-artifacts.png"
+      },
+      "position": {
+        "x": 2188,
+        "y": 518,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-artifact-open",
+          "type": "action",
+          "label": "Abrir"
+        },
+        {
+          "to": "run-memory",
+          "type": "tab"
+        }
+      ]
+    },
+    {
+      "id": "run-artifact-open",
+      "order": 28,
+      "title": "Ejecución: artefacto abierto",
+      "group": "execution",
+      "route": "/runs/:id?agent=:id&tab=artifacts → Abrir",
+      "capture": "viewport",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/28-run-artifact-open.jpg",
+      "files": {
+        "desktop/light": "desktop/light/28-run-artifact-open.png",
+        "desktop/dark": "desktop/dark/28-run-artifact-open.png",
+        "mobile/light": "mobile/light/28-run-artifact-open.png",
+        "mobile/dark": "mobile/dark/28-run-artifact-open.png"
+      },
+      "position": {
+        "x": 2188,
+        "y": 818,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-artifacts",
+          "type": "return"
+        }
+      ]
+    },
+    {
+      "id": "run-memory",
+      "order": 29,
+      "title": "Ejecución: memoria",
+      "group": "execution",
+      "route": "/runs/:id?agent=:id&tab=memory",
+      "capture": "viewport",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/29-run-memory.jpg",
+      "files": {
+        "desktop/light": "desktop/light/29-run-memory.png",
+        "desktop/dark": "desktop/dark/29-run-memory.png",
+        "mobile/light": "mobile/light/29-run-memory.png",
+        "mobile/dark": "mobile/dark/29-run-memory.png"
+      },
+      "position": {
+        "x": 2188,
+        "y": 1118,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-artifacts",
+          "type": "tab"
+        },
+        {
+          "to": "project-memory",
+          "type": "navigation"
+        }
+      ]
+    },
+    {
+      "id": "run-active",
+      "order": 30,
+      "title": "Ejecución activa",
+      "group": "execution",
+      "route": "/runs/:id",
+      "capture": "viewport",
+      "notes": "Una fase de comando larga mantiene la ejecución en curso mientras se captura.",
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/30-run-active.jpg",
+      "files": {
+        "desktop/light": "desktop/light/30-run-active.png",
+        "desktop/dark": "desktop/dark/30-run-active.png",
+        "mobile/light": "mobile/light/30-run-active.png",
+        "mobile/dark": "mobile/dark/30-run-active.png"
+      },
+      "position": {
+        "x": 2188,
+        "y": 1418,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "runs",
+          "type": "return"
+        }
+      ]
+    },
+    {
+      "id": "run-failed",
+      "order": 31,
+      "title": "Ejecución fallida",
+      "group": "execution",
+      "route": "/runs/:id",
+      "capture": "viewport",
+      "notes": "La verificación del repositorio falla.",
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/31-run-failed.jpg",
+      "files": {
+        "desktop/light": "desktop/light/31-run-failed.png",
+        "desktop/dark": "desktop/dark/31-run-failed.png",
+        "mobile/light": "mobile/light/31-run-failed.png",
+        "mobile/dark": "mobile/dark/31-run-failed.png"
+      },
+      "position": {
+        "x": 2188,
+        "y": 1718,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "runs",
+          "type": "return"
+        }
+      ]
+    },
+    {
+      "id": "approvals",
+      "order": 32,
+      "title": "Aprobaciones",
+      "group": "decisions",
+      "route": "/approvals",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/32-approvals.jpg",
+      "files": {
+        "desktop/light": "desktop/light/32-approvals.png",
+        "desktop/dark": "desktop/dark/32-approvals.png",
+        "mobile/light": "mobile/light/32-approvals.png",
+        "mobile/dark": "mobile/dark/32-approvals.png"
+      },
+      "position": {
+        "x": 2638,
+        "y": 218,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "approval-pending",
+          "type": "navigation"
+        }
+      ]
+    },
+    {
+      "id": "approval-pending",
+      "order": 33,
+      "title": "Aprobación pendiente",
+      "group": "decisions",
+      "route": "/approvals/:id",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/33-approval-pending.jpg",
+      "files": {
+        "desktop/light": "desktop/light/33-approval-pending.png",
+        "desktop/dark": "desktop/dark/33-approval-pending.png",
+        "mobile/light": "mobile/light/33-approval-pending.png",
+        "mobile/dark": "mobile/dark/33-approval-pending.png"
+      },
+      "position": {
+        "x": 2638,
+        "y": 518,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "approvals",
+          "type": "return"
+        }
+      ]
+    },
+    {
+      "id": "settings-colors",
+      "order": 34,
+      "title": "Ajustes: apariencia y colores",
+      "group": "settings",
+      "route": "/settings",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/34-settings-colors.jpg",
+      "files": {
+        "desktop/light": "desktop/light/34-settings-colors.png",
+        "desktop/dark": "desktop/dark/34-settings-colors.png",
+        "mobile/light": "mobile/light/34-settings-colors.png",
+        "mobile/dark": "mobile/dark/34-settings-colors.png"
+      },
+      "position": {
+        "x": 3088,
+        "y": 218,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "settings-icons",
+          "type": "tab"
+        },
+        {
+          "to": "settings-companion",
+          "type": "tab"
+        }
+      ]
+    },
+    {
+      "id": "settings-icons",
+      "order": 35,
+      "title": "Ajustes: iconos",
+      "group": "settings",
+      "route": "/settings?tab=icons",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/35-settings-icons.jpg",
+      "files": {
+        "desktop/light": "desktop/light/35-settings-icons.png",
+        "desktop/dark": "desktop/dark/35-settings-icons.png",
+        "mobile/light": "mobile/light/35-settings-icons.png",
+        "mobile/dark": "mobile/dark/35-settings-icons.png"
+      },
+      "position": {
+        "x": 3088,
+        "y": 518,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "settings-colors",
+          "type": "tab"
+        }
+      ]
+    },
+    {
+      "id": "settings-companion",
+      "order": 36,
+      "title": "Ajustes: companion",
+      "group": "settings",
+      "route": "/settings?tab=companion",
+      "capture": "fullPage",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/36-settings-companion.jpg",
+      "files": {
+        "desktop/light": "desktop/light/36-settings-companion.png",
+        "desktop/dark": "desktop/dark/36-settings-companion.png",
+        "mobile/light": "mobile/light/36-settings-companion.png",
+        "mobile/dark": "mobile/dark/36-settings-companion.png"
+      },
+      "position": {
+        "x": 3088,
+        "y": 818,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "settings-colors",
+          "type": "tab"
+        }
+      ]
+    },
+    {
+      "id": "command-palette",
+      "order": 37,
+      "title": "Paleta ⌘K",
+      "group": "overlays",
+      "route": "cualquier página → ⌘K",
+      "capture": "viewport",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/37-command-palette.jpg",
+      "files": {
+        "desktop/light": "desktop/light/37-command-palette.png",
+        "desktop/dark": "desktop/dark/37-command-palette.png",
+        "mobile/light": "mobile/light/37-command-palette.png",
+        "mobile/dark": "mobile/dark/37-command-palette.png"
+      },
+      "position": {
+        "x": 3538,
+        "y": 218,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "run-completed",
+          "type": "navigation"
+        },
+        {
+          "to": "dashboard",
+          "type": "return"
+        }
+      ]
+    },
+    {
+      "id": "theme-menu",
+      "order": 38,
+      "title": "Menú de tema",
+      "group": "overlays",
+      "route": "barra superior → tema",
+      "capture": "viewport",
+      "notes": null,
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/38-theme-menu.jpg",
+      "files": {
+        "desktop/light": "desktop/light/38-theme-menu.png",
+        "desktop/dark": "desktop/dark/38-theme-menu.png",
+        "mobile/light": "mobile/light/38-theme-menu.png",
+        "mobile/dark": "mobile/dark/38-theme-menu.png"
+      },
+      "position": {
+        "x": 3538,
+        "y": 518,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "dashboard",
+          "type": "return"
+        }
+      ]
+    },
+    {
+      "id": "companion-menu",
+      "order": 39,
+      "title": "Companion abierto",
+      "group": "overlays",
+      "route": "barra superior → Skyny",
+      "capture": "viewport",
+      "notes": "Con una aprobación pendiente, Skyny avisa de que te necesita.",
+      "entry": false,
+      "isolated": false,
+      "thumbnail": "thumbs/39-companion-menu.jpg",
+      "files": {
+        "desktop/light": "desktop/light/39-companion-menu.png",
+        "desktop/dark": "desktop/dark/39-companion-menu.png",
+        "mobile/light": "mobile/light/39-companion-menu.png",
+        "mobile/dark": "mobile/dark/39-companion-menu.png"
+      },
+      "position": {
+        "x": 3538,
+        "y": 818,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "approval-pending",
+          "type": "navigation"
+        },
+        {
+          "to": "settings-companion",
+          "type": "navigation"
+        }
+      ]
+    },
+    {
+      "id": "not-found",
+      "order": 40,
+      "title": "Página 404",
+      "group": "overlays",
+      "route": "/no-existe",
+      "capture": "viewport",
+      "notes": null,
+      "entry": false,
+      "isolated": true,
+      "thumbnail": "thumbs/40-not-found.jpg",
+      "files": {
+        "desktop/light": "desktop/light/40-not-found.png",
+        "desktop/dark": "desktop/dark/40-not-found.png",
+        "mobile/light": "mobile/light/40-not-found.png",
+        "mobile/dark": "mobile/dark/40-not-found.png"
+      },
+      "position": {
+        "x": 3538,
+        "y": 1118,
+        "width": 300,
+        "height": 266
+      },
+      "links": [
+        {
+          "to": "dashboard",
+          "type": "return"
+        }
+      ]
+    }
+  ],
+  "exceptions": []
+}

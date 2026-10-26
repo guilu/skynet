@@ -14,6 +14,7 @@
     "preview": "vite preview",
     "e2e": "playwright test",
     "screenshots": "../scripts/screenshots.sh",
+    "screenshots:map": "node visual/build-map.ts",
     "screenshots:verify": "node visual/verify.ts"
   },
   "dependencies": {

@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { checkZip, expectedFiles, finishGallery, ZIP_NAME, type Rendered } from './gallery.ts'
+import {
+  checkMap,
+  checkZip,
+  expectedFiles,
+  finishGallery,
+  mapFiles,
+  zipFiles,
+  ZIP_NAME,
+  type Rendered,
+} from './gallery.ts'
 import {
   capturedScreens,
   fileName,
@@ -10,6 +19,7 @@ import {
   inventoryProblems,
   type Inventory,
 } from './inventory.ts'
+import { layoutMap, mapReadme, renderHtml, renderSvg, resolvedMap } from './map.ts'
 import { pngSize } from './png.ts'
 import { scanText } from './privacy.ts'
 import { galleryReadme } from './readme.ts'
@@ -153,7 +163,30 @@ async function fakeGallery(change: (r: Rendered) => Rendered = (r) => r) {
     await mkdir(dirname(file), { recursive: true })
     await writeFile(file, JSON.stringify(change(rendered)))
   }
+  await fakeMap(galleryDir)
   return { root, galleryDir, renderedDir }
+}
+
+/** El mapa que dejaría build-map.ts, con miniaturas, PNG y PDF de relleno. */
+async function fakeMap(galleryDir: string, inv: Inventory = inventory) {
+  const image = () => 'data:image/jpeg;base64,AAAA'
+  const layout = layoutMap(inv)
+  const groupFiles: { title: string; file: string }[] = []
+  for (const rel of mapFiles(inv)) {
+    await mkdir(dirname(join(galleryDir, rel)), { recursive: true })
+    const group = /^map\/groups\/\d+-(.+)\.svg$/.exec(rel)?.[1]
+    if (group) {
+      groupFiles.push({ title: group, file: rel.slice('map/groups/'.length) })
+      await writeFile(join(galleryDir, rel), renderSvg(layoutMap(inv, group), inv, { image }))
+    } else await writeFile(join(galleryDir, rel), 'relleno')
+  }
+  await writeFile(join(galleryDir, 'map/navigation-map.svg'), renderSvg(layout, inv, { image }))
+  await writeFile(join(galleryDir, 'map/navigation-map.html'), renderHtml(layout, inv, ''))
+  await writeFile(
+    join(galleryDir, 'map/navigation-map.json'),
+    JSON.stringify(resolvedMap(inv, layout)),
+  )
+  await writeFile(join(galleryDir, 'map/README.md'), mapReadme(inv, groupFiles))
 }
 
 const finish = (g: { galleryDir: string; renderedDir: string }) =>
@@ -179,7 +212,8 @@ describe('cierre de la galería', () => {
     try {
       expect((await finish(g)).problems).toEqual([])
       const zip = await readFile(join(g.galleryDir, ZIP_NAME))
-      expect(zipEntries(zip)).toEqual([...expectedFiles(inventory), 'README.md'].sort())
+      expect(zipEntries(zip)).toEqual(zipFiles(inventory))
+      expect(zipEntries(zip)).toContain('map/navigation-map.svg')
       expect(checkZip(zip, inventory)).toEqual([])
       expect(await readFile(join(g.galleryDir, 'README.md'), 'utf8')).toContain('01-login.png')
     } finally {
@@ -249,6 +283,103 @@ describe('cierre de la galería', () => {
       expect(await zipExists(g.galleryDir)).toBe(false)
     } finally {
       await rm(g.root, { recursive: true })
+    }
+  })
+})
+
+describe('mapa de navegación', () => {
+  const ids = capturedScreens().map((s) => s.id)
+
+  it('coloca cada captura una vez, sin solapes, y un conector por enlace', () => {
+    const layout = layoutMap(inventory)
+    expect(layout.nodes.map((n) => n.screen.id).sort()).toEqual([...ids].sort())
+    const links = capturedScreens().flatMap((s) => s.links.filter((l) => ids.includes(l.to)))
+    expect(layout.edges).toHaveLength(links.length)
+    for (const e of layout.edges) expect(e.path).toMatch(/^M\d+,\d+ C/)
+    const spots = new Set(layout.nodes.map((n) => `${n.x},${n.y}`))
+    expect(spots.size).toBe(layout.nodes.length)
+    for (const n of layout.nodes) {
+      expect(n.x + 300).toBeLessThanOrEqual(layout.width)
+      expect(n.y).toBeLessThan(layout.height)
+    }
+  })
+
+  it('el SVG lleva cada pantalla una sola vez, la leyenda y nada fuera del inventario', () => {
+    const svg = renderSvg(layoutMap(inventory), inventory, { image: () => 'thumbs/x.jpg' })
+    for (const id of ids) expect(svg.split(`class="node" data-id="${id}"`)).toHaveLength(2)
+    expect(svg.match(/class="node"/g)).toHaveLength(ids.length)
+    for (const t of Object.values(inventory.linkTypes)) expect(svg).toContain(t)
+  })
+
+  it('es estable: el mismo inventario da el mismo SVG y el mismo JSON', () => {
+    const a = layoutMap(inventory)
+    const b = layoutMap(inventory)
+    const image = () => 'thumbs/x.jpg'
+    expect(renderSvg(a, inventory, { image })).toBe(renderSvg(b, inventory, { image }))
+    expect(JSON.stringify(resolvedMap(inventory, a))).toBe(
+      JSON.stringify(resolvedMap(inventory, b)),
+    )
+  })
+
+  it('un submapa tiene su grupo entero y, atenuadas, solo las vecinas enlazadas', () => {
+    for (const g of inventory.groups) {
+      const own = capturedScreens().filter((s) => s.group === g.id)
+      if (!own.length) continue
+      const sub = layoutMap(inventory, g.id)
+      const shown = sub.nodes.filter((n) => !n.muted).map((n) => n.screen.id)
+      expect(shown.sort()).toEqual(own.map((s) => s.id).sort())
+      const ownIds = new Set(shown)
+      for (const n of sub.nodes.filter((n) => n.muted)) {
+        expect(n.screen.group).not.toBe(g.id)
+        const touches = sub.edges.some(
+          (e) =>
+            (e.from === n.screen.id && ownIds.has(e.to)) ||
+            (e.to === n.screen.id && ownIds.has(e.from)),
+        )
+        expect(touches, `${g.id}: ${n.screen.id} sin conector al grupo`).toBe(true)
+      }
+      for (const e of sub.edges) expect(ownIds.has(e.from) || ownIds.has(e.to)).toBe(true)
+    }
+  })
+
+  it('el cierre falla si al mapa le falta una pantalla, un fichero o filtra algo privado', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'mapa-'))
+    try {
+      await fakeMap(root)
+      expect(await checkMap(root, inventory, [])).toEqual([])
+
+      const json = JSON.parse(await readFile(join(root, 'map/navigation-map.json'), 'utf8'))
+      json.screens = json.screens.filter((s: { id: string }) => s.id !== 'usage')
+      await writeFile(join(root, 'map/navigation-map.json'), JSON.stringify(json))
+      await writeFile(
+        join(root, 'map/README.md'),
+        `${await readFile(join(root, 'map/README.md'), 'utf8')}\nautor: ana@gmail.com\n`,
+      )
+      expect(await checkMap(root, inventory, [])).toEqual(
+        expect.arrayContaining([
+          'el mapa no tiene cada captura canónica exactamente una vez',
+          'conector sin destino en el mapa: dashboard → usage',
+          'privacidad: correo «ana@gmail.com» en map/README.md',
+        ]),
+      )
+
+      await rm(join(root, 'map/thumbs/02-dashboard.jpg'))
+      expect(await checkMap(root, inventory, [])).toEqual(['falta map/thumbs/02-dashboard.jpg'])
+    } finally {
+      await rm(root, { recursive: true })
+    }
+  })
+
+  it('una pantalla repetida en el SVG se detecta', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'mapa-'))
+    try {
+      await fakeMap(root)
+      const file = join(root, 'map/navigation-map.svg')
+      const svg = await readFile(file, 'utf8')
+      await writeFile(file, svg.replace('</svg>', '<g class="node" data-id="runs"></g></svg>'))
+      expect(await checkMap(root, inventory, [])).toEqual(['el SVG tiene 2 veces la pantalla runs'])
+    } finally {
+      await rm(root, { recursive: true })
     }
   })
 })

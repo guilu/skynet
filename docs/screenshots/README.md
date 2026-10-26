@@ -16,6 +16,15 @@ rediseñar, comparar antes y después y preparar publicaciones.
 En Git solo se guarda la combinación canónica (`desktop/light`); las demás y
 `skynet-screenshots.zip` salen al regenerar en local o en la Action **Galería visual**.
 
+## Mapa de navegación
+
+[![Mapa de navegación](map/navigation-map.png)](map/navigation-map.png)
+
+Todas las pantallas con sus relaciones, agrupadas por zona: [HTML navegable](map/navigation-map.html)
+(zoom, arrastrar y ficha de cada pantalla), [SVG para Figma y Miro](map/navigation-map.svg),
+[PDF](map/navigation-map.pdf) y [JSON](map/navigation-map.json). Cómo abrirlo e importarlo, en
+[`map/README.md`](map/README.md).
+
 ## Acceso
 
 | # | Pantalla | Ruta o estado | Vista | Variantes |
