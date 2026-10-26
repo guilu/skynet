@@ -25,7 +25,8 @@ describe('Bocadillo de la mascota', () => {
     expect(peekText('running', 0)).toBe('¡Todo en marcha! 🚀')
     expect(peekText('thinking', 0)).toBe('¡Todo en marcha! 🚀')
     expect(peekText('error', 0)).toBe('Algo ha fallado')
-    expect(peekText('ready', 0)).toBe('Todo al día')
+    expect(peekText('calm', 0)).toBe('Todo al día')
+    expect(peekText('ready', 0)).toBe('En cola')
   })
 })
 
@@ -44,8 +45,8 @@ describe('Saludo del dashboard', () => {
 })
 
 describe('Cara de un grupo de ejecuciones', () => {
-  it('sin ejecuciones está lista', () => {
-    expect(groupExpression([], NOW)).toBe('ready')
+  it('sin ejecuciones está en reposo', () => {
+    expect(groupExpression([], NOW)).toBe('calm')
   })
 
   it('toma la cara más fuerte', () => {

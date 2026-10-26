@@ -23,8 +23,10 @@ export function peekText(state: CompanionState, approvals: number): string {
       return 'Esperando un reintento'
     case 'cancelled':
       return 'Cancelado'
-    case 'ready':
+    case 'calm':
       return 'Todo al día'
+    case 'ready':
+      return 'En cola'
     case 'sleeping':
       return 'Todo tranquilo'
   }
@@ -43,7 +45,7 @@ export function helloText(runs: number, approvals: number): string {
 
 /** La cara de un grupo de ejecuciones (un proyecto): la más fuerte de las que están en marcha. */
 export function groupExpression(runs: Run[], now: number = Date.now()): CompanionState {
-  return strongest(runs.map((r) => runExpression(r, r.stages, now))) ?? 'ready'
+  return strongest(runs.map((r) => runExpression(r, r.stages, now))) ?? 'calm'
 }
 
 /** Lo que cuenta la banda de la ejecución: qué pasa ahora y, debajo, fase, tiempo y coste. */

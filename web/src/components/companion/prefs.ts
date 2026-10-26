@@ -8,6 +8,8 @@ export interface CompanionPrefs {
   toasts: boolean
   /** Avisos del navegador con la pestaña oculta (hay que dar permiso). */
   browser: boolean
+  /** Accesorios de temporada (Halloween, Navidad, verano). */
+  seasonal: boolean
   /** Hasta cuándo (ms) no salen avisos flotantes ni del navegador; null si no está silenciado. */
   mutedUntil: number | null
 }
@@ -17,6 +19,7 @@ export const DEFAULT_PREFS: CompanionPrefs = {
   mascot: true,
   toasts: true,
   browser: false,
+  seasonal: true,
   mutedUntil: null,
 }
 /** «Silenciar 1 h». */

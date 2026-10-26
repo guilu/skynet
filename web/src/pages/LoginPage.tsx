@@ -29,7 +29,7 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
     <main className="login">
       <div className="login-card">
         <section className="login-hero" aria-hidden="true">
-          <Companion state="ready" size={128} />
+          <Companion state="calm" size={128} />
           <p className="login-tagline">Tus agentes, a la vista.</p>
           <ul className="login-states">
             <li>

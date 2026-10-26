@@ -114,7 +114,7 @@ describe('Expresiones de la mascota', () => {
   }
 
   it.each<[string, Partial<GlobalSnapshot>, CompanionState]>([
-    ['sin nada, recién', {}, 'ready'],
+    ['sin nada, recién: reposo', {}, 'calm'],
     ['sin nada, 5 min', { idleMinutes: 5 }, 'sleeping'],
     [
       'sin conexión gana a todo',
