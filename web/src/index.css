@@ -1980,6 +1980,41 @@
     outline: none;
   }
 
+  /* Contraseña con el botón de mostrarla dentro del campo (SY-C) */
+  .login-password {
+    position: relative;
+    display: grid;
+  }
+
+  .login-password label {
+    display: grid;
+  }
+
+  .login-password input {
+    padding-right: 44px;
+  }
+
+  .login-reveal {
+    position: absolute;
+    bottom: 5px;
+    right: 6px;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: var(--r-sm);
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .login-reveal:hover,
+  .login-reveal[aria-pressed='true'] {
+    color: var(--primary);
+  }
+
   @media (max-width: 640px) {
     .login-card {
       grid-template-columns: minmax(0, 1fr);
@@ -4821,6 +4856,17 @@
     min-width: 0;
   }
 
+  .problems-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .problems-head h2 {
+    margin: 0;
+  }
+
   .definition-aside .card {
     margin: 0;
   }
@@ -6183,6 +6229,7 @@
   .companion-body,
   .companion-head,
   .companion-hand,
+  .companion-gaze,
   .companion-eyes,
   .companion-fx {
     transform-box: view-box;
@@ -6522,6 +6569,135 @@
     animation: companion-swap 220ms ease-in-out both;
   }
 
+  /* ---------- Interacciones (SY-C) ---------- */
+
+  /* Los ojos siguen al cursor (el desplazamiento lo pone Companion.tsx) */
+  .companion-gaze {
+    transition: transform 120ms ease-out;
+  }
+
+  /* Manos sobre el visor: las dos tapan los ojos; de reojo, la derecha baja un poco */
+  .companion .companion-hand {
+    transition: transform 260ms cubic-bezier(0.3, 1.4, 0.5, 1);
+  }
+
+  .companion[data-pose] .companion-hand-l {
+    transform: translate(35px, -34px);
+  }
+
+  .companion[data-pose='cover'] .companion-hand-r {
+    transform: translate(-35px, -34px);
+  }
+
+  .companion[data-pose='peek'] .companion-hand-r {
+    transform: translate(-14px, -6px);
+  }
+
+  /* Gotita de sudor: cuota apurada */
+  .companion-fx-sweat {
+    fill: #7cc8ff;
+    stroke: var(--companion-visor);
+    stroke-width: 1.5;
+    animation: companion-drip 2.4s ease-in infinite;
+  }
+
+  /* Gestos de una vez, encima de la animación de la expresión */
+  .companion.companion-gesture[data-gesture='hop'] .companion-body {
+    animation: companion-gesture-hop 0.7s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+  }
+
+  .companion.companion-gesture[data-gesture='hop'] .companion-hand {
+    animation: companion-gesture-cheer 0.7s ease-out both;
+  }
+
+  .companion.companion-gesture[data-gesture='nod'] .companion-body {
+    animation: companion-gesture-nod 0.9s ease-in-out both;
+  }
+
+  .companion.companion-gesture[data-gesture='yawn'] .companion-body {
+    animation: companion-gesture-yawn 1.6s ease-in-out both;
+  }
+
+  .companion.companion-gesture[data-gesture='yawn'] .companion-hand {
+    animation: companion-gesture-stretch 1.6s ease-in-out both;
+  }
+
+  @keyframes companion-gesture-hop {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    15% {
+      transform: scale(1.06, 0.92);
+    }
+    45% {
+      transform: translateY(-12px) scale(0.97, 1.04);
+    }
+    75% {
+      transform: translateY(0) scale(1.04, 0.96);
+    }
+  }
+
+  @keyframes companion-gesture-cheer {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    45% {
+      transform: translateY(-14px);
+    }
+  }
+
+  @keyframes companion-gesture-nod {
+    0%,
+    50%,
+    100% {
+      transform: translateY(0) rotate(0);
+    }
+    25%,
+    75% {
+      transform: translateY(5px) rotate(2deg);
+    }
+  }
+
+  @keyframes companion-gesture-yawn {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    35%,
+    65% {
+      transform: scale(0.96, 1.08);
+    }
+  }
+
+  @keyframes companion-gesture-stretch {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    35%,
+    65% {
+      transform: translateY(-16px);
+    }
+  }
+
+  @keyframes companion-drip {
+    0%,
+    20% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    90% {
+      transform: translateY(8px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 0;
+    }
+  }
+
   /*
    * Quietas en listas y galerías (se animan al pasar el ratón). Sin animación, no en pausa: una
    * finita en pausa (el «pop» del éxito) no terminaría nunca.
@@ -6786,6 +6962,52 @@
     .companion,
     .companion * {
       animation: none !important;
+      transition: none !important;
+    }
+  }
+
+  /* Confeti a pantalla completa al terminar bien la ejecución que miras (SY-C) */
+  .celebration {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .celebration-piece {
+    position: absolute;
+    top: -16px;
+    width: 8px;
+    height: 14px;
+    border-radius: 3px;
+    opacity: 0;
+    animation: celebration-fall 1.2s cubic-bezier(0.25, 0.6, 0.5, 1) forwards;
+  }
+
+  .celebration-piece[data-round] {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+  }
+
+  @keyframes celebration-fall {
+    0% {
+      transform: translate(0, 0) rotate(0);
+      opacity: 1;
+    }
+    85% {
+      opacity: 1;
+    }
+    100% {
+      transform: translate(var(--drift), 100vh) rotate(var(--turn));
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .celebration {
+      display: none;
     }
   }
 
@@ -6800,6 +7022,13 @@
     grid-template-columns: auto minmax(0, 1fr);
     gap: 20px;
     align-items: center;
+  }
+
+  .companion-moves {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
   }
 
   .companion-gallery {
@@ -7126,7 +7355,47 @@
     background: var(--surface);
     box-shadow: none;
     font-weight: 600;
-    white-space: nowrap;
+    max-width: 300px;
+    text-wrap: balance;
+  }
+
+  /* Skyny se puede pulsar: da un saltito y dice una frase (SY-C) */
+  .skyny-poke {
+    display: block;
+    flex: none;
+    padding: 0;
+    border: none;
+    border-radius: var(--r-md);
+    background: none;
+    cursor: pointer;
+  }
+
+  .skyny-poke:active .companion {
+    transform: scale(0.96);
+  }
+
+  /* Skyny trabajando mientras algo carga (SY-C) */
+  .skyny-loading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .skyny-loading.login {
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  /* Skyny reacciona a lo que acabas de hacer (aprobar, publicar…) */
+  .skyny-says {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: var(--space-4);
+  }
+
+  .skyny-says .peek-bubble {
+    margin: 0 0 16px;
   }
 
   /* El pico del bocadillo apunta a la mascota. */
@@ -7239,7 +7508,7 @@
       margin-bottom: 20px;
     }
 
-    .companion-hello > .companion {
+    .companion-hello > .skyny-poke {
       display: none;
     }
   }

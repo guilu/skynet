@@ -26,6 +26,7 @@ import { VerificationTab } from './VerificationTab'
 import { Button } from '../ui/Button'
 import { TabList, TabPanel } from '../ui/Tabs'
 import { LinesSkeleton } from '../ui/Skeleton'
+import { SkynyLoading } from '../companion/SkynyLoading'
 
 interface Props {
   agent: AgentRun
@@ -243,7 +244,7 @@ function OriginalEvent({ sequence }: { sequence: number | null }) {
     )
   }
   if (event.error) return <ErrorMessage error={event.error} />
-  if (!event.data) return <p className="muted">Cargando evento #{sequence}…</p>
+  if (!event.data) return <SkynyLoading label={`el evento #${sequence}`} size={32} />
   return (
     <>
       <p className="small">

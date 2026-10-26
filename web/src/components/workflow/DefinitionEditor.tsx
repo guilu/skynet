@@ -6,6 +6,7 @@ import { cn } from '../../lib/cn'
 import { LinesSkeleton } from '../ui/Skeleton'
 import { TabList, TabPanel } from '../ui/Tabs'
 import { DefinitionSummary } from './DefinitionSummary'
+import { Companion } from '../companion/Companion'
 import { ProblemList } from './ProblemList'
 import { problemSummary } from './problems'
 import { useDebounced } from './useDebounced'
@@ -97,6 +98,12 @@ export function DefinitionEditor({
   const current = unchanged || readOnly ? saved : (live.data ?? saved)
   const problems = current?.validation.problems ?? []
   const definition = current?.definition ?? null
+  const validating = !current || (!readOnly && !unchanged && live.isFetching)
+  const skyny = validating
+    ? 'thinking'
+    : problems.some((p) => p.severity === 'ERROR')
+      ? 'error'
+      : 'calm'
   // Desde el grafo, «Editar en YAML» y los problemas llevan a su línea en la pestaña YAML.
   const revealInYaml = (line: number, column: number) => {
     selectView('yaml')
@@ -198,7 +205,11 @@ export function DefinitionEditor({
         </section>
         <aside className="definition-aside">
           <section className="card" aria-labelledby="problems-title">
-            <h2 id="problems-title">Problemas</h2>
+            <div className="problems-head">
+              <h2 id="problems-title">Problemas</h2>
+              {/* Skyny pone cara de lo que ve: pensando al validar, error si hay errores (SY-C). */}
+              <Companion state={skyny} size={36} still season={null} />
+            </div>
             <p className="muted small" aria-live="polite">
               {current ? problemSummary(problems) : 'Validando…'}
             </p>

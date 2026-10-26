@@ -101,5 +101,7 @@ describe('Aprobaciones', () => {
     expect(decisions(fetch)).toEqual([])
     fireEvent.click(within(confirm).getByRole('button', { name: 'Sí, aprobar' }))
     await waitFor(() => expect(decisions(fetch)).toEqual([{ action: 'APPROVE' }]))
+    // Skyny lo agradece con un saltito.
+    expect(await screen.findByText('¡Gracias! Sigo con ello.')).toBeInTheDocument()
   })
 })

@@ -5,6 +5,7 @@ import { api, type Run, type RunPage, type StoredEvent } from '../../api'
 import { useNow } from '../../useNow'
 import type { StreamState } from '../../useEventStream'
 import { CompanionContext, type CompanionContextValue } from './context'
+import { useGesture } from './gesture'
 import { usePendingApprovals } from '../approval/usePendingApprovals'
 import { applyEvent } from '../run/applyEvent'
 import {
@@ -44,6 +45,13 @@ export function CompanionProvider({ children }: { children: ReactNode }) {
     refetchInterval: 30_000,
   })
   const pending = usePendingApprovals()
+  // Para la gotita de sudor: las cuotas que ya avisan en el Dashboard y en Uso.
+  const dashboard = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: api.dashboard,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  })
   const [streamState, setStreamState] = useState<StreamState>('connecting')
   const [offline, setOffline] = useState(false)
   const [notices, setNotices] = useState<Notice[]>([])
@@ -197,6 +205,26 @@ export function CompanionProvider({ children }: { children: ReactNode }) {
     idleMinutes: busy ? 0 : (now - idleSince) / 60_000,
   })
 
+  // Dormida, se despierta con un bostezo al mover el ratón, teclear o volver a la pestaña.
+  const [gesture, play] = useGesture()
+  const asleep = expression === 'sleeping'
+  useEffect(() => {
+    if (!asleep) return
+    const wake = () => {
+      if (document.visibilityState === 'hidden') return
+      setIdleSince(Date.now())
+      play('yawn')
+    }
+    window.addEventListener('pointermove', wake)
+    window.addEventListener('keydown', wake)
+    document.addEventListener('visibilitychange', wake)
+    return () => {
+      window.removeEventListener('pointermove', wake)
+      window.removeEventListener('keydown', wake)
+      document.removeEventListener('visibilitychange', wake)
+    }
+  }, [asleep, play])
+
   const markRead = useCallback(() => {
     setNotices((list) =>
       list.some((n) => !n.read) ? list.map((n) => ({ ...n, read: true })) : list,
@@ -224,6 +252,8 @@ export function CompanionProvider({ children }: { children: ReactNode }) {
     toasts,
     dismissToast,
     streamState,
+    gesture,
+    quotaTight: (dashboard.data?.quotaWarnings.length ?? 0) > 0,
   }
   return <CompanionContext.Provider value={value}>{children}</CompanionContext.Provider>
 }

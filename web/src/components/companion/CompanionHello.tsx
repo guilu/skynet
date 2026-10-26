@@ -1,23 +1,65 @@
+import { useQuery } from '@tanstack/react-query'
 import { CirclePlay, ListChecks, ShieldCheck } from 'lucide-react'
 import { Link } from 'react-router'
 import { cn } from '../../lib/cn'
-import type { ApprovalSummary } from '../../api'
+import { api, type ApprovalSummary } from '../../api'
+import { useNow } from '../../useNow'
 import { Companion } from './Companion'
 import { useCompanion } from './context'
-import { helloText } from './peek'
+import { usePoke } from './gesture'
+import { helloText, successStreak } from './peek'
+
+/** Cuántas ejecuciones recientes mira para la racha. */
+const STREAK_RUNS = 20
 
 /**
  * Tarjeta de saludo del Dashboard: la mascota cuenta qué hay en marcha y qué te espera, con atajos
- * a lo que ya existe (revisar la aprobación, lanzar un workflow, ver la última ejecución).
+ * a lo que ya existe (revisar la aprobación, lanzar un workflow, ver la última ejecución). El
+ * saludo cambia con la hora y cuenta la racha sin fallos; al pulsar a Skyny dice una frase (SY-C).
  */
 export function CompanionHello({ approvals }: { approvals: ApprovalSummary[] }) {
-  const { activeRuns } = useCompanion()
+  const { activeRuns, gesture } = useCompanion()
   const latest = activeRuns[0]
+  const now = useNow(true, 60_000)
+  const recent = useQuery({
+    queryKey: ['runs', 'list', 'streak'],
+    queryFn: () => api.listRuns({ size: STREAK_RUNS }),
+    refetchInterval: 60_000,
+  })
+  const streak = successStreak(recent.data?.items ?? [])
+  const poked = usePoke()
   return (
     <section className="card companion-hello" aria-label="Skyny">
-      <Companion state={approvals.length > 0 ? 'waiting' : 'calm'} size={80} />
+      <button
+        type="button"
+        className="skyny-poke"
+        aria-label="Hablar con Skyny"
+        onClick={poked.poke}
+      >
+        <Companion
+          state={approvals.length > 0 ? 'waiting' : 'calm'}
+          size={80}
+          gesture={poked.gesture ?? gesture}
+          look
+        />
+      </button>
       <div className="companion-hello-text">
-        <Hello text={helloText(activeRuns.length, approvals.length)} />
+        <div aria-live="polite">
+          {poked.quip ? (
+            <p>
+              <strong>{poked.quip}</strong>
+            </p>
+          ) : (
+            <Hello
+              text={helloText(
+                activeRuns.length,
+                approvals.length,
+                new Date(now).getHours(),
+                streak,
+              )}
+            />
+          )}
+        </div>
         <div className="companion-hello-links">
           {approvals.length > 0 && (
             <Link

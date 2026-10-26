@@ -2,6 +2,7 @@ import type { Run } from '../../api'
 import { isTerminal } from '../../format'
 import { latestAttempts } from '../run/stageNotes'
 import { Companion } from './Companion'
+import type { Gesture } from './gesture'
 import { bandText } from './peek'
 import { runExpression } from './state'
 
@@ -9,14 +10,23 @@ import { runExpression } from './state'
  * Bajo la línea de fases, la mascota cuenta qué pasa ahora en la ejecución (plan, §5): quién
  * trabaja y en qué, y debajo la fase, el tiempo y el coste. Anima solo mientras está en marcha.
  */
-export function RunBand({ run, now }: { run: Run; now: number }) {
+export function RunBand({
+  run,
+  now,
+  gesture,
+}: {
+  run: Run
+  now: number
+  /** Un gesto de una vez (el salto al terminar bien mientras la miras); anima aunque haya acabado. */
+  gesture?: Gesture | null
+}) {
   const stages = latestAttempts(run)
   const state = runExpression(run, stages, now)
   const { title, sub } = bandText(run, stages, now)
   const done = isTerminal(run.status)
   return (
     <section className="card run-band" data-state={state} aria-label="Qué pasa ahora">
-      <Companion state={state} size={56} still={done} />
+      <Companion state={state} size={56} still={done && !gesture} gesture={gesture} />
       <div className="run-band-text">
         <strong>{title}</strong>
         <span className="muted">{sub}</span>

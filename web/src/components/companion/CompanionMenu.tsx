@@ -13,7 +13,7 @@ import { Icon } from '../icons/Icon'
  * al pulsarla abre el menú rápido (plan, §5).
  */
 export function CompanionMenu({ onOpenNotices }: { onOpenNotices: () => void }) {
-  const { expression, summary, activeRuns, pendingApprovals } = useCompanion()
+  const { expression, summary, activeRuns, pendingApprovals, gesture, quotaTight } = useCompanion()
   const prefs = useCompanionPrefs()
   const navigate = useNavigate()
   const now = useNow(true, 30_000)
@@ -25,7 +25,7 @@ export function CompanionMenu({ onOpenNotices }: { onOpenNotices: () => void }) 
       <Tooltip.Root>
         <Tooltip.Trigger asChild>
           <Menu.Trigger className="companion-btn" aria-label={name} data-live={live || undefined}>
-            <Companion state={expression} size={34} />
+            <Companion state={expression} size={34} gesture={gesture} sweat={quotaTight} />
           </Menu.Trigger>
         </Tooltip.Trigger>
         <Tooltip.Portal>
@@ -37,7 +37,7 @@ export function CompanionMenu({ onOpenNotices }: { onOpenNotices: () => void }) 
       <Menu.Portal>
         <Menu.Content className="menu companion-menu" align="end" sideOffset={8}>
           <div className="companion-menu-head">
-            <Companion state={expression} size={48} />
+            <Companion state={expression} size={48} sweat={quotaTight} />
             <div>
               <strong>{companionLabel(expression)}</strong>
               <span className="muted">{summary}</span>

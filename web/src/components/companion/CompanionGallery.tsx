@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
-import { Companion } from './Companion'
+import { Companion, type Pose } from './Companion'
+import { useGesture, type Gesture } from './gesture'
 import { setCompanionPrefs, useCompanionPrefs } from './prefs'
 import { SEASONS } from './season'
 import { COMPANION_STATES, type CompanionState } from './state'
@@ -12,6 +13,9 @@ import { COMPANION_STATES, type CompanionState } from './state'
 export function CompanionGallery() {
   const [selected, setSelected] = useState<CompanionState>('calm')
   const info = COMPANION_STATES.find((s) => s.state === selected)
+  const [gesture, play] = useGesture()
+  const [pose, setPose] = useState<Pose | undefined>()
+  const [sweat, setSweat] = useState(false)
   const prefs = useCompanionPrefs()
   const [permission, setPermission] = useState(notificationPermission)
   const toggleBrowser = async (on: boolean) => {
@@ -86,10 +90,51 @@ export function CompanionGallery() {
         <p className="hint">Estas opciones valen solo para este navegador.</p>
       </fieldset>
       <div className="companion-stage">
-        <Companion state={selected} size={144} label="Mascota de Skynet" />
-        <div aria-live="polite">
-          <h3>{info?.label}</h3>
-          <p className="muted">{info?.when}</p>
+        <Companion
+          state={selected}
+          size={144}
+          label="Mascota de Skynet"
+          gesture={gesture}
+          pose={pose}
+          sweat={sweat}
+          look
+        />
+        <div>
+          <div aria-live="polite">
+            <h3>{info?.label}</h3>
+            <p className="muted">{info?.when}</p>
+          </div>
+          <div className="companion-moves" role="group" aria-label="Gestos de Skyny">
+            {GESTURES.map(({ gesture: g, label }) => (
+              <button
+                key={g}
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={() => play(g)}
+              >
+                {label}
+              </button>
+            ))}
+            {POSES.map(({ pose: p, label }) => (
+              <button
+                key={p}
+                type="button"
+                className="btn btn-sm btn-secondary"
+                aria-pressed={pose === p}
+                onClick={() => setPose(pose === p ? undefined : p)}
+              >
+                {label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary"
+              aria-pressed={sweat}
+              onClick={() => setSweat(!sweat)}
+            >
+              Sudando
+            </button>
+          </div>
         </div>
       </div>
       <ul className="companion-gallery">
@@ -120,6 +165,17 @@ export function CompanionGallery() {
     </section>
   )
 }
+
+/** Los gestos y las poses de SY-C, para verlos en la mascota grande. */
+const GESTURES: { gesture: Gesture; label: string }[] = [
+  { gesture: 'hop', label: 'Saltito' },
+  { gesture: 'nod', label: 'Asentir' },
+  { gesture: 'yawn', label: 'Bostezo' },
+]
+const POSES: { pose: Pose; label: string }[] = [
+  { pose: 'cover', label: 'Taparse los ojos' },
+  { pose: 'peek', label: 'De reojo' },
+]
 
 function notificationPermission(): NotificationPermission | 'unsupported' {
   return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission

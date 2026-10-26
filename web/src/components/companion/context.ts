@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { Run } from '../../api'
 import type { StreamState } from '../../useEventStream'
+import type { Gesture } from './gesture'
 import type { Notice, Toast } from './notices'
 import type { CompanionState } from './state'
 
@@ -18,6 +19,10 @@ export interface CompanionContextValue {
   toasts: Toast[]
   dismissToast: (id: string) => void
   streamState: StreamState
+  /** El gesto de la mascota global (el bostezo al despertarse). */
+  gesture: Gesture | null
+  /** Alguna cuota de un CLI va justa: la mascota suda. */
+  quotaTight: boolean
 }
 
 export const CompanionContext = createContext<CompanionContextValue | null>(null)
