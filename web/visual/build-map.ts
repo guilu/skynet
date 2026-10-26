@@ -1,9 +1,9 @@
-import { chromium } from '@playwright/test'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { capturedScreens, fileName, inventory } from './inventory.ts'
 import { layoutMap, mapReadme, renderHtml, renderSvg, resolvedMap, THUMB_SIZE } from './map.ts'
 import { galleryDir } from './paths.ts'
+import { barlowCss, launchChromium } from './render.ts'
 
 /**
  * Mapa de navegación (VS-B) a partir de las capturas de escritorio en claro que ya hay en la
@@ -21,22 +21,9 @@ await rm(mapDir, { recursive: true, force: true })
 await mkdir(join(mapDir, 'thumbs'), { recursive: true })
 await mkdir(join(mapDir, 'groups'), { recursive: true })
 
-// Barlow incrustada: el PNG y el PDF salen con la tipografía de la web en cualquier máquina.
-const fonts = await Promise.all(
-  [400, 600].map(async (w) => {
-    const file = join(
-      import.meta.dirname,
-      `../node_modules/@fontsource/barlow/files/barlow-latin-${w}-normal.woff2`,
-    )
-    const data = (await readFile(file)).toString('base64')
-    return `@font-face { font-family: Barlow; font-weight: ${w}; font-display: block; src: url(data:font/woff2;base64,${data}) format('woff2'); }`
-  }),
-)
-const fontCss = fonts.join('\n')
+const fontCss = await barlowCss()
 
-const browser = await chromium.launch(
-  process.env.SCREENSHOTS_CHROMIUM ? { executablePath: process.env.SCREENSHOTS_CHROMIUM } : {},
-)
+const browser = await launchChromium()
 try {
   // 1. Miniaturas: la parte de arriba de cada captura, al doble de su tamaño en el mapa.
   const thumbs = new Map<string, string>()

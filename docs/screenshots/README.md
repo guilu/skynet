@@ -25,6 +25,24 @@ Todas las pantallas con sus relaciones, agrupadas por zona: [HTML navegable](map
 [PDF](map/navigation-map.pdf) y [JSON](map/navigation-map.json). Cómo abrirlo e importarlo, en
 [`map/README.md`](map/README.md).
 
+## Redes sociales
+
+En `social/`, 6 pantallas en 3 formatos (`landscape` 1600 × 900, `square` 1080 × 1080, `portrait` 1080 × 1350): la
+captura de escritorio en una ventana y la de móvil en un teléfono, con su titular. Se escalan
+sin deformar y nunca por encima del 100 %; solo se recortan por abajo y por la derecha. No se
+guardan en Git: están en el ZIP y en el artifact, y `npm run screenshots:social [carpeta]` las
+rehace a partir de una galería ya generada. La selección y los titulares están en
+`social` de `web/visual/navigation-map.json`.
+
+| Pantalla | Tema | Titular |
+| --- | --- | --- |
+| Dashboard | light | Tus agentes, a la vista |
+| Ejecución: cascada | light | Cada fase de una ejecución, en cascada |
+| Workflow: editor visual | dark | Workflows con un editor visual |
+| Aprobación pendiente | light | Tú decides antes de seguir |
+| Proyecto: trabajos | dark | Cada proyecto, con su trabajo |
+| Ejecución activa | dark | Ejecuciones en directo |
+
 ## Acceso
 
 | # | Pantalla | Ruta o estado | Vista | Variantes |
@@ -138,7 +156,7 @@ reloj del navegador se para justo después de sembrar; las fechas absolutas y lo
 día en que se generan.
 
 **Cuándo actualizar las capturas de Git**: al cambiar el diseño de una pantalla, regenerar y
-commitear solo `desktop/light/` y este README.
+commitear solo `desktop/light/`, `map/` (sin `groups/`, que no se versiona) y este README.
 
 ## Descargar una imagen suelta
 
