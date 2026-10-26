@@ -124,5 +124,6 @@ if [[ "${SCREENSHOTS_SKIP_BUILD:-}" != 1 ]]; then
 fi
 npx playwright test -c playwright.screenshots.config.ts "$@"
 node visual/build-map.ts
+node visual/build-social.ts
 # Privacidad, índice y ZIP: si algo falla aquí, no se empaqueta.
 node visual/finish.ts

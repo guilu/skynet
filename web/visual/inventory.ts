@@ -29,6 +29,15 @@ export interface Screen {
   exception?: string
 }
 
+export type SocialFormatId = 'landscape' | 'square' | 'portrait'
+
+/** Una composición para redes: una pantalla en un tema, con su titular. */
+export interface SocialPick {
+  screen: string
+  theme: ThemeId
+  headline: string
+}
+
 export interface Inventory {
   canonical: { viewport: ViewportId; theme: ThemeId }
   viewports: Record<ViewportId, { width: number; height: number }>
@@ -36,6 +45,10 @@ export interface Inventory {
   linkTypes: Record<LinkType, string>
   groups: { id: string; title: string }[]
   screens: Screen[]
+  social: {
+    formats: Record<SocialFormatId, { width: number; height: number }>
+    picks: SocialPick[]
+  }
 }
 
 export const inventory = map as Inventory
@@ -93,6 +106,18 @@ export function inventoryProblems(inv: Inventory, preparers: Iterable<string>): 
   }
   if (!(inv.canonical.viewport in inv.viewports) || !inv.themes.includes(inv.canonical.theme))
     problems.push('la combinación canónica no existe')
+  const captured = new Set(inv.screens.filter((s) => !s.exception).map((s) => s.id))
+  const picks = new Set<string>()
+  for (const p of inv.social.picks) {
+    const key = `${p.screen}-${p.theme}`
+    if (picks.has(key)) problems.push(`composición repetida: ${key}`)
+    picks.add(key)
+    if (!captured.has(p.screen))
+      problems.push(`composición de una pantalla sin captura: ${p.screen}`)
+    if (!inv.themes.includes(p.theme)) problems.push(`composición con tema desconocido: ${key}`)
+    if (!p.headline.trim() || p.headline.length > 48)
+      problems.push(`titular vacío o de más de 48 caracteres: ${key}`)
+  }
   const names = inv.screens.map(fileName)
   if (new Set(names).size !== names.length) problems.push('nombres de fichero repetidos')
   return problems

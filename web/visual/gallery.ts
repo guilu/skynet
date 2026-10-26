@@ -4,10 +4,11 @@ import { capturedScreens, fileName, variants, type Inventory } from './inventory
 import { pngSize } from './png.ts'
 import { scanText } from './privacy.ts'
 import { galleryReadme } from './readme.ts'
+import { socialFile, socialFiles, SOCIAL_FORMATS } from './social.ts'
 import { buildZip, zipEntries } from './zip.ts'
 
 /**
- * Comprobaciones y empaquetado de la galería y su mapa, sin navegador: las usan finish.ts (al terminar de
+ * Comprobaciones y empaquetado de la galería, su mapa y las composiciones para redes, sin navegador: las usan finish.ts (al terminar de
  * capturar), verify.ts (sobre una galería ya generada) y los tests.
  */
 
@@ -131,9 +132,50 @@ export function mapFiles(inv: Inventory): string[] {
   ]
 }
 
-/** Lo que va en el ZIP: capturas, índice y mapa, ordenado. */
+/** Lo que va en el ZIP: capturas, índice, mapa y composiciones para redes, ordenado. */
 export function zipFiles(inv: Inventory): string[] {
-  return [...expectedFiles(inv), 'README.md', ...mapFiles(inv)].sort()
+  return [...expectedFiles(inv), 'README.md', ...mapFiles(inv), ...socialFiles(inv)].sort()
+}
+
+/**
+ * Las composiciones para redes: todas, ninguna de más, al tamaño exacto de su formato, y sus
+ * titulares sin nada privado (las capturas que llevan dentro ya las revisa checkRendered).
+ */
+export async function checkSocial(
+  galleryDir: string,
+  inv: Inventory,
+  secrets: string[],
+): Promise<string[]> {
+  const problems: string[] = []
+  for (const format of SOCIAL_FORMATS) {
+    const want = inv.social.formats[format]
+    for (const pick of inv.social.picks) {
+      const rel = socialFile(inv, format, pick)
+      const data = await readFile(join(galleryDir, rel)).catch(() => null)
+      if (!data) {
+        problems.push(`falta ${rel}`)
+        continue
+      }
+      let size: { width: number; height: number }
+      try {
+        size = pngSize(data)
+      } catch {
+        problems.push(`${rel} no es un PNG`)
+        continue
+      }
+      if (size.width !== want.width || size.height !== want.height)
+        problems.push(`${rel} mide ${size.width} × ${size.height}`)
+    }
+  }
+  const expected = new Set(socialFiles(inv))
+  for (const file of await walk(join(galleryDir, 'social'))) {
+    const rel = relative(galleryDir, file)
+    if (!expected.has(rel)) problems.push(`sobra ${rel}`)
+  }
+  for (const pick of inv.social.picks)
+    for (const f of scanText(`titular de ${pick.screen}-${pick.theme}`, pick.headline, secrets))
+      problems.push(`privacidad: ${f.rule} «${f.match}» en ${f.where}`)
+  return problems
 }
 
 /** Sin las miniaturas y fuentes incrustadas: el texto que hay que escanear. */
@@ -177,7 +219,7 @@ export async function checkMap(
   return problems
 }
 
-/** El ZIP lleva exactamente las capturas, el README y el mapa, nada más. */
+/** El ZIP lleva exactamente las capturas, el README, el mapa y las composiciones, nada más. */
 export function checkZip(zip: Buffer, inv: Inventory): string[] {
   const names = zipEntries(zip)
   const expected = zipFiles(inv)
@@ -206,6 +248,7 @@ export async function finishGallery(options: {
     ...(await checkCaptures(galleryDir, inv)),
     ...(await checkRendered(renderedDir, inv, secrets, warnings)),
     ...(await checkMap(galleryDir, inv, secrets)),
+    ...(await checkSocial(galleryDir, inv, secrets)),
     ...scanText('README.md', readme, secrets).map(
       (f) => `privacidad: ${f.rule} «${f.match}» en ${f.where}`,
     ),

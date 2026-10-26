@@ -1,4 +1,5 @@
 import { capturedScreens, fileName, variants, type Inventory } from './inventory.ts'
+import { SOCIAL_FORMATS } from './social.ts'
 
 const RAW = 'https://raw.githubusercontent.com/guilu/skynet/main/docs/screenshots'
 
@@ -34,6 +35,27 @@ export function galleryReadme(inv: Inventory): string {
     '(zoom, arrastrar y ficha de cada pantalla), [SVG para Figma y Miro](map/navigation-map.svg),',
     '[PDF](map/navigation-map.pdf) y [JSON](map/navigation-map.json). Cómo abrirlo e importarlo, en',
     '[`map/README.md`](map/README.md).',
+    '',
+    '## Redes sociales',
+    '',
+    `En \`social/\`, ${inv.social.picks.length} pantallas en ${SOCIAL_FORMATS.length} formatos (${SOCIAL_FORMATS.map(
+      (f) => {
+        const size = inv.social.formats[f]
+        return `\`${f}\` ${size.width} × ${size.height}`
+      },
+    ).join(', ')}): la`,
+    'captura de escritorio en una ventana y la de móvil en un teléfono, con su titular. Se escalan',
+    'sin deformar y nunca por encima del 100 %; solo se recortan por abajo y por la derecha. No se',
+    'guardan en Git: están en el ZIP y en el artifact, y `npm run screenshots:social [carpeta]` las',
+    'rehace a partir de una galería ya generada. La selección y los titulares están en',
+    '`social` de `web/visual/navigation-map.json`.',
+    '',
+    '| Pantalla | Tema | Titular |',
+    '| --- | --- | --- |',
+    ...inv.social.picks.map((p) => {
+      const screen = capturedScreens(inv).find((s) => s.id === p.screen)
+      return `| ${screen?.title ?? p.screen} | ${p.theme} | ${p.headline} |`
+    }),
     '',
   ]
   for (const group of inv.groups) {
@@ -95,7 +117,7 @@ export function galleryReadme(inv: Inventory): string {
     'día en que se generan.',
     '',
     '**Cuándo actualizar las capturas de Git**: al cambiar el diseño de una pantalla, regenerar y',
-    `commitear solo \`${viewport}/${theme}/\` y este README.`,
+    `commitear solo \`${viewport}/${theme}/\`, \`map/\` (sin \`groups/\`, que no se versiona) y este README.`,
     '',
     '## Descargar una imagen suelta',
     '',

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
   checkMap,
+  checkSocial,
   checkZip,
   expectedFiles,
   finishGallery,
@@ -24,6 +25,14 @@ import { pngSize } from './png.ts'
 import { scanText } from './privacy.ts'
 import { galleryReadme } from './readme.ts'
 import { PREPARERS } from './screens.ts'
+import {
+  renderSocial,
+  SOCIAL_FORMATS,
+  socialFile,
+  socialFiles,
+  socialLayout,
+  type SocialLayout,
+} from './social.ts'
 import { buildZip, zipEntries } from './zip.ts'
 
 describe('inventario de la galería', () => {
@@ -164,7 +173,20 @@ async function fakeGallery(change: (r: Rendered) => Rendered = (r) => r) {
     await writeFile(file, JSON.stringify(change(rendered)))
   }
   await fakeMap(galleryDir)
+  await fakeSocial(galleryDir)
   return { root, galleryDir, renderedDir }
+}
+
+/** Las composiciones que dejaría build-social.ts, con su tamaño exacto. */
+async function fakeSocial(galleryDir: string, inv: Inventory = inventory) {
+  for (const format of SOCIAL_FORMATS) {
+    const { width, height } = inv.social.formats[format]
+    for (const pick of inv.social.picks) {
+      const file = join(galleryDir, socialFile(inv, format, pick))
+      await mkdir(dirname(file), { recursive: true })
+      await writeFile(file, fakePng(width, height))
+    }
+  }
 }
 
 /** El mapa que dejaría build-map.ts, con miniaturas, PNG y PDF de relleno. */
@@ -214,6 +236,7 @@ describe('cierre de la galería', () => {
       const zip = await readFile(join(g.galleryDir, ZIP_NAME))
       expect(zipEntries(zip)).toEqual(zipFiles(inventory))
       expect(zipEntries(zip)).toContain('map/navigation-map.svg')
+      expect(zipEntries(zip)).toContain('social/landscape/02-dashboard-light.png')
       expect(checkZip(zip, inventory)).toEqual([])
       expect(await readFile(join(g.galleryDir, 'README.md'), 'utf8')).toContain('01-login.png')
     } finally {
@@ -378,6 +401,123 @@ describe('mapa de navegación', () => {
       const svg = await readFile(file, 'utf8')
       await writeFile(file, svg.replace('</svg>', '<g class="node" data-id="runs"></g></svg>'))
       expect(await checkMap(root, inventory, [])).toEqual(['el SVG tiene 2 veces la pantalla runs'])
+    } finally {
+      await rm(root, { recursive: true })
+    }
+  })
+})
+
+const overlap = (a: SocialLayout['window'], b: SocialLayout['phone']) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+
+describe('composiciones para redes', () => {
+  const desktop = inventory.viewports.desktop
+  const mobile = inventory.viewports.mobile
+
+  it('la selección del inventario es válida y detecta repetidas, sin captura o con titular largo', () => {
+    expect(inventory.social.picks.length).toBeGreaterThan(0)
+    const bad: Inventory = {
+      ...inventory,
+      social: {
+        ...inventory.social,
+        picks: [
+          { screen: 'dashboard', theme: 'light', headline: 'Uno' },
+          { screen: 'dashboard', theme: 'light', headline: 'Otro' },
+          { screen: 'no-existe', theme: 'dark', headline: 'Fantasma' },
+          { screen: 'usage', theme: 'dark', headline: 'x'.repeat(49) },
+        ],
+      },
+    }
+    expect(inventoryProblems(bad, Object.keys(PREPARERS))).toEqual([
+      'composición repetida: dashboard-light',
+      'composición de una pantalla sin captura: no-existe',
+      'titular vacío o de más de 48 caracteres: usage-dark',
+    ])
+  })
+
+  it('da nombres estables: formato, número de captura y tema', () => {
+    const files = socialFiles(inventory)
+    expect(files).toHaveLength(SOCIAL_FORMATS.length * inventory.social.picks.length)
+    expect(files).toContain('social/square/02-dashboard-light.png')
+    expect([...files].sort()).toEqual(files)
+    expect(new Set(files).size).toBe(files.length)
+  })
+
+  it.each(SOCIAL_FORMATS)(
+    '%s: escala sin deformar ni ampliar, dentro del lienzo y con el teléfono sobre la ventana',
+    (format) => {
+      for (const capturedHeight of [desktop.height, 3200]) {
+        const l = socialLayout(inventory, format, capturedHeight)
+        const { width, height } = inventory.social.formats[format]
+        expect([l.width, l.height]).toEqual([width, height])
+        // Nunca por encima del 100 %, y la imagen ocupa justo el ancho de la ventana.
+        expect(l.window.scale).toBeLessThanOrEqual(1)
+        expect(l.phone.scale).toBeLessThanOrEqual(1)
+        expect(l.window.width - 2).toBe(Math.round(desktop.width * l.window.scale))
+        expect(l.phone.width - 2 * l.phone.bezel).toBe(Math.round(mobile.width * l.phone.scale))
+        expect(l.phone.height - 2 * l.phone.bezel).toBe(Math.round(mobile.height * l.phone.scale))
+        // Teléfono entero dentro del lienzo; la ventana empieza dentro y bajo el titular.
+        expect(l.phone.x).toBeGreaterThanOrEqual(l.margin)
+        expect(l.phone.x + l.phone.width).toBeLessThanOrEqual(width - l.margin)
+        expect(l.phone.y + l.phone.height).toBeLessThanOrEqual(height - l.margin)
+        expect(l.window.x).toBeGreaterThanOrEqual(l.margin)
+        // Debajo de la marca (56 px) y del titular: una línea en horizontal, dos en los demás.
+        const lines = format === 'landscape' ? 1 : 2
+        expect(l.window.y).toBeGreaterThanOrEqual(
+          l.headline.y + 56 + Math.ceil(l.headline.size * 1.08 * lines),
+        )
+        // La ventana no pinta más alto que la captura: sin huecos debajo de la imagen.
+        expect(l.window.height).toBeLessThanOrEqual(
+          l.window.bar + Math.round(capturedHeight * l.window.scale),
+        )
+        expect(overlap(l.window, l.phone)).toBe(true)
+      }
+    },
+  )
+
+  it('la plantilla conserva la proporción y escapa el titular', () => {
+    const layout = socialLayout(inventory, 'square', desktop.height)
+    const html = renderSocial({
+      inv: inventory,
+      layout,
+      pick: { screen: 'dashboard', theme: 'dark', headline: 'Agentes <b>&</b> más' },
+      desktop: 'data:image/png;base64,AAAA',
+      mobile: 'data:image/png;base64,BBBB',
+      logo: '<svg></svg>',
+      fontCss: '',
+    })
+    expect(html).toContain(
+      `.window img { display: block; width: ${layout.window.width - 2}px; height: auto; }`,
+    )
+    expect(html).toContain('.phone img { display: block; width: 100%; height: auto; }')
+    expect(html).toContain('Agentes &lt;b&gt;&amp;&lt;/b&gt; más')
+    expect(html).toContain('Dashboard')
+  })
+
+  it('el cierre falla si una composición falta, mide mal, sobra o su titular es privado', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'social-'))
+    try {
+      await fakeSocial(root)
+      expect(await checkSocial(root, inventory, [])).toEqual([])
+
+      await rm(join(root, 'social/square/02-dashboard-light.png'))
+      await writeFile(join(root, 'social/portrait/02-dashboard-light.png'), fakePng(1080, 1080))
+      await writeFile(join(root, 'social/landscape/99-extra-light.png'), fakePng(1600, 900))
+      const inv: Inventory = {
+        ...inventory,
+        social: {
+          ...inventory.social,
+          picks: inventory.social.picks.map((p, i) =>
+            i === 0 ? { ...p, headline: 'Escribe a ana@gmail.com' } : p,
+          ),
+        },
+      }
+      expect(await checkSocial(root, inv, [])).toEqual([
+        'falta social/square/02-dashboard-light.png',
+        'social/portrait/02-dashboard-light.png mide 1080 × 1080',
+        'sobra social/landscape/99-extra-light.png',
+        'privacidad: correo «ana@gmail.com» en titular de dashboard-light',
+      ])
     } finally {
       await rm(root, { recursive: true })
     }

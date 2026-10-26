@@ -456,5 +456,29 @@
       "isolated": true,
       "links": [{ "to": "dashboard", "type": "return" }]
     }
-  ]
+  ],
+  "social": {
+    "$comment": "Composiciones para redes (VS-C): cada selección sale en los tres formatos, con su captura de escritorio y la de móvil del mismo tema, escaladas sin deformar (nunca por encima del 100 %) y recortadas por abajo.",
+    "formats": {
+      "landscape": { "width": 1600, "height": 900 },
+      "square": { "width": 1080, "height": 1080 },
+      "portrait": { "width": 1080, "height": 1350 }
+    },
+    "picks": [
+      { "screen": "dashboard", "theme": "light", "headline": "Tus agentes, a la vista" },
+      {
+        "screen": "run-waterfall",
+        "theme": "light",
+        "headline": "Cada fase de una ejecución, en cascada"
+      },
+      {
+        "screen": "workflow-editor",
+        "theme": "dark",
+        "headline": "Workflows con un editor visual"
+      },
+      { "screen": "approval-pending", "theme": "light", "headline": "Tú decides antes de seguir" },
+      { "screen": "project-work", "theme": "dark", "headline": "Cada proyecto, con su trabajo" },
+      { "screen": "run-active", "theme": "dark", "headline": "Ejecuciones en directo" }
+    ]
+  }
 }
