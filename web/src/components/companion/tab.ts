@@ -1,36 +1,17 @@
 import { useEffect } from 'react'
+import { skynySvg } from '../../lib/brand'
 import type { Notice } from './notices'
 import type { CompanionState } from './state'
 
 /** Avisos que salen también fuera de la pestaña: lo que te necesita, los fallos y los éxitos. */
 export const BROWSER_KINDS: Notice['kind'][] = ['approval', 'input', 'error', 'success']
 
-/** Colores fijos: el favicon no ve los tokens de la página. */
-const FACE = {
-  waiting: { body: '#a9b8ff', line: '#3b5bdb', eyes: 'M48 57h8v15h-8zM64 57h8v15h-8z' },
-  error: { body: '#ffb4b4', line: '#c92a2a', eyes: '' },
-}
+/** Colores fijos de la cara (los de Te necesita y Error): el favicon no ve los tokens. */
+export const FACE_COLORS = { waiting: '#f4b400', error: '#ec4646' }
 
-/** La cara de la mascota como favicon (SVG), para «Te necesita» y «Error». */
+/** Skyny como favicon (SVG), amarillo para «Te necesita» y rojo con «> <» para «Error». */
 export function faceIcon(state: 'waiting' | 'error'): string {
-  const { body, line, eyes } = FACE[state]
-  const node = (cx: number, cy: number) =>
-    `<circle cx="${cx}" cy="${cy}" r="15" fill="#fff" stroke="${line}" stroke-width="6"/>`
-  const face =
-    state === 'error'
-      ? `<path d="M46 60l9 5.5-9 5.5M74 60l-9 5.5 9 5.5" fill="none" stroke="#ffd2d2" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`
-      : `<path d="${eyes}" fill="#dfe6ff"/>`
-  const svg = [
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 116 120">',
-    `<polygon points="60,30 22,92 98,92" fill="${body}" stroke="${body}" stroke-width="30" stroke-linejoin="round"/>`,
-    node(60, 22),
-    `<circle cx="60" cy="66" r="28" fill="${line}"/>`,
-    '<circle cx="60" cy="66" r="21" fill="#1c2345"/>',
-    face,
-    node(20, 96),
-    node(100, 96),
-    '</svg>',
-  ].join('')
+  const svg = skynySvg(FACE_COLORS[state], state === 'error' ? 'error' : 'calm')
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
@@ -44,7 +25,7 @@ export function titleWith(title: string, unread: number): string {
 
 /**
  * La pestaña cuenta lo que ha pasado: el título lleva los avisos sin leer y, con «Te necesita» o
- * «Error», el favicon pasa a la cara de la mascota; si no, el logo de siempre.
+ * «Error», el favicon pasa a Skyny de ese color; si no, el de siempre (Skyny en reposo).
  */
 export function useTabSignals(expression: CompanionState, unread: number) {
   useEffect(() => {
@@ -81,7 +62,8 @@ export function browserNotice(notice: Notice, open: (href: string) => void): boo
   const n = new Notification(`Skynet · ${notice.title}`, {
     body: notice.body,
     tag: notice.runId ?? notice.id,
-    icon: '/favicon.svg',
+    // PNG: no todos los sistemas pintan un SVG en los avisos.
+    icon: '/icon-192.png',
   })
   n.onclick = () => {
     window.focus()

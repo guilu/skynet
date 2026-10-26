@@ -12,6 +12,7 @@ Plan del hito CO: `plans/estudio-companion.md` (carpeta de proyecto), aprobado e
 | CO-B | el companion global: stream en vivo (`after=latest`, `types=`), mascota y menú en la barra, campana y avisos |
 | CO-C | la mascota en las páginas (Dashboard, proyecto, ejecución, listas, Uso) y los avisos fuera de la pestaña |
 | SY-A | Skyny v3: dibujo nuevo, color por estado, Reposo con animación idle, tres tamaños y accesorios de temporada |
+| SY-B | Skyny como icono de la app: favicon, favicon de estado, iconos de iOS y Android (con maskable) y marca de la barra lateral |
 
 ## Componente
 
@@ -136,7 +137,7 @@ Las caras pequeñas van quietas (`still`) para que una lista no se mueva entera.
 ### Fuera de la pestaña
 
 - **Título:** con avisos sin leer, «(2) Skynet»; al leerlos vuelve a «Skynet».
-- **Favicon:** con Te necesita o Error, la cara de la mascota (SVG con colores fijos, porque el favicon no ve los tokens); si no, el logo.
+- **Favicon:** Skyny en reposo, del color del acento (SY-B). Con Te necesita pasa a Skyny amarillo y con Error a Skyny rojo con «> <». Son SVG con colores fijos (`skynySvg` en `lib/brand.ts`), porque el favicon no ve los tokens.
 - **Avisos del navegador** (opcional, Ajustes › Companion › «Avisos del navegador con la pestaña oculta»): al activarlo se pide permiso. Solo salen con la pestaña oculta y para aprobaciones, preguntas, fallos y éxitos. Llevan clave, nombre y fase, nunca prompts ni salidas, y uno por ejecución (`tag`), así que el siguiente sustituye al anterior. Al pulsarlo se enfoca la pestaña y se abre su enlace. El silencio de 1 h también los calla.
 
 ## Dónde aparece (CO-A)

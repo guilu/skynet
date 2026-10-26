@@ -138,12 +138,22 @@ El logo sale del estudio de imagen corporativa de octubre de 2026, variante «Pr
 
 ![Isotipo](ui/marca-isotipo.png)
 
-- **Un solo dibujo.** La geometría del isotipo está en `web/src/lib/brand.ts`. De ahí salen el componente `Logo` (SVG con `currentColor`) y el favicon (`faviconSvg`). No se usa el PNG del estudio.
-- **Baldosa.** `BrandMark` pone el isotipo sobre `--brand-tile` con un degradado blanco suave y la sombra corta de siempre (`--brand-tile-shade`). En claro, la baldosa es el acento y el isotipo va en `--on-primary`. En oscuro baja al tono sombra para que el isotipo siga en blanco. Como todo sale de los tokens, sigue a los colores personalizables.
-- **Dónde aparece.** En la barra lateral, como enlace al Dashboard (se ilumina al pasar el ratón, se hunde al pulsar y tiene foco visible; con la barra plegada solo queda la baldosa). En el login, en lugar de la baldosa grande aparece la mascota (sección 11), y bajo el nombre va el lema «Agentes · Flujos · Ejecuciones».
+**Desde SY-B (#183), el icono de la app es Skyny**, la mascota (sección 11), en lugar del isotipo. El isotipo queda en `brand.ts` y en el componente `Logo`, pero ya no sale en la interfaz.
+
+- **Un solo dibujo.** La geometría de Skyny (cuerpo, bandas, nodos y visor) está en `web/src/lib/brand.ts` y la comparten el componente `Companion` y `skynySvg`, que dibuja a Skyny quieto y sin efectos para los iconos.
+- **Marca de la barra lateral.** `BrandMark` es Skyny en Reposo (54 px, quieto, sin destellos ni suelo), sin baldosa. Sigue al acento, al tema y a los accesorios de temporada. Es enlace al Dashboard: se ilumina al pasar el ratón, se hunde al pulsar y tiene foco visible. Con la barra plegada solo queda Skyny.
+- **Dónde aparece.** En la barra lateral y en el login, donde va Skyny grande con animación, y bajo el nombre va el lema «Agentes · Flujos · Ejecuciones».
 - **Nombre.** «Skynet» en Barlow 600, la tipografía de títulos.
-- **Favicon e iconos.** `public/favicon.svg` es `faviconSvg` con el azul por defecto, y un test lo comprueba. `public/apple-touch-icon.png`, `icon-192.png` e `icon-512.png` (los del manifiesto) se generan desde él con `node scripts/iconos.mjs`. Con un acento propio, `appearance.ts` cambia el favicon por uno generado al vuelo con ese color.
-- **Tamaño mínimo.** 16 px en el favicon y 36 px de baldosa en la interfaz. Por debajo de eso, el hueco del anillo deja de leerse.
+- **Favicon e iconos.** `public/favicon.svg` es `faviconSvg`: Skyny en reposo, sin fondo, con el azul por defecto, y un test lo comprueba. Con un acento propio, `appearance.ts` lo cambia por uno generado al vuelo con ese color.
+- **Iconos generados.** `node scripts/iconos.mjs` genera, desde el favicon:
+  - `public/apple-touch-icon.png` (180 px, a sangre sobre el azul claro de la web);
+  - `icon-192.png` e `icon-512.png` (baldosa redondeada);
+  - `icon-maskable-512.png`, con Skyny dentro de la zona segura para que Android lo recorte con su forma;
+  - `docs/ui/skyny-512.webp`, para documentación y redes.
+
+  Los PNG no siguen al acento: son los de la pantalla de inicio.
+- **Favicon de estado.** Con «Te necesita», Skyny amarillo; con «Error», rojo y con los ojos «> <» (`faceIcon` en `tab.ts`). Los avisos del navegador llevan `icon-192.png`.
+- **Tamaño mínimo.** 16 px en el favicon: se leen el triángulo, las bandas y el visor.
 - **Fuera.** Las demás variantes del estudio (minimalista, oscura, acento IA, outline, horizontal) no se usan. La oscura y la neutra ya salen con las paletas.
 
 ## 11. Companion
