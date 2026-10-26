@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Notice } from './notices'
-import { browserNotice, faceIcon, titleWith } from './tab'
+import { browserNotice, FACE_COLORS, faceIcon, titleWith } from './tab'
 
 const notice: Notice = {
   id: 'n1',
@@ -49,11 +49,14 @@ describe('Título y favicon de la pestaña', () => {
     expect(titleWith('(5) Skynet', 0)).toBe('Skynet')
   })
 
-  it('dibuja la cara de la mascota como SVG', () => {
-    const icon = decodeURIComponent(faceIcon('error'))
-    expect(icon).toMatch(/^data:image\/svg\+xml,<svg/)
-    expect(icon).toContain('#c92a2a')
-    expect(decodeURIComponent(faceIcon('waiting'))).toContain('#3b5bdb')
+  it('dibuja a Skyny del color del estado como SVG', () => {
+    const error = decodeURIComponent(faceIcon('error'))
+    expect(error).toMatch(/^data:image\/svg\+xml,<svg/)
+    expect(error).toContain(`stop-color="${FACE_COLORS.error}"`)
+    expect(error).toContain('M46 58 L55 63.5')
+    const waiting = decodeURIComponent(faceIcon('waiting'))
+    expect(waiting).toContain(`stop-color="${FACE_COLORS.waiting}"`)
+    expect(waiting).not.toContain('M46 58 L55 63.5')
   })
 })
 

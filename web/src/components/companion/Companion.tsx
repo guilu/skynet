@@ -1,4 +1,11 @@
 import { useEffect, useId, useState, type ReactNode } from 'react'
+import {
+  SKYNY_BANDS,
+  SKYNY_BODY,
+  SKYNY_BODY_STROKE,
+  SKYNY_NODES,
+  SKYNY_VISOR,
+} from '../../lib/brand'
 import { cn } from '../../lib/cn'
 import { useSeason, type Season } from './season'
 import { companionLabel, type CompanionState } from './state'
@@ -10,8 +17,9 @@ const LARGE = 64
 /** Lo que tarda en cerrarse el visor al cambiar de expresión; el cambio queda tapado. */
 export const SWAP_MS = 110
 
-/** El cuerpo: un triángulo que el trazo grueso redondea. */
-const BODY = 'M60 12 L10 94 L110 94 Z'
+const BODY = SKYNY_BODY
+const [HEAD, HAND_L, HAND_R] = SKYNY_NODES
+const VISOR = SKYNY_VISOR
 
 /**
  * Skyny v3 (plan `plans/siguiente-hito-sy.md`): el isotipo de Skynet hecho personaje. El nodo de
@@ -92,7 +100,13 @@ export function Companion({
           width="160"
           height="160"
         >
-          <path d={BODY} fill="#fff" stroke="#fff" strokeWidth="22" strokeLinejoin="round" />
+          <path
+            d={BODY}
+            fill="#fff"
+            stroke="#fff"
+            strokeWidth={SKYNY_BODY_STROKE}
+            strokeLinejoin="round"
+          />
         </mask>
         {!small && (
           <>
@@ -127,19 +141,24 @@ export function Companion({
           d={BODY}
           fill={ref('body')}
           stroke={ref('body')}
-          strokeWidth="22"
+          strokeWidth={SKYNY_BODY_STROKE}
           strokeLinejoin="round"
         />
         <g className="companion-bands" mask={ref('shape')} strokeWidth={small ? 13 : 11}>
-          <path d="M60 63 L-6 50" />
-          <path d="M60 63 L126 50" />
-          <path d="M60 64 L60 120" />
+          {SKYNY_BANDS.map((d) => (
+            <path key={d} d={d} />
+          ))}
         </g>
-        {!small && <circle className="companion-ring" cx="60" cy="64" r="27" />}
-        <circle className="companion-visor" cx="60" cy="64" r={small ? 24 : 22} />
+        {!small && <circle className="companion-ring" cx={VISOR.cx} cy={VISOR.cy} r={VISOR.ring} />}
+        <circle
+          className="companion-visor"
+          cx={VISOR.cx}
+          cy={VISOR.cy}
+          r={small ? VISOR.r + 2 : VISOR.r}
+        />
         {!small && <path className="companion-visor-shine" d="M44 52 Q50 45 58 44" />}
         <g className="companion-head">
-          <Node cx={60} cy={12} r={16} small={small} fill={ref('node')} />
+          <Node {...HEAD} small={small} fill={ref('node')} />
           {hat && (
             // Ladeado sobre el lado izquierdo de la cabeza, lejos de los bocadillos (arriba a la
             // derecha). Se dibuja centrado arriba, se agranda desde el ala y se gira con la cabeza.
@@ -152,10 +171,10 @@ export function Companion({
           <Eyes state={shown} small={small} />
         </g>
         <g className="companion-hand companion-hand-l">
-          <Node cx={14} cy={96} r={18} small={small} fill={ref('node')} />
+          <Node {...HAND_L} small={small} fill={ref('node')} />
         </g>
         <g className="companion-hand companion-hand-r">
-          <Node cx={106} cy={96} r={18} small={small} fill={ref('node')} />
+          <Node {...HAND_R} small={small} fill={ref('node')} />
         </g>
       </g>
       {!small && <Effects state={shown} />}

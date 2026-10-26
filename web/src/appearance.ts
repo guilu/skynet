@@ -49,7 +49,7 @@ function applyFavicon(palette: Palette) {
     return
   }
   const { light } = derivePalette({ primary: palette.primary })
-  icon.href = `data:image/svg+xml,${encodeURIComponent(faviconSvg(light.primary, light['on-primary']))}`
+  icon.href = `data:image/svg+xml,${encodeURIComponent(faviconSvg(light.primary))}`
 }
 
 /** Aplica el paquete de iconos (IC-A) y lo recuerda en este navegador, como la paleta. */
