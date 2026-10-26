@@ -88,7 +88,7 @@ export function UsagePage() {
         </div>
         {windows.data && own.length > 0 && (
           <CompanionPeek
-            state={alerts.length > 0 ? 'paused' : 'ready'}
+            state={alerts.length > 0 ? 'paused' : 'calm'}
             text={alerts.length > 0 ? 'Vamos justos de cuota' : 'Hay cuota de sobra'}
             size={72}
             className="page-peek"

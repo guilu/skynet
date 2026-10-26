@@ -15,7 +15,7 @@ export function CompanionHello({ approvals }: { approvals: ApprovalSummary[] }) 
   const latest = activeRuns[0]
   return (
     <section className="card companion-hello" aria-label="Skyny">
-      <Companion state={approvals.length > 0 ? 'waiting' : 'ready'} size={80} />
+      <Companion state={approvals.length > 0 ? 'waiting' : 'calm'} size={80} />
       <div className="companion-hello-text">
         <Hello text={helloText(activeRuns.length, approvals.length)} />
         <div className="companion-hello-links">

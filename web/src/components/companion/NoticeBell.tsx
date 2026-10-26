@@ -39,7 +39,7 @@ export function NoticeBell({
           <Menu.Label className="menu-label">Avisos</Menu.Label>
           {notices.length === 0 ? (
             <p className="notices-empty">
-              <Companion state="ready" size={56} />
+              <Companion state="calm" size={56} />
               Aún no hay avisos. Te contaré aquí lo que termine, falle o te necesite.
             </p>
           ) : (

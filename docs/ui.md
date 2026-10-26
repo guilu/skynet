@@ -148,7 +148,7 @@ El logo sale del estudio de imagen corporativa de octubre de 2026, variante «Pr
 
 ## 11. Companion
 
-La mascota de Skynet es el isotipo convertido en personaje (CO-A): el nodo de arriba hace de cabeza, los de abajo de manos y el anillo de cara, con un visor donde cambian los ojos. Es plana y en pastel, con la sombra sólida corta de las tarjetas, y toma los colores de los tokens, así que sigue al acento y al tema. Tiene once expresiones, cada una ligada a estados reales de Skynet. Componente, mapeo de estados, animaciones y reglas de uso: [`companion.md`](companion.md).
+La mascota de Skynet es el isotipo convertido en personaje (CO-A): el nodo de arriba hace de cabeza, los de abajo de manos y el anillo de cara, con un visor donde cambian los ojos. Es plana y en pastel, con la sombra sólida corta de las tarjetas, y toma los colores de los tokens, así que sigue al acento y al tema. Tiene once expresiones, cada una ligada a estados reales de Skynet. Desde SY-A sigue la lámina v3: tres bandas oscuras, ojos cian que brillan, un color por estado, la expresión Reposo con animación idle y accesorios de temporada. Componente, mapeo de estados, animaciones y reglas de uso: [`companion.md`](companion.md).
 
 Desde CO-B vive también en la barra superior, junto a una campana nueva: la mascota muestra el estado de toda la web y abre un menú rápido, la campana guarda los avisos y abajo a la derecha salen los avisos flotantes, con la cara de la mascota y el color suave del estado.
 

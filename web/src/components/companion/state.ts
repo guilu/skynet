@@ -2,6 +2,7 @@ import type { AgentRun, AgentStatus, RunStatus, StageRun } from '../../api'
 
 /** Expresiones de la mascota (plan: `plans/estudio-companion.md`). */
 export type CompanionState =
+  | 'calm'
   | 'sleeping'
   | 'ready'
   | 'thinking'
@@ -16,6 +17,7 @@ export type CompanionState =
 
 /** Nombre y cuándo sale cada expresión, en el orden de la galería de Ajustes. */
 export const COMPANION_STATES: { state: CompanionState; label: string; when: string }[] = [
+  { state: 'calm', label: 'Reposo', when: 'Todo tranquilo: no hay nada que contar.' },
   { state: 'sleeping', label: 'Inactivo', when: 'No hay nada en marcha ni pendiente.' },
   { state: 'ready', label: 'En espera', when: 'En cola o pendiente de empezar.' },
   { state: 'thinking', label: 'Pensando', when: 'El agente arranca o está pensando.' },
@@ -157,5 +159,5 @@ export function globalExpression(s: GlobalSnapshot): CompanionState {
   if (busy) return busy
   if (s.recentSuccess) return 'success'
   if (s.active.length > 0) return 'ready'
-  return s.idleMinutes >= SLEEP_AFTER_MINUTES ? 'sleeping' : 'ready'
+  return s.idleMinutes >= SLEEP_AFTER_MINUTES ? 'sleeping' : 'calm'
 }

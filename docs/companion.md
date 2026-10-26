@@ -1,6 +1,8 @@
 # Companion
 
-La mascota de Skynet se llama **Skyny** (diminutivo de Skynet) y cuenta cómo van los agentes. Se presenta por su nombre en el saludo del Dashboard y en Ajustes › Companion. Es el isotipo convertido en personaje: el nodo de arriba es la cabeza, los dos de abajo son las manos y el anillo es la cara, con un visor oscuro donde cambian los ojos. Es plana y en pastel, como el resto de la web, y no usa imágenes, solo SVG con CSS.
+La mascota de Skynet se llama **Skyny** (diminutivo de Skynet) y cuenta cómo van los agentes. Se presenta por su nombre en el saludo del Dashboard y en Ajustes › Companion. Es el isotipo convertido en personaje: el nodo de arriba es la cabeza, los dos de abajo son las manos y el visor oscuro es la cara, con **tres bandas** que van hasta el borde del cuerpo (las laterales suben un poco) y unos ojos cian que brillan. No usa imágenes, solo SVG con CSS.
+
+Desde el hito SY (issue #181, plan `plans/siguiente-hito-sy.md`) se dibuja según la lámina v3 de Diego: cada estado tiene su color, hay una expresión de reposo con animación idle y lleva accesorios de temporada.
 
 Plan del hito CO: `plans/estudio-companion.md` (carpeta de proyecto), aprobado el 2026-10-24. Solo web; la app de escritorio que planteaba la issue #140 queda descartada.
 
@@ -9,6 +11,7 @@ Plan del hito CO: `plans/estudio-companion.md` (carpeta de proyecto), aprobado e
 | CO-A | la mascota, el motor de estados, la galería de Ajustes y los primeros usos estáticos (login, 404, estados vacíos) |
 | CO-B | el companion global: stream en vivo (`after=latest`, `types=`), mascota y menú en la barra, campana y avisos |
 | CO-C | la mascota en las páginas (Dashboard, proyecto, ejecución, listas, Uso) y los avisos fuera de la pestaña |
+| SY-A | Skyny v3: dibujo nuevo, color por estado, Reposo con animación idle, tres tamaños y accesorios de temporada |
 
 ## Componente
 
@@ -18,10 +21,11 @@ import { Companion } from './components/companion/Companion'
 <Companion state="running" size={56} />                       // decorativa: el texto va al lado
 <Companion state="waiting" size={144} label="Mascota de Skynet" /> // se anuncia como imagen
 <Companion state="success" size={30} still />                  // quieta (listas, nodos, galerías)
+<Companion state="calm" size={92} season="christmas" />         // fuerza un accesorio (null: ninguno)
 ```
 
-- **Colores.** El cuerpo es `--primary` mezclado con blanco, así que sigue al acento (UI-G) y al tema. Los nodos y el visor usan `--companion-node` y `--companion-visor`, y los efectos los colores de estado (`--ok`, `--warn`, `--live`, `--bad`, `--idle`). El error tiñe el cuerpo de rojo; «Sin conexión» y «Cancelado» lo pasan a gris.
-- **Tamaños.** 128–160 px en los héroes, 96 px en los estados vacíos, 56–80 px en las cabeceras, 30–40 px en avisos y listas, y 16 px en la pestaña. Por debajo de 32 px desaparecen los efectos, el brillo y la sombra, y el contorno se engrosa.
+- **Colores.** El cuerpo es un degradado de `--c-hi` a `--c-lo`, que cambian con el estado: Reposo y Revisando usan `--primary` (siguen al acento de UI-G), Pensando `--live`, Ejecutando `--skyny-orange`, Éxito `--ok`, Error `--bad`, Te necesita `--skyny-yellow`, y los demás grises. Las bandas, el visor, los nodos y los ojos usan `--companion-band`, `--companion-visor`, `--companion-node`, `--companion-eye` y `--companion-glow`. Cada instancia define sus propios degradados, máscara y filtro con `useId`.
+- **Tamaños** (`data-size`). Pequeño (`s`, menos de 32 px): sin efectos, brillo, aro ni resplandor, con ojos y bandas más gruesos. Mediano (`m`, de 32 a 63 px): con efectos, sin animación idle. Grande (`l`, 64 px o más): completo. En la web: 128–160 px en los héroes, 96 px en los estados vacíos, 56–92 px en las cabeceras, 30–48 px en avisos, menú y listas, y 18–22 px en el grafo.
 - **Accesibilidad.** Sin `label` lleva `aria-hidden`, y el estado tiene que decirse en el texto de al lado. Con `label` es `role="img"` y se anuncia como «label: Expresión». El estado nunca se transmite solo con el color: también cambian los ojos, el gesto y la insignia.
 
 ## Expresiones y estados
@@ -30,20 +34,21 @@ La traducción a expresiones está en `components/companion/state.ts`: funciones
 
 | Expresión | Gesto | Cuándo |
 |---|---|---|
-| Inactivo (`sleeping`) | ojos cerrados, «zZ» | nada en marcha ni pendiente durante 5 min |
-| En espera (`ready`) | parpadea | agente `QUEUED`, fase `PENDING`/`READY`, ejecución `PENDING` |
-| Pensando (`thinking`) | mira arriba, cabeza ladeada, «…» | agente `STARTING`/`THINKING`, fase `STARTING` |
-| Ejecutando (`running`) | ojos «^ ^», manos alternas, líneas de velocidad | agente `EXECUTING`, fase `RUNNING` |
-| Revisando (`reviewing`) | mira el portátil | fase con una verificación `QUEUED`/`RUNNING` |
-| Éxito (`success`) | salta, confeti | `COMPLETED`, `SUCCEEDED` |
-| Error (`error`) | «> <», cuerpo rojo, sacudida | `FAILED` |
-| Te necesita (`waiting`) | levanta la mano y saluda, «!» | `WAITING_FOR_APPROVAL` (W5), `WAITING_FOR_INPUT` |
-| En pausa (`paused`) | ojos «– –», insignia de pausa | fase con un reintento programado (`notBefore` en el futuro) |
-| Sin conexión (`offline`) | gris, insignia sin señal | agente `UNRESPONSIVE`, stream en vivo caído |
-| Cancelado (`cancelled`) | gris, quieto | `CANCELLED`, fase `SKIPPED` |
+| Reposo (`calm`) | azul del acento; en grande, animación idle de 7 s (se ladea, mira a los lados, parpadea, guiña y le salen destellos) | todo tranquilo: login, saludo, campana vacía, proyecto o Uso sin nada que contar |
+| Inactivo (`sleeping`) | gris, ojos cerrados, «zZ» | nada en marcha ni pendiente durante 5 min |
+| En espera (`ready`) | gris, parpadea, bocadillo «?» | agente `QUEUED`, fase `PENDING`/`READY`, ejecución `PENDING` |
+| Pensando (`thinking`) | morado, un ojo cerrado, burbujas, se ladea | agente `STARTING`/`THINKING`, fase `STARTING` |
+| Ejecutando (`running`) | naranja, ojos «^ ^», manos alternas, líneas de velocidad | agente `EXECUTING`, fase `RUNNING` |
+| Revisando (`reviewing`) | azul del acento, lupa grande en la mano derecha apuntando a la derecha y los ojos hacia ella | fase con una verificación `QUEUED`/`RUNNING` |
+| Éxito (`success`) | verde, salta, confeti | `COMPLETED`, `SUCCEEDED` |
+| Error (`error`) | rojo, «> <», destellos, sacudida | `FAILED` |
+| Te necesita (`waiting`) | amarillo, bocadillo «!», saluda con la mano | `WAITING_FOR_APPROVAL` (W5), `WAITING_FOR_INPUT` |
+| En pausa (`paused`) | gris, ojos «– –», bocadillo de pausa | fase con un reintento programado (`notBefore` en el futuro) |
+| Sin conexión (`offline`) | gris, ojos de punto, señal de prohibido | agente `UNRESPONSIVE`, stream en vivo caído |
+| Cancelado (`cancelled`) | gris, ojos «– –», quieto (no está en la lámina) | `CANCELLED`, fase `SKIPPED` |
 
 - **`agentExpression`, `stageExpression` y `runExpression`.** Cuando hay varias expresiones a la vez (fases en paralelo, varios agentes), gana la de más prioridad: Te necesita › Error › Sin conexión › Revisando › Ejecutando › Pensando › En pausa › En espera.
-- **`globalExpression`.** Calcula la mascota de toda la web (CO-B). El orden es: Sin conexión › error sin ver › aprobaciones pendientes › trabajo en curso › Éxito (durante 8 s) › En espera › Inactivo, a partir de 5 minutos sin nada.
+- **`globalExpression`.** Calcula la mascota de toda la web (CO-B). El orden es: Sin conexión › error sin ver › aprobaciones pendientes › trabajo en curso › Éxito (durante 8 s) › En espera (ejecuciones en cola) › Reposo › Inactivo, a partir de 5 minutos sin nada.
 
 ## Movimiento
 
@@ -60,7 +65,7 @@ La traducción a expresiones está en `components/companion/state.ts`: funciones
 
 - **Stream.** `/api/events/stream?after=latest&types=…`: empieza desde ahora (sin reenviar el histórico) y solo trae los tipos de `COMPANION_EVENT_TYPES` (`notices.ts`): `workflow.*`, `run.resumed`, `stage.status.changed`, `stage.retry.scheduled`, `stage.verification.*`, `agent.status.changed`, `agent.rate_limit` y `approval.*`. Al reconectar, el navegador manda `Last-Event-ID` y el servidor sigue desde ahí; además se releen las ejecuciones y las aprobaciones.
 - **Estado de partida.** Las ejecuciones `PENDING` y `RUNNING` (`GET /api/workflow-runs?status=PENDING&status=RUNNING&size=50`, cada 30 s como red de seguridad) y las aprobaciones pendientes (`usePendingApprovals`, cada 10 s). Los cambios de fases y agentes se aplican en memoria con `applyEvent`, como en la página de ejecución.
-- **Cara global.** `globalExpression`: Sin conexión si el stream lleva más de 5 s caído, Error mientras haya un fallo sin ver (se da por visto al abrir esa ejecución o al cerrar la campana), Te necesita con aprobaciones pendientes, luego el trabajo en curso, Éxito durante 8 s y, tras 5 min sin nada, Inactivo.
+- **Cara global.** `globalExpression`: Sin conexión si el stream lleva más de 5 s caído, Error mientras haya un fallo sin ver (se da por visto al abrir esa ejecución o al cerrar la campana), Te necesita con aprobaciones pendientes, luego el trabajo en curso, Éxito durante 8 s, En espera si solo hay ejecuciones en cola, Reposo si no hay nada y, tras 5 min sin nada, Inactivo.
 
 ![Mascota de la barra, campana y avisos flotantes](ui/companion-avisos.png)
 
@@ -94,7 +99,19 @@ La zona de avisos es `aria-live="polite"` (sin `role="status"`, que ya usan los 
 
 ### Ajustes
 
-En Ajustes › Companion hay opciones que valen **solo para este navegador** (`localStorage`, `prefs.ts`): «Mostrar la mascota en la barra superior» y «Avisos flotantes». El silencio de 1 h se guarda en el mismo sitio.
+En Ajustes › Companion hay opciones que valen **solo para este navegador** (`localStorage`, `prefs.ts`): «Mostrar la mascota en la barra superior», «Avisos flotantes» y «Accesorios de temporada». El silencio de 1 h se guarda en el mismo sitio.
+
+### Accesorios de temporada (SY-A)
+
+Skyny lleva un sombrero según la fecha (`season.ts`, hora local, se mira al montar). Va ladeado sobre el lado izquierdo de la cabeza, para no chocar con los bocadillos, que salen arriba a la derecha:
+
+| Accesorio | Cuándo |
+|---|---|
+| Sombrero de bruja (Halloween) | del 24 de octubre al 2 de noviembre |
+| Gorro de Papá Noel (Navidad) | del 15 de diciembre al 6 de enero |
+| Sombrero de paja (verano) | julio y agosto |
+
+Solo sale desde 32 px (nunca en listas, grafo ni favicon). Se quita con «Accesorios de temporada» en Ajustes › Companion, donde también se ven los tres. `season` en el componente fuerza uno o ninguno (`null`).
 
 ## En las páginas y fuera de la pestaña (CO-C)
 
@@ -104,7 +121,7 @@ En la cabecera, a la derecha del título, asoma una mascota de 92 px (80 px en P
 
 - **Dashboard:** la cara global y «1 aprobación te espera», «¡Todo en marcha! 🚀», «Algo ha fallado» o «Todo al día».
 - **Proyecto:** la cara más fuerte de sus ejecuciones en marcha y «2 ejecuciones en marcha» o «Nada en marcha».
-- **Uso:** En pausa y «Vamos justos de cuota» si hay alertas de cuota; si no, En espera y «Hay cuota de sobra». Solo cuando hay datos.
+- **Uso:** En pausa y «Vamos justos de cuota» si hay alertas de cuota; si no, Reposo y «Hay cuota de sobra». Solo cuando hay datos.
 
 Bajo la cabecera del Dashboard va la tarjeta de saludo (`CompanionHello`): «Hola, soy Skyny. Hay 1 ejecución en marcha y 1 aprobación esperándote.» con atajos a revisar la aprobación, lanzar un workflow y ver la última ejecución.
 
@@ -124,7 +141,7 @@ Las caras pequeñas van quietas (`still`) para que una lista no se mueva entera.
 
 ## Dónde aparece (CO-A)
 
-- **Login:** héroe En espera de 128 px.
+- **Login:** héroe Reposo de 128 px.
 - **Estados vacíos (`EmptyState` con `companion`):**
   - Proyectos, Ejecuciones y Aprobaciones sin nada todavía: Inactivo.
   - Runners sin registrar: Sin conexión.

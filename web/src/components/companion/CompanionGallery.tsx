@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
 import { Companion } from './Companion'
 import { setCompanionPrefs, useCompanionPrefs } from './prefs'
+import { SEASONS } from './season'
 import { COMPANION_STATES, type CompanionState } from './state'
 
 /**
@@ -9,7 +10,7 @@ import { COMPANION_STATES, type CompanionState } from './state'
  * todas las expresiones; al elegir una, la grande cambia con su parpadeo.
  */
 export function CompanionGallery() {
-  const [selected, setSelected] = useState<CompanionState>('ready')
+  const [selected, setSelected] = useState<CompanionState>('calm')
   const info = COMPANION_STATES.find((s) => s.state === selected)
   const prefs = useCompanionPrefs()
   const [permission, setPermission] = useState(notificationPermission)
@@ -36,9 +37,9 @@ export function CompanionGallery() {
     >
       <h2 id="companion-title">Skyny, tu companion</h2>
       <p className="hint">
-        Skyny (de Skynet) es la mascota que te cuenta cómo van tus agentes. Toca una expresión para
-        ver el cambio. Sigue al color de acento y al tema; con «reducir movimiento» del sistema se
-        queda quieta.
+        Skyny (de Skynet) es la mascota que te cuenta cómo van tus agentes. Cambia de color y de
+        cara según el estado; en reposo toma el color de acento. Toca una expresión para ver el
+        cambio. Con «reducir movimiento» del sistema se queda quieta.
       </p>
       <fieldset className="companion-prefs">
         <legend className="visually-hidden">Preferencias del companion en este navegador</legend>
@@ -66,6 +67,14 @@ export function CompanionGallery() {
             onChange={(e) => void toggleBrowser(e.target.checked)}
           />
           Avisos del navegador con la pestaña oculta (te necesita, errores y éxitos)
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={prefs.seasonal}
+            onChange={(e) => setCompanionPrefs({ seasonal: e.target.checked })}
+          />
+          Accesorios de temporada (Halloween, Navidad y verano)
         </label>
         {permission === 'denied' && (
           <p className="hint">
@@ -95,6 +104,16 @@ export function CompanionGallery() {
               <Companion state={state} size={72} still />
               {label}
             </button>
+          </li>
+        ))}
+      </ul>
+      <h3 className="companion-seasons-title">Accesorios de temporada</h3>
+      <ul className="companion-gallery companion-seasons">
+        {SEASONS.map(({ season, label, when }) => (
+          <li key={season} className="companion-tile" data-off={!prefs.seasonal || undefined}>
+            <Companion state="calm" size={72} season={season} still />
+            {label}
+            <small className="muted">{when}</small>
           </li>
         ))}
       </ul>
