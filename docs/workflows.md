@@ -163,7 +163,7 @@ stages:
 - Al publicar se comprueba cada condición: la sintaxis, que cada dato exista y sea de una fase de la que depende, y los tipos (no se compara un número con un texto). Un error dice qué falla y en qué línea y columna.
 - Cada evaluación deja `stage.condition.evaluated` con la condición, los valores leídos y el resultado.
 
-**Variables de los prompts:** `{{workItem.key}}`, `{{workItem.title}}`, `{{workItem.description}}`, `{{workItem.type}}`, `{{workItem.externalRef}}`, `{{project.key}}`, `{{project.name}}`, `{{inputs.<nombre>}}` y los datos de otras fases.
+**Variables de los prompts:** `{{workItem.key}}`, `{{workItem.title}}`, `{{workItem.description}}`, `{{workItem.type}}`, `{{workItem.externalRef}}`, `{{project.key}}`, `{{project.name}}`, `{{project.slug}}` (la clave en minúsculas, para nombres de fichero como `docs/skynet/mapa-{{project.slug}}.md`), `{{inputs.<nombre>}}` y los datos de otras fases.
 
 **Datos de otras fases en los prompts.** Un prompt puede usar lo que dejó una fase de la que depende (directa o indirectamente), con los mismos datos que las condiciones:
 
@@ -209,7 +209,7 @@ stages:
     scope: ["docs/**", "openspec/**"]   # lo que se puede cambiar
 ```
 
-- `artifacts`: rutas o globs del repositorio (`docs/*.md`, `openspec/**/*.md`). Cada uno tiene que encontrar al menos un fichero; si no, «`docs/spec.md` no existe».
+- `artifacts`: rutas o globs del repositorio (`docs/*.md`, `openspec/**/*.md`). Cada uno tiene que encontrar al menos un fichero; si no, «`docs/spec.md` no existe». No admiten variables (`{{...}}`), porque se comprueban al publicar: para un fichero con la clave del proyecto en el nombre se declara un glob (`docs/skynet/mapa-*.md`).
   - Cuenta un fichero regular o un enlace simbólico a un fichero regular **dentro** del worktree (fuera de `.git`). Un enlace que sale del worktree, una FIFO, un socket o un dispositivo no cuentan.
   - Cada fichero que casa se guarda además como artefacto `DECLARED_FILE` (#145), con su ruta relativa como nombre y en metadatos `path`, `glob`, `mediaType` y `size`: se abre y se descarga desde la web (`GET /api/artifacts/{id}/download`) aunque se limpie el worktree. Solo lo declarado: el resto de cambios sigue en `GIT_CHANGES` y `DIFF`.
   - **En la web:** la pestaña **Artefactos** del agente los lista en «Archivos generados», con su tamaño y tipo, entre los cambios y los logs. **Descargar** baja el fichero entero con su nombre. **Abrir** lo enseña dentro de Skynet si hay una vista segura: Markdown formateado (sin su HTML, con enlaces solo `http`, `https` y `mailto` que se abren en otra pestaña y las imágenes como texto, y «Ver como texto» para el original), JSON y texto en el visor de código, y PNG, JPEG, GIF y WebP como imagen. Los PDF, SVG y demás binarios solo se descargan. En la pestaña **Verificación**, el check `artifacts` dice qué ficheros no se guardaron y por qué.

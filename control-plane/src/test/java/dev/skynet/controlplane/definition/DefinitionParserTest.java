@@ -816,8 +816,8 @@ class DefinitionParserTest {
             "`{{inputs.isue}}` usa un dato que no está en `inputs`; ¿quisiste decir `issue`?",
             "Variable `{{workitem.key}}` desconocida; ¿quisiste decir `workItem.key`?. Admite:"
                 + " workItem.key, workItem.title, workItem.description, workItem.type,"
-                + " workItem.externalRef, project.key, project.name, inputs.<nombre> y"
-                + " stages.<fase>.output.<campo>",
+                + " workItem.externalRef, project.key, project.name, project.slug,"
+                + " inputs.<nombre> y stages.<fase>.output.<campo>",
             "`{{stages.plan.summary}}` no es un dato de otra fase: usa"
                 + " `{{stages.<fase>.output.<campo>}}`, `{{stages.<fase>.<hijo>.output.<campo>}}`,"
                 + " `{{stages.<fase>.status}}` o `{{stages.<fase>.exitCode}}`");

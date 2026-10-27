@@ -3,6 +3,10 @@
 # existen, así que se puede repetir sin miedo.
 #
 #   SKYNET_ADMIN_PASSWORD=<contraseña> scripts/seed-workflows.sh
+#   SKYNET_ADMIN_PASSWORD=<contraseña> scripts/seed-workflows.sh --actualizar
+#
+# Con --actualizar, un workflow que ya existe y cuyo YAML publicado no es el del repositorio se
+# publica como versión nueva. Si tiene un borrador abierto no se toca, para no pisarlo.
 #
 # Antes de publicar, cada `model: ${VARIABLE}` toma su valor de workflows/modelos.env (o de una
 # variable del entorno con el mismo nombre); si está vacío, la línea desaparece y el CLI usa su
@@ -11,6 +15,13 @@
 # Variables: SKYNET_URL (por defecto http://localhost:8080), SKYNET_ADMIN_USER (admin) y
 # SKYNET_ADMIN_PASSWORD (si no está, se lee de deploy/.env). Necesita curl y jq.
 set -euo pipefail
+
+UPDATE=false
+case ${1:-} in
+  --actualizar) UPDATE=true ;;
+  '') ;;
+  *) echo "Uso: $0 [--actualizar]" >&2; exit 2 ;;
+esac
 
 cd "$(dirname "$0")/.."
 command -v jq >/dev/null || { echo "Falta jq (pacman -S jq, apt install jq o brew install jq)." >&2; exit 1; }
@@ -51,13 +62,65 @@ substitute() { # fichero: el YAML con los modelos puestos (o sin la línea si es
 curl -fsS -o /dev/null "$URL/actuator/health" \
   || { echo "No responde $URL: arranca antes el control plane." >&2; exit 1; }
 
-created=0 skipped=0 failed=0
+publish() { # clave id revisión: publica el borrador; escribe la versión o falla
+  local response
+  response=$(api POST "/api/workflow-versions/$2/publish" "{\"revision\": $3}")
+  if [[ ${response##*$'\n'} != 200 ]]; then
+    echo "✗ $1: no se pudo publicar (HTTP ${response##*$'\n'}): ${response%$'\n'*}" >&2
+    return 1
+  fi
+  jq -r '.version' <<< "${response%$'\n'*}"
+}
+
+update() { # clave fichero vista: publica el YAML del repositorio como versión nueva si ha cambiado
+  local key=$1 file=$2 view=$3 source response detail version
+  if [[ $(jq -r '.workflow.draft // empty | .id' <<< "$view") ]]; then
+    echo "· $key: tiene un borrador abierto, no se toca"
+    skipped=$((skipped + 1))
+    return
+  fi
+  source=$(substitute "$file")
+  response=$(api GET "/api/workflow-versions/$(jq -r '.workflow.published.id' <<< "$view")")
+  if [[ $(jq -r '.sourceYaml' <<< "${response%$'\n'*}") == "$source" ]]; then
+    echo "· $key: ya está al día"
+    skipped=$((skipped + 1))
+    return
+  fi
+  response=$(api POST "/api/workflows/$key/draft")
+  detail=${response%$'\n'*}
+  if [[ ${response##*$'\n'} != 200 ]]; then
+    echo "✗ $key: no se pudo abrir el borrador (HTTP ${response##*$'\n'}): $detail" >&2
+    failed=$((failed + 1))
+    return
+  fi
+  response=$(api PUT "/api/workflow-versions/$(jq -r '.id' <<< "$detail")" \
+    "$(jq -n --arg yaml "$source" --argjson revision "$(jq '.revision' <<< "$detail")" \
+      '{sourceYaml: $yaml, revision: $revision}')")
+  detail=${response%$'\n'*}
+  if [[ ${response##*$'\n'} != 200 || $(jq -r '.validation.publishable' <<< "$detail") != true ]]; then
+    echo "✗ $key: el borrador nuevo no se puede publicar (HTTP ${response##*$'\n'}): $detail" >&2
+    failed=$((failed + 1))
+    return
+  fi
+  if version=$(publish "$key" "$(jq -r '.id' <<< "$detail")" "$(jq '.revision' <<< "$detail")"); then
+    echo "✓ $key: actualizado (v$version)"
+    updated=$((updated + 1))
+  else
+    failed=$((failed + 1))
+  fi
+}
+
+created=0 updated=0 skipped=0 failed=0
 for file in workflows/*.yaml; do
   key=$(basename "$file" .yaml)
   response=$(api GET "/api/workflows/$key")
   if [[ ${response##*$'\n'} == 200 ]]; then
-    echo "· $key: ya existe, no se toca"
-    skipped=$((skipped + 1))
+    if $UPDATE; then
+      update "$key" "$file" "${response%$'\n'*}"
+    else
+      echo "· $key: ya existe, no se toca"
+      skipped=$((skipped + 1))
+    fi
     continue
   fi
 
@@ -75,11 +138,7 @@ for file in workflows/*.yaml; do
     failed=$((failed + 1))
     continue
   fi
-  id=$(jq -r '.id' <<< "$detail")
-  revision=$(jq -r '.revision' <<< "$detail")
-  response=$(api POST "/api/workflow-versions/$id/publish" "{\"revision\": $revision}")
-  if [[ ${response##*$'\n'} != 200 ]]; then
-    echo "✗ $key: no se pudo publicar (HTTP ${response##*$'\n'}): ${response%$'\n'*}" >&2
+  if ! publish "$key" "$(jq -r '.id' <<< "$detail")" "$(jq -r '.revision' <<< "$detail")" > /dev/null; then
     failed=$((failed + 1))
     continue
   fi
@@ -87,5 +146,5 @@ for file in workflows/*.yaml; do
   created=$((created + 1))
 done
 
-echo "Workflows: $created publicados, $skipped ya estaban, $failed con error."
+echo "Workflows: $created publicados, $updated actualizados, $skipped sin cambios, $failed con error."
 [[ $failed == 0 ]]
