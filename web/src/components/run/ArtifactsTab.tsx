@@ -21,6 +21,7 @@ import { Button } from '../ui/Button'
 import { Pill } from '../ui/Pill'
 import { LinesSkeleton } from '../ui/Skeleton'
 import { Icon } from '../icons/Icon'
+import { SkynyLoading } from '../companion/SkynyLoading'
 
 const sum = (files: FileChange[], key: 'insertions' | 'deletions') =>
   files.reduce((n, f) => n + (f[key] ?? 0), 0)
@@ -183,7 +184,7 @@ function FileDiff({ file, diff }: { file: FileChange; diff?: ArtifactSummary }) 
   if (!diff) return <p className="muted small">El diff no llegó.</p>
   if (!ranged) return <p className="muted small">No se pudo situar el diff de este archivo.</p>
   if (content.error) return <ErrorMessage error={content.error} />
-  if (content.data == null) return <p className="muted small">Cargando diff…</p>
+  if (content.data == null) return <SkynyLoading label="el diff" size={32} />
   const cut = (file.diffLength ?? 0) > MAX_CHUNK
   const beyondTruncation =
     diff.truncated && (file.diffOffset ?? 0) + (file.diffLength ?? 0) > diff.size

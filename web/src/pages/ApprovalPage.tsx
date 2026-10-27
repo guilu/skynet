@@ -17,6 +17,7 @@ import {
   RISK_TONE,
 } from '../components/approval/approvalFormat'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { SkynySays } from '../components/companion/SkynySays'
 import { JsonView } from '../components/run/JsonView'
 import { StatusBadge } from '../components/StatusBadge'
 import { Button } from '../components/ui/Button'
@@ -46,6 +47,8 @@ export function ApprovalPage() {
     refetchInterval: 10_000,
   })
   const latest = run.data?.stages.find((s) => s.id === a?.stageRunId)?.approval
+  // Lo último que decidiste aquí: Skyny reacciona (SY-C).
+  const [decided, setDecided] = useState<{ id: string; action: ApprovalAction } | null>(null)
 
   if (approval.isPending) return <TableSkeleton label="la aprobación" columns={3} rows={4} />
   if (!a) return <ErrorMessage error={approval.error} />
@@ -129,7 +132,10 @@ export function ApprovalPage() {
         </section>
       )}
 
-      {a.status === 'PENDING' && <DecisionPanel approval={a} />}
+      {decided?.id === a.id && <SkynySays {...DECISION_REACTION[decided.action]} />}
+      {a.status === 'PENDING' && (
+        <DecisionPanel approval={a} onDecided={(action) => setDecided({ id: a.id, action })} />
+      )}
 
       {a.evidence.changesRequested && (
         <section className="card" aria-labelledby="previous-title">
@@ -315,7 +321,21 @@ const REQUIRES_COMMENT: Record<ApprovalAction, string | null> = {
  * Decidir: un comentario (obligatorio para rechazar, pedir cambios y comentar) y las cuatro
  * acciones. Aprobar algo de riesgo alto pide confirmarlo.
  */
-function DecisionPanel({ approval }: { approval: ApprovalView }) {
+/** Cómo reacciona Skyny a cada decisión: salta al aprobar y asiente serio al resto. */
+const DECISION_REACTION: Record<ApprovalAction, { text: string; gesture: 'hop' | 'nod' }> = {
+  APPROVE: { text: '¡Gracias! Sigo con ello.', gesture: 'hop' },
+  REJECT: { text: 'Entendido: lo paro aquí.', gesture: 'nod' },
+  REQUEST_CHANGES: { text: 'Vale: le paso tus cambios a la fase que corrige.', gesture: 'nod' },
+  COMMENT: { text: 'Anotado.', gesture: 'nod' },
+}
+
+function DecisionPanel({
+  approval,
+  onDecided,
+}: {
+  approval: ApprovalView
+  onDecided: (action: ApprovalAction) => void
+}) {
   const queryClient = useQueryClient()
   const [comment, setComment] = useState('')
   const [missing, setMissing] = useState<string | null>(null)
@@ -323,7 +343,8 @@ function DecisionPanel({ approval }: { approval: ApprovalView }) {
   const decide = useMutation({
     mutationFn: (action: ApprovalAction) =>
       api.decideApproval(approval.id, action, comment.trim() || undefined),
-    onSuccess: (view) => {
+    onSuccess: (view, action) => {
+      onDecided(action)
       queryClient.setQueryData(['approval', approval.id], view)
       setComment('')
       setConfirming(false)

@@ -32,15 +32,47 @@ export function peekText(state: CompanionState, approvals: number): string {
   }
 }
 
-/** «Hola, soy Skyny. Hay 2 ejecuciones en marcha y 1 aprobación esperándote.» */
-export function helloText(runs: number, approvals: number): string {
+/** Desde cuántas ejecuciones seguidas sin fallos lo cuenta el saludo. */
+export const STREAK_FROM = 3
+
+/**
+ * «Hola, soy Skyny. Hay 2 ejecuciones en marcha y 1 aprobación esperándote.» Sin nada en marcha,
+ * la invitación cambia con la hora (`hour`, de 0 a 23, si se da), y con una racha de `STREAK_FROM` o más
+ * ejecuciones bien seguidas, la cuenta.
+ */
+export function helloText(runs: number, approvals: number, hour?: number, streak = 0): string {
   const parts = [
     runs > 0 && `${runs} ${runs === 1 ? 'ejecución en marcha' : 'ejecuciones en marcha'}`,
     approvals > 0 &&
       `${approvals} ${approvals === 1 ? 'aprobación esperándote' : 'aprobaciones esperándote'}`,
   ].filter(Boolean)
-  if (parts.length === 0) return 'Hola, soy Skyny. No hay nada en marcha: ¿lanzamos algo?'
-  return `Hola, soy Skyny. Hay ${parts.join(' y ')}.`
+  const news =
+    parts.length > 0 ? `Hay ${parts.join(' y ')}.` : `No hay nada en marcha: ${invitation(hour)}`
+  const run = streak >= STREAK_FROM ? ` Llevas ${streak} ejecuciones seguidas sin fallos. 🎉` : ''
+  return `Hola, soy Skyny. ${news}${run}`
+}
+
+function invitation(hour: number | undefined): string {
+  if (hour == null) return '¿lanzamos algo?'
+  if (hour >= 6 && hour < 14) return '¿empezamos el día lanzando algo?'
+  if (hour >= 14 && hour < 21) return '¿lanzamos algo?'
+  return 'es tarde, ¿lo dejamos para mañana?'
+}
+
+/**
+ * Cuántas ejecuciones han terminado bien seguidas, de la última hacia atrás: las canceladas no
+ * cortan la racha, un fallo sí, y las que siguen en marcha no cuentan.
+ */
+export function successStreak(runs: Pick<Run, 'status' | 'finishedAt'>[]): number {
+  const done = runs
+    .filter((r) => r.finishedAt != null)
+    .sort((a, b) => Date.parse(b.finishedAt!) - Date.parse(a.finishedAt!))
+  let streak = 0
+  for (const r of done) {
+    if (r.status === 'FAILED') break
+    if (r.status === 'SUCCEEDED') streak += 1
+  }
+  return streak
 }
 
 /** La cara de un grupo de ejecuciones (un proyecto): la más fuerte de las que están en marcha. */

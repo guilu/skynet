@@ -13,6 +13,7 @@ Plan del hito CO: `plans/estudio-companion.md` (carpeta de proyecto), aprobado e
 | CO-C | la mascota en las páginas (Dashboard, proyecto, ejecución, listas, Uso) y los avisos fuera de la pestaña |
 | SY-A | Skyny v3: dibujo nuevo, color por estado, Reposo con animación idle, tres tamaños y accesorios de temporada |
 | SY-B | Skyny como icono de la app: favicon, favicon de estado, iconos de iOS y Android (con maskable) y marca de la barra lateral |
+| SY-C | interacciones: ojos que siguen al cursor, se tapa los ojos en el login, frases al pulsarla, se despierta, confeti, reacciones, editor, carga, cuota apurada y saludo por hora y racha |
 
 ## Componente
 
@@ -23,6 +24,8 @@ import { Companion } from './components/companion/Companion'
 <Companion state="waiting" size={144} label="Mascota de Skynet" /> // se anuncia como imagen
 <Companion state="success" size={30} still />                  // quieta (listas, nodos, galerías)
 <Companion state="calm" size={92} season="christmas" />         // fuerza un accesorio (null: ninguno)
+<Companion state="calm" size={128} look pose="cover" />          // sigue al cursor y se tapa los ojos
+<Companion state="calm" size={80} gesture="hop" sweat />         // gesto de una vez y gotita de sudor
 ```
 
 - **Colores.** El cuerpo es un degradado de `--c-hi` a `--c-lo`, que cambian con el estado: Reposo y Revisando usan `--primary` (siguen al acento de UI-G), Pensando `--live`, Ejecutando `--skyny-orange`, Éxito `--ok`, Error `--bad`, Te necesita `--skyny-yellow`, y los demás grises. Las bandas, el visor, los nodos y los ojos usan `--companion-band`, `--companion-visor`, `--companion-node`, `--companion-eye` y `--companion-glow`. Cada instancia define sus propios degradados, máscara y filtro con `useId`.
@@ -113,6 +116,33 @@ Skyny lleva un sombrero según la fecha (`season.ts`, hora local, se mira al mon
 | Sombrero de paja (verano) | julio y agosto |
 
 Solo sale desde 32 px (nunca en listas, grafo ni favicon). Se quita con «Accesorios de temporada» en Ajustes › Companion, donde también se ven los tres. `season` en el componente fuerza uno o ninguno (`null`).
+
+## Interacciones (SY-C)
+
+Lote 1 del censo de `plans/siguiente-hito-sy.md`. Todo en el navegador, sin backend nuevo.
+
+- **Props del componente.**
+  - `gesture`: un gesto de una vez encima de la expresión: `hop` (saltito con ojos de risa), `nod` (asiente serio, ojos «– –») y `yawn` (bosteza estirando las manos, ojos cerrados). `useGesture` (en `gesture.ts`) lo lanza y lo quita al terminar (`GESTURE_MS`).
+  - `pose`: las manos sobre el visor. `cover` tapa los dos ojos; `peek` deja ver el derecho, de reojo.
+  - `look`: los ojos siguen al cursor y al foco del teclado, hasta 4 unidades (`lookOffset` en `look.ts`). Solo en grande y sin «reducir movimiento»; mueve el grupo `.companion-gaze` sin volver a pintar.
+  - `sweat`: gotita de sudor (no sale en pequeño).
+- **Dónde se ven.**
+
+| # | Interacción | Dónde |
+|---|---|---|
+| 1 | Los ojos siguen al cursor o al foco | login, mascota que asoma, saludo, Ajustes |
+| 2 | Se tapa los ojos al escribir la contraseña y mira de reojo si la muestras (botón del ojo) | login |
+| 3 | Al pulsarla da un saltito y dice una frase (`SKYNY_QUIPS`, por turnos, 5 s) | mascota que asoma (Dashboard, Proyecto, Uso) y saludo |
+| 4 | Dormida (Inactivo), se despierta con un bostezo al mover el ratón, teclear o volver a la pestaña | barra superior y Dashboard |
+| 5 | Confeti a pantalla completa (1,6 s) si la ejecución que miras termina bien; la banda salta | ejecución (`useCelebration`, `Celebration`) |
+| 6 | Reacciona a tu decisión: salta al aprobar («¡Gracias! Sigo con ello.») y asiente al rechazar, pedir cambios o comentar | aprobación (`SkynySays`) |
+| 7 | Cara de lo que ve: Pensando al validar, Error si hay errores, Reposo si no; salta al publicar | editor de workflows (Problemas) y versión publicada |
+| 8 | Skyny Ejecutando en lugar del «Cargando…» suelto (`SkynyLoading`) | arranque de la web, agente, evento y diff |
+| 9 | Gotita de sudor con alguna alerta de cuota (las de CU: 90 % o por encima del ritmo semanal) | barra superior, Dashboard y Uso |
+| 10 | El saludo cambia con la hora si no hay nada en marcha y cuenta la racha («Llevas 5 ejecuciones seguidas sin fallos») desde 3 (`successStreak`, últimas 20) | saludo del Dashboard |
+
+- **Movimiento.** Con «reducir movimiento» no hay gestos, ni transiciones de las manos, ni seguimiento de los ojos, ni confeti; las caras de los gestos y las poses sí cambian.
+- **Ajustes › Companion.** Bajo la mascota grande hay botones para ver los gestos (Saltito, Asentir, Bostezo), las poses (Taparse los ojos, De reojo) y la gotita (Sudando).
 
 ## En las páginas y fuera de la pestaña (CO-C)
 

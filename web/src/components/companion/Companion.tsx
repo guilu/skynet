@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
   SKYNY_BANDS,
   SKYNY_BODY,
@@ -7,6 +7,8 @@ import {
   SKYNY_VISOR,
 } from '../../lib/brand'
 import { cn } from '../../lib/cn'
+import type { Gesture } from './gesture'
+import { lookOffset, prefersReducedMotion } from './look'
 import { useSeason, type Season } from './season'
 import { companionLabel, type CompanionState } from './state'
 
@@ -30,6 +32,10 @@ const VISOR = SKYNY_VISOR
  * Con `label` se anuncia como imagen; sin él es decorativa y el texto va al lado. `still` la deja
  * quieta salvo al pasar el ratón (listas, nodos, galerías). `season` fuerza un accesorio (o
  * ninguno con null); si no se pasa, sale el de la fecha salvo que se haya quitado en Ajustes.
+ *
+ * Interacciones (SY-C): `gesture` hace un gesto de una vez encima de la expresión; `pose` le tapa
+ * los ojos con las manos (o solo uno, para mirar de reojo); `look` hace que los ojos sigan al
+ * cursor y al foco del teclado (solo en grande); `sweat` le pone una gotita de sudor.
  */
 export function Companion({
   state,
@@ -37,6 +43,10 @@ export function Companion({
   label,
   still = false,
   season,
+  gesture = null,
+  pose,
+  look = false,
+  sweat = false,
   className,
 }: {
   state: CompanionState
@@ -44,12 +54,19 @@ export function Companion({
   label?: string
   still?: boolean
   season?: Season | null
+  gesture?: Gesture | null
+  pose?: Pose
+  look?: boolean
+  sweat?: boolean
   className?: string
 }) {
   const [shown, setShown] = useState(state)
   const [opening, setOpening] = useState(false)
   const today = useSeason()
   const id = useId()
+  const svg = useRef<SVGSVGElement>(null)
+  const gaze = useRef<SVGGElement>(null)
+  const following = look && size >= LARGE
 
   // Cierra el visor, cambia los ojos a mitad del parpadeo y lo vuelve a abrir.
   useEffect(() => {
@@ -67,14 +84,56 @@ export function Companion({
     return () => window.clearTimeout(t)
   }, [opening])
 
+  // Los ojos miran hacia el cursor o hacia lo que tiene el foco, sin volver a pintar.
+  useEffect(() => {
+    if (!following || prefersReducedMotion()) return
+    let frame = 0
+    let x = 0
+    let y = 0
+    const apply = () => {
+      frame = 0
+      const box = svg.current?.getBoundingClientRect()
+      if (!box || !gaze.current) return
+      const [dx, dy] = lookOffset(box, x, y)
+      gaze.current.style.transform = `translate(${dx}px, ${dy}px)`
+    }
+    const aim = (px: number, py: number) => {
+      x = px
+      y = py
+      if (!frame) frame = window.requestAnimationFrame(apply)
+    }
+    const onMove = (e: PointerEvent) => aim(e.clientX, e.clientY)
+    const onFocus = (e: FocusEvent) => {
+      if (!(e.target instanceof Element)) return
+      const r = e.target.getBoundingClientRect()
+      aim(r.left + r.width / 2, r.top + r.height / 2)
+    }
+    window.addEventListener('pointermove', onMove, { passive: true })
+    document.addEventListener('focusin', onFocus)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      document.removeEventListener('focusin', onFocus)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
+  }, [following])
+
   const swapping = state !== shown || opening
   const small = size < SMALL
   const hat = small ? null : season === undefined ? today : season
   const ref = (name: string) => `url(#${id}-${name})`
   return (
     <svg
-      className={cn('companion', swapping && 'companion-swap', className)}
+      ref={svg}
+      className={cn(
+        'companion',
+        swapping && 'companion-swap',
+        gesture && 'companion-gesture',
+        className,
+      )}
       data-state={shown}
+      data-gesture={gesture ?? undefined}
+      data-pose={pose}
+      data-look={following || undefined}
       data-size={small ? 's' : size < LARGE ? 'm' : 'l'}
       data-still={still || undefined}
       data-small={small || undefined}
@@ -167,8 +226,10 @@ export function Companion({
             </g>
           )}
         </g>
-        <g className="companion-eyes" filter={small ? undefined : ref('glow')}>
-          <Eyes state={shown} small={small} />
+        <g ref={gaze} className="companion-gaze">
+          <g className="companion-eyes" filter={small ? undefined : ref('glow')}>
+            <Eyes state={gesture ? GESTURE_EYES[gesture] : shown} small={small} />
+          </g>
         </g>
         <g className="companion-hand companion-hand-l">
           <Node {...HAND_L} small={small} fill={ref('node')} />
@@ -178,8 +239,24 @@ export function Companion({
         </g>
       </g>
       {!small && <Effects state={shown} />}
+      {!small && sweat && (
+        <path
+          className="companion-fx companion-fx-sweat"
+          d="M86 22 Q80 32 80 36 A6 6 0 0 0 92 36 Q92 32 86 22 Z"
+        />
+      )}
     </svg>
   )
+}
+
+/** Manos sobre el visor: `cover` tapa los dos ojos y `peek` deja ver el derecho, de reojo. */
+export type Pose = 'cover' | 'peek'
+
+/** Los ojos de cada gesto: se ríe al saltar, asiente serio y bosteza con los ojos cerrados. */
+const GESTURE_EYES: Record<Gesture, CompanionState> = {
+  hop: 'success',
+  nod: 'paused',
+  yawn: 'sleeping',
 }
 
 /** Un nodo del logo: bola blanca y, en grande, con su degradado y su brillo. */

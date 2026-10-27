@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import runPage from '../../../../fixtures/contracts/run-page.json'
 import type { Run, StageRun } from '../../api'
-import { bandText, groupExpression, helloText, peekText } from './peek'
+import { bandText, groupExpression, helloText, peekText, successStreak } from './peek'
 
 const NOW = Date.parse('2026-10-05T10:00:00Z')
 const running = runPage.items[0] as unknown as Run
@@ -41,6 +41,55 @@ describe('Saludo del dashboard', () => {
 
   it('propone lanzar algo si no hay nada', () => {
     expect(helloText(0, 0)).toBe('Hola, soy Skyny. No hay nada en marcha: ¿lanzamos algo?')
+  })
+
+  it('cambia la invitación con la hora', () => {
+    expect(helloText(0, 0, 9)).toBe(
+      'Hola, soy Skyny. No hay nada en marcha: ¿empezamos el día lanzando algo?',
+    )
+    expect(helloText(0, 0, 14)).toBe('Hola, soy Skyny. No hay nada en marcha: ¿lanzamos algo?')
+    expect(helloText(0, 0, 23)).toBe(
+      'Hola, soy Skyny. No hay nada en marcha: es tarde, ¿lo dejamos para mañana?',
+    )
+    expect(helloText(0, 0, 5)).toContain('es tarde')
+    // Con algo en marcha, la hora no cambia nada.
+    expect(helloText(1, 0, 23)).toBe('Hola, soy Skyny. Hay 1 ejecución en marcha.')
+  })
+
+  it('cuenta la racha sin fallos desde 3', () => {
+    expect(helloText(0, 0, 14, 2)).not.toContain('seguidas')
+    expect(helloText(1, 0, 14, 5)).toBe(
+      'Hola, soy Skyny. Hay 1 ejecución en marcha. Llevas 5 ejecuciones seguidas sin fallos. 🎉',
+    )
+  })
+})
+
+describe('Racha sin fallos', () => {
+  const run = (status: Run['status'], finishedAt: string | null) => ({ status, finishedAt })
+
+  it('cuenta las terminadas bien desde la última hasta un fallo', () => {
+    expect(
+      successStreak([
+        run('SUCCEEDED', '2026-10-26T10:00:00Z'),
+        run('FAILED', '2026-10-26T09:00:00Z'),
+        run('SUCCEEDED', '2026-10-26T11:00:00Z'),
+        run('SUCCEEDED', '2026-10-26T12:00:00Z'),
+        run('SUCCEEDED', '2026-10-26T08:00:00Z'),
+      ]),
+    ).toBe(3)
+  })
+
+  it('las canceladas no la cortan y las que siguen en marcha no cuentan', () => {
+    expect(
+      successStreak([
+        run('RUNNING', null),
+        run('SUCCEEDED', '2026-10-26T12:00:00Z'),
+        run('CANCELLED', '2026-10-26T11:00:00Z'),
+        run('SUCCEEDED', '2026-10-26T10:00:00Z'),
+      ]),
+    ).toBe(2)
+    expect(successStreak([run('FAILED', '2026-10-26T12:00:00Z')])).toBe(0)
+    expect(successStreak([])).toBe(0)
   })
 })
 

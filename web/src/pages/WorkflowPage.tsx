@@ -11,6 +11,7 @@ import { Sheet } from '../components/ui/Sheet'
 import { LinesSkeleton } from '../components/ui/Skeleton'
 import { DefinitionEditor } from '../components/workflow/DefinitionEditor'
 import { ImportButton } from '../components/workflow/ImportButton'
+import { SkynySays } from '../components/companion/SkynySays'
 import { ProblemList } from '../components/workflow/ProblemList'
 import { VersionPill } from '../components/workflow/status'
 import { formatDateTime } from '../format'
@@ -163,6 +164,8 @@ function VersionPanel({
   const [edited, setEdited] = useState<{ stamp: string; text: string } | null>(null)
   const [publishing, setPublishing] = useState(false)
   const [discarding, setDiscarding] = useState(false)
+  // La versión que acabas de publicar aquí: Skyny lo celebra (SY-C).
+  const [published, setPublished] = useState<string | null>(null)
   const saved = detail.data
   const stamp = saved ? `${saved.id}:${saved.revision}` : ''
   const text = edited?.stamp === stamp ? edited.text : (saved?.sourceYaml ?? null)
@@ -181,6 +184,7 @@ function VersionPanel({
     onSuccess: (next) => {
       store(next)
       setPublishing(false)
+      setPublished(next.id)
     },
   })
   const discard = useMutation({
@@ -218,6 +222,12 @@ function VersionPanel({
 
   return (
     <>
+      {published === saved.id && (
+        <SkynySays
+          gesture="hop"
+          text={`¡Publicado! ${saved.key} v${saved.version} ya se puede lanzar.`}
+        />
+      )}
       {isDraft && (
         <div className="version-status">
           <span className="muted small" aria-live="polite">

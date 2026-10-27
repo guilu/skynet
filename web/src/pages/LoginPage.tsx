@@ -1,4 +1,5 @@
 import { useMutation } from '@tanstack/react-query'
+import { Eye, EyeOff } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, type Session } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
@@ -6,10 +7,15 @@ import { Companion } from '../components/companion/Companion'
 import { Button } from '../components/ui/Button'
 import { Pill } from '../components/ui/Pill'
 
-/** Entrada a la web con el usuario único del control plane. */
+/**
+ * Entrada a la web con el usuario único del control plane. Skyny sigue con los ojos lo que haces,
+ * se tapa los ojos mientras escribes la contraseña y mira de reojo si la muestras (SY-C).
+ */
 export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [secret, setSecret] = useState(false)
+  const [reveal, setReveal] = useState(false)
   const heading = useRef<HTMLHeadingElement>(null)
   const login = useMutation({
     mutationFn: () => api.login(username.trim(), password),
@@ -29,7 +35,12 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
     <main className="login">
       <div className="login-card">
         <section className="login-hero" aria-hidden="true">
-          <Companion state="calm" size={128} />
+          <Companion
+            state="calm"
+            size={128}
+            look
+            pose={reveal ? 'peek' : secret ? 'cover' : undefined}
+          />
           <p className="login-tagline">Tus agentes, a la vista.</p>
           <ul className="login-states">
             <li>
@@ -59,16 +70,33 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
                 required
               />
             </label>
-            <label>
-              Contraseña
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-              />
-            </label>
+            <div className="login-password">
+              <label>
+                Contraseña
+                <input
+                  type={reveal ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => setSecret(true)}
+                  onBlur={() => setSecret(false)}
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
+              <button
+                type="button"
+                className="login-reveal"
+                aria-label="Mostrar la clave"
+                aria-pressed={reveal}
+                onClick={() => setReveal((r) => !r)}
+              >
+                {reveal ? (
+                  <EyeOff size={18} strokeWidth={2.25} aria-hidden="true" />
+                ) : (
+                  <Eye size={18} strokeWidth={2.25} aria-hidden="true" />
+                )}
+              </button>
+            </div>
             <Button type="submit" disabled={login.isPending}>
               {login.isPending ? 'Entrando…' : 'Entrar'}
             </Button>

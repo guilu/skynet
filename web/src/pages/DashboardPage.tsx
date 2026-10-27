@@ -68,6 +68,8 @@ export function DashboardPage() {
         <CompanionPeek
           state={companion.expression}
           text={peekText(companion.expression, companion.pendingApprovals)}
+          gesture={companion.gesture}
+          sweat={(data?.quotaWarnings.length ?? 0) > 0}
           className="dash-peek"
         />
         <div className="dash-actions">

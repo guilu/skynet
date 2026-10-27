@@ -90,6 +90,7 @@ export function UsagePage() {
           <CompanionPeek
             state={alerts.length > 0 ? 'paused' : 'calm'}
             text={alerts.length > 0 ? 'Vamos justos de cuota' : 'Hay cuota de sobra'}
+            sweat={alerts.length > 0}
             size={72}
             className="page-peek"
           />

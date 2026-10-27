@@ -13,6 +13,8 @@ import { applyEvent } from '../components/run/applyEvent'
 import { headlineAgent } from '../components/run/headlineAgent'
 import { Inspector } from '../components/run/Inspector'
 import { RunHeader } from '../components/run/RunHeader'
+import { Celebration } from '../components/companion/Celebration'
+import { useCelebration } from '../components/companion/useCelebration'
 import { RunBand } from '../components/companion/RunBand'
 import { ACTIVITY_VIEWS, useRunSelection, type RunPane } from '../components/run/useRunSelection'
 import { TabList, TabPanel, type TabItem } from '../components/ui/Tabs'
@@ -93,6 +95,7 @@ export function RunPage() {
     return runSpans(run.data, (id) => calls.get(id) ?? [])
   }, [run.data, events])
   const now = useNow(run.data?.finishedAt == null)
+  const celebrating = useCelebration(run.data?.status)
   const narrow = useMediaQuery('(max-width: 900px)')
   const panels = useDefaultLayout({ id: 'skynet.run-panels-2', storage: safeStorage })
   const visible = timeline.filter((e) => matchesFilters(e, selection.filters))
@@ -208,7 +211,8 @@ export function RunPage() {
             selectedAgentId={agent?.id}
             onSelectAgent={selectAgent}
           />
-          <RunBand run={run.data} now={now} />
+          <RunBand run={run.data} now={now} gesture={celebrating ? 'hop' : null} />
+          {celebrating && <Celebration />}
           {narrow ? (
             <div className="run-mobile">
               <TabList

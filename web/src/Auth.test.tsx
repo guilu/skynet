@@ -41,6 +41,32 @@ describe('login', () => {
     expect((login[1]!.headers as Record<string, string>)['X-XSRF-TOKEN']).toBe('token-csrf')
   })
 
+  it('Skyny se tapa los ojos con la contraseña y mira de reojo si se muestra', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input) === '/api/auth/session'
+          ? unauthorized()
+          : mockFetch({ '/actuator/health': { status: 'UP' } })(input),
+      ),
+    )
+    const { container } = renderAt('/', <App />)
+    const password = await screen.findByLabelText('Contraseña')
+    const skyny = () => container.querySelector<SVGSVGElement>('.login-hero svg.companion')!
+    expect(skyny().dataset.pose).toBeUndefined()
+    fireEvent.focus(password)
+    expect(skyny().dataset.pose).toBe('cover')
+    const reveal = screen.getByRole('button', { name: 'Mostrar la clave' })
+    fireEvent.click(reveal)
+    expect(password).toHaveAttribute('type', 'text')
+    expect(reveal).toHaveAttribute('aria-pressed', 'true')
+    expect(skyny().dataset.pose).toBe('peek')
+    fireEvent.click(reveal)
+    fireEvent.blur(password)
+    expect(password).toHaveAttribute('type', 'password')
+    expect(skyny().dataset.pose).toBeUndefined()
+  })
+
   it('un login fallido muestra el motivo y no sale del formulario', async () => {
     vi.stubGlobal(
       'fetch',

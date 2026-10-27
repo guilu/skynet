@@ -3,6 +3,7 @@ import { useEffect, type ReactNode } from 'react'
 import { api, ApiError, SESSION_KEY, UNAUTHORIZED_EVENT, type Session } from '../api'
 import { LoginPage } from '../pages/LoginPage'
 import { ErrorMessage } from './ErrorMessage'
+import { SkynyLoading } from './companion/SkynyLoading'
 
 /**
  * Muestra el login mientras no haya sesión. Si la API responde 401 a mitad (sesión caducada o
@@ -44,6 +45,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
       </main>
     )
   }
-  if (!session.data) return <p className="muted login">Cargando…</p>
+  if (!session.data) return <SkynyLoading className="login" size={64} />
   return <>{children}</>
 }
