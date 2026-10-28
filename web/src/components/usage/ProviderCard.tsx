@@ -3,6 +3,7 @@ import type { UsageWindow } from '../../api'
 import { providerName } from '../../format'
 import { cn } from '../../lib/cn'
 import { Pill } from '../ui/Pill'
+import { ProviderLogo } from './ProviderLogo'
 import {
   formatPercent,
   freshness,
@@ -12,12 +13,6 @@ import {
   renewsText,
   windowLabel,
 } from './quotaFormat'
-
-const LOGOS: Record<string, string> = {
-  'claude-code': 'C',
-  codex: 'X',
-  antigravity: 'A',
-}
 
 /**
  * Tarjeta de un CLI en la página Uso: versión y plan, su estado según la ventana más gastada y un
@@ -46,7 +41,7 @@ export function ProviderCard({
     <section className={cn('card prov', stale && 'prov-stale')} aria-label={name}>
       <div className="prov-head">
         <span className={cn('prov-logo', `prov-logo-${provider}`)} aria-hidden="true">
-          {LOGOS[provider] ?? name.charAt(0)}
+          <ProviderLogo provider={provider} name={name} />
         </span>
         <div>
           <h3>{name}</h3>
@@ -90,7 +85,7 @@ function EmptyCard({ provider, version }: { provider: string; version: string | 
     <section className="card prov prov-stale" aria-label={name}>
       <div className="prov-head">
         <span className={cn('prov-logo', `prov-logo-${provider}`)} aria-hidden="true">
-          {LOGOS[provider] ?? name.charAt(0)}
+          <ProviderLogo provider={provider} name={name} />
         </span>
         <div>
           <h3>{name}</h3>
