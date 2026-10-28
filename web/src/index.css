@@ -5847,9 +5847,10 @@
     font-weight: 600;
   }
 
+  /* El naranja arcilla de Anthropic: legible sobre el fondo suave en claro y en oscuro. */
   .prov-logo-claude-code {
     background: var(--warn-soft);
-    color: var(--warn-ink);
+    color: #d97757;
   }
 
   .prov-logo-antigravity {
