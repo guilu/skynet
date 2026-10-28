@@ -6,6 +6,7 @@ import dev.skynet.controlplane.workitem.WorkItem;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -20,6 +21,9 @@ import tools.jackson.databind.json.JsonMapper;
  * {{stages.<fase>.<hijo>.output.<campo>}}}, {@code {{stages.<fase>.status}}} y {@code
  * {{stages.<fase>.exitCode}}} leen los mismos datos que las condiciones: un texto entra tal cual y
  * lo demás como JSON. Lo que falta (una fase omitida, un campo que no devolvió) queda vacío.
+ *
+ * <p>{@code {{project.slug}}} es la clave del proyecto en minúsculas, para nombres de fichero
+ * ({@code docs/skynet/mapa-{{project.slug}}.md}).
  */
 final class PromptRenderer {
 
@@ -50,6 +54,7 @@ final class PromptRenderer {
     values.put("workItem.externalRef", workItem.getExternalRef());
     values.put("project.key", project.getKey());
     values.put("project.name", project.getName());
+    values.put("project.slug", project.getKey().toLowerCase(Locale.ROOT));
     inputs.forEach((name, value) -> values.put("inputs." + name, text(value)));
   }
 

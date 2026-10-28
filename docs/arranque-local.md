@@ -56,6 +56,12 @@ SKYNET_ADMIN_PASSWORD=<contraseña> scripts/seed-workflows.sh
 
 Publica cada `workflows/*.yaml` como su v1 y se salta los que ya existen. Necesita `curl` y `jq`.
 
+Cuando cambia un workflow inicial del repositorio, `--actualizar` lo publica como versión nueva en los que ya existen. Deja como están los que ya coinciden y los que tienen un borrador abierto. Pasa las mismas variables de modelos que al publicarlos, o los verá cambiados:
+
+```bash
+SKYNET_ADMIN_PASSWORD=<contraseña> scripts/seed-workflows.sh --actualizar
+```
+
 `SKYNET_URL` va por defecto a `http://localhost:8080`, y la contraseña se lee de `deploy/.env` si no la pasas.
 
 **Los modelos** salen de [`workflows/modelos.env`](../workflows/modelos.env), con una variable por proveedor y papel: `CLAUDE_FUERTE`, `CODEX_RAPIDO`, `AGY_FUERTE`… Vacía, la línea `model:` desaparece y el CLI usa su modelo por defecto. Una variable del entorno con el mismo nombre manda sobre el fichero:
@@ -84,7 +90,7 @@ Los proyectos y los repositorios no se siembran.
 | Workflow | Para qué | Fases (proveedor) |
 |---|---|---|
 | `adhoc` | Una tarea suelta con tu prompt | agente (el que elijas al lanzar) |
-| `conocer-repositorio` | El primer contacto con un proyecto | comandos de compilar y de tests (Codex) → mapa en `docs/skynet/mapa.md` (Antigravity) |
+| `conocer-repositorio` | El primer contacto con un proyecto | comandos de compilar y de tests (Codex) → mapa en `docs/skynet/mapa-<clave>.md`, con la clave del proyecto en minúsculas, p. ej. `mapa-demo.md` (Antigravity) |
 | `implementar-tarea` | Una tarea bien definida | explorar (Antigravity, solo lectura) → implementar con los tests en verde (Claude Code) → revisión de calidad (Codex) y de seguridad (Antigravity) a la vez → corregir si algo bloquea (Claude Code) |
 | `corregir-bug` | Un fallo que se puede reproducir | test que falla (Codex) → corrección con los tests en verde (Claude Code) → buscar regresiones (Antigravity) → ajustar si hay alguna (Claude Code) |
 | `revisar-codigo` | Una auditoría sin cambios, con un `foco` opcional | arquitectura (Claude Code), tests (Codex) y seguridad (Antigravity) a la vez → un informe con los hallazgos por prioridad (Claude Code) |

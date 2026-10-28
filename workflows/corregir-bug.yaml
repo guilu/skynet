@@ -12,6 +12,7 @@ agents:
 
       {{workItem.description}}
 
+      Si existe docs/skynet/mapa-{{project.slug}}.md (el mapa del repositorio que deja «Conocer un repositorio»), léelo primero.
       Escribe un test automático que falle por culpa del bug y ejecútalo para comprobarlo. No corrijas el bug.
       Devuelve si lo has reproducido, la ruta del test y la causa más probable.
     output:

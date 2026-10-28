@@ -110,7 +110,8 @@ public final class DefinitionParser {
           "workItem.type",
           "workItem.externalRef",
           "project.key",
-          "project.name");
+          "project.name",
+          "project.slug");
 
   /** Ids que chocarían con rutas de la API ({@code /api/workflows/schema}) o de la web. */
   static final Set<String> RESERVED_KEYS = Set.of("schema", "validate", "new");
