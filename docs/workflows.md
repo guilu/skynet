@@ -72,7 +72,7 @@ stages:
 - Al lanzar, lo que pide un agente se recorta a la política del repositorio: solo las herramientas que el repositorio permite (`Bash(git:*)` cabe en `Bash`, al revés no), su modo de permisos solo si no es más permisivo (`plan` < `default`/`dontAsk` < `acceptEdits`) y sus límites rebajados a los del repositorio. Lo que el agente no fija sale de la política y, los límites, de los del lanzamiento.
 
 **`stages[]`:**
-- `id` (obligatorio, único) y `type` (obligatorio): `agent`, `command`, `parallel`, `conditional`, `verification` o `human-approval` (los demás tipos aún no se ejecutan, ver abajo).
+- `id` (obligatorio, único) y `type` (obligatorio): `agent`, `command`, `parallel`, `conditional`, `verification`, `human-approval` o `github-pr` (los demás tipos aún no se ejecutan, ver abajo).
 - `agent`: un agente de `agents`. Sin él, la fase usa la política del repositorio.
 - `prompt`: el de la fase; si falta, el del agente. Uno de los dos tiene que existir.
 - `dependsOn`: fases que tienen que terminar antes. Con `?` al final (`plan?`) es opcional: también vale si esa fase se omite. Entre corchetes va entre comillas (`dependsOn: ["plan?"]`), porque YAML lee `?` como otra cosa.
@@ -85,6 +85,7 @@ stages:
 - `condition`: la fase solo se ejecuta si es verdadera; si es falsa, se omite. Ver «Condiciones».
 - `artifacts`, `checks` y `scope`: lo que Skynet comprueba en el worktree de la fase antes de darla por buena. Ver «Verificación de una fase».
 - `action`, `risk` y `revise`: solo en las fases `type: human-approval`. Ver «Puertas de aprobación».
+- `pullRequest`: solo en las fases `type: github-pr`. Ver «Entrega por PR».
 - `outputSchema`: solo en las fases `type: agent`. La salida estructurada que devuelve la fase, y manda sobre el `output` de su agente, así que un mismo agente sirve en fases con salidas distintas. Es un JSON Schema en línea, como `output`, o la ruta de un fichero del repositorio (`outputSchema: schemas/spec.json`). Ver «Salida de una fase en un fichero».
 
 **Fases `command`:** ejecutan un comando de shell en lugar de un agente, p. ej. los tests después de implementar:
@@ -159,6 +160,7 @@ stages:
   - `<fase>.<hijo>.<campo>`: el de un hijo de una fase `parallel`.
   - `<fase>.<campo>` en una fase `parallel`: solo para campos booleanos; es verdadero si algún hijo devuelve `true`.
   - `inputs.<nombre>`: un dato de entrada.
+  - `repository.github`: verdadero si el repositorio de la ejecución está en GitHub y la App tiene acceso. Así una plantilla con fases `github-pr` sigue funcionando en un repositorio local: esas fases se omiten.
 - **El lenguaje** es un subconjunto de [CEL](https://cel.dev): `&&`, `||`, `!`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in` con una lista (`review.score in [4, 5]`), paréntesis, números, textos entre comillas, `true`, `false` y `null`. Un dato que no existe (un hijo omitido, un campo que el agente no devolvió) vale `null`, y `null` cuenta como falso.
 - Al publicar se comprueba cada condición: la sintaxis, que cada dato exista y sea de una fase de la que depende, y los tipos (no se compara un número con un texto). Un error dice qué falla y en qué línea y columna.
 - Cada evaluación deja `stage.condition.evaluated` con la condición, los valores leídos y el resultado.
@@ -243,6 +245,28 @@ stages:
 - `diff`, `commit` y `scope` miden desde el commit con el que se creó el worktree.
 - En la ejecución, su única invocación tiene proveedor `verification`: no arranca ningún proceso, termina bien si pasan las comprobaciones y falla con los motivos si no. No se continúa ni se reintenta por separado.
 - La fase siguiente continúa el mismo worktree.
+
+**Entrega por PR.** Una fase `type: github-pr` sube el worktree que hereda a GitHub y abre una PR con lo que ha hecho el workflow (EN-A). Necesita la GitHub App ([`github.md`](github.md)) instalada en el repositorio:
+
+```yaml
+  - id: pr
+    type: github-pr
+    dependsOn: [revisar]
+    condition: repository.github       # en un repositorio sin GitHub, se omite
+    pullRequest:
+      title: "{{workItem.key}}: {{stages.plan.output.summary}}"
+      body: Generado por Skynet.       # va antes de las evidencias
+      base: main                       # por defecto, la rama por defecto en GitHub
+      draft: false
+      labels: [skynet]
+```
+
+- Continúa el worktree de la fase de la que depende, como un `command`, y la siguiente puede seguir en él. No admite `agent` ni `prompt`, ni `workspace: isolated-worktree`.
+- El runner confirma lo que el agente dejara sin confirmar y sube `HEAD` a la rama `skynet/<clave del trabajo>`, siempre la misma para un trabajo: los reintentos actualizan la misma PR. No sube nada que toque `.github/workflows/`: la fase falla con el motivo.
+- El token lo pide el runner justo antes del push. Está limitado al repositorio y a `contents: write`, va a git como cabecera y no se escribe en ningún sitio.
+- Después, el control plane abre la PR (o actualiza la que ya hay abierta de esa rama). La descripción lleva el trabajo, cada fase anterior con el resumen de su salida (`summary`) y sus comprobaciones, y el coste. Con `SKYNET_PUBLIC_URL`, también un enlace a la ejecución.
+- La fase termina bien cuando la PR está abierta. Si GitHub no responde, se reintenta con espera creciente; si dice que no (p. ej. 422) o falla 5 veces, la fase falla con el motivo.
+- En la ejecución es una invocación más de su fase, con proveedor `git-push`: una herramienta `git push` con su salida. Eventos `agent.git.pushed` (rama, commit y cuántos commits), `stage.github.pr.opened`, `stage.github.pr.updated` y `stage.github.pr.failed`. `GET /api/workflow-runs/{id}/pull-requests` da la PR de la ejecución.
 
 **Puertas de aprobación.** Una fase `type: human-approval` para la ejecución hasta que alguien decide, p. ej. aprobar el plan antes de implementar:
 
@@ -344,7 +368,9 @@ El YAML admite ya todo §11 para poder escribir los workflows de la especificaci
 
 | Qué | Hito |
 |---|---|
-| Fases `github-pr`, `github-check`, `github-merge` y `merge` | S2 |
+| Fase `github-check` | EN-B |
+| Fase `github-merge` | EN-C |
+| Fase `merge` (sin GitHub) | sin fecha |
 | `promptTemplate` | S3 |
 | `provider: opencode` | sin fecha |
 | Fase `deploy` | sin fecha |

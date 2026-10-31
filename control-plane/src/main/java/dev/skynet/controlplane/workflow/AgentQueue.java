@@ -76,9 +76,11 @@ class AgentQueue {
             ? AgentRun.queued(
                 stage.getId(),
                 repository.getId(),
-                invocation.command() == null
-                    ? policy.providerOrDefault()
-                    : AgentRun.PROVIDER_COMMAND,
+                invocation.push() != null
+                    ? AgentRun.PROVIDER_PUSH
+                    : invocation.command() == null
+                        ? policy.providerOrDefault()
+                        : AgentRun.PROVIDER_COMMAND,
                 invocation.sessionId(),
                 invocation.workspaceId(),
                 limits,
@@ -94,7 +96,8 @@ class AgentQueue {
     queued.forChild(childKey);
     String memory = memoryMode(invocation, policy);
     queued.useMemory(memory);
-    String outputSchema = invocation.command() == null ? policy.outputSchema() : null;
+    boolean noAgent = invocation.command() != null || invocation.push() != null;
+    String outputSchema = noAgent ? null : policy.outputSchema();
     queued.expectOutput(outputSchema);
     AgentRun agent = agentRuns.save(queued);
     Prompt prompt =
@@ -118,6 +121,14 @@ class AgentQueue {
     }
     if (invocation.command() != null) {
       spawned.put("command", invocation.command());
+    }
+    if (invocation.push() != null) {
+      Map<String, Object> push = new LinkedHashMap<>();
+      push.put("remoteUrl", invocation.push().remoteUrl());
+      push.put("branch", invocation.push().branch());
+      push.put("base", invocation.push().base());
+      push.put("force", invocation.push().force());
+      spawned.put("push", push);
     }
     if (outputSchema != null) {
       spawned.put("outputSchema", outputSchema);
@@ -185,7 +196,8 @@ class AgentQueue {
                 invocation.command(),
                 outputSchema,
                 agent.isCommand() ? null : agent.getProvider(),
-                memory == null ? null : memory.toLowerCase(Locale.ROOT)),
+                memory == null ? null : memory.toLowerCase(Locale.ROOT),
+                invocation.push()),
             invocation.runnerId()));
     return agent;
   }
@@ -196,7 +208,9 @@ class AgentQueue {
    */
   private static String memoryMode(Invocation invocation, EffectivePolicy policy) {
     String mode = policy.memoryOrDefault();
-    if (invocation.command() != null || StageDefinition.MEMORY_OFF.equals(mode)) {
+    if (invocation.command() != null
+        || invocation.push() != null
+        || StageDefinition.MEMORY_OFF.equals(mode)) {
       return null;
     }
     return mode.toUpperCase(Locale.ROOT);
@@ -208,7 +222,7 @@ class AgentQueue {
    * CLI. Un comando no tiene modelo.
    */
   private String model(Invocation invocation, String provider) {
-    if (invocation.command() != null) {
+    if (invocation.command() != null || invocation.push() != null) {
       return null;
     }
     String model = invocation.policy().model();

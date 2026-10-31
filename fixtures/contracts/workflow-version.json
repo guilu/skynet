@@ -71,6 +71,7 @@
       "retry" : null,
       "phase" : null,
       "memory" : null,
+      "pullRequest" : null,
       "timeoutSeconds" : null
     }, {
       "id" : "fix",
@@ -98,6 +99,7 @@
       },
       "phase" : null,
       "memory" : null,
+      "pullRequest" : null,
       "timeoutSeconds" : null
     }, {
       "id" : "verify",
@@ -137,6 +139,7 @@
       "retry" : null,
       "phase" : null,
       "memory" : null,
+      "pullRequest" : null,
       "timeoutSeconds" : 1800
     } ]
   }

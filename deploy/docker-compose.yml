@@ -73,6 +73,7 @@ services:
       SKYNET_GITHUB_WEBHOOK_SECRET: ${SKYNET_GITHUB_WEBHOOK_SECRET:-}
       SKYNET_GITHUB_API_URL: ${SKYNET_GITHUB_API_URL:-https://api.github.com}
       SKYNET_GITHUB_WEB_URL: ${SKYNET_GITHUB_WEB_URL:-}
+      SKYNET_PUBLIC_URL: ${SKYNET_PUBLIC_URL:-}
     volumes:
       - artifacts-data:/data/artifacts
       - ${SKYNET_GITHUB_PRIVATE_KEY_FILE:-/dev/null}:/run/skynet/github-app.pem:ro

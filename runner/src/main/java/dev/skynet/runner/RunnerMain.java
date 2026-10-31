@@ -94,18 +94,19 @@ public final class RunnerMain {
             new ArtifactSender(journal, client, Duration.ofSeconds(1), Duration.ofSeconds(5));
         AgentExecutor executor =
             new AgentExecutor(
-                journal,
-                supervisor,
-                new WorkspaceManager(config.workspacesDir()),
-                providers,
-                System.getenv(),
-                config.logsDir(),
-                config.cancelGrace(),
-                sender::wakeUp,
-                new ArtifactSpool(journal, config.artifactsDir(), artifactSender::wakeUp),
-                config.declaredFiles(),
-                new MemorySessions(
-                    client::memoryToken, config.controlPlane(), MemorySessions.currentRunner()));
+                    journal,
+                    supervisor,
+                    new WorkspaceManager(config.workspacesDir()),
+                    providers,
+                    System.getenv(),
+                    config.logsDir(),
+                    config.cancelGrace(),
+                    sender::wakeUp,
+                    new ArtifactSpool(journal, config.artifactsDir(), artifactSender::wakeUp),
+                    config.declaredFiles(),
+                    new MemorySessions(
+                        client::memoryToken, config.controlPlane(), MemorySessions.currentRunner()))
+                .pushTokens(id -> client.pushToken(id).token());
         RunnerDaemon daemon =
             new RunnerDaemon(
                 config,

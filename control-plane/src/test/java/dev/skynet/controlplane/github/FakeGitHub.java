@@ -59,6 +59,18 @@ public final class FakeGitHub implements AutoCloseable {
   /** Si no es 0, {@code GET /app} responde con este código (p. ej. 401: credenciales malas). */
   volatile int appStatus;
 
+  /** Las PR de cada repositorio ({@code owner/nombre}), por número (EN-A). */
+  final Map<String, Map<Long, Map<String, Object>>> pulls = new ConcurrentHashMap<>();
+
+  /** Las peticiones a {@code /repos/…}: método, ruta y cuerpo, en orden. */
+  final List<String> repoRequests = new CopyOnWriteArrayList<>();
+
+  /** Si no es 0, abrir una PR responde con este código (p. ej. 422 o 502). */
+  volatile int createPullStatus;
+
+  /** El commit de cada rama, para la cabeza de sus PR; si no está, uno de ceros. */
+  final Map<String, String> branchShas = new ConcurrentHashMap<>();
+
   public FakeGitHub() {
     try {
       server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -94,6 +106,15 @@ public final class FakeGitHub implements AutoCloseable {
     hookDeliveries.clear();
     redelivered.clear();
     appStatus = 0;
+    pulls.clear();
+    repoRequests.clear();
+    createPullStatus = 0;
+    branchShas.clear();
+  }
+
+  /** Una PR del repositorio {@code fullName}, o {@code null}. */
+  Map<String, Object> pull(String fullName, long number) {
+    return pulls.getOrDefault(fullName, Map.of()).get(number);
   }
 
   /** Un intento de entrega de la App, como lo lista {@code GET /app/hook/deliveries}. */
@@ -120,6 +141,10 @@ public final class FakeGitHub implements AutoCloseable {
           String.valueOf(exchange.getRequestHeaders().getFirst("Authorization"))
               .replaceFirst("^Bearer ", "");
       Matcher token = TOKEN_PATH.matcher(path);
+      if (path.startsWith("/repos/")) {
+        repos(exchange, method, path, bearer);
+        return;
+      }
       if (path.equals("/installation/repositories") && method.equals("GET")) {
         Long installation = issuedTokens.get(bearer);
         if (installation == null || !installations.containsKey(installation)) {
@@ -206,6 +231,82 @@ public final class FakeGitHub implements AutoCloseable {
       } else {
         send(exchange, 404, Map.of("message", "Not Found"));
       }
+    }
+  }
+
+  private static final Pattern REPO_PATH =
+      Pattern.compile("/repos/([^/]+/[^/]+)(/pulls(?:/(\\d+))?|/issues/(\\d+)/labels)?");
+
+  /** La API de un repositorio con un token de instalación: el repositorio y sus PR (EN-A). */
+  private void repos(HttpExchange exchange, String method, String path, String bearer)
+      throws IOException {
+    Long installation = issuedTokens.get(bearer);
+    Matcher m = REPO_PATH.matcher(path);
+    if (installation == null || !m.matches()) {
+      send(exchange, installation == null ? 401 : 404, Map.of("message", "Bad credentials"));
+      return;
+    }
+    String fullName = m.group(1);
+    byte[] body = exchange.getRequestBody().readAllBytes();
+    repoRequests.add(
+        method
+            + " "
+            + path
+            + (body.length == 0 ? "" : " " + new String(body, StandardCharsets.UTF_8)));
+    Map<Long, Map<String, Object>> prs =
+        pulls.computeIfAbsent(fullName, k -> new ConcurrentHashMap<>());
+    if (m.group(2) == null && method.equals("GET")) {
+      send(exchange, 200, Map.of("full_name", fullName, "default_branch", "main"));
+    } else if ("/pulls".equals(m.group(2)) && method.equals("GET")) {
+      String query = String.valueOf(exchange.getRequestURI().getQuery());
+      String head = query.replaceAll(".*head=([^&]*).*", "$1");
+      List<Map<String, Object>> open = new ArrayList<>();
+      for (Map<String, Object> pr : prs.values()) {
+        String owner = fullName.substring(0, fullName.indexOf('/'));
+        if ("open".equals(pr.get("state"))
+            && head.equals(owner + ":" + ((Map<?, ?>) pr.get("head")).get("ref"))) {
+          open.add(pr);
+        }
+      }
+      send(exchange, 200, open);
+    } else if ("/pulls".equals(m.group(2)) && method.equals("POST")) {
+      if (createPullStatus != 0) {
+        send(exchange, createPullStatus, Map.of("message", "Validation Failed"));
+        return;
+      }
+      JsonNode request = JSON.readTree(body);
+      long number = 12 + prs.size();
+      String branch = request.path("head").asString();
+      Map<String, Object> pr = new java.util.LinkedHashMap<>();
+      pr.put("number", number);
+      pr.put("html_url", "https://github.com/" + fullName + "/pull/" + number);
+      pr.put("state", "open");
+      pr.put("title", request.path("title").asString());
+      pr.put("body", request.path("body").asString());
+      pr.put("draft", request.path("draft").asBoolean());
+      pr.put("labels", new ArrayList<String>());
+      pr.put("head", Map.of("ref", branch, "sha", branchShas.getOrDefault(branch, "0".repeat(40))));
+      pr.put("base", Map.of("ref", request.path("base").asString()));
+      prs.put(number, pr);
+      send(exchange, 201, pr);
+    } else if (m.group(3) != null && method.equals("PATCH")) {
+      Map<String, Object> pr = prs.get(Long.parseLong(m.group(3)));
+      if (pr == null) {
+        send(exchange, 404, Map.of("message", "Not Found"));
+        return;
+      }
+      JsonNode request = JSON.readTree(body);
+      pr.put("title", request.path("title").asString());
+      pr.put("body", request.path("body").asString());
+      send(exchange, 200, pr);
+    } else if (m.group(4) != null && method.equals("POST")) {
+      Map<String, Object> pr = prs.get(Long.parseLong(m.group(4)));
+      @SuppressWarnings("unchecked")
+      List<String> labels = (List<String>) pr.get("labels");
+      JSON.readTree(body).path("labels").forEach(l -> labels.add(l.asString()));
+      send(exchange, 200, labels);
+    } else {
+      send(exchange, 404, Map.of("message", "Not Found"));
     }
   }
 

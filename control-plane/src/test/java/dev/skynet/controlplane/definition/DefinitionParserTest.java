@@ -121,6 +121,7 @@ class DefinitionParserTest {
           dependsOn:
             - review
             - fix-review-findings?
+          workspaceFrom: review
 
         - id: merge
           type: github-merge
@@ -149,7 +150,7 @@ class DefinitionParserTest {
     assertThat(parsed.validation().publishable()).isFalse();
     assertThat(messages(parsed, Severity.UNSUPPORTED))
         .contains(
-            "El tipo `github-pr` todavía no se ejecuta: llega en S2",
+            "El tipo `github-merge` todavía no se ejecuta: llega en EN-C",
             "`promptTemplate` todavía no se usa: llega en S3");
 
     WorkflowDefinition definition = parsed.definition();
@@ -1226,6 +1227,97 @@ class DefinitionParserTest {
         .isEqualTo(Risk.MEDIUM);
     assertThat(definition.reads("aprobar-plan")).containsExactly("spec.output.summary");
     assertThat(definition.dependents("plan")).containsExactly("aprobar-plan", "aprobar-spec");
+  }
+
+  @Test
+  void aPullRequestStagePushesTheWorktreeItInheritsAndOpensAPullRequest() {
+    Parsed parsed =
+        parse(
+            """
+            id: entrega
+            stages:
+              - id: implement
+                type: agent
+                prompt: Implementa
+                outputSchema:
+                  type: object
+                  properties:
+                    summary:
+                      type: string
+              - id: pr
+                type: github-pr
+                dependsOn: [implement]
+                condition: repository.github
+                pullRequest:
+                  title: "{{workItem.key}}: {{stages.implement.output.summary}}"
+                  body: Hecho por Skynet.
+                  base: develop
+                  draft: true
+                  labels: [skynet, skynet]
+              - id: sin-bloque
+                type: github-pr
+                dependsOn: [implement]
+            """);
+    assertThat(parsed.validation().problems()).isEmpty();
+    assertThat(parsed.validation().publishable()).isTrue();
+    StageDefinition pr = parsed.definition().stage("pr").orElseThrow();
+    assertThat(pr.pullRequest())
+        .isEqualTo(
+            new PullRequestSpec(
+                "{{workItem.key}}: {{stages.implement.output.summary}}",
+                "Hecho por Skynet.",
+                "develop",
+                true,
+                List.of("skynet")));
+    assertThat(parsed.definition().stage("sin-bloque").orElseThrow().pullRequest())
+        .isEqualTo(PullRequestSpec.DEFAULT);
+    assertThat(parsed.definition().stage("implement").orElseThrow().pullRequest()).isNull();
+  }
+
+  @Test
+  void aPullRequestStageNeedsAWorktreeAndOnlyItsOwnFields() {
+    Parsed parsed =
+        parse(
+            """
+            id: entrega-mal
+            stages:
+              - id: implement
+                type: agent
+                prompt: Implementa
+                pullRequest:
+                  title: no
+              - id: suelta
+                type: github-pr
+                agent: dev
+                pullRequest:
+                  base: -f
+                  draft: quizá
+                  labels: skynet
+                  reviewers: [guilu]
+              - id: aislada
+                type: github-pr
+                dependsOn: [implement]
+                workspace: isolated-worktree
+              - id: mal-condicion
+                type: agent
+                prompt: Sigue
+                dependsOn: [implement]
+                condition: repository.gitlab
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .contains(
+            "`pullRequest` solo vale en fases `type: github-pr`; esta es `agent`",
+            "Una fase `github-pr` sube la rama y abre la PR, no lanza un agente: quita `agent`",
+            "`-f` no es un nombre de rama válido",
+            "`stages.suelta.pullRequest.draft` debe ser `true` o `false`",
+            "`labels` debe ser una lista, p. ej. `labels: [skynet]`",
+            "Una fase `github-pr` sube el worktree de la fase de la que depende: ponla en"
+                + " `dependsOn` detrás de una fase `agent`, `command` o `parallel`",
+            "Una fase `github-pr` sube el worktree que hereda: quita `workspace:"
+                + " isolated-worktree`");
+    assertThat(messages(parsed, Severity.ERROR))
+        .anyMatch(m -> m.startsWith("Clave `reviewers` desconocida"))
+        .anyMatch(m -> m.contains("`repository.gitlab` no es un dato del repositorio"));
   }
 
   @Test

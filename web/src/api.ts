@@ -721,6 +721,14 @@ export interface StageDefinition {
   phase: Phase | null
   /** Acceso de su agente a la memoria del proyecto; null para `write`, lo predeterminado. */
   memory: 'off' | 'read' | 'write' | null
+  /** La PR que abre una fase `github-pr`; null en las demás. */
+  pullRequest: {
+    title: string | null
+    body: string | null
+    base: string | null
+    draft: boolean
+    labels: string[]
+  } | null
 }
 
 /** Una comprobación de fase: `artifacts`, `tests`, `diff`, `commit`, `scope` o `command`. */

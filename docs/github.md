@@ -6,7 +6,7 @@ Skynet se conecta a GitHub con una **GitHub App propia** (hito GH). Con ella, el
 - pide tokens de instalación de corta vida, limitados a un repositorio;
 - recibe webhooks firmados y los publica como eventos `github.*`.
 
-En GH todavía nadie reacciona a esos eventos. Las fases que suben ramas, abren PR y esperan la CI llegan con EN, y las que lanzan workflows desde issues o comentarios, con DS.
+Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la rama y abre la PR (EN-A, ver «Entrega por PR» en [`workflows.md`](workflows.md)). Esperar la CI y fusionar llegan con EN-B y EN-C, y lanzar workflows desde issues o comentarios, con DS.
 
 ## 1. Crear la App
 
@@ -98,6 +98,7 @@ Ajustes → GitHub enseña las últimas 50 entregas con su estado y su error (`G
   - nunca se escriben en la base de datos, en los logs ni en los eventos.
 - El webhook no lleva sesión: lo protege solo la firma. No cuenta para el bloqueo por intentos fallidos de login.
 - Los textos libres que llegan de GitHub (comentarios y revisiones) pasan por el mismo redactor de secretos que los eventos de los agentes.
+- El token del push (EN-A) no viaja en la orden del runner: el runner lo pide justo antes y solo para su invocación en curso. Se lo da a git como cabecera (`http.extraHeader` en `GIT_CONFIG_*`), así que no queda en la URL, en los argumentos, en `.git/config` ni en el disco. El título y la descripción de la PR pasan por el redactor antes de guardarse.
 - Nada de la CI llama al GitHub real:
   - los IT usan `FakeGitHub` (JDK `HttpServer`);
   - las E2E usan `web/e2e/fake-github.ts`;
@@ -111,3 +112,5 @@ Ajustes → GitHub enseña las últimas 50 entregas con su estado y su error (`G
 | `POST` | `/api/github/sync` | vuelve a pedir las instalaciones. Da 409 si la App no está configurada y 502 si GitHub falla |
 | `GET` | `/api/github/deliveries?limit=` | últimas entregas, sin el cuerpo (`limit` de 1 a 200) |
 | `POST` | `/api/github/webhooks` | el webhook, sin sesión y firmado |
+| `GET` | `/api/workflow-runs/{id}/pull-requests` | la PR que ha abierto la ejecución: rama, estado, número, URL y commit |
+| `POST` | `/api/runner/agent-runs/{id}/push-token` | solo el runner de un push en curso: su token, limitado al repositorio y a `contents: write` |

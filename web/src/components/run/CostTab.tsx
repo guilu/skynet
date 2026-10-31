@@ -39,7 +39,9 @@ export function CostTab({ agent }: { agent: AgentRun }) {
       {agent.costUsd == null && (
         <p className="muted small">El coste llega con el resultado final de la invocación.</p>
       )}
-      {agent.provider !== 'command' && <QuotaSection agent={agent} />}
+      {agent.provider !== 'command' && agent.provider !== 'git-push' && (
+        <QuotaSection agent={agent} />
+      )}
       <ErrorMessage error={conversation.error} />
       {turns.length > 1 && (
         <>

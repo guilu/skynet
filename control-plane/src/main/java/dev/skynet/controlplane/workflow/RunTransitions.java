@@ -148,6 +148,7 @@ class RunTransitions {
    * terminan bien; si no, fallida si alguno falla y cancelada si alguno se cancela. Con algún
    * agente aún en curso (un hijo de una fase {@code parallel}) la deja como está. La ejecución la
    * cierra el motor, que decide qué viene después: quien llama publica {@link WorkflowRunChanged}.
+   * Una fase {@code github-pr} cuyo push terminó bien no se cierra aquí: espera a su PR.
    */
   StageRun finishStage(StageRun stage, Instant now) {
     List<AgentRun> agents = agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
@@ -155,6 +156,10 @@ class RunTransitions {
       return stage;
     }
     AgentObservableStatus outcome = outcome(agents);
+    if (outcome == AgentObservableStatus.COMPLETED && agents.getLast().isPush()) {
+      // Una fase github-pr sigue en marcha hasta que se abre la PR (PullRequests, EN-A).
+      return stage;
+    }
     String reason = "agent-" + outcome.name().toLowerCase(java.util.Locale.ROOT);
     return switch (outcome) {
       case COMPLETED -> advanceStage(stage, StageStatus.SUCCEEDED, reason, now);

@@ -1,5 +1,6 @@
 package dev.skynet.controlplane.workflow;
 
+import dev.skynet.protocol.runner.PushBranch;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.WorkspaceRef;
 import java.util.UUID;
@@ -15,6 +16,7 @@ import java.util.UUID;
  *     parallel})
  * @param runnerId runner que debe ejecutarla, o {@code null} si vale cualquiera
  * @param command comando de shell de una fase {@code command}, o {@code null} para un agente
+ * @param push rama que sube una fase {@code github-pr}, o {@code null} si no sube nada
  */
 record Invocation(
     AgentRunKind kind,
@@ -26,7 +28,33 @@ record Invocation(
     ResumeFrom resume,
     WorkspaceRef workspace,
     UUID runnerId,
-    String command) {
+    String command,
+    PushBranch push) {
+
+  Invocation(
+      AgentRunKind kind,
+      AgentRun parent,
+      UUID sessionId,
+      String prompt,
+      EffectivePolicy policy,
+      UUID workspaceId,
+      ResumeFrom resume,
+      WorkspaceRef workspace,
+      UUID runnerId,
+      String command) {
+    this(
+        kind,
+        parent,
+        sessionId,
+        prompt,
+        policy,
+        workspaceId,
+        resume,
+        workspace,
+        runnerId,
+        command,
+        null);
+  }
 
   Invocation(
       AgentRunKind kind,
@@ -97,7 +125,27 @@ record Invocation(
         resume,
         ref,
         runnerId,
-        command);
+        command,
+        push);
+  }
+
+  /**
+   * La misma invocación como fase {@code github-pr}: el runner sube el worktree a {@code push}
+   * (EN-A).
+   */
+  Invocation asPush(PushBranch push) {
+    return new Invocation(
+        kind,
+        parent,
+        sessionId,
+        "git push " + push.remoteUrl() + " HEAD:" + push.branch(),
+        policy,
+        workspaceId,
+        resume,
+        workspace,
+        runnerId,
+        null,
+        push);
   }
 
   /** La misma invocación como fase {@code command}: el runner ejecuta {@code command}. */

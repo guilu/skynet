@@ -7,6 +7,7 @@ import dev.skynet.controlplane.memory.MemoryAgents;
 import dev.skynet.controlplane.usage.QuotaRefresh;
 import dev.skynet.controlplane.usage.QuotaSnapshots;
 import dev.skynet.controlplane.workflow.AgentEventIngestion;
+import dev.skynet.controlplane.workflow.PullRequests;
 import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.runner.ArtifactStored;
 import dev.skynet.protocol.runner.ArtifactUpload;
@@ -14,6 +15,7 @@ import dev.skynet.protocol.runner.EventBatch;
 import dev.skynet.protocol.runner.EventBatchResult;
 import dev.skynet.protocol.runner.HeartbeatReply;
 import dev.skynet.protocol.runner.MemoryToken;
+import dev.skynet.protocol.runner.PushToken;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
@@ -63,6 +65,7 @@ class RunnerController {
   private final QuotaSnapshots quotas;
   private final QuotaRefresh refresh;
   private final MemoryAgents memory;
+  private final PullRequests pullRequests;
 
   RunnerController(
       RunnerRegistry registry,
@@ -74,7 +77,8 @@ class RunnerController {
       LostInvocations lost,
       QuotaSnapshots quotas,
       QuotaRefresh refresh,
-      MemoryAgents memory) {
+      MemoryAgents memory,
+      PullRequests pullRequests) {
     this.registry = registry;
     this.commands = commands;
     this.signal = signal;
@@ -85,6 +89,7 @@ class RunnerController {
     this.quotas = quotas;
     this.refresh = refresh;
     this.memory = memory;
+    this.pullRequests = pullRequests;
   }
 
   /**
@@ -97,6 +102,17 @@ class RunnerController {
       @PathVariable UUID id) {
     MemoryAgents.IssuedToken issued = memory.issue(registry.authenticate(authorization), id);
     return new MemoryToken(issued.token(), issued.mode().name());
+  }
+
+  /**
+   * Token de GitHub para el push de una fase {@code github-pr} de este runner (EN-A): limitado al
+   * repositorio y a {@code contents: write}. No se guarda en ningún sitio.
+   */
+  @PostMapping("/agent-runs/{id}/push-token")
+  PushToken pushToken(
+      @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+      @PathVariable UUID id) {
+    return new PushToken(pullRequests.pushToken(registry.authenticate(authorization), id));
   }
 
   @PostMapping("/register")

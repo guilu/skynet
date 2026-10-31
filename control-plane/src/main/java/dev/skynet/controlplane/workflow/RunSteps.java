@@ -2,7 +2,9 @@ package dev.skynet.controlplane.workflow;
 
 import dev.skynet.controlplane.definition.AgentDefinition;
 import dev.skynet.controlplane.definition.Condition;
+import dev.skynet.controlplane.definition.DefinitionParser;
 import dev.skynet.controlplane.definition.PublishedDefinition;
+import dev.skynet.controlplane.definition.PullRequestSpec;
 import dev.skynet.controlplane.definition.StageDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.ChildDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.Dependency;
@@ -12,6 +14,7 @@ import dev.skynet.controlplane.definition.WorkflowDefinition;
 import dev.skynet.controlplane.project.CodeRepository;
 import dev.skynet.controlplane.project.ProjectService;
 import dev.skynet.controlplane.shared.ConflictException;
+import dev.skynet.controlplane.shared.PayloadRedactor;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.controlplane.workitem.WorkItem;
 import dev.skynet.controlplane.workitem.WorkItemService;
@@ -35,6 +38,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
@@ -123,6 +127,9 @@ public class RunSteps {
   private final Verifications verifications;
   private final StageVerifications stageVerifications;
   private final Approvals approvals;
+  private final PullRequests pullRequests;
+  private final PayloadRedactor redactor;
+  private final String publicUrl;
   private final TimeSource time;
 
   RunSteps(
@@ -141,6 +148,9 @@ public class RunSteps {
       Verifications verifications,
       StageVerifications stageVerifications,
       Approvals approvals,
+      PullRequests pullRequests,
+      PayloadRedactor redactor,
+      @Value("${skynet.github.pull-requests.public-url:}") String publicUrl,
       TimeSource time) {
     this.runs = runs;
     this.workflowRuns = workflowRuns;
@@ -157,6 +167,9 @@ public class RunSteps {
     this.verifications = verifications;
     this.stageVerifications = stageVerifications;
     this.approvals = approvals;
+    this.pullRequests = pullRequests;
+    this.redactor = redactor;
+    this.publicUrl = publicUrl;
     this.time = time;
   }
 
@@ -420,6 +433,13 @@ public class RunSteps {
             runId, repository.getId(), stage, stageDefinition, source, now);
         return StartOutcome.STARTED;
       }
+      if (stageDefinition.type() == StageType.GITHUB_PR) {
+        if (source == null) {
+          throw new ConflictException("La fase " + stageKey + " no tiene un worktree que subir");
+        }
+        startPush(run, stage, stageDefinition, definition, workItem, repository, source, now);
+        return StartOutcome.STARTED;
+      }
       Map<String, Invocation> invocations = new LinkedHashMap<>();
       switch (stageDefinition.type()) {
         case COMMAND -> {
@@ -492,6 +512,139 @@ public class RunSteps {
       fail(stage, e.getMessage(), now);
       return StartOutcome.FAILED;
     }
+  }
+
+  /**
+   * Arranca una fase {@code github-pr} (EN-A): pone en cola el push del worktree en su runner y
+   * deja preparada la PR, con el título y la descripción ya escritos. La PR se abre cuando el push
+   * termina bien ({@link PullRequests#openPending}).
+   */
+  private void startPush(
+      WorkflowRun run,
+      StageRun stage,
+      StageDefinition stageDefinition,
+      WorkflowDefinition definition,
+      WorkItem workItem,
+      CodeRepository repository,
+      WorkspaceView source,
+      Instant now) {
+    PullRequests.Delivery delivery = pullRequests.prepare(run, stage, workItem, repository, source);
+    PullRequestSpec spec =
+        stageDefinition.pullRequest() == null
+            ? PullRequestSpec.DEFAULT
+            : stageDefinition.pullRequest();
+    PromptRenderer renderer =
+        new PromptRenderer(
+            workItem,
+            projects.get(workItem.getProjectId()),
+            inputsOf(run),
+            new ConditionData(run, definition)::value);
+    String title =
+        spec.title() == null
+            ? workItem.getKey() + " - " + workItem.getTitle()
+            : renderer.render(spec.title());
+    title = title.replaceAll("\\s*\\R\\s*", " ").strip();
+    if (title.length() > 250) {
+      title = title.substring(0, 249) + "…";
+    }
+    String body =
+        PullRequestBody.of(
+            spec.body() == null ? null : renderer.render(spec.body()),
+            workItem.getKey(),
+            workItem.getTitle(),
+            workItem.getDescription(),
+            evidence(run, definition, stage.getStageKey()),
+            costOf(run.getId()),
+            publicUrl,
+            run.getId());
+    EffectivePolicy policy =
+        EffectivePolicy.of(projects.agentPolicy(repository), AgentLimits.none());
+    Invocation invocation = Invocation.inWorkspace("", policy, source).asPush(delivery.push());
+    if (stage.getAttempt() > 1) {
+      invocation = retrying(run.getId(), stage.getStageKey(), null, invocation, source, definition);
+    }
+    AgentRun agent = agentQueue.queue(run, stage, workItem, repository, invocation, now);
+    pullRequests.pushing(
+        run,
+        stage,
+        repository,
+        delivery,
+        agent,
+        redactor.redact(title),
+        redactor.redact(body),
+        spec.base(),
+        spec.draft(),
+        spec.labels(),
+        now);
+  }
+
+  /**
+   * Las fases que han terminado antes de {@code current}, en el orden del YAML, con el resumen de
+   * su salida y sus comprobaciones: las evidencias de la PR.
+   */
+  private List<PullRequestBody.StageLine> evidence(
+      WorkflowRun run, WorkflowDefinition definition, String current) {
+    Map<String, StageRun> latest = latestStages(run.getId());
+    ConditionData data = new ConditionData(run, definition);
+    Map<UUID, List<VerificationResult>> checks =
+        verifications.latestOfStages(latest.values().stream().map(StageRun::getId).toList());
+    List<PullRequestBody.StageLine> lines = new ArrayList<>();
+    for (StageDefinition stage : definition.stages()) {
+      StageRun stageRun = latest.get(stage.id());
+      if (stage.id().equals(current)
+          || stageRun == null
+          || !stageRun.getStatus().isTerminal()
+          || stageRun.getStatus() == StageStatus.SKIPPED) {
+        continue;
+      }
+      Object summary =
+          stage.type() == StageType.AGENT ? data.value(List.of(stage.id(), "summary")) : null;
+      List<String> done = new ArrayList<>();
+      for (VerificationResult result : checks.getOrDefault(stageRun.getId(), List.of())) {
+        for (VerificationResult.CheckResult check : result.checks()) {
+          if (check.passed() != null) {
+            done.add(check.name() + (check.passed() ? " ✅" : " ❌"));
+          }
+        }
+        if (result.tests() != null && result.tests().total() > 0) {
+          int failed = result.tests().failed() + result.tests().errors();
+          done.add(
+              "tests "
+                  + (result.tests().total() - failed - result.tests().skipped())
+                  + "/"
+                  + (result.tests().total() - result.tests().skipped())
+                  + (failed == 0 ? " ✅" : " ❌"));
+        }
+      }
+      lines.add(
+          new PullRequestBody.StageLine(
+              stage.id(),
+              stage.name(),
+              statusText(stageRun.getStatus()),
+              summary instanceof String text ? text : null,
+              done.stream().distinct().toList()));
+    }
+    return lines;
+  }
+
+  private static String statusText(StageStatus status) {
+    return switch (status) {
+      case SUCCEEDED -> "terminada bien";
+      case FAILED -> "falló";
+      case CANCELLED -> "cancelada";
+      default -> status.name().toLowerCase(java.util.Locale.ROOT);
+    };
+  }
+
+  /** Lo que han costado los agentes de la ejecución hasta ahora, o {@code null} si no se sabe. */
+  private java.math.BigDecimal costOf(UUID runId) {
+    return jdbc.sql(
+            "SELECT sum(a.cost_usd) FROM agent_run a JOIN stage_run s ON s.id = a.stage_run_id"
+                + " WHERE s.workflow_run_id = ?")
+        .param(runId)
+        .query(java.math.BigDecimal.class)
+        .optional()
+        .orElse(null);
   }
 
   /**
@@ -694,6 +847,10 @@ public class RunSteps {
     Object value(List<String> parts) {
       if (parts.getFirst().equals("inputs")) {
         return inputsOf(run).get(parts.get(1));
+      }
+      if (String.join(".", parts).equals(DefinitionParser.REPOSITORY_GITHUB)
+          && definition.stage("repository").isEmpty()) {
+        return pullRequests.connected(repositoryOf(run));
       }
       StageRun stage = stages.get(parts.getFirst());
       StageDefinition stageDefinition = definition.stage(parts.getFirst()).orElse(null);

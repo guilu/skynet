@@ -59,6 +59,7 @@ public class AgentEventIngestion {
   private final QuotaAttributor attributor;
   private final TimeSource time;
   private final JdbcClient jdbc;
+  private final PullRequests pullRequests;
 
   AgentEventIngestion(
       AgentRunRepository agentRuns,
@@ -73,7 +74,8 @@ public class AgentEventIngestion {
       QuotaSnapshots quotas,
       QuotaAttributor attributor,
       TimeSource time,
-      JdbcClient jdbc) {
+      JdbcClient jdbc,
+      PullRequests pullRequests) {
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
     this.publisher = publisher;
@@ -87,6 +89,7 @@ public class AgentEventIngestion {
     this.attributor = attributor;
     this.time = time;
     this.jdbc = jdbc;
+    this.pullRequests = pullRequests;
   }
 
   @Transactional
@@ -224,6 +227,11 @@ public class AgentEventIngestion {
             decimal(p.get("costUsd")),
             previousCumulativeCost(agent),
             errors(p));
+      }
+      case GIT_PUSHED -> {
+        if (agent.isPush() && string(p, "sha") != null) {
+          pullRequests.pushed(agent, string(p, "sha"), now);
+        }
       }
       case PROCESS_EXITED -> {
         // Sin resultado (cancelado a medias) se queda con los tokens que ningún evento llevó y,

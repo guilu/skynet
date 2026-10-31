@@ -66,6 +66,12 @@ public enum AgentEventType {
    * eliminar, {@code error}. No cambia el estado del agente.
    */
   WORKSPACE_REMOVED("agent.workspace.removed"),
+  /**
+   * El runner ha subido la rama de una fase {@code github-pr} (EN-A): {@code branch}, {@code sha}
+   * (el commit subido), {@code commits} (cuántos hay desde la base) y {@code committed} (si tuvo
+   * que confirmar cambios que el agente dejó sin confirmar).
+   */
+  GIT_PUSHED("agent.git.pushed"),
   /** Línea que el adaptador no reconoce; se conserva para no perder información. */
   RAW("agent.raw");
 

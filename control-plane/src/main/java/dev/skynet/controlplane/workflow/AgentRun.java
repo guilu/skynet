@@ -24,6 +24,12 @@ public class AgentRun {
   public static final String PROVIDER_COMMAND = "command";
 
   /**
+   * Una fase {@code github-pr} (EN-A): el runner sube la rama del worktree en lugar de lanzar un
+   * agente. Se trata como un comando: sin sesión, sin verificación y termina con su resultado.
+   */
+  public static final String PROVIDER_PUSH = "git-push";
+
+  /**
    * Una fase {@code verification}: no hay agente ni comando, solo la verificación de la fase en el
    * worktree que hereda. Su estado es el de esa verificación.
    */
@@ -589,8 +595,14 @@ public class AgentRun {
   }
 
   /** Si es una fase {@code command}: sin sesión que reanudar ni verificación. */
+  /** Un comando de shell o el push de una fase {@code github-pr}: no hay agente detrás. */
   public boolean isCommand() {
-    return PROVIDER_COMMAND.equals(provider);
+    return PROVIDER_COMMAND.equals(provider) || PROVIDER_PUSH.equals(provider);
+  }
+
+  /** El push de una fase {@code github-pr} (EN-A). */
+  public boolean isPush() {
+    return PROVIDER_PUSH.equals(provider);
   }
 
   public boolean isVerification() {
