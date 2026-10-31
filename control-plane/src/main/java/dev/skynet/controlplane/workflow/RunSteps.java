@@ -128,6 +128,7 @@ public class RunSteps {
   private final StageVerifications stageVerifications;
   private final Approvals approvals;
   private final PullRequests pullRequests;
+  private final CiChecks ciChecks;
   private final PayloadRedactor redactor;
   private final String publicUrl;
   private final TimeSource time;
@@ -149,6 +150,7 @@ public class RunSteps {
       StageVerifications stageVerifications,
       Approvals approvals,
       PullRequests pullRequests,
+      CiChecks ciChecks,
       PayloadRedactor redactor,
       @Value("${skynet.github.pull-requests.public-url:}") String publicUrl,
       TimeSource time) {
@@ -168,6 +170,7 @@ public class RunSteps {
     this.stageVerifications = stageVerifications;
     this.approvals = approvals;
     this.pullRequests = pullRequests;
+    this.ciChecks = ciChecks;
     this.redactor = redactor;
     this.publicUrl = publicUrl;
     this.time = time;
@@ -413,6 +416,10 @@ public class RunSteps {
       if (stageDefinition.type() == StageType.HUMAN_APPROVAL) {
         String action = approvalAction(run, stageDefinition, definition, workItem);
         approvals.request(run, stage, published, action, workItem, repository, now);
+        return StartOutcome.STARTED;
+      }
+      if (stageDefinition.type() == StageType.GITHUB_CHECK) {
+        ciChecks.start(run, stage, repository, now);
         return StartOutcome.STARTED;
       }
       WorkspaceView source = sourceWorkspace(runId, stageDefinition, definition);
@@ -773,6 +780,8 @@ public class RunSteps {
           now);
       changed = true;
     }
+    // Las correcciones de la CI de las fases github-check (EN-B).
+    changed |= ciChecks.settleFixes(runId);
     return changed;
   }
 

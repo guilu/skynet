@@ -1321,6 +1321,95 @@ class DefinitionParserTest {
   }
 
   @Test
+  void aCiStageWaitsForThePullRequestAndIsFixedByTheStageItPushes() {
+    Parsed parsed =
+        parse(
+            """
+            id: ci
+            stages:
+              - id: implement
+                type: agent
+                prompt: Implementa
+              - id: pr
+                type: github-pr
+                dependsOn: [implement]
+              - id: ci
+                type: github-check
+                dependsOn: [pr]
+                required: [test, lint, test]
+                ifNoChecks: fail
+                fix: implement
+                maxRounds: 3
+              - id: ci-por-defecto
+                type: github-check
+                dependsOn: [pr]
+                timeout: 10m
+            """);
+    assertThat(parsed.validation().problems()).isEmpty();
+    assertThat(parsed.validation().publishable()).isTrue();
+    StageDefinition ci = parsed.definition().stage("ci").orElseThrow();
+    assertThat(ci.ci()).isEqualTo(new CiSpec(List.of("test", "lint"), "fail", "implement", 3));
+    assertThat(ci.timeout()).isEqualTo(Duration.ofMinutes(60));
+    StageDefinition byDefault = parsed.definition().stage("ci-por-defecto").orElseThrow();
+    assertThat(byDefault.ci()).isEqualTo(CiSpec.DEFAULT);
+    assertThat(byDefault.timeout()).isEqualTo(Duration.ofMinutes(10));
+    assertThat(parsed.definition().stage("pr").orElseThrow().ci()).isNull();
+  }
+
+  @Test
+  void aCiStageNeedsAPullRequestBeforeItAndAnAgentToFixIt() {
+    Parsed parsed =
+        parse(
+            """
+            id: ci-mal
+            stages:
+              - id: implement
+                type: agent
+                prompt: Implementa
+                fix: implement
+              - id: tests
+                type: command
+                dependsOn: [implement]
+                command: make test
+              - id: pr
+                type: github-pr
+                dependsOn: [tests]
+              - id: sin-pr
+                type: github-check
+                dependsOn: [implement]
+                agent: dev
+                maxRounds: 2
+              - id: fix-comando
+                type: github-check
+                dependsOn: [pr]
+                fix: tests
+                ifNoChecks: quizá
+              - id: despues
+                type: agent
+                prompt: Sigue
+                dependsOn: [pr]
+              - id: fix-tarde
+                type: github-check
+                dependsOn: [despues]
+                fix: despues
+                required: test
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .contains(
+            "`fix` solo vale en fases `type: github-check`; esta es `agent`",
+            "Una fase `github-check` espera la CI de la PR, no lanza un agente: quita `agent`."
+                + " El agente que corrige va en `fix`",
+            "`maxRounds` son las rondas de corrección: sin `fix` no hay ninguna",
+            "Una fase `github-check` espera la CI de la PR: ponla en `dependsOn` detrás de una"
+                + " fase `github-pr`",
+            "`tests` es una fase `command`: la CI roja la corrige el agente de una fase `agent`",
+            "`ifNoChecks: quizá` no se conoce. Admite: pass, fail",
+            "`despues` no va antes de la fase `github-pr`: `fix` tiene que ser la fase cuyo"
+                + " worktree se sube a la PR",
+            "`required` debe ser una lista de checks, p. ej. `required: [test]`");
+  }
+
+  @Test
   void anApprovalGateOnlyWaitsForADecision() {
     Parsed parsed =
         parse(

@@ -92,10 +92,20 @@ public final class DefinitionParser {
           "timeout",
           "phase",
           "memory",
-          "pullRequest");
+          "pullRequest",
+          "required",
+          "ifNoChecks",
+          "fix",
+          "maxRounds");
   static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt", "retry");
   static final Set<String> RETRY_KEYS = Set.of("maxAttempts", "on", "delay");
   static final Set<String> PULL_REQUEST_KEYS = Set.of("title", "body", "base", "draft", "labels");
+
+  /** Lo que espera como mucho una fase {@code github-check} sin {@code timeout} (EN-B). */
+  static final Duration CI_TIMEOUT = Duration.ofMinutes(60);
+
+  /** Las claves de una fase {@code github-check} (EN-B). */
+  static final List<String> CI_KEYS = List.of("required", "ifNoChecks", "fix", "maxRounds");
 
   /** La condición que dice si el repositorio de la ejecución está en GitHub con acceso (EN-A). */
   public static final String REPOSITORY_GITHUB = "repository.github";
@@ -965,6 +975,7 @@ public final class DefinitionParser {
       String phase = phase(fields, path);
       String memory = memory(fields, type, path);
       PullRequestSpec pullRequest = pullRequest(fields, type, node, path);
+      CiSpec ci = ci(fields, type, path);
       Entry schemaEntry = fields.get("outputSchema");
       Map<String, Object> outputSchema = null;
       String outputSchemaPath = null;
@@ -1004,7 +1015,8 @@ public final class DefinitionParser {
               timeout,
               phase,
               memory,
-              pullRequest);
+              pullRequest,
+              ci);
       return new StageAt(stage, path, node, fields, dependencyNodes, children);
     }
 
@@ -1416,7 +1428,8 @@ public final class DefinitionParser {
     private Duration timeout(Map<String, Entry> fields, StageType type, String path) {
       Entry entry = fields.get("timeout");
       if (entry == null) {
-        return null;
+        // Una fase github-check no espera a la CI para siempre (EN-B).
+        return type == StageType.GITHUB_CHECK ? CI_TIMEOUT : null;
       }
       if (type == StageType.CONDITIONAL) {
         error(
@@ -1649,6 +1662,81 @@ public final class DefinitionParser {
      * fases, {@code command} no vale.
      */
     /**
+     * Cómo espera la CI una fase {@code github-check}: a qué checks ({@code required}), qué hace si
+     * no hay ninguno ({@code ifNoChecks}) y quién la corrige ({@code fix}, que se comprueba con las
+     * demás fases) y cuántas veces ({@code maxRounds}). En las demás fases, esas claves no valen.
+     */
+    private CiSpec ci(Map<String, Entry> fields, StageType type, String path) {
+      if (type != StageType.GITHUB_CHECK) {
+        for (String key : CI_KEYS) {
+          Entry used = fields.get(key);
+          if (used != null && type.executable()) {
+            error(
+                used.key(),
+                path + "." + key,
+                "`"
+                    + key
+                    + "` solo vale en fases `type: github-check`; esta es `"
+                    + type.yaml()
+                    + "`");
+          }
+        }
+        return null;
+      }
+      for (String key : List.of("agent", "prompt")) {
+        Entry used = fields.get(key);
+        if (used != null) {
+          error(
+              used.key(),
+              path + "." + key,
+              "Una fase `github-check` espera la CI de la PR, no lanza un agente: quita `"
+                  + key
+                  + "`. El agente que corrige va en `fix`");
+        }
+      }
+      List<String> required = new ArrayList<>();
+      Entry requiredEntry = fields.get("required");
+      if (requiredEntry != null && !isNull(requiredEntry.value())) {
+        if (requiredEntry.value() instanceof SequenceNode sequence) {
+          for (int i = 0; i < sequence.getValue().size(); i++) {
+            String name = scalarText(sequence.getValue().get(i), path + ".required[" + i + "]");
+            if (name != null && (name.isBlank() || name.length() > 200)) {
+              error(
+                  sequence.getValue().get(i),
+                  path + ".required[" + i + "]",
+                  "El nombre de un check tiene entre 1 y 200 caracteres");
+            } else if (name != null && !required.contains(name)) {
+              required.add(name);
+            }
+          }
+        } else {
+          error(
+              requiredEntry.value(),
+              path + ".required",
+              "`required` debe ser una lista de checks, p. ej. `required: [test]`");
+        }
+      }
+      String ifNoChecks = text(fields.get("ifNoChecks"), path + ".ifNoChecks");
+      if (ifNoChecks != null && !List.of(CiSpec.PASS, CiSpec.FAIL).contains(ifNoChecks)) {
+        error(
+            fields.get("ifNoChecks").value(),
+            path + ".ifNoChecks",
+            "`ifNoChecks: " + ifNoChecks + "` no se conoce. Admite: pass, fail");
+        ifNoChecks = null;
+      }
+      String fix = text(fields.get("fix"), path + ".fix");
+      Integer maxRounds = integer(fields.get("maxRounds"), path + ".maxRounds", 1, 5);
+      if (fields.get("maxRounds") != null && fix == null) {
+        error(
+            fields.get("maxRounds").key(),
+            path + ".maxRounds",
+            "`maxRounds` son las rondas de corrección: sin `fix` no hay ninguna");
+      }
+      return new CiSpec(
+          required, ifNoChecks, fix, maxRounds == null ? CiSpec.DEFAULT_MAX_ROUNDS : maxRounds);
+    }
+
+    /**
      * El bloque {@code pullRequest} de una fase {@code github-pr}: título, texto, rama de destino,
      * borrador y etiquetas. Sin bloque, la PR se abre con lo predeterminado.
      */
@@ -1844,6 +1932,10 @@ public final class DefinitionParser {
           checkWorkspace(at, byId);
           continue;
         }
+        if (stage.type() == StageType.GITHUB_CHECK) {
+          checkCi(at, byId);
+          continue;
+        }
         if (stage.type() == StageType.GITHUB_PR) {
           boolean inherits =
               stage.workspaceFrom() != null
@@ -2027,6 +2119,58 @@ public final class DefinitionParser {
                 + "` es una fase `"
                 + target.stage().type().yaml()
                 + "`: al pedir cambios, el comentario se manda al agente de una fase `agent`");
+      }
+    }
+
+    /**
+     * Una fase {@code github-check} espera la CI de la PR que abre una fase {@code github-pr} de la
+     * que depende. Su {@code fix} es una fase {@code agent} anterior a esa {@code github-pr}: la
+     * que dejó el worktree que se sube, que es el que corrige.
+     */
+    private void checkCi(StageAt at, Map<String, StageAt> byId) {
+      StageDefinition stage = at.stage();
+      Set<String> ancestors = ancestors(stage.id(), byId);
+      List<String> pullRequests =
+          ancestors.stream()
+              .filter(a -> byId.get(a).stage().type() == StageType.GITHUB_PR)
+              .sorted()
+              .toList();
+      if (pullRequests.isEmpty()) {
+        error(
+            at.node(),
+            at.path() + ".dependsOn",
+            "Una fase `github-check` espera la CI de la PR: ponla en `dependsOn` detrás de una"
+                + " fase `github-pr`");
+      }
+      Entry fixEntry = at.fields().get("fix");
+      String fix = stage.ci() == null ? null : stage.ci().fix();
+      if (fixEntry == null || fix == null) {
+        return;
+      }
+      String path = at.path() + ".fix";
+      StageAt target = byId.get(fix);
+      if (target == null) {
+        error(
+            fixEntry.value(),
+            path,
+            "No hay ninguna fase `" + fix + "`" + suggestion(fix, byId.keySet()));
+      } else if (target.stage().type() != StageType.AGENT) {
+        error(
+            fixEntry.value(),
+            path,
+            "`"
+                + fix
+                + "` es una fase `"
+                + target.stage().type().yaml()
+                + "`: la CI roja la corrige el agente de una fase `agent`");
+      } else if (pullRequests.stream().noneMatch(pr -> ancestors(pr, byId).contains(fix))) {
+        error(
+            fixEntry.value(),
+            path,
+            "`"
+                + fix
+                + "` no va antes de la fase `github-pr`: `fix` tiene que ser la fase cuyo worktree"
+                + " se sube a la PR");
       }
     }
 

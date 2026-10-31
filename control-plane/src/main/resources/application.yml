@@ -99,6 +99,13 @@ skynet:
       # Cada cuánto se piden a GitHub las entregas que no llegaron (túnel o equipo caídos).
       redelivery-interval: ${SKYNET_GITHUB_REDELIVERY_INTERVAL:10m}
       max-payload: 25MB
+    ci:
+      # Cada cuánto se miran las esperas de CI a las que les toca preguntar (EN-B).
+      poll-interval: ${SKYNET_GITHUB_CI_POLL_INTERVAL:2s}
+      # Si no llega ningún webhook, cada cuánto se pregunta igual por la CI de un commit.
+      recheck: ${SKYNET_GITHUB_CI_RECHECK:2m}
+      # Sin ningún check en este tiempo, el repositorio no tiene CI (ifNoChecks decide).
+      no-checks-after: ${SKYNET_GITHUB_CI_NO_CHECKS_AFTER:5m}
     pull-requests:
       # Cada cuánto se abren las PR cuya rama ya está subida (EN-A).
       poll-interval: ${SKYNET_GITHUB_PR_POLL_INTERVAL:2s}

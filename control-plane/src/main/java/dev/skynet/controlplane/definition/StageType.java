@@ -16,7 +16,7 @@ public enum StageType {
   VERIFICATION("verification", null),
   HUMAN_APPROVAL("human-approval", null),
   GITHUB_PR("github-pr", null),
-  GITHUB_CHECK("github-check", "EN-B"),
+  GITHUB_CHECK("github-check", null),
   GITHUB_MERGE("github-merge", "EN-C"),
   MERGE("merge", null),
   DEPLOY("deploy", null);
@@ -43,7 +43,8 @@ public enum StageType {
         || this == CONDITIONAL
         || this == VERIFICATION
         || this == HUMAN_APPROVAL
-        || this == GITHUB_PR;
+        || this == GITHUB_PR
+        || this == GITHUB_CHECK;
   }
 
   /**

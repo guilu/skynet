@@ -846,4 +846,4 @@ Se planificará con datos reales de las fases anteriores: descomposición dinám
 5. ~~**Rediseño visual del control plane**, antes de la Fase 2.~~ Terminado con UI-A a UI-F (issue #37); el resultado está en la [guía de estilo](ui.md). Los colores se personalizan en Ajustes > Apariencia desde UI-G (issue #47).
 6. ~~Fase 2, empezando por W1 (definiciones) y W2 (motor) como primer hito.~~ Terminada el 2026-10-19 (W1–W8).
 7. ~~Fase 3, empezando por GitHub conectado (GH, antes S1).~~ GH terminado: GitHub App, webhooks firmados y Ajustes → GitHub ([`github.md`](github.md)).
-8. En curso: EN, la entrega por PR. EN-A trae la fase `github-pr` (push de la rama con un token por invocación y la PR con evidencias). Faltan EN-B (esperar la CI y corregirla) y EN-C (fusionar tras el gate, web y E2E).
+8. En curso: EN, la entrega por PR. EN-A trae la fase `github-pr` (push de la rama con un token por invocación y la PR con evidencias) y EN-B, la fase `github-check` (espera de la CI dirigida por webhooks con consulta de respaldo, y rondas de corrección con los logs de la CI). Falta EN-C (fusionar tras el gate, web y E2E).

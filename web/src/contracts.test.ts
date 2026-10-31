@@ -551,6 +551,7 @@ const STAGE_DEFINITION: Keys<StageDefinition> = {
   phase: true,
   memory: true,
   pullRequest: true,
+  ci: true,
   retry: true,
   timeoutSeconds: true,
   id: true,

@@ -260,12 +260,31 @@
             }
           }
         },
+        "required": {
+          "description": "Solo en fases github-check: los checks (nombre del check-run o contexto del status) a los que espera. Por defecto, a todos.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 200 }
+        },
+        "ifNoChecks": {
+          "description": "Solo en fases github-check: qué hace si en 5 minutos no aparece ningún check. pass (por defecto) la da por buena con un aviso; fail la hace fallar.",
+          "enum": ["pass", "fail"]
+        },
+        "fix": {
+          "description": "Solo en fases github-check: la fase agent que corrige la CI roja en su sesión, con lo que falló. Tiene que ir antes de la github-pr: es la que dejó el worktree que se sube.",
+          "type": "string"
+        },
+        "maxRounds": {
+          "description": "Solo en fases github-check con fix: rondas de corrección como mucho (por defecto 2).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
         "memory": {
           "description": "Acceso del agente (o de los hijos de una parallel) a la memoria del proyecto: write (por defecto) lee y guarda, read solo lee (contexto inicial, mem_search y mem_get) y off no recibe ni el bloque de memoria ni las herramientas. Solo vale en fases agent y parallel.",
           "enum": ["off", "read", "write"]
         },
         "timeout": {
-          "description": "Tiempo máximo de cada intento de la fase, desde que está lista hasta que termina (s, m o h; hasta 168 h). Al vencer se paran sus agentes y la fase falla con `timeout`; en una human-approval, la petición caduca. No vale en fases conditional.",
+          "description": "Tiempo máximo de cada intento de la fase, desde que está lista hasta que termina (s, m o h; hasta 168 h). Al vencer se paran sus agentes y la fase falla con `timeout`; en una human-approval, la petición caduca. Una github-check sin timeout espera la CI como mucho 60 m. No vale en fases conditional.",
           "type": "string",
           "pattern": "^[1-9][0-9]{0,5}(s|m|h)$"
         },

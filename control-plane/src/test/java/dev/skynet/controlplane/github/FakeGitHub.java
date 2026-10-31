@@ -110,6 +110,66 @@ public final class FakeGitHub implements AutoCloseable {
     repoRequests.clear();
     createPullStatus = 0;
     branchShas.clear();
+    checkRuns.clear();
+    statuses.clear();
+    annotations.clear();
+    jobLogs.clear();
+    comments.clear();
+    deniedPermissions.clear();
+    logDownloadAuthorized = false;
+  }
+
+  /** Los check-runs de cada commit, por SHA (EN-B). */
+  final Map<String, List<Map<String, Object>>> checkRuns = new ConcurrentHashMap<>();
+
+  /** Los statuses de cada commit, por SHA (EN-B). */
+  final Map<String, List<Map<String, Object>>> statuses = new ConcurrentHashMap<>();
+
+  /** Las anotaciones de cada check-run, por id. */
+  final Map<Long, List<Map<String, Object>>> annotations = new ConcurrentHashMap<>();
+
+  /** El log de cada job de Actions, por id; se descarga de una URL firmada sin token. */
+  final Map<Long, String> jobLogs = new ConcurrentHashMap<>();
+
+  /** Los comentarios en las PR: {@code owner/nombre#número: texto}. */
+  final List<String> comments = new CopyOnWriteArrayList<>();
+
+  /** Permisos que la instalación no ha aceptado: pedir un token con ellos responde 422. */
+  final java.util.Set<String> deniedPermissions = ConcurrentHashMap.newKeySet();
+
+  /** Si alguna descarga de un log llevó la cabecera Authorization. */
+  volatile boolean logDownloadAuthorized;
+
+  /** Añade un check-run al commit {@code sha} y devuelve su id. */
+  long checkRun(String sha, String name, String app, String status, String conclusion) {
+    long id = 9000 + checkRuns.values().stream().mapToInt(List::size).sum();
+    Map<String, Object> run = new java.util.LinkedHashMap<>();
+    run.put("id", id);
+    run.put("name", name);
+    run.put("status", status);
+    run.put("conclusion", conclusion);
+    run.put("html_url", "https://github.com/runs/" + id);
+    run.put("app", Map.of("slug", app));
+    run.put("output", Map.of("title", name + ": " + (conclusion == null ? status : conclusion)));
+    checkRuns.computeIfAbsent(sha, k -> new CopyOnWriteArrayList<>()).add(run);
+    return id;
+  }
+
+  /** Cambia el estado de un check-run del commit. */
+  void finishCheckRun(String sha, long id, String conclusion) {
+    for (Map<String, Object> run : checkRuns.getOrDefault(sha, List.of())) {
+      if (((Number) run.get("id")).longValue() == id) {
+        run.put("status", "completed");
+        run.put("conclusion", conclusion);
+      }
+    }
+  }
+
+  /** Añade un status al commit {@code sha}. */
+  void status(String sha, String context, String state) {
+    statuses
+        .computeIfAbsent(sha, k -> new CopyOnWriteArrayList<>())
+        .add(Map.of("context", context, "state", state, "description", context + " " + state));
   }
 
   /** Una PR del repositorio {@code fullName}, o {@code null}. */
@@ -141,6 +201,15 @@ public final class FakeGitHub implements AutoCloseable {
           String.valueOf(exchange.getRequestHeaders().getFirst("Authorization"))
               .replaceFirst("^Bearer ", "");
       Matcher token = TOKEN_PATH.matcher(path);
+      if (path.startsWith("/blob/logs/")) {
+        logDownloadAuthorized |= exchange.getRequestHeaders().containsKey("Authorization");
+        String log = jobLogs.get(Long.parseLong(path.substring("/blob/logs/".length())));
+        byte[] bytes = String.valueOf(log).getBytes(StandardCharsets.UTF_8);
+        exchange.sendResponseHeaders(log == null ? 404 : 200, bytes.length);
+        exchange.getResponseBody().write(bytes);
+        exchange.close();
+        return;
+      }
       if (path.startsWith("/repos/")) {
         repos(exchange, method, path, bearer);
         return;
@@ -209,7 +278,16 @@ public final class FakeGitHub implements AutoCloseable {
         JsonNode body = JSON.readTree(exchange.getRequestBody().readAllBytes());
         tokenRequests.add(body);
         Installation installation = installations.get(id);
-        if (installation == null) {
+        boolean denied = false;
+        for (String permission : deniedPermissions) {
+          denied |= body.path("permissions").has(permission);
+        }
+        if (denied) {
+          send(
+              exchange,
+              422,
+              Map.of("message", "The permissions requested are not granted to this installation."));
+        } else if (installation == null) {
           send(exchange, 404, Map.of("message", "Not Found"));
         } else if (installation.suspendedAt() != null) {
           send(exchange, 403, Map.of("message", "This installation has been suspended"));
@@ -241,6 +319,9 @@ public final class FakeGitHub implements AutoCloseable {
   private void repos(HttpExchange exchange, String method, String path, String bearer)
       throws IOException {
     Long installation = issuedTokens.get(bearer);
+    if (installation != null && ci(exchange, method, path)) {
+      return;
+    }
     Matcher m = REPO_PATH.matcher(path);
     if (installation == null || !m.matches()) {
       send(exchange, installation == null ? 401 : 404, Map.of("message", "Bad credentials"));
@@ -308,6 +389,42 @@ public final class FakeGitHub implements AutoCloseable {
     } else {
       send(exchange, 404, Map.of("message", "Not Found"));
     }
+  }
+
+  private static final Pattern CI_PATH =
+      Pattern.compile(
+          "/repos/([^/]+/[^/]+)/(?:commits/([0-9a-f]+)/(check-runs|status)"
+              + "|check-runs/(\\d+)/annotations|actions/jobs/(\\d+)/logs|issues/(\\d+)/comments)");
+
+  /** La CI de un commit y los comentarios en las PR (EN-B). Si no es una de esas rutas, false. */
+  private boolean ci(HttpExchange exchange, String method, String path) throws IOException {
+    Matcher m = CI_PATH.matcher(path);
+    if (!m.matches()) {
+      return false;
+    }
+    byte[] body = exchange.getRequestBody().readAllBytes();
+    repoRequests.add(
+        method
+            + " "
+            + path
+            + (body.length == 0 ? "" : " " + new String(body, StandardCharsets.UTF_8)));
+    if ("check-runs".equals(m.group(3))) {
+      List<Map<String, Object>> runs = checkRuns.getOrDefault(m.group(2), List.of());
+      send(exchange, 200, Map.of("total_count", runs.size(), "check_runs", runs));
+    } else if ("status".equals(m.group(3))) {
+      send(exchange, 200, Map.of("statuses", statuses.getOrDefault(m.group(2), List.of())));
+    } else if (m.group(4) != null) {
+      send(exchange, 200, annotations.getOrDefault(Long.parseLong(m.group(4)), List.of()));
+    } else if (m.group(5) != null) {
+      exchange.getResponseHeaders().add("Location", url() + "/blob/logs/" + m.group(5));
+      exchange.sendResponseHeaders(302, -1);
+      exchange.close();
+    } else {
+      comments.add(
+          m.group(1) + "#" + m.group(6) + ": " + JSON.readTree(body).path("body").asString());
+      send(exchange, 201, Map.of("id", comments.size()));
+    }
+    return true;
   }
 
   private static boolean validJwt(String jwt) {

@@ -729,6 +729,13 @@ export interface StageDefinition {
     draft: boolean
     labels: string[]
   } | null
+  /** Cómo espera la CI una fase `github-check`; null en las demás. */
+  ci: {
+    required: string[]
+    ifNoChecks: 'pass' | 'fail'
+    fix: string | null
+    maxRounds: number
+  } | null
 }
 
 /** Una comprobación de fase: `artifacts`, `tests`, `diff`, `commit`, `scope` o `command`. */
