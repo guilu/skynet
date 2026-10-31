@@ -1,0 +1,39 @@
+{
+  "configured" : true,
+  "missing" : [ ],
+  "apiUrl" : "https://api.github.com",
+  "appId" : "123456",
+  "app" : {
+    "slug" : "skynet-guilu",
+    "name" : "skynet-guilu",
+    "owner" : "guilu",
+    "htmlUrl" : "https://github.com/apps/skynet-guilu"
+  },
+  "error" : null,
+  "checkedAt" : "2026-10-05T09:00:05Z",
+  "installations" : [ {
+    "id" : 7,
+    "account" : "guilu",
+    "accountType" : "User",
+    "repositorySelection" : "selected",
+    "suspendedAt" : null,
+    "syncedAt" : "2026-10-05T09:00:05Z",
+    "repositories" : [ {
+      "id" : 5001,
+      "fullName" : "guilu/demo-repo",
+      "private" : true
+    } ]
+  } ],
+  "repositories" : [ {
+    "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a03",
+    "projectId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a01",
+    "projectKey" : "DEMO",
+    "name" : "demo-repo",
+    "remoteUrl" : "https://github.com/guilu/demo-repo.git",
+    "fullName" : "guilu/demo-repo",
+    "access" : "CONNECTED",
+    "installationId" : 7,
+    "installationAccount" : "guilu",
+    "githubRepositoryId" : 5001
+  } ]
+}

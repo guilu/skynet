@@ -112,6 +112,7 @@ describe('clasificación', () => {
     expect(originOf(ev('agent.process.exited'))).toBe('runner')
     expect(originOf(status('THINKING', 'FAILED'))).toBe('control-plane')
     expect(originOf(ev('workflow.started', {}, { type: 'workflow_run' }))).toBe('control-plane')
+    expect(originOf(ev('github.pull_request.opened', {}, { type: 'repository' }))).toBe('github')
   })
 
   it('distingue la severidad', () => {

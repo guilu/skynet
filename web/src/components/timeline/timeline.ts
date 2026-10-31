@@ -4,8 +4,8 @@ import { describeEvent, toolSummary } from '../../format'
 /** Categoría de un evento para filtrar el timeline. */
 export type EventKind = 'message' | 'tool' | 'file' | 'status' | 'lifecycle' | 'result' | 'other'
 export type Severity = 'info' | 'warn' | 'error'
-/** Quién produce el evento: el agente (vía runner), el propio runner o el control plane. */
-export type Origin = 'agent' | 'runner' | 'control-plane'
+/** Quién produce el evento: el agente (vía runner), el propio runner, el control plane o GitHub. */
+export type Origin = 'agent' | 'runner' | 'control-plane' | 'github'
 
 export const KIND_LABELS: Record<EventKind, string> = {
   message: 'Mensajes',
@@ -25,6 +25,7 @@ export const ORIGIN_LABELS: Record<Origin, string> = {
   agent: 'Agente',
   runner: 'Runner',
   'control-plane': 'Control plane',
+  github: 'GitHub',
 }
 
 export interface TimelineEntry {
@@ -90,6 +91,8 @@ export function kindOf(type: string): EventKind {
 }
 
 export function originOf(event: StoredEvent): Origin {
+  // Los webhooks de la GitHub App (GH-B).
+  if (event.type.startsWith('github.')) return 'github'
   if (
     event.type === 'agent.process.exited' ||
     event.type === 'agent.workspace.ready' ||

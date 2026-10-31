@@ -78,6 +78,7 @@ export function elapsed(start: string | null, end: string | null, now: number): 
 
 /** Resumen legible de un evento para el timeline. */
 export function describeEvent(type: string, payload: Record<string, unknown>): string {
+  if (type.startsWith('github.')) return describeGitHub(payload)
   const p = (k: string) => String(payload[k] ?? '')
   switch (type) {
     case 'project.created':
@@ -222,6 +223,36 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return payload.key ? `Workflow ${p('key')} restaurado` : 'Ejecución restaurada'
     default:
       return type
+  }
+}
+
+/** Un webhook de GitHub (GH-B): `github.<evento>.<acción>` con el resumen de la entrega. */
+function describeGitHub(payload: Record<string, unknown>): string {
+  const p = (k: string) => (payload[k] == null ? '' : String(payload[k]))
+  const repo = p('repository')
+  const action = p('action')
+  const short = (sha: string) => sha.slice(0, 7)
+  switch (p('event')) {
+    case 'pull_request': {
+      const what = payload.merged === true && action === 'closed' ? 'fusionada' : action
+      return `GitHub ${repo}: PR #${p('number')} ${what} (${p('title')})`
+    }
+    case 'pull_request_review':
+      return `GitHub ${repo}: revisión ${p('reviewState').toLowerCase()} de ${p('reviewer')} en la PR #${p('number')}`
+    case 'check_run':
+      return `GitHub ${repo}: check ${p('name')} ${p('conclusion') || p('status')} en ${short(p('headSha'))}`
+    case 'check_suite':
+      return `GitHub ${repo}: checks ${p('conclusion') || p('status')} en ${short(p('headSha'))}`
+    case 'status':
+      return `GitHub ${repo}: estado ${p('context')} ${p('state')} en ${short(p('sha'))}`
+    case 'issues':
+      return `GitHub ${repo}: issue #${p('number')} ${action}${p('label') ? ` (${p('label')})` : ''}`
+    case 'issue_comment':
+      return `GitHub ${repo}: comentario de ${p('commentAuthor')} en la ${
+        payload.isPullRequest === true ? 'PR' : 'issue'
+      } #${p('number')}`
+    default:
+      return `GitHub ${repo}: ${p('event')}${action ? ` ${action}` : ''}`
   }
 }
 
