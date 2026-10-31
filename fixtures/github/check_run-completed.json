@@ -1,0 +1,17 @@
+{
+  "action": "completed",
+  "check_run": {
+    "id": 3001,
+    "name": "Java",
+    "status": "completed",
+    "conclusion": "failure",
+    "head_sha": "4f1c2a9e0b7d3c5e8a6f1b2d3c4e5f6a7b8c9d0e",
+    "html_url": "https://github.com/guilu/demo-repo/runs/3001",
+    "app": {"slug": "github-actions"},
+    "check_suite": {"id": 4001},
+    "pull_requests": [{"number": 12}]
+  },
+  "repository": {"id": 5001, "full_name": "guilu/demo-repo", "private": true},
+  "installation": {"id": 7},
+  "sender": {"login": "github-actions[bot]"}
+}

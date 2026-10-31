@@ -41,10 +41,11 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
- * Todo exige sesión salvo la salud, el login, leer la paleta y la API del runner, que lleva su
- * propio token. Las peticiones con cabecera {@code Authorization} (HTTP Basic de un script, o el
- * runner) no usan cookies y no necesitan CSRF. Un 401 nunca lleva {@code WWW-Authenticate}, para
- * que el navegador no abra su diálogo de usuario y contraseña.
+ * Todo exige sesión salvo la salud, el login, leer la paleta, la API del runner, que lleva su
+ * propio token, y los webhooks de GitHub, que van firmados. Las peticiones con cabecera {@code
+ * Authorization} (HTTP Basic de un script, o el runner) no usan cookies y no necesitan CSRF. Un 401
+ * nunca lleva {@code WWW-Authenticate}, para que el navegador no abra su diálogo de usuario y
+ * contraseña.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(SecurityProperties.class)
@@ -62,6 +63,9 @@ class SecurityConfiguration {
                     .requestMatchers(
                         "/api/runner/**", "/api/auth/login", "/actuator/health/**", "/error")
                     .permitAll()
+                    // Los webhooks de GitHub: los protege su firma (X-Hub-Signature-256).
+                    .requestMatchers(HttpMethod.POST, "/api/github/webhooks")
+                    .permitAll()
                     // La paleta se lee antes de entrar, para pintar el login con ella.
                     .requestMatchers(HttpMethod.GET, "/api/settings/appearance")
                     .permitAll()
@@ -74,7 +78,7 @@ class SecurityConfiguration {
             csrf ->
                 csrf.spa()
                     // El registro del runner aún no lleva token, pero tampoco cookies.
-                    .ignoringRequestMatchers("/api/runner/**")
+                    .ignoringRequestMatchers("/api/runner/**", "/api/github/webhooks")
                     .ignoringRequestMatchers(
                         new RequestHeaderRequestMatcher(HttpHeaders.AUTHORIZATION)))
         .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)

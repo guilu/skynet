@@ -1,0 +1,14 @@
+{
+  "action": "created",
+  "installation": {
+    "id": 9,
+    "account": {"login": "guilu", "type": "User"},
+    "repository_selection": "selected",
+    "suspended_at": null
+  },
+  "repositories": [
+    {"id": 5001, "full_name": "guilu/demo-repo", "private": true},
+    {"id": 5002, "full_name": "guilu/otro", "private": false}
+  ],
+  "sender": {"login": "guilu"}
+}
