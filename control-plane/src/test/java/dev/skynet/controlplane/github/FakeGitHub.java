@@ -38,6 +38,8 @@ public final class FakeGitHub implements AutoCloseable {
   static final String APP_ID = "424242";
 
   private static final ObjectMapper JSON = JsonMapper.builder().build();
+  private static final Pattern REDELIVER_PATH =
+      Pattern.compile("/app/hook/deliveries/(\\d+)/attempts");
   private static final Pattern TOKEN_PATH =
       Pattern.compile("/app/installations/(\\d+)/access_tokens");
 
@@ -47,6 +49,12 @@ public final class FakeGitHub implements AutoCloseable {
 
   /** Los cuerpos de las peticiones de token, en orden. */
   final List<JsonNode> tokenRequests = new CopyOnWriteArrayList<>();
+
+  /** Lo que devuelve {@code GET /app/hook/deliveries}: los intentos de entrega de la App. */
+  final List<Map<String, Object>> hookDeliveries = new CopyOnWriteArrayList<>();
+
+  /** Los ids de intento que se han pedido repetir ({@code POST …/attempts}), en orden. */
+  final List<Long> redelivered = new CopyOnWriteArrayList<>();
 
   /** Si no es 0, {@code GET /app} responde con este código (p. ej. 401: credenciales malas). */
   volatile int appStatus;
@@ -83,7 +91,15 @@ public final class FakeGitHub implements AutoCloseable {
     installations.clear();
     issuedTokens.clear();
     tokenRequests.clear();
+    hookDeliveries.clear();
+    redelivered.clear();
     appStatus = 0;
+  }
+
+  /** Un intento de entrega de la App, como lo lista {@code GET /app/hook/deliveries}. */
+  void hookDelivery(long id, String guid, int statusCode) {
+    hookDeliveries.add(
+        Map.of("id", id, "guid", guid, "status_code", statusCode, "event", "pull_request"));
   }
 
   /** El id que da este GitHub a un repositorio: estable a partir de su nombre. */
@@ -156,6 +172,13 @@ public final class FakeGitHub implements AutoCloseable {
           list.add(item);
         }
         send(exchange, 200, list);
+      } else if (path.equals("/app/hook/deliveries") && method.equals("GET")) {
+        send(exchange, 200, hookDeliveries);
+      } else if (REDELIVER_PATH.matcher(path).matches() && method.equals("POST")) {
+        Matcher redeliver = REDELIVER_PATH.matcher(path);
+        redeliver.matches();
+        redelivered.add(Long.parseLong(redeliver.group(1)));
+        send(exchange, 202, Map.of());
       } else if (token.matches() && method.equals("POST")) {
         long id = Long.parseLong(token.group(1));
         JsonNode body = JSON.readTree(exchange.getRequestBody().readAllBytes());

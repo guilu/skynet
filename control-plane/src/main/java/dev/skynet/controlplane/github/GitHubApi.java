@@ -103,6 +103,20 @@ class GitHubApi {
     }
   }
 
+  /**
+   * {@code GET /app/hook/deliveries}: las últimas entregas de webhooks de la App, con su código.
+   */
+  List<JsonNode> hookDeliveries() {
+    List<JsonNode> all = new ArrayList<>();
+    send("GET", "/app/hook/deliveries?per_page=" + PAGE_SIZE, appJwt(), null).forEach(all::add);
+    return all;
+  }
+
+  /** {@code POST /app/hook/deliveries/{id}/attempts}: pide a GitHub que repita una entrega. */
+  void redeliver(long hookDeliveryId) {
+    send("POST", "/app/hook/deliveries/" + hookDeliveryId + "/attempts", appJwt(), null);
+  }
+
   private JsonNode send(String method, String path, String bearer, String body) {
     HttpRequest.Builder request =
         HttpRequest.newBuilder(URI.create(properties.apiUrl() + path))

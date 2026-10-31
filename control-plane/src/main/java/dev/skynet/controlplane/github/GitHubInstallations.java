@@ -148,46 +148,103 @@ public class GitHubInstallations {
       jdbc.sql("DELETE FROM github_installation WHERE id NOT IN (:ids)").param("ids", ids).update();
     }
     for (Fetched f : fetched) {
-      JsonNode installation = f.installation();
-      long id = installation.path("id").asLong();
-      jdbc.sql(
-              """
-              INSERT INTO github_installation (id, account_login, account_type,
-                  repository_selection, suspended_at, synced_at, created_at)
-              VALUES (:id, :account, :type, :selection, :suspendedAt, :now, :now)
-              ON CONFLICT (id) DO UPDATE SET account_login = EXCLUDED.account_login,
-                  account_type = EXCLUDED.account_type,
-                  repository_selection = EXCLUDED.repository_selection,
-                  suspended_at = EXCLUDED.suspended_at, synced_at = EXCLUDED.synced_at
-              """)
-          .param("id", id)
-          .param("account", installation.path("account").path("login").asString(""))
-          .param("type", installation.path("account").path("type").asString("User"))
-          .param("selection", installation.path("repository_selection").asString("selected"))
-          .param("suspendedAt", timestamp(installation.path("suspended_at")))
-          .param("now", Timestamp.from(now))
-          .update();
+      long id = upsertInstallation(f.installation(), now);
       if (f.repositories() == null) {
         continue;
       }
       jdbc.sql("DELETE FROM github_installation_repository WHERE installation_id = :id")
           .param("id", id)
           .update();
-      for (JsonNode repository : f.repositories()) {
-        jdbc.sql(
-                """
-                INSERT INTO github_installation_repository
-                    (installation_id, repository_id, full_name, private)
-                VALUES (:installation, :repository, :name, :private)
-                ON CONFLICT DO NOTHING
-                """)
-            .param("installation", id)
-            .param("repository", repository.path("id").asLong())
-            .param("name", repository.path("full_name").asString())
-            .param("private", repository.path("private").asBoolean(false))
-            .update();
-      }
+      f.repositories().forEach(repository -> addRepository(id, repository));
     }
+  }
+
+  /** Guarda una instalación tal como la da GitHub (sin sus repositorios). Devuelve su id. */
+  long upsertInstallation(JsonNode installation, Instant now) {
+    long id = installation.path("id").asLong();
+    jdbc.sql(
+            """
+            INSERT INTO github_installation (id, account_login, account_type,
+                repository_selection, suspended_at, synced_at, created_at)
+            VALUES (:id, :account, :type, :selection, :suspendedAt, :now, :now)
+            ON CONFLICT (id) DO UPDATE SET account_login = EXCLUDED.account_login,
+                account_type = EXCLUDED.account_type,
+                repository_selection = EXCLUDED.repository_selection,
+                suspended_at = EXCLUDED.suspended_at, synced_at = EXCLUDED.synced_at
+            """)
+        .param("id", id)
+        .param("account", installation.path("account").path("login").asString(""))
+        .param("type", installation.path("account").path("type").asString("User"))
+        .param("selection", installation.path("repository_selection").asString("selected"))
+        .param("suspendedAt", timestamp(installation.path("suspended_at")))
+        .param("now", Timestamp.from(now))
+        .update();
+    return id;
+  }
+
+  /** Añade a una instalación un repositorio de GitHub ({@code id}, {@code full_name}…). */
+  void addRepository(long installationId, JsonNode repository) {
+    jdbc.sql(
+            """
+            INSERT INTO github_installation_repository
+                (installation_id, repository_id, full_name, private)
+            VALUES (:installation, :repository, :name, :private)
+            ON CONFLICT (installation_id, repository_id)
+                DO UPDATE SET full_name = EXCLUDED.full_name, private = EXCLUDED.private
+            """)
+        .param("installation", installationId)
+        .param("repository", repository.path("id").asLong())
+        .param("name", repository.path("full_name").asString())
+        .param("private", repository.path("private").asBoolean(false))
+        .update();
+  }
+
+  void removeRepository(long installationId, long repositoryId) {
+    jdbc.sql(
+            "DELETE FROM github_installation_repository"
+                + " WHERE installation_id = :installation AND repository_id = :repository")
+        .param("installation", installationId)
+        .param("repository", repositoryId)
+        .update();
+  }
+
+  /** Borra una instalación (desinstalada) con sus repositorios y olvida sus tokens. */
+  void removeInstallation(long installationId) {
+    jdbc.sql("DELETE FROM github_installation WHERE id = :id").param("id", installationId).update();
+    tokens.forget(installationId);
+  }
+
+  /** Marca una instalación como suspendida ({@code at}) o reactivada ({@code null}). */
+  void suspend(long installationId, Instant at) {
+    jdbc.sql("UPDATE github_installation SET suspended_at = :at WHERE id = :id")
+        .param("at", at == null ? null : Timestamp.from(at))
+        .param("id", installationId)
+        .update();
+    tokens.forget(installationId);
+  }
+
+  /**
+   * Los repositorios de Skynet sin archivar cuya URL remota es {@code owner/nombre} en este GitHub,
+   * sin distinguir mayúsculas.
+   */
+  List<UUID> repositoriesNamed(String fullName) {
+    String host = properties.webHost().toLowerCase(Locale.ROOT);
+    return jdbc
+        .sql(
+            "SELECT r.id, r.remote_url FROM repository r JOIN project p ON p.id = r.project_id"
+                + " WHERE r.archived_at IS NULL AND p.archived_at IS NULL AND r.remote_url IS NOT NULL")
+        .query(
+            (rs, n) ->
+                RemoteName.parse(rs.getString("remote_url"))
+                        .filter(name -> name.host().equals(host))
+                        .filter(name -> name.fullName().equalsIgnoreCase(fullName))
+                        .isPresent()
+                    ? rs.getObject("id", UUID.class)
+                    : null)
+        .list()
+        .stream()
+        .filter(java.util.Objects::nonNull)
+        .toList();
   }
 
   private List<Installation> installations() {
@@ -297,7 +354,7 @@ public class GitHubInstallations {
     return check;
   }
 
-  private static Timestamp timestamp(JsonNode node) {
+  static Timestamp timestamp(JsonNode node) {
     return node == null || node.isNull() || node.isMissingNode()
         ? null
         : Timestamp.from(Instant.parse(node.asString()));

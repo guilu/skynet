@@ -33,4 +33,20 @@ class GitHubUnconfiguredIT extends IntegrationTest {
             HttpClientErrorException.Conflict.class,
             e -> assertThat(e.getResponseBodyAsString()).contains("SKYNET_GITHUB_APP_ID"));
   }
+
+  @Test
+  void aWebhookIsUnavailable() throws Exception {
+    java.net.http.HttpResponse<String> response =
+        java.net.http.HttpClient.newHttpClient()
+            .send(
+                java.net.http.HttpRequest.newBuilder(
+                        java.net.URI.create("http://localhost:" + port + "/api/github/webhooks"))
+                    .header("X-GitHub-Event", "ping")
+                    .header("X-GitHub-Delivery", "d-1")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString("{}"))
+                    .build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString());
+    assertThat(response.statusCode()).isEqualTo(503);
+    assertThat(response.body()).contains("no está configurada");
+  }
 }

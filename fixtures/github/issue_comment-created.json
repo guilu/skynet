@@ -1,0 +1,21 @@
+{
+  "action": "created",
+  "issue": {
+    "number": 12,
+    "title": "Corrige add() con negativos",
+    "state": "open",
+    "html_url": "https://github.com/guilu/demo-repo/pull/12",
+    "user": {"login": "guilu"},
+    "labels": [{"name": "skynet"}],
+    "pull_request": {"url": "https://api.github.com/repos/guilu/demo-repo/pulls/12"}
+  },
+  "comment": {
+    "id": 6001,
+    "html_url": "https://github.com/guilu/demo-repo/pull/12#issuecomment-6001",
+    "user": {"login": "guilu"},
+    "body": "/skynet revisa esto con api_key=super-secreto-123"
+  },
+  "repository": {"id": 5001, "full_name": "guilu/demo-repo", "private": true},
+  "installation": {"id": 7},
+  "sender": {"login": "guilu"}
+}

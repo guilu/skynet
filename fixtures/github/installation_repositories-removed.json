@@ -1,0 +1,13 @@
+{
+  "action": "removed",
+  "installation": {
+    "id": 9,
+    "account": {"login": "guilu", "type": "User"},
+    "repository_selection": "selected",
+    "suspended_at": null
+  },
+  "repository_selection": "selected",
+  "repositories_added": [],
+  "repositories_removed": [{"id": 5002, "full_name": "guilu/otro", "private": false}],
+  "sender": {"login": "guilu"}
+}
