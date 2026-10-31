@@ -14,7 +14,7 @@ GH-C es la última PR del hito GH (GitHub conectado, issue #195). Lleva a la web
   - o su URL remota cuando la App no está configurada.
 
   El formulario de registrar repositorio admite ahora una **URL remota** opcional.
-- **Actividad:** los eventos `github.*` salen legibles, por ejemplo «GitHub guilu/demo-repo: PR #12 opened (…)».
+- **Actividad:** los eventos `github.*` salen legibles, por ejemplo «GitHub guilu/demo-repo: PR #12 opened (…)», y el filtro **Origen** tiene la opción **GitHub** (`?f.origin=github`).
 - **Contratos:** `fixtures/contracts/github-status.json` y `github-deliveries.json`, generados por `ContractIT` y comprobados por la web.
 - **E2E** `web/e2e/github.e2e.ts`, contra un GitHub falso (`web/e2e/fake-github.ts`) que `scripts/e2e.sh` arranca con una clave de usar y tirar. Todas las E2E corren ahora con la App configurada contra ese falso.
 - **Documentación:** `docs/github.md`, el README y §8 y §12 de `docs/implementation-plan.md`.

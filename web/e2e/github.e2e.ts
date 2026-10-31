@@ -91,7 +91,8 @@ test('Ajustes → GitHub: sincronizar, recibir una entrega firmada y verla en Ac
     await expect(github.getByText(/instalación de guilu/)).toBeVisible()
     await expectAccessible(page, 'repositorio con acceso a GitHub')
 
-    await page.goto('/activity')
+    // Solo lo que llega de GitHub: tras otras E2E, el resto del historial es largo.
+    await page.goto('/activity?f.origin=github')
     await expect(
       page.getByText('GitHub guilu/demo-repo: PR #12 opened (Corrige add() con negativos)').first(),
     ).toBeVisible()
