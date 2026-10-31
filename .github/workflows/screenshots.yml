@@ -22,7 +22,8 @@ jobs:
   galeria:
     name: Generar la galería
     if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'galeria-visual'
-    runs-on: ubuntu-latest
+    # Fijo: Playwright 1.56 no soporta Ubuntu 26.04 (el ubuntu-latest actual).
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     services:
       postgres:
