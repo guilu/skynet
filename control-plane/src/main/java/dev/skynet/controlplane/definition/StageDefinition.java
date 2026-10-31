@@ -44,6 +44,7 @@ import tools.jackson.databind.json.JsonMapper;
  *     proyecto (ME-C): {@code off}, {@code read} o {@code write}; {@code null} para {@code write}
  * @param pullRequest la PR que abre una fase {@code github-pr} (EN-A); {@code null} en las demás
  * @param ci cómo espera la CI una fase {@code github-check} (EN-B); {@code null} en las demás
+ * @param merge cómo fusiona la PR una fase {@code github-merge} (EN-C); {@code null} en las demás
  */
 public record StageDefinition(
     String id,
@@ -66,7 +67,8 @@ public record StageDefinition(
     String phase,
     String memory,
     PullRequestSpec pullRequest,
-    CiSpec ci) {
+    CiSpec ci,
+    MergeSpec merge) {
 
   /** Las macrofases que admite {@code phase}, en el orden de los carriles del grafo. */
   public static final List<String> PHASES =
@@ -88,6 +90,54 @@ public record StageDefinition(
     dependsOn = List.copyOf(dependsOn);
     children = children == null ? List.of() : List.copyOf(children);
     checks = checks == null ? List.of() : List.copyOf(checks);
+  }
+
+  /** Una fase que no fusiona ninguna PR. */
+  public StageDefinition(
+      String id,
+      String name,
+      StageType type,
+      String agent,
+      String prompt,
+      List<Dependency> dependsOn,
+      WorkspaceMode workspace,
+      String workspaceFrom,
+      String command,
+      List<ChildDefinition> children,
+      String condition,
+      Map<String, Object> outputSchema,
+      String outputSchemaPath,
+      List<VerificationCheck> checks,
+      Approval approval,
+      Retry retry,
+      Duration timeout,
+      String phase,
+      String memory,
+      PullRequestSpec pullRequest,
+      CiSpec ci) {
+    this(
+        id,
+        name,
+        type,
+        agent,
+        prompt,
+        dependsOn,
+        workspace,
+        workspaceFrom,
+        command,
+        children,
+        condition,
+        outputSchema,
+        outputSchemaPath,
+        checks,
+        approval,
+        retry,
+        timeout,
+        phase,
+        memory,
+        pullRequest,
+        ci,
+        null);
   }
 
   /** Una fase que no espera la CI. */

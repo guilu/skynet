@@ -162,6 +162,19 @@ class WebhookProcessor {
               "github:" + delivery.deliveryId() + ":" + repository,
               delivery.receivedAt()));
     }
+    if ("pull_request".equals(delivery.event())
+        && "closed".equals(delivery.action())
+        && payload.path("pull_request").path("number").isIntegralNumber()) {
+      JsonNode pr = payload.path("pull_request");
+      for (UUID repository : repositories) {
+        publisher.publishEvent(
+            new GitHubPullRequestClosed(
+                repository,
+                pr.path("number").asLong(),
+                pr.path("merged").asBoolean(false),
+                pr.path("merge_commit_sha").asString(null)));
+      }
+    }
     String sha = checkedSha(delivery.event(), payload);
     if (sha != null) {
       for (UUID repository : repositories) {

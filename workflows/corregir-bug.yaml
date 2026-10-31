@@ -77,3 +77,29 @@ stages:
 
       Arréglalo, deja todos los tests en verde y confirma los cambios con un commit.
     checks: [tests]
+  # Entrega por PR (EN): en un repositorio con la GitHub App sube la rama, abre la PR, espera la CI
+  # (si falla, la corrige corregir), pide aprobar la fusión y fusiona. En uno local, se omiten.
+  - id: pr
+    type: github-pr
+    dependsOn: [revisar, "ajustar?"]
+    workspaceFrom: revisar
+    phase: deliver
+    condition: repository.github
+  - id: ci
+    type: github-check
+    dependsOn: [pr]
+    phase: deliver
+    condition: repository.github
+    fix: corregir
+  - id: aprobar-fusion
+    type: human-approval
+    dependsOn: [ci]
+    phase: deliver
+    condition: repository.github
+    action: "Fusionar la PR de {{workItem.key}}: {{workItem.title}}"
+    risk: high
+  - id: fusionar
+    type: github-merge
+    dependsOn: [aprobar-fusion]
+    phase: deliver
+    condition: repository.github

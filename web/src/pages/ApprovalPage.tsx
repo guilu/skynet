@@ -7,6 +7,7 @@ import {
   type ApprovalAction,
   type ApprovalEvidence,
   type ApprovalEvidenceAgent,
+  type ApprovalPullRequest,
   type ApprovalView,
 } from '../api'
 import {
@@ -19,6 +20,7 @@ import {
 import { ErrorMessage } from '../components/ErrorMessage'
 import { SkynySays } from '../components/companion/SkynySays'
 import { JsonView } from '../components/run/JsonView'
+import { CiChecksList } from '../components/run/PullRequestCard'
 import { StatusBadge } from '../components/StatusBadge'
 import { Button } from '../components/ui/Button'
 import { Pill } from '../components/ui/Pill'
@@ -152,6 +154,8 @@ export function ApprovalPage() {
           </p>
         </section>
       )}
+
+      {a.evidence.pullRequest && <MergeEvidence pr={a.evidence.pullRequest} />}
 
       <section className="card" aria-labelledby="evidence-title">
         <h2 id="evidence-title">Lo que dejaron sus dependencias</h2>
@@ -444,6 +448,53 @@ function DecisionPanel({
           <ErrorMessage error={decide.error} />
         </div>
       </Sheet>
+    </section>
+  )
+}
+
+/** La PR que se fusiona al aprobar (EN-C): el commit que se aprueba y su CI, check a check. */
+function MergeEvidence({ pr }: { pr: ApprovalPullRequest }) {
+  return (
+    <section className="card" aria-labelledby="merge-title">
+      <h2 id="merge-title">La PR que se fusiona al aprobar</h2>
+      <p>
+        {pr.url && pr.number != null ? (
+          <a href={pr.url} target="_blank" rel="noreferrer">
+            PR #{pr.number}
+          </a>
+        ) : (
+          'La PR'
+        )}{' '}
+        de <code>{pr.branch}</code>
+        {pr.base && (
+          <>
+            {' '}
+            a <code>{pr.base}</code>
+          </>
+        )}
+        {pr.headSha && (
+          <>
+            , en el commit <code title={pr.headSha}>{pr.headSha.slice(0, 7)}</code>
+          </>
+        )}
+        . Se fusiona solo si sigue en ese commit y con la CI en verde.
+      </p>
+      {pr.ci ? (
+        <>
+          <p className="muted small">
+            CI: {pr.ci.status === 'PASSED' ? 'en verde' : pr.ci.status.toLowerCase()}
+            {pr.ci.round > 0 &&
+              ` tras ${pr.ci.round === 1 ? '1 ronda' : `${pr.ci.round} rondas`} de corrección`}
+          </p>
+          {pr.ci.checks.length > 0 ? (
+            <CiChecksList checks={pr.ci.checks} />
+          ) : (
+            <p className="muted small">El commit no tiene checks.</p>
+          )}
+        </>
+      ) : (
+        <p className="muted small">Esta ejecución no espera la CI antes de fusionar.</p>
+      )}
     </section>
   )
 }

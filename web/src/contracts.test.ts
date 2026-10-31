@@ -449,6 +449,7 @@ const APPROVAL_EVIDENCE: Keys<ApprovalEvidence> = {
   grants: true,
   consequences: true,
   changesRequested: true,
+  pullRequest: true,
 }
 const APPROVAL_AGENT: Keys<ApprovalEvidenceAgent> = {
   agentRunId: true,
@@ -552,6 +553,7 @@ const STAGE_DEFINITION: Keys<StageDefinition> = {
   memory: true,
   pullRequest: true,
   ci: true,
+  merge: true,
   retry: true,
   timeoutSeconds: true,
   id: true,

@@ -640,14 +640,18 @@ stages:
   - id: ci
     type: github-check
     dependsOn: [pull-request]
+    fix: implementation      # la CI roja la corrige el agente que implementó
 
   - id: merge-approval
     type: human-approval
     dependsOn: [ci]
+    action: "Fusionar la PR de {{workItem.key}}"
+    risk: high               # la puerta enseña la PR, su commit y su CI
 
   - id: merge
     type: github-merge
     dependsOn: [merge-approval]
+    method: squash           # solo si la PR sigue en el commit aprobado y con la CI en verde
 ```
 
 ### 11.1. Tipos de nodos
@@ -659,6 +663,7 @@ stages:
 - `conditional`
 - `github-pr`
 - `github-check`
+- `github-merge`
 - `merge`
 - `deploy`
 - `verification`

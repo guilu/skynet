@@ -6,7 +6,7 @@ Skynet se conecta a GitHub con una **GitHub App propia** (hito GH). Con ella, el
 - pide tokens de instalación de corta vida, limitados a un repositorio;
 - recibe webhooks firmados y los publica como eventos `github.*`.
 
-Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la rama y abre la PR (EN-A) y la fase `github-check` espera su CI y la corrige (EN-B); ver «Entrega por PR» y «Esperar la CI de la PR» en [`workflows.md`](workflows.md). Fusionar llega con EN-C, y lanzar workflows desde issues o comentarios, con DS.
+Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la rama y abre la PR (EN-A), la fase `github-check` espera su CI y la corrige (EN-B) y la fase `github-merge` la fusiona tras una puerta, solo con el commit aprobado (EN-C). El recorrido completo está en [`entrega-por-pr.md`](entrega-por-pr.md) y cada fase, en [`workflows.md`](workflows.md). Lanzar workflows desde issues o comentarios llega con DS.
 
 ## 1. Crear la App
 
@@ -23,7 +23,7 @@ Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la 
    | Permiso | Nivel | Para qué |
    |---|---|---|
    | Metadata | lectura | obligatorio |
-   | Contents | lectura y escritura | subir las ramas de los agentes (EN) |
+   | Contents | lectura y escritura | subir las ramas de los agentes y borrarlas al fusionar (EN) |
    | Pull requests | lectura y escritura | abrir y fusionar las PR (EN) |
    | Checks | lectura | esperar la CI (EN) |
    | Commit statuses | lectura | la CI que usa statuses (EN) |
@@ -55,6 +55,7 @@ Añade a `deploy/.env` y reinicia (`docker compose -f deploy/docker-compose.yml 
 | `SKYNET_GITHUB_WEBHOOK_SECRET` | el secreto del webhook |
 | `SKYNET_GITHUB_API_URL` | por defecto `https://api.github.com` |
 | `SKYNET_GITHUB_WEB_URL` | el host de las URL remotas; por defecto `https://github.com` |
+| `SKYNET_GITHUB_GIT_URL` | adónde sube las ramas el runner; por defecto, `SKYNET_GITHUB_WEB_URL`. Solo las E2E lo cambian, a remotos locales (`file://…`) |
 | `SKYNET_WEBHOOK_PORT` | el puerto que solo sirve el webhook (8082) |
 | `SKYNET_WEBHOOK_BIND` | dónde escucha ese puerto (por defecto `127.0.0.1`) |
 

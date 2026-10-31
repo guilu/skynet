@@ -21,6 +21,10 @@ public class GitHubRepositories {
   /** Subir ramas: lo que recibe el runner para el push. */
   static final Map<String, String> CONTENTS_WRITE = Map.of("contents", "write");
 
+  /** Fusionar la PR y borrar su rama. */
+  static final Map<String, String> MERGE_WRITE =
+      Map.of("metadata", "read", "pull_requests", "write", "contents", "write");
+
   /** Leer el repositorio y abrir, actualizar y etiquetar su PR. */
   static final Map<String, String> PULL_REQUESTS_WRITE =
       Map.of("metadata", "read", "pull_requests", "write");
@@ -116,7 +120,7 @@ public class GitHubRepositories {
 
   /** La URL https a la que sube el runner: la del repositorio en este GitHub. */
   public String pushUrl(Link link) {
-    return properties.webUrl() + "/" + link.fullName() + ".git";
+    return properties.gitUrl() + "/" + link.fullName() + ".git";
   }
 
   /**
@@ -329,6 +333,47 @@ public class GitHubRepositories {
   /** Comenta en la PR {@code number}. */
   public void comment(Link link, long number, String body) {
     api.comment(token(link), link.fullName(), number, body);
+  }
+
+  /**
+   * El estado de una PR en GitHub.
+   *
+   * @param state {@code open} o {@code closed}
+   * @param merged si está fusionada
+   * @param headSha el último commit de su rama
+   * @param mergeSha el commit de la fusión, si está fusionada
+   */
+  public record PullRequestState(String state, boolean merged, String headSha, String mergeSha) {}
+
+  /** El estado de la PR {@code number}. */
+  public PullRequestState pullRequestState(Link link, long number) {
+    JsonNode pr = api.pullRequest(token(link), link.fullName(), number);
+    return new PullRequestState(
+        pr.path("state").asString("open"),
+        pr.path("merged").asBoolean(false),
+        pr.path("head").path("sha").asString(null),
+        pr.path("merge_commit_sha").asString(null));
+  }
+
+  /**
+   * Fusiona la PR {@code number} con {@code method}, solo si su último commit sigue siendo {@code
+   * sha}: si alguien ha subido algo después, GitHub responde 409 y no la fusiona.
+   *
+   * @return el commit de la fusión
+   */
+  public String merge(Link link, long number, String method, String sha) {
+    String token =
+        tokens.forRepository(link.installationId(), link.githubRepositoryId(), MERGE_WRITE);
+    return api.mergePullRequest(token, link.fullName(), number, method, sha)
+        .path("sha")
+        .asString(null);
+  }
+
+  /** Borra la rama {@code branch} del repositorio. */
+  public void deleteBranch(Link link, String branch) {
+    String token =
+        tokens.forRepository(link.installationId(), link.githubRepositoryId(), MERGE_WRITE);
+    api.deleteBranch(token, link.fullName(), branch);
   }
 
   /** Las últimas {@code lines} líneas de {@code text}, sin la marca de tiempo de Actions. */

@@ -138,6 +138,27 @@ public class WorkItemService {
     }
   }
 
+  /**
+   * Da el trabajo por hecho ({@code CLOSED}), p. ej. al fusionar su PR (EN-C), con {@code
+   * workitem.closed} y el motivo. Si ya lo estaba, no hace nada.
+   */
+  @Transactional
+  public void close(UUID id, UUID workflowRunId, String reason) {
+    WorkItem item = get(id);
+    if (!item.close()) {
+      return;
+    }
+    workItems.save(item);
+    events.append(
+        EventDraft.of(
+            "work_item",
+            item.getId(),
+            "workitem.closed",
+            workflowRunId,
+            Map.of("key", item.getKey(), "reason", reason),
+            time.now()));
+  }
+
   @Transactional(readOnly = true)
   public WorkItem get(UUID id) {
     return workItems.findById(id).orElseThrow(() -> new NotFoundException("Trabajo", id));

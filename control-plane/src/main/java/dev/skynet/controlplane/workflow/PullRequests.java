@@ -59,6 +59,8 @@ public class PullRequests {
   static final String PUSHED = "PUSHED";
   static final String OPEN = "OPEN";
   static final String FAILED = "FAILED";
+  static final String MERGED = "MERGED";
+  static final String CLOSED = "CLOSED";
 
   /** Cuánto se reserva una fila mientras se habla con GitHub. */
   static final Duration LEASE = Duration.ofMinutes(2);

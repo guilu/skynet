@@ -28,6 +28,10 @@ export SKYNET_GITHUB_PRIVATE_KEY_FILE=$OUT/github-app.pem
 export SKYNET_GITHUB_WEBHOOK_SECRET=${SKYNET_GITHUB_WEBHOOK_SECRET:-e2e-webhook-secret}
 export SKYNET_GITHUB_API_URL=http://127.0.0.1:$E2E_GITHUB_PORT
 export SKYNET_GITHUB_WEB_URL=https://github.com
+# La entrega por PR (web/e2e/delivery.e2e.ts) sube a un remoto local, nunca a GitHub: el runner
+# empuja a file://…/remotes/guilu/demo-repo.git y el GitHub falso lee de ahí cada rama.
+export E2E_GITHUB_REMOTES=$OUT/remotes
+export SKYNET_GITHUB_GIT_URL=file://$E2E_GITHUB_REMOTES
 
 cleanup() {
   "$ROOT/scripts/e2e-service.sh" stop runner || true
@@ -41,7 +45,7 @@ if [[ "${E2E_SKIP_BUILD:-}" != 1 ]]; then
 fi
 
 # Repositorio de juguete para el worktree del agente.
-rm -rf "$E2E_REPO_PATH" "$OUT/runner-home" "$OUT/claude" "$OUT/codex" "$OUT/agy" "$OUT"/*.log
+rm -rf "$E2E_REPO_PATH" "$E2E_GITHUB_REMOTES" "$OUT/runner-home" "$OUT/claude" "$OUT/codex" "$OUT/agy" "$OUT"/*.log
 mkdir -p "$E2E_REPO_PATH"
 git -C "$E2E_REPO_PATH" init -q -b main
 # Secretos falsos que no deben llegar nunca a la web (web/e2e/review.e2e.ts): uno en calc.py, que
@@ -66,6 +70,8 @@ SH
 printf 'build/\n' > "$E2E_REPO_PATH/.gitignore"
 git -C "$E2E_REPO_PATH" add calc.py check.sh .gitignore
 git -C "$E2E_REPO_PATH" -c user.email=e2e@skynet -c user.name=e2e commit -qm "Inicial"
+git init -q --bare -b main "$E2E_GITHUB_REMOTES/guilu/demo-repo.git"
+git -C "$E2E_REPO_PATH" push -q "$E2E_GITHUB_REMOTES/guilu/demo-repo.git" main
 
 openssl genrsa -out "$SKYNET_GITHUB_PRIVATE_KEY_FILE" 2048 2> /dev/null
 node web/e2e/fake-github.ts "$E2E_GITHUB_PORT" >> "$OUT/fake-github.log" 2>&1 &

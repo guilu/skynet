@@ -86,6 +86,9 @@ skynet:
     api-url: ${SKYNET_GITHUB_API_URL:https://api.github.com}
     # La web de ese GitHub, la de las URL remotas; sin ella, github.com o el host de la API.
     web-url: ${SKYNET_GITHUB_WEB_URL:}
+    # De dónde cuelgan los repositorios al subir una rama (EN): por defecto, web-url. Las E2E lo
+    # apuntan a remotos locales para no subir nada a GitHub.
+    git-url: ${SKYNET_GITHUB_GIT_URL:}
     webhooks:
       # Cada cuánto se procesan las entregas pendientes y cuánto se queda un worker una entrega.
       poll-interval: ${SKYNET_GITHUB_WEBHOOK_POLL_INTERVAL:1s}

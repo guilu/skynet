@@ -149,9 +149,10 @@ class DefinitionParserTest {
     assertThat(parsed.validation().valid()).isTrue();
     assertThat(parsed.validation().publishable()).isFalse();
     assertThat(messages(parsed, Severity.UNSUPPORTED))
-        .contains(
-            "El tipo `github-merge` todavía no se ejecuta: llega en EN-C",
-            "`promptTemplate` todavía no se usa: llega en S3");
+        .contains("`promptTemplate` todavía no se usa: llega en S3")
+        .noneMatch(m -> m.contains("github-merge"));
+    assertThat(parsed.definition().stage("merge").orElseThrow().merge())
+        .isEqualTo(MergeSpec.DEFAULT);
 
     WorkflowDefinition definition = parsed.definition();
     assertThat(definition.stage("pull-request").orElseThrow().dependsOn())
@@ -1407,6 +1408,74 @@ class DefinitionParserTest {
             "`despues` no va antes de la fase `github-pr`: `fix` tiene que ser la fase cuyo"
                 + " worktree se sube a la PR",
             "`required` debe ser una lista de checks, p. ej. `required: [test]`");
+  }
+
+  @Test
+  void aMergeStageMergesThePullRequestWithTheMethodAndBranchItSays() {
+    Parsed parsed =
+        parse(
+            """
+            id: fusion
+            stages:
+              - id: implement
+                type: agent
+                prompt: Implementa
+              - id: pr
+                type: github-pr
+                dependsOn: [implement]
+              - id: ci
+                type: github-check
+                dependsOn: [pr]
+              - id: aprobar
+                type: human-approval
+                dependsOn: [ci]
+                action: Fusionar la PR
+              - id: merge
+                type: github-merge
+                dependsOn: [aprobar]
+                method: rebase
+                deleteBranch: false
+              - id: merge-por-defecto
+                type: github-merge
+                dependsOn: [aprobar]
+            """);
+    assertThat(parsed.validation().problems()).isEmpty();
+    assertThat(parsed.validation().publishable()).isTrue();
+    StageDefinition merge = parsed.definition().stage("merge").orElseThrow();
+    assertThat(merge.merge()).isEqualTo(new MergeSpec("rebase", false));
+    assertThat(merge.timeout()).isEqualTo(Duration.ofMinutes(30));
+    assertThat(parsed.definition().stage("merge-por-defecto").orElseThrow().merge())
+        .isEqualTo(MergeSpec.DEFAULT);
+    assertThat(parsed.definition().stage("pr").orElseThrow().merge()).isNull();
+  }
+
+  @Test
+  void aMergeStageNeedsAPullRequestBeforeItAndAKnownMethod() {
+    Parsed parsed =
+        parse(
+            """
+            id: fusion-mal
+            stages:
+              - id: implement
+                type: agent
+                prompt: Implementa
+                method: squash
+              - id: sin-pr
+                type: github-merge
+                dependsOn: [implement]
+                agent: dev
+                method: fast-forward
+                deleteBranch: quizá
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .contains(
+            "`method` solo vale en fases `type: github-merge`; esta es `agent`",
+            "Una fase `github-merge` fusiona la PR, no lanza un agente: quita `agent`",
+            "`method: fast-forward` no se conoce. Admite: squash, merge, rebase",
+            "Una fase `github-merge` fusiona la PR de la ejecución: ponla en `dependsOn` detrás"
+                + " de una fase `github-pr` (mejor, detrás de su `github-check` y de una"
+                + " `human-approval`)");
+    assertThat(messages(parsed, Severity.ERROR)).anyMatch(m -> m.contains("deleteBranch"));
   }
 
   @Test

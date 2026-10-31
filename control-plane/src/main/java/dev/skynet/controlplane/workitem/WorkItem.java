@@ -112,6 +112,15 @@ public class WorkItem {
     return status;
   }
 
+  /** Lo da por hecho; devuelve si ha cambiado. */
+  boolean close() {
+    if (status == WorkItemStatus.CLOSED) {
+      return false;
+    }
+    status = WorkItemStatus.CLOSED;
+    return true;
+  }
+
   public Instant getCreatedAt() {
     return createdAt;
   }

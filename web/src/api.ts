@@ -302,6 +302,63 @@ export interface ApprovalEvidenceAgent {
   artifacts: { id: string; type: string; name: string }[]
 }
 
+/** La PR que abre una fase `github-pr` (EN-A). */
+export interface PullRequestView {
+  repositoryId: string
+  fullName: string
+  branch: string
+  base: string | null
+  status: 'PUSHING' | 'PUSHED' | 'OPEN' | 'FAILED' | 'MERGED' | 'CLOSED'
+  headSha: string | null
+  number: number | null
+  url: string | null
+  title: string | null
+  error: string | null
+  updatedAt: string
+}
+
+/** Un check de la CI de un commit, como lo resume Skynet. */
+export interface CiCheck {
+  name: string
+  state: 'success' | 'failure' | 'pending' | 'skipped' | string
+  url?: string | null
+  [key: string]: unknown
+}
+
+/** La espera de la CI de una fase `github-check` (EN-B). */
+export interface CiCheckView {
+  stageRunId: string
+  stageKey: string
+  status: 'WAITING' | 'FIXING' | 'PUSHING' | 'PASSED' | 'FAILED'
+  headSha: string
+  round: number
+  checks: CiCheck[]
+  error: string | null
+  waitingSince: string
+  updatedAt: string
+}
+
+/** La fusión de una fase `github-merge` (EN-C). */
+export interface MergeView {
+  stageRunId: string
+  method: 'squash' | 'merge' | 'rebase'
+  status: 'PENDING' | 'MERGED' | 'FAILED'
+  expectedSha: string
+  mergedSha: string | null
+  branchDeleted: boolean
+  error: string | null
+}
+
+/** La PR que fusionará la fase que desbloquea una aprobación, con la CI del commit que se aprueba. */
+export interface ApprovalPullRequest {
+  number: number | null
+  url: string | null
+  branch: string
+  base: string | null
+  headSha: string | null
+  ci: { status: CiCheckView['status']; round: number; checks: CiCheck[] } | null
+}
+
 /** La foto que se tomó al crear la petición. */
 export interface ApprovalEvidence {
   origin: ApprovalOrigin
@@ -327,6 +384,8 @@ export interface ApprovalEvidence {
     createdAt: string
     correctionAgentRunId: string
   } | null
+  /** Si la aprobación desbloquea una fase `github-merge`, la PR que fusionará; si no, null. */
+  pullRequest: ApprovalPullRequest | null
 }
 
 /** Una decisión o un comentario, que no se reescribe. */
@@ -736,6 +795,8 @@ export interface StageDefinition {
     fix: string | null
     maxRounds: number
   } | null
+  /** Cómo fusiona la PR una fase `github-merge`; null en las demás. */
+  merge: { method: 'squash' | 'merge' | 'rebase'; deleteBranch: boolean } | null
 }
 
 /** Una comprobación de fase: `artifacts`, `tests`, `diff`, `commit`, `scope` o `command`. */
@@ -1324,6 +1385,11 @@ export const api = {
   runs: (workItemId: string, archived?: ArchivedFilter) =>
     request<Run[]>('GET', `/api/work-items/${workItemId}/runs${archivedQuery(archived)}`),
   run: (id: string) => request<Run>('GET', `/api/workflow-runs/${id}`),
+  pullRequests: (runId: string) =>
+    request<PullRequestView[]>('GET', `/api/workflow-runs/${runId}/pull-requests`),
+  ciChecks: (runId: string) =>
+    request<CiCheckView[]>('GET', `/api/workflow-runs/${runId}/ci-checks`),
+  merges: (runId: string) => request<MergeView[]>('GET', `/api/workflow-runs/${runId}/merges`),
   listRuns: (query: {
     status?: RunStatus[]
     projectId?: string

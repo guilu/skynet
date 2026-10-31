@@ -2,6 +2,50 @@ import { describe, expect, it } from 'vitest'
 import { describeEvent, formatCompact, formatDuration, providerName, statusTone } from './format'
 
 describe('describeEvent', () => {
+  it('describe la entrega por PR: la PR, la CI y la fusión', () => {
+    expect(
+      describeEvent('stage.github.pr.opened', {
+        stageKey: 'pr',
+        number: 12,
+        branch: 'skynet/ENG-1',
+        base: 'main',
+      }),
+    ).toBe('pr abrió la PR #12 (skynet/ENG-1 → main)')
+    expect(
+      describeEvent('stage.github.ci.fix.started', {
+        fixStageKey: 'implementar',
+        round: 1,
+        maxRounds: 2,
+        failed: ['test', 'lint'],
+      }),
+    ).toBe('implementar corrige la CI (ronda 1 de 2): test, lint')
+    expect(
+      describeEvent('stage.github.pr.merged', {
+        stageKey: 'merge',
+        number: 12,
+        branch: 'skynet/ENG-1',
+        branchDeleted: true,
+        external: false,
+      }),
+    ).toBe('merge fusionó la PR #12 y borró la rama skynet/ENG-1')
+    expect(describeEvent('stage.github.pr.merged', { number: 12, external: true })).toBe(
+      'La PR #12 se fusionó en GitHub',
+    )
+    expect(
+      describeEvent('stage.github.pr.merge.failed', {
+        stageKey: 'merge',
+        number: 12,
+        error: 'La CI ya no está en verde: falló en lint',
+      }),
+    ).toBe('merge no fusionó la PR #12: La CI ya no está en verde: falló en lint')
+    expect(describeEvent('workflow.github.pr.closed', { number: 12 })).toBe(
+      'La PR #12 se cerró en GitHub sin fusionarla: se cancela la ejecución',
+    )
+    expect(describeEvent('workitem.closed', { key: 'ENG-1', reason: 'pull-request-merged' })).toBe(
+      'Trabajo ENG-1 cerrado: su PR se fusionó',
+    )
+  })
+
   it('describe los webhooks de GitHub con su resumen', () => {
     const base = { repository: 'guilu/demo-repo' }
     expect(

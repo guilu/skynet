@@ -436,6 +436,7 @@ class ContractIT extends IntegrationTest {
       evidence.put("grants", Samples.effectivePolicy().subList(0, 1));
       evidence.put("consequences", consequences);
       evidence.put("changesRequested", null);
+      evidence.put("pullRequest", null);
       return new ApprovalView(
           APPROVAL,
           RUN,

@@ -25,7 +25,8 @@ function whoOf(stage: StageRun): string | null {
     stage.type === 'parallel' ||
     stage.type === 'command' ||
     stage.type === 'github-pr' ||
-    stage.type === 'github-check'
+    stage.type === 'github-check' ||
+    stage.type === 'github-merge'
   )
     return null
   if (stage.agent) return stage.agent
