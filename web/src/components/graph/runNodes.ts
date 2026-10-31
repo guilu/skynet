@@ -21,7 +21,8 @@ export function toRunGraphStages(stages: StageRun[]): GraphStage[] {
 
 /** Quién la hace: el agente con nombre, el proveedor del último agente o nada. */
 function whoOf(stage: StageRun): string | null {
-  if (stage.type === 'parallel' || stage.type === 'command') return null
+  if (stage.type === 'parallel' || stage.type === 'command' || stage.type === 'github-pr')
+    return null
   if (stage.agent) return stage.agent
   const last = stage.agents.at(-1)
   return last && last.provider !== 'command' && last.provider !== 'verification'

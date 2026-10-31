@@ -103,6 +103,43 @@ class GitHubApi {
     }
   }
 
+  /** {@code GET /repos/{owner}/{repo}}: el repositorio, con su rama por defecto. */
+  JsonNode repository(String token, String fullName) {
+    return send("GET", "/repos/" + fullName, token, null);
+  }
+
+  /**
+   * {@code GET /repos/{owner}/{repo}/pulls?head=owner:rama&state=open}: la PR abierta de la rama.
+   */
+  List<JsonNode> openPullRequests(String token, String fullName, String owner, String branch) {
+    String head =
+        java.net.URLEncoder.encode(owner + ":" + branch, java.nio.charset.StandardCharsets.UTF_8);
+    List<JsonNode> all = new ArrayList<>();
+    send("GET", "/repos/" + fullName + "/pulls?state=open&head=" + head, token, null)
+        .forEach(all::add);
+    return all;
+  }
+
+  /** {@code POST /repos/{owner}/{repo}/pulls}. */
+  JsonNode createPullRequest(String token, String fullName, Map<String, Object> body) {
+    return send("POST", "/repos/" + fullName + "/pulls", token, json.writeValueAsString(body));
+  }
+
+  /** {@code PATCH /repos/{owner}/{repo}/pulls/{n}}. */
+  JsonNode updatePullRequest(String token, String fullName, long number, Map<String, Object> body) {
+    return send(
+        "PATCH", "/repos/" + fullName + "/pulls/" + number, token, json.writeValueAsString(body));
+  }
+
+  /** {@code POST /repos/{owner}/{repo}/issues/{n}/labels}: añade etiquetas a una PR. */
+  void addLabels(String token, String fullName, long number, List<String> labels) {
+    send(
+        "POST",
+        "/repos/" + fullName + "/issues/" + number + "/labels",
+        token,
+        json.writeValueAsString(Map.of("labels", labels)));
+  }
+
   /**
    * {@code GET /app/hook/deliveries}: las últimas entregas de webhooks de la App, con su código.
    */

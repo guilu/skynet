@@ -143,6 +143,7 @@ const definition = (over: Partial<StageDefinition>): StageDefinition => ({
   timeoutSeconds: null,
   phase: null,
   memory: null,
+  pullRequest: null,
   ...over,
 })
 

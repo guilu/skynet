@@ -1,6 +1,7 @@
 package dev.skynet.runner;
 
 import dev.skynet.protocol.runner.AgentLimits;
+import dev.skynet.protocol.runner.PushBranch;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerCommandType;
@@ -257,6 +258,37 @@ public final class TestAgents {
             null,
             workspace,
             command),
+        null,
+        null);
+  }
+
+  /** Una fase {@code github-pr}: sube el worktree {@code workspace} a {@code push} (EN-A). */
+  public static RunnerCommand push(
+      UUID agentRunId, String repository, WorkspaceRef workspace, PushBranch push) {
+    return new RunnerCommand(
+        UUID.randomUUID(),
+        RunnerCommandType.START,
+        agentRunId,
+        Instant.now(),
+        new StartAgent(
+            UUID.randomUUID(),
+            "TKM-1",
+            repository,
+            "main",
+            UUID.randomUUID(),
+            "git push " + push.branch(),
+            List.of(),
+            null,
+            null,
+            AgentLimits.none(),
+            null,
+            null,
+            workspace,
+            null,
+            null,
+            null,
+            null,
+            push),
         null,
         null);
   }

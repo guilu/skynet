@@ -36,8 +36,10 @@ class RunController {
 
   private final RunService service;
   private final WorkspaceCleanup cleanup;
+  private final PullRequests pullRequests;
 
-  RunController(RunService service, WorkspaceCleanup cleanup) {
+  RunController(RunService service, WorkspaceCleanup cleanup, PullRequests pullRequests) {
+    this.pullRequests = pullRequests;
     this.service = service;
     this.cleanup = cleanup;
   }
@@ -162,6 +164,13 @@ class RunController {
   @GetMapping("/api/workflow-runs/{id}")
   RunView run(@PathVariable UUID id) {
     return service.run(id);
+  }
+
+  /** Las PR que ha abierto la ejecución con sus fases {@code github-pr} (EN-A). */
+  @GetMapping("/api/workflow-runs/{id}/pull-requests")
+  List<PullRequests.View> pullRequests(@PathVariable UUID id) {
+    service.run(id);
+    return pullRequests.ofRun(id);
   }
 
   @GetMapping("/api/agent-runs/{id}")

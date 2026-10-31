@@ -1486,8 +1486,8 @@ public class RunService {
   List<UUID> silentAgents(Instant before) {
     return jdbc.sql(
             "SELECT id FROM agent_run WHERE status IN ('THINKING', 'EXECUTING')"
-                + " AND provider <> ? AND last_activity_at < ? ORDER BY last_activity_at")
-        .params(AgentRun.PROVIDER_COMMAND, Timestamp.from(before))
+                + " AND provider NOT IN (?, ?) AND last_activity_at < ? ORDER BY last_activity_at")
+        .params(AgentRun.PROVIDER_COMMAND, AgentRun.PROVIDER_PUSH, Timestamp.from(before))
         .query(UUID.class)
         .list();
   }

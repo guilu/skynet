@@ -6,6 +6,7 @@ import dev.skynet.protocol.runner.EventBatch;
 import dev.skynet.protocol.runner.EventBatchResult;
 import dev.skynet.protocol.runner.HeartbeatReply;
 import dev.skynet.protocol.runner.MemoryToken;
+import dev.skynet.protocol.runner.PushToken;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
@@ -80,6 +81,17 @@ public class ControlPlaneClient {
     return send(
         post("/api/runner/agent-runs/" + agentRunId + "/memory-token", null, true),
         MemoryToken.class,
+        TIMEOUT);
+  }
+
+  /**
+   * Token de GitHub para el push de una fase {@code github-pr} de este runner (EN-A). No se guarda:
+   * se usa una vez.
+   */
+  public PushToken pushToken(UUID agentRunId) throws IOException, InterruptedException {
+    return send(
+        post("/api/runner/agent-runs/" + agentRunId + "/push-token", null, true),
+        PushToken.class,
         TIMEOUT);
   }
 

@@ -1,6 +1,7 @@
 import {
   Bot,
   GitBranch,
+  GitPullRequest,
   Hand,
   ListChecks,
   Split,
@@ -19,6 +20,7 @@ export const TYPE_ICON: Record<string, LucideIcon> = {
   conditional: GitBranch,
   verification: ListChecks,
   'human-approval': Hand,
+  'github-pr': GitPullRequest,
 }
 
 /** Lo que hace la fase, en una línea corta: el agente, el comando, la condición… */
@@ -36,6 +38,8 @@ export function stageDetail(stage: StageDefinition): string {
       return stage.checks.length === 1 ? '1 comprobación' : `${stage.checks.length} comprobaciones`
     case 'human-approval':
       return stage.approval ? `Aprobar: ${stage.approval.action}` : 'Aprobación'
+    case 'github-pr':
+      return 'Subir la rama y abrir la PR'
     default:
       return ''
   }

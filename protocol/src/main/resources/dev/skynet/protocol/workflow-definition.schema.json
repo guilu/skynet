@@ -232,6 +232,34 @@
           "description": "Macrofase de la fase. El grafo del workflow y el de la ejecución la dibujan como carril, en este orden; una fase sin phase va en el carril de su dependencia. Sin ninguna, no hay carriles.",
           "enum": ["spec", "plan", "implement", "test", "review", "deliver"]
         },
+        "pullRequest": {
+          "description": "Solo en fases github-pr: la PR que se abre al subir la rama skynet/<clave>. Todo es opcional.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "description": "Plantilla del título, con variables. Por defecto, «<clave> - <título del trabajo>».",
+              "type": "string"
+            },
+            "body": {
+              "description": "Plantilla de un texto que va al principio de la descripción, antes de las evidencias.",
+              "type": "string"
+            },
+            "base": {
+              "description": "Rama de destino. Por defecto, la rama por defecto del repositorio en GitHub.",
+              "type": "string"
+            },
+            "draft": {
+              "description": "Si se abre como borrador.",
+              "type": "boolean"
+            },
+            "labels": {
+              "description": "Etiquetas de la PR.",
+              "type": "array",
+              "items": { "type": "string", "maxLength": 50 }
+            }
+          }
+        },
         "memory": {
           "description": "Acceso del agente (o de los hijos de una parallel) a la memoria del proyecto: write (por defecto) lee y guarda, read solo lee (contexto inicial, mem_search y mem_get) y off no recibe ni el bloque de memoria ni las herramientas. Solo vale en fases agent y parallel.",
           "enum": ["off", "read", "write"]
@@ -242,7 +270,7 @@
           "pattern": "^[1-9][0-9]{0,5}(s|m|h)$"
         },
         "condition": {
-          "description": "Se evalúa cuando la fase está lista; si es falsa, la fase se omite. Lee <fase>.status, <fase>.exitCode, <fase>.<campo> del output de su agente e inputs.<nombre>, con == != < <= > >= && || ! in. En una fase conditional es lo único que hace.",
+          "description": "Se evalúa cuando la fase está lista; si es falsa, la fase se omite. Lee <fase>.status, <fase>.exitCode, <fase>.<campo> del output de su agente, inputs.<nombre> y repository.github, con == != < <= > >= && || ! in. En una fase conditional es lo único que hace.",
           "type": "string",
           "minLength": 1
         },

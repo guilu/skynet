@@ -99,6 +99,12 @@ skynet:
       # Cada cuánto se piden a GitHub las entregas que no llegaron (túnel o equipo caídos).
       redelivery-interval: ${SKYNET_GITHUB_REDELIVERY_INTERVAL:10m}
       max-payload: 25MB
+    pull-requests:
+      # Cada cuánto se abren las PR cuya rama ya está subida (EN-A).
+      poll-interval: ${SKYNET_GITHUB_PR_POLL_INTERVAL:2s}
+      # La URL con la que se ve Skynet, para enlazar la ejecución desde la PR. Vacía: sin enlace,
+      # porque Skynet vive en tu equipo y GitHub no llega a él.
+      public-url: ${SKYNET_PUBLIC_URL:}
   artifacts:
     # Directorio donde se guarda el contenido de los artefactos.
     root: ${SKYNET_ARTIFACTS_DIR:data/artifacts}

@@ -91,9 +91,14 @@ public final class DefinitionParser {
           "retry",
           "timeout",
           "phase",
-          "memory");
+          "memory",
+          "pullRequest");
   static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt", "retry");
   static final Set<String> RETRY_KEYS = Set.of("maxAttempts", "on", "delay");
+  static final Set<String> PULL_REQUEST_KEYS = Set.of("title", "body", "base", "draft", "labels");
+
+  /** La condición que dice si el repositorio de la ejecución está en GitHub con acceso (EN-A). */
+  public static final String REPOSITORY_GITHUB = "repository.github";
 
   /** Claves de §11 que llegan con hitos posteriores, con el hito que las ejecuta. */
   static final Map<String, String> FUTURE_STAGE_KEYS = Map.of("promptTemplate", "S3");
@@ -959,6 +964,7 @@ public final class DefinitionParser {
       Duration timeout = timeout(fields, type, path);
       String phase = phase(fields, path);
       String memory = memory(fields, type, path);
+      PullRequestSpec pullRequest = pullRequest(fields, type, node, path);
       Entry schemaEntry = fields.get("outputSchema");
       Map<String, Object> outputSchema = null;
       String outputSchemaPath = null;
@@ -997,7 +1003,8 @@ public final class DefinitionParser {
               retry,
               timeout,
               phase,
-              memory);
+              memory,
+              pullRequest);
       return new StageAt(stage, path, node, fields, dependencyNodes, children);
     }
 
@@ -1641,6 +1648,81 @@ public final class DefinitionParser {
      * (un dato de entrada metido en un comando de shell podría ejecutar otra cosa). En las demás
      * fases, {@code command} no vale.
      */
+    /**
+     * El bloque {@code pullRequest} de una fase {@code github-pr}: título, texto, rama de destino,
+     * borrador y etiquetas. Sin bloque, la PR se abre con lo predeterminado.
+     */
+    private PullRequestSpec pullRequest(
+        Map<String, Entry> fields, StageType type, Node node, String path) {
+      Entry entry = fields.get("pullRequest");
+      if (type != StageType.GITHUB_PR) {
+        if (entry != null && type.executable()) {
+          error(
+              entry.key(),
+              path + ".pullRequest",
+              "`pullRequest` solo vale en fases `type: github-pr`; esta es `" + type.yaml() + "`");
+        }
+        return null;
+      }
+      for (String key : List.of("agent", "prompt")) {
+        Entry used = fields.get(key);
+        if (used != null) {
+          error(
+              used.key(),
+              path + "." + key,
+              "Una fase `github-pr` sube la rama y abre la PR, no lanza un agente: quita `"
+                  + key
+                  + "`");
+        }
+      }
+      if (entry == null || isNull(entry.value())) {
+        return PullRequestSpec.DEFAULT;
+      }
+      String at = path + ".pullRequest";
+      Map<String, Entry> pr = mapping(entry.value(), at, PULL_REQUEST_KEYS, Map.of());
+      if (pr == null) {
+        return PullRequestSpec.DEFAULT;
+      }
+      String base = text(pr.get("base"), at + ".base");
+      if (base != null && !dev.skynet.protocol.SafeIds.isBranch(base)) {
+        error(
+            pr.get("base").value(), at + ".base", "`" + base + "` no es un nombre de rama válido");
+        base = null;
+      }
+      if (base != null && VARIABLE.matcher(base).find()) {
+        error(pr.get("base").value(), at + ".base", "La rama de destino no admite variables");
+        base = null;
+      }
+      List<String> labels = new ArrayList<>();
+      Entry labelsEntry = pr.get("labels");
+      if (labelsEntry != null && !isNull(labelsEntry.value())) {
+        if (labelsEntry.value() instanceof SequenceNode sequence) {
+          for (int i = 0; i < sequence.getValue().size(); i++) {
+            String label = scalarText(sequence.getValue().get(i), at + ".labels[" + i + "]");
+            if (label != null && label.length() > 50) {
+              error(
+                  sequence.getValue().get(i),
+                  at + ".labels[" + i + "]",
+                  "Una etiqueta de GitHub tiene como mucho 50 caracteres");
+            } else if (label != null && !labels.contains(label)) {
+              labels.add(label);
+            }
+          }
+        } else {
+          error(
+              labelsEntry.value(),
+              at + ".labels",
+              "`labels` debe ser una lista, p. ej. `labels: [skynet]`");
+        }
+      }
+      return new PullRequestSpec(
+          text(pr.get("title"), at + ".title"),
+          text(pr.get("body"), at + ".body"),
+          base,
+          Boolean.TRUE.equals(bool(pr.get("draft"), at + ".draft")),
+          labels);
+    }
+
     private String command(Map<String, Entry> fields, StageType type, Node node, String path) {
       Entry entry = fields.get("command");
       if (type != StageType.COMMAND) {
@@ -1759,6 +1841,44 @@ public final class DefinitionParser {
         }
         if (stage.type() == StageType.HUMAN_APPROVAL) {
           checkApproval(at, byId, inputNames, scope);
+          checkWorkspace(at, byId);
+          continue;
+        }
+        if (stage.type() == StageType.GITHUB_PR) {
+          boolean inherits =
+              stage.workspaceFrom() != null
+                  || stage.dependsOn().stream()
+                      .anyMatch(
+                          d ->
+                              byId.containsKey(d.stage())
+                                  && byId.get(d.stage()).stage().type().hasWorkspace());
+          if (stage.workspace() == WorkspaceMode.ISOLATED) {
+            error(
+                at.fields().get("workspace").value(),
+                at.path() + ".workspace",
+                "Una fase `github-pr` sube el worktree que hereda: quita `workspace:"
+                    + " isolated-worktree`");
+          } else if (!inherits) {
+            error(
+                at.node(),
+                at.path() + ".dependsOn",
+                "Una fase `github-pr` sube el worktree de la fase de la que depende: ponla en"
+                    + " `dependsOn` detrás de una fase `agent`, `command` o `parallel`");
+          }
+          Entry pr = at.fields().get("pullRequest");
+          if (pr != null && pr.value() instanceof MappingNode mapping) {
+            for (NodeTuple tuple : mapping.getValue()) {
+              if (tuple.getKeyNode() instanceof ScalarNode key
+                  && List.of("title", "body").contains(key.getValue())) {
+                checkVariables(
+                    tuple.getValueNode(),
+                    at.path() + ".pullRequest." + key.getValue(),
+                    inputNames,
+                    scope,
+                    List.of(stage.id()));
+              }
+            }
+          }
           checkWorkspace(at, byId);
           continue;
         }
@@ -1987,6 +2107,18 @@ public final class DefinitionParser {
       List<String> parts = path.parts();
       String first = parts.getFirst();
       String usage = "`" + path.text() + "` " + reader.usage();
+      if (reader == CONDITION && first.equals("repository") && !byId.containsKey(first)) {
+        if (!path.text().equals(REPOSITORY_GITHUB)) {
+          throw new Condition.SyntaxError(
+              "`"
+                  + path.text()
+                  + "` no es un dato del repositorio: el único es `"
+                  + REPOSITORY_GITHUB
+                  + "`",
+              path.position());
+        }
+        return Condition.Type.BOOLEAN;
+      }
       if (first.equals("inputs")) {
         if (parts.size() != 2) {
           throw new Condition.SyntaxError(usage, path.position());

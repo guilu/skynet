@@ -7,6 +7,7 @@ import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.runner.AgentLimits;
 import dev.skynet.protocol.runner.ArtifactType;
 import dev.skynet.protocol.runner.CleanupWorkspace;
+import dev.skynet.protocol.runner.PushBranch;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
@@ -888,6 +889,93 @@ class AgentExecutorTest {
         .containsEntry("isError", false)
         .containsEntry("output", "1\n");
     assertThat(exit.payload()).containsEntry("exitCode", 0);
+  }
+
+  @Test
+  void aPushStageCommitsAndPushesTheWorktreeOfThePreviousStage() throws Exception {
+    UUID first = UUID.randomUUID();
+    executor("02-tools", Map.of("FAKE_CLAUDE_APPLY", "1"))
+        .start(TestAgents.start(first, repo.toString(), null));
+    awaitExit(first);
+    Map<String, Object> ready = eventsOf(first).getFirst().payload();
+    String path = ready.get("path").toString();
+    Path remote = dir.resolve("remote.git");
+    TestRepos.git(dir, "init", "-q", "--bare", remote.toString());
+    List<UUID> asked = new java.util.concurrent.CopyOnWriteArrayList<>();
+    executor.pushTokens(
+        agentRunId -> {
+          asked.add(agentRunId);
+          return "ghs_tokenDePruebaDelPush000000000000000";
+        });
+
+    UUID id = UUID.randomUUID();
+    executor.start(
+        TestAgents.push(
+            id,
+            repo.toString(),
+            new WorkspaceRef(path, ready.get("branch").toString()),
+            new PushBranch(
+                remote.toUri().toString(),
+                "skynet/tkm-1",
+                ready.get("baseCommit").toString(),
+                false,
+                "TKM-1: cambios")));
+
+    NormalizedEvent exit = awaitExit(id);
+    assertThat(exit.payload()).containsEntry("exitCode", 0);
+    assertThat(asked).containsExactly(id);
+    List<NormalizedEvent> events = eventsOf(id);
+    assertThat(events)
+        .extracting(NormalizedEvent::type)
+        .contains(
+            AgentEventType.WORKSPACE_READY,
+            AgentEventType.TOOL_STARTED,
+            AgentEventType.TOOL_COMPLETED,
+            AgentEventType.GIT_PUSHED,
+            AgentEventType.PROCESS_EXITED);
+    NormalizedEvent pushed =
+        events.stream()
+            .filter(e -> e.type() == AgentEventType.GIT_PUSHED)
+            .findFirst()
+            .orElseThrow();
+    assertThat(pushed.payload())
+        .containsEntry("branch", "skynet/tkm-1")
+        .containsEntry("sha", TestRepos.git(remote, "rev-parse", "refs/heads/skynet/tkm-1"))
+        .containsEntry("commits", 1)
+        // El agente de prueba ya confirma sus cambios.
+        .containsEntry("committed", false);
+  }
+
+  @Test
+  void aPushWithoutATokenFails() throws Exception {
+    UUID first = UUID.randomUUID();
+    executor("02-tools", Map.of("FAKE_CLAUDE_APPLY", "1"))
+        .start(TestAgents.start(first, repo.toString(), null));
+    awaitExit(first);
+    Map<String, Object> ready = eventsOf(first).getFirst().payload();
+    executor.pushTokens(
+        agentRunId -> {
+          throw new java.io.IOException("401");
+        });
+
+    UUID id = UUID.randomUUID();
+    executor.start(
+        TestAgents.push(
+            id,
+            repo.toString(),
+            new WorkspaceRef(ready.get("path").toString(), ready.get("branch").toString()),
+            new PushBranch(
+                "https://github.com/guilu/demo-repo.git",
+                "skynet/tkm-1",
+                ready.get("baseCommit").toString(),
+                false,
+                "TKM-1: cambios")));
+
+    NormalizedEvent exit = awaitExit(id);
+    assertThat(exit.payload().get("error").toString())
+        .startsWith("No se pudo subir la rama")
+        .contains("token de GitHub");
+    assertThat(exit.payload()).containsEntry("failure", "error");
   }
 
   @Test

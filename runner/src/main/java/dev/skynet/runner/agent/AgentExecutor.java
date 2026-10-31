@@ -5,6 +5,7 @@ import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.SafeIds;
 import dev.skynet.protocol.runner.ArtifactType;
 import dev.skynet.protocol.runner.CleanupWorkspace;
+import dev.skynet.protocol.runner.PushBranch;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
@@ -25,6 +26,7 @@ import dev.skynet.runner.verify.DeclaredFiles;
 import dev.skynet.runner.verify.JUnitReports;
 import dev.skynet.runner.verify.StageChecks;
 import dev.skynet.runner.workspace.GitIndexer;
+import dev.skynet.runner.workspace.GitPush;
 import dev.skynet.runner.workspace.Workspace;
 import dev.skynet.runner.workspace.WorkspaceManager;
 import java.io.IOException;
@@ -87,6 +89,14 @@ public final class AgentExecutor implements AutoCloseable {
   private final DeclaredFiles.Limits declaredLimits;
   private final ArtifactSpool spool;
   private final MemorySessions memory;
+
+  /** Da el token de GitHub para el push de una invocación (EN-A). */
+  @FunctionalInterface
+  public interface PushTokens {
+    String forInvocation(UUID agentRunId) throws IOException, InterruptedException;
+  }
+
+  private volatile PushTokens pushTokens;
 
   public AgentExecutor(
       Journal journal,
@@ -163,6 +173,12 @@ public final class AgentExecutor implements AutoCloseable {
     this.spool = spool;
     this.declaredLimits = declaredLimits;
     this.memory = memory;
+  }
+
+  /** De dónde saca el token del push de una fase {@code github-pr}; sin él, el push falla. */
+  public AgentExecutor pushTokens(PushTokens tokens) {
+    this.pushTokens = tokens;
+    return this;
   }
 
   /** Invocaciones en curso en este runner. */
@@ -274,7 +290,7 @@ public final class AgentExecutor implements AutoCloseable {
   private void run(UUID id, StartAgent start, Execution execution) {
     try {
       AgentProvider provider = null;
-      if (start.command() == null) {
+      if (start.command() == null && start.push() == null) {
         provider = providers.get(start.providerOrDefault()).orElse(null);
         if (provider == null) {
           finish(
@@ -388,6 +404,10 @@ public final class AgentExecutor implements AutoCloseable {
     emit(id, AgentEventType.WORKSPACE_READY, ready);
     if (start.command() != null) {
       runCommand(id, start, execution, workspace);
+      return;
+    }
+    if (start.push() != null) {
+      runPush(id, start.push(), workspace);
       return;
     }
     StartAgent resolved;
@@ -732,6 +752,55 @@ public final class AgentExecutor implements AutoCloseable {
       payload.put(FAILURE, AgentFailure.TIMEOUT.id());
     }
     finish(id, payload);
+  }
+
+  /**
+   * Fase {@code github-pr} (EN-A): confirma lo que haya sin confirmar y sube la rama con un token
+   * que pide justo ahora y no guarda. Se cuenta como una sola herramienta ({@code git push}) y, si
+   * sube, emite {@code agent.git.pushed} con el commit antes del fin.
+   */
+  private void runPush(UUID id, PushBranch push, Workspace workspace) throws InterruptedException {
+    String toolUseId = "push-" + id;
+    Map<String, Object> started = new LinkedHashMap<>();
+    started.put("toolUseId", toolUseId);
+    started.put("name", "git push");
+    started.put("input", Map.of("branch", push.branch(), "remote", push.remoteUrl()));
+    emit(id, AgentEventType.TOOL_STARTED, started);
+    Map<String, Object> completed = new LinkedHashMap<>();
+    completed.put("toolUseId", toolUseId);
+    completed.put("name", "git push");
+    GitPush.Result result;
+    try {
+      GitPush.check(push);
+      PushTokens tokens = pushTokens;
+      if (tokens == null) {
+        throw new IOException("Este runner no sabe pedir tokens de GitHub");
+      }
+      String token;
+      try {
+        token = tokens.forInvocation(id);
+      } catch (IOException e) {
+        throw new IOException("El control plane no dio el token de GitHub: " + e.getMessage(), e);
+      }
+      result = GitPush.push(workspace.path(), push, token);
+    } catch (IOException e) {
+      completed.put("isError", true);
+      completed.put("output", e.getMessage());
+      emit(id, AgentEventType.TOOL_COMPLETED, completed);
+      finish(id, failure(AgentFailure.ERROR, "No se pudo subir la rama: " + e.getMessage()));
+      return;
+    }
+    completed.put("isError", false);
+    completed.put("output", result.output());
+    emit(id, AgentEventType.TOOL_COMPLETED, completed);
+    collectChanges(id, workspace);
+    Map<String, Object> pushed = new LinkedHashMap<>();
+    pushed.put("branch", push.branch());
+    pushed.put("sha", result.sha());
+    pushed.put("commits", result.commits());
+    pushed.put("committed", result.committed());
+    emit(id, AgentEventType.GIT_PUSHED, pushed);
+    finish(id, Map.of(EXIT_CODE, 0));
   }
 
   /** Los últimos {@link #MAX_OUTPUT} bytes de la salida de un comando, como texto. */
