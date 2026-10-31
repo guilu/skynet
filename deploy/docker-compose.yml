@@ -67,8 +67,15 @@ services:
       SKYNET_WORKTREE_RETENTION: ${SKYNET_WORKTREE_RETENTION:-7d}
       SKYNET_VERIFICATION_TIMEOUT: ${SKYNET_VERIFICATION_TIMEOUT:-30m}
       SKYNET_CANCEL_TIMEOUT: ${SKYNET_CANCEL_TIMEOUT:-70s}
+      # GitHub App (docs/github.md). La clave se monta de solo lectura desde la ruta del equipo.
+      SKYNET_GITHUB_APP_ID: ${SKYNET_GITHUB_APP_ID:-}
+      SKYNET_GITHUB_PRIVATE_KEY_FILE: ${SKYNET_GITHUB_PRIVATE_KEY_FILE:+/run/skynet/github-app.pem}
+      SKYNET_GITHUB_WEBHOOK_SECRET: ${SKYNET_GITHUB_WEBHOOK_SECRET:-}
+      SKYNET_GITHUB_API_URL: ${SKYNET_GITHUB_API_URL:-https://api.github.com}
+      SKYNET_GITHUB_WEB_URL: ${SKYNET_GITHUB_WEB_URL:-}
     volumes:
       - artifacts-data:/data/artifacts
+      - ${SKYNET_GITHUB_PRIVATE_KEY_FILE:-/dev/null}:/run/skynet/github-app.pem:ro
     # Los runners se conectan aquí o a la web, que redirige /api. El healthcheck es el de la imagen.
     ports:
       - "${SKYNET_API_PORT:-8080}:8080"

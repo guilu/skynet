@@ -75,6 +75,17 @@ skynet:
     # Límites de cada invocación: llamadas a las herramientas de memoria y guardados.
     max-calls: ${SKYNET_MEMORY_MAX_CALLS:500}
     max-saves: ${SKYNET_MEMORY_MAX_SAVES:100}
+  github:
+    # La GitHub App de esta instalación (hito GH, ver docs/github.md). Sin las tres primeras,
+    # Skynet no habla con GitHub.
+    app-id: ${SKYNET_GITHUB_APP_ID:}
+    # Ruta al .pem que da GitHub al crear la App. Nunca se copia a la base de datos.
+    private-key-file: ${SKYNET_GITHUB_PRIVATE_KEY_FILE:}
+    webhook-secret: ${SKYNET_GITHUB_WEBHOOK_SECRET:}
+    # La API de GitHub; para GitHub Enterprise, https://<host>/api/v3.
+    api-url: ${SKYNET_GITHUB_API_URL:https://api.github.com}
+    # La web de ese GitHub, la de las URL remotas; sin ella, github.com o el host de la API.
+    web-url: ${SKYNET_GITHUB_WEB_URL:}
   artifacts:
     # Directorio donde se guarda el contenido de los artefactos.
     root: ${SKYNET_ARTIFACTS_DIR:data/artifacts}

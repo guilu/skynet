@@ -21,6 +21,7 @@ public record RedactionProperties(List<String> secretEnv) {
           "SKYNET_ADMIN_PASSWORD",
           "SKYNET_RUNNER_REGISTRATION_TOKEN",
           "SKYNET_DB_PASSWORD",
+          "SKYNET_GITHUB_WEBHOOK_SECRET",
           "GITHUB_TOKEN",
           "GH_TOKEN");
 
