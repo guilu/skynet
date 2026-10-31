@@ -5,6 +5,7 @@ import { api, type Appearance } from '../api'
 import { APPEARANCE_KEY, useAppearance } from '../appearance'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { CompanionGallery } from '../components/companion/CompanionGallery'
+import { GitHubSettings } from '../components/github/GitHubSettings'
 import { IconSettings } from '../components/icons/IconSettings'
 import { DEFAULT_PACK } from '../components/icons/pack'
 import { Button } from '../components/ui/Button'
@@ -24,18 +25,19 @@ import {
   type Palette,
 } from '../lib/palette'
 
-type SettingsTab = 'colors' | 'icons' | 'companion'
+type SettingsTab = 'colors' | 'icons' | 'companion' | 'github'
 
 const TABS: TabItem<SettingsTab>[] = [
   { id: 'colors', label: 'Colores', icon: 'palette' },
   { id: 'icons', label: 'Iconos', icon: 'icons' },
   { id: 'companion', label: 'Companion', icon: 'agent' },
+  { id: 'github', label: 'GitHub', icon: 'repo' },
 ]
 
 /**
  * Ajustes de la web, en pestañas: los colores y los iconos valen para todos los navegadores; el
- * companion, en parte, solo para este. La pestaña va en `?tab=`; `#companion` (el menú de la
- * mascota) abre la del companion.
+ * companion, en parte, solo para este; GitHub es la conexión con la GitHub App. La pestaña va en
+ * `?tab=`; `#companion` (el menú de la mascota) abre la del companion.
  */
 export function SettingsPage() {
   const appearance = useAppearance()
@@ -59,7 +61,9 @@ export function SettingsPage() {
         panelId="settings-panel"
       />
       <TabPanel id="settings-panel" labelledBy={`settings-tab-${tab}`} className="tab-body">
-        {tab === 'companion' ? (
+        {tab === 'github' ? (
+          <GitHubSettings />
+        ) : tab === 'companion' ? (
           <CompanionGallery />
         ) : (
           <>

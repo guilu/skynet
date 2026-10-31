@@ -20,9 +20,19 @@ export SKYNET_URL=http://127.0.0.1:$E2E_API_PORT
 export E2E_OUT=$OUT
 export E2E_RUNNER_NAME=${E2E_RUNNER_NAME:-e2e-$(date +%s)}
 
+# GitHub App contra el GitHub falso de web/e2e/fake-github.ts (web/e2e/github.e2e.ts): una clave de
+# usar y tirar, un secreto de webhooks de pruebas y las URL remotas de github.com.
+export E2E_GITHUB_PORT=${E2E_GITHUB_PORT:-4200}
+export SKYNET_GITHUB_APP_ID=1
+export SKYNET_GITHUB_PRIVATE_KEY_FILE=$OUT/github-app.pem
+export SKYNET_GITHUB_WEBHOOK_SECRET=${SKYNET_GITHUB_WEBHOOK_SECRET:-e2e-webhook-secret}
+export SKYNET_GITHUB_API_URL=http://127.0.0.1:$E2E_GITHUB_PORT
+export SKYNET_GITHUB_WEB_URL=https://github.com
+
 cleanup() {
   "$ROOT/scripts/e2e-service.sh" stop runner || true
   "$ROOT/scripts/e2e-service.sh" stop control-plane || true
+  [[ -n ${FAKE_GITHUB_PID:-} ]] && kill "$FAKE_GITHUB_PID" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -56,6 +66,10 @@ SH
 printf 'build/\n' > "$E2E_REPO_PATH/.gitignore"
 git -C "$E2E_REPO_PATH" add calc.py check.sh .gitignore
 git -C "$E2E_REPO_PATH" -c user.email=e2e@skynet -c user.name=e2e commit -qm "Inicial"
+
+openssl genrsa -out "$SKYNET_GITHUB_PRIVATE_KEY_FILE" 2048 2> /dev/null
+node web/e2e/fake-github.ts "$E2E_GITHUB_PORT" >> "$OUT/fake-github.log" 2>&1 &
+FAKE_GITHUB_PID=$!
 
 # Las E2E de reinicio paran y vuelven a arrancar los dos servicios con el mismo script.
 scripts/e2e-service.sh start control-plane

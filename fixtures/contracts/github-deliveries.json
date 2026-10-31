@@ -1,0 +1,25 @@
+[ {
+  "deliveryId" : "72d3162e-cc78-11e3-81ab-4c9367dc0958",
+  "event" : "pull_request",
+  "action" : "opened",
+  "installationId" : 7,
+  "repository" : "guilu/demo-repo",
+  "status" : "PROCESSED",
+  "attempts" : 1,
+  "error" : null,
+  "events" : 1,
+  "receivedAt" : "2026-10-05T09:00:20Z",
+  "processedAt" : "2026-10-05T09:00:21Z"
+}, {
+  "deliveryId" : "8a1c22f0-cc78-11e3-81ab-4c9367dc0958",
+  "event" : "ping",
+  "action" : null,
+  "installationId" : null,
+  "repository" : null,
+  "status" : "IGNORED",
+  "attempts" : 0,
+  "error" : "ping: GitHub comprueba el webhook",
+  "events" : 0,
+  "receivedAt" : "2026-10-05T09:00:10Z",
+  "processedAt" : "2026-10-05T09:00:10Z"
+} ]

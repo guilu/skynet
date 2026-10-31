@@ -12,6 +12,8 @@ import dev.skynet.controlplane.definition.VersionView;
 import dev.skynet.controlplane.definition.WorkflowSummary;
 import dev.skynet.controlplane.definition.WorkflowView;
 import dev.skynet.controlplane.event.StoredEvent;
+import dev.skynet.controlplane.github.GitHubStatus;
+import dev.skynet.controlplane.github.WebhookDelivery;
 import dev.skynet.controlplane.runner.ProviderShortage;
 import dev.skynet.controlplane.runner.ProviderView;
 import dev.skynet.controlplane.runner.RunnerView;
@@ -106,7 +108,9 @@ class ContractIT extends IntegrationTest {
         Arguments.of("usage-windows", Samples.usageWindows()),
         Arguments.of("usage-history", Samples.usageHistory()),
         Arguments.of("usage-agents", List.of(Samples.agentUsage())),
-        Arguments.of("usage-runs", List.of(Samples.runUsage())));
+        Arguments.of("usage-runs", List.of(Samples.runUsage())),
+        Arguments.of("github-status", Samples.gitHubStatus()),
+        Arguments.of("github-deliveries", Samples.gitHubDeliveries()));
   }
 
   @ParameterizedTest(name = "{0}")
@@ -791,6 +795,67 @@ class ContractIT extends IntegrationTest {
           mapper.valueToTree(payload),
           at(17),
           at(17));
+    }
+
+    static GitHubStatus gitHubStatus() {
+      return new GitHubStatus(
+          true,
+          List.of(),
+          "https://api.github.com",
+          "123456",
+          new GitHubStatus.App(
+              "skynet-guilu", "skynet-guilu", "guilu", "https://github.com/apps/skynet-guilu"),
+          null,
+          at(5),
+          List.of(
+              new GitHubStatus.Installation(
+                  7,
+                  "guilu",
+                  "User",
+                  "selected",
+                  null,
+                  at(5),
+                  List.of(new GitHubStatus.InstallationRepository(5001, "guilu/demo-repo", true)))),
+          List.of(
+              new GitHubStatus.RepositoryLink(
+                  REPOSITORY,
+                  PROJECT,
+                  "DEMO",
+                  "demo-repo",
+                  "https://github.com/guilu/demo-repo.git",
+                  "guilu/demo-repo",
+                  GitHubStatus.Access.CONNECTED,
+                  7L,
+                  "guilu",
+                  5001L)));
+    }
+
+    static List<WebhookDelivery> gitHubDeliveries() {
+      return List.of(
+          new WebhookDelivery(
+              "72d3162e-cc78-11e3-81ab-4c9367dc0958",
+              "pull_request",
+              "opened",
+              7L,
+              "guilu/demo-repo",
+              "PROCESSED",
+              1,
+              null,
+              1,
+              at(20),
+              at(21)),
+          new WebhookDelivery(
+              "8a1c22f0-cc78-11e3-81ab-4c9367dc0958",
+              "ping",
+              null,
+              null,
+              null,
+              "IGNORED",
+              0,
+              "ping: GitHub comprueba el webhook",
+              0,
+              at(10),
+              at(10)));
     }
 
     static WorkflowDefinitionView adhocDefinition() {

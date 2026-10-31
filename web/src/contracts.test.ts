@@ -24,7 +24,15 @@ import workflowDefinitions from '../../fixtures/contracts/workflow-definitions.j
 import workflowVersion from '../../fixtures/contracts/workflow-version.json'
 import workflow from '../../fixtures/contracts/workflow.json'
 import workflows from '../../fixtures/contracts/workflows.json'
+import gitHubDeliveries from '../../fixtures/contracts/github-deliveries.json'
+import gitHubStatus from '../../fixtures/contracts/github-status.json'
 import type {
+  GitHubApp,
+  GitHubInstallation,
+  GitHubInstallationRepository,
+  GitHubRepositoryLink,
+  GitHubStatus,
+  WebhookDelivery,
   AgentDefinition,
   AgentUsage,
   QuotaShare,
@@ -569,6 +577,58 @@ function expectSummary(summary: WorkflowSummary) {
 }
 
 const keysOf = (value: object) => Object.keys(value).sort()
+const GITHUB_STATUS: Keys<GitHubStatus> = {
+  configured: true,
+  missing: true,
+  apiUrl: true,
+  appId: true,
+  app: true,
+  error: true,
+  checkedAt: true,
+  installations: true,
+  repositories: true,
+}
+const GITHUB_APP: Keys<GitHubApp> = { slug: true, name: true, owner: true, htmlUrl: true }
+const GITHUB_INSTALLATION: Keys<GitHubInstallation> = {
+  id: true,
+  account: true,
+  accountType: true,
+  repositorySelection: true,
+  suspendedAt: true,
+  syncedAt: true,
+  repositories: true,
+}
+const GITHUB_INSTALLATION_REPOSITORY: Keys<GitHubInstallationRepository> = {
+  id: true,
+  fullName: true,
+  private: true,
+}
+const GITHUB_REPOSITORY_LINK: Keys<GitHubRepositoryLink> = {
+  id: true,
+  projectId: true,
+  projectKey: true,
+  name: true,
+  remoteUrl: true,
+  fullName: true,
+  access: true,
+  installationId: true,
+  installationAccount: true,
+  githubRepositoryId: true,
+}
+const WEBHOOK_DELIVERY: Keys<WebhookDelivery> = {
+  deliveryId: true,
+  event: true,
+  action: true,
+  installationId: true,
+  repository: true,
+  status: true,
+  attempts: true,
+  error: true,
+  events: true,
+  receivedAt: true,
+  processedAt: true,
+}
+
 const expectShape = (value: object, shape: object) => expect(keysOf(value)).toEqual(keysOf(shape))
 
 function expectAgent(agent: AgentRun) {
@@ -731,5 +791,18 @@ describe('contratos con el backend', () => {
     view.evidence.grants.forEach((p) => expectShape(p, STAGE_POLICY))
     view.decisions.forEach((d) => expectShape(d, APPROVAL_DECISION))
     expect(view.evidence.consequences.requestChanges).not.toBeNull()
+  })
+
+  it('GitHub', () => {
+    const status = gitHubStatus as GitHubStatus
+    expectShape(status, GITHUB_STATUS)
+    if (status.app) expectShape(status.app, GITHUB_APP)
+    status.installations.forEach((i) => {
+      expectShape(i, GITHUB_INSTALLATION)
+      i.repositories.forEach((r) => expectShape(r, GITHUB_INSTALLATION_REPOSITORY))
+    })
+    status.repositories.forEach((r) => expectShape(r, GITHUB_REPOSITORY_LINK))
+    expect(status.repositories.map((r) => r.access)).toEqual(['CONNECTED'])
+    ;(gitHubDeliveries as WebhookDelivery[]).forEach((d) => expectShape(d, WEBHOOK_DELIVERY))
   })
 })

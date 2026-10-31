@@ -29,6 +29,7 @@ export function RegisterRepositoryForm({
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [localPath, setLocalPath] = useState('')
+  const [remoteUrl, setRemoteUrl] = useState('')
   const [defaultBranch, setDefaultBranch] = useState('')
   const [validationCommand, setValidationCommand] = useState('')
   const [reportPaths, setReportPaths] = useState('')
@@ -37,12 +38,15 @@ export function RegisterRepositoryForm({
       api.registerRepository(projectId, {
         name,
         localPath,
+        remoteUrl: remoteUrl.trim() || undefined,
         defaultBranch: defaultBranch || undefined,
         validationCommand: validationCommand.trim() || undefined,
         testReportPaths: globs(reportPaths),
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['repositories', projectId] })
+      // Su enlace con GitHub sale de la URL remota.
+      await queryClient.invalidateQueries({ queryKey: ['github'] })
       onDone()
     },
   })
@@ -65,6 +69,15 @@ export function RegisterRepositoryForm({
           placeholder="/home/dev/repos/proyecto"
           required
         />
+      </label>
+      <label>
+        URL remota (opcional)
+        <input
+          value={remoteUrl}
+          onChange={(e) => setRemoteUrl(e.target.value)}
+          placeholder="https://github.com/usuario/proyecto.git"
+        />
+        <span className="hint">Con ella, Skynet lo enlaza con su repositorio de GitHub.</span>
       </label>
       <label>
         Rama por defecto

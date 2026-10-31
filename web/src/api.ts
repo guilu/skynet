@@ -1014,6 +1014,85 @@ export interface Appearance {
   updatedAt: string | null
 }
 
+/** La conexión con la GitHub App (`GET /api/github`). */
+export interface GitHubStatus {
+  /** Si están las tres variables de la App. */
+  configured: boolean
+  /** Las variables que faltan. */
+  missing: string[]
+  apiUrl: string
+  appId: string | null
+  /** La App según GitHub; null si no se pudo comprobar. */
+  app: GitHubApp | null
+  /** Por qué no se pudo comprobar la App. */
+  error: string | null
+  checkedAt: string | null
+  installations: GitHubInstallation[]
+  /** Los repositorios de Skynet sin archivar y su enlace con GitHub. */
+  repositories: GitHubRepositoryLink[]
+}
+
+export interface GitHubApp {
+  slug: string
+  name: string
+  owner: string
+  htmlUrl: string
+}
+
+export interface GitHubInstallation {
+  id: number
+  account: string
+  accountType: string
+  /** `all` (todos los repositorios de la cuenta) o `selected`. */
+  repositorySelection: string
+  suspendedAt: string | null
+  syncedAt: string | null
+  repositories: GitHubInstallationRepository[]
+}
+
+export interface GitHubInstallationRepository {
+  id: number
+  fullName: string
+  private: boolean
+}
+
+/** `CONNECTED`: una instalación llega a él; `NOT_INSTALLED`: está en GitHub, pero no; `NOT_GITHUB`. */
+export type GitHubAccess = 'CONNECTED' | 'NOT_INSTALLED' | 'NOT_GITHUB'
+
+export interface GitHubRepositoryLink {
+  id: string
+  projectId: string
+  projectKey: string
+  name: string
+  remoteUrl: string | null
+  /** `owner/nombre` según su URL remota; null si no es de GitHub. */
+  fullName: string | null
+  access: GitHubAccess
+  installationId: number | null
+  installationAccount: string | null
+  githubRepositoryId: number | null
+}
+
+export type WebhookDeliveryStatus = 'PENDING' | 'PROCESSED' | 'FAILED' | 'IGNORED'
+
+/** Una entrega de webhook de GitHub, sin su cuerpo. */
+export interface WebhookDelivery {
+  deliveryId: string
+  event: string
+  action: string | null
+  installationId: number | null
+  /** `owner/nombre` del repositorio de GitHub, si la entrega es de uno. */
+  repository: string | null
+  status: WebhookDeliveryStatus
+  attempts: number
+  /** El error del último intento o por qué se ignoró. */
+  error: string | null
+  /** Eventos `github.*` que publicó. */
+  events: number
+  receivedAt: string
+  processedAt: string | null
+}
+
 /** Qué enseña una lista respecto a lo archivado: lo vigente (por defecto), lo archivado o todo. */
 export type ArchivedFilter = 'false' | 'true' | 'all'
 
@@ -1160,6 +1239,10 @@ export const api = {
     request<Appearance>('PUT', '/api/settings/appearance', { colors }),
   saveIconPack: (icons: IconPack) =>
     request<Appearance>('PUT', '/api/settings/appearance', { icons }),
+  gitHub: () => request<GitHubStatus>('GET', '/api/github'),
+  syncGitHub: () => request<GitHubStatus>('POST', '/api/github/sync'),
+  gitHubDeliveries: (limit = 50) =>
+    request<WebhookDelivery[]>('GET', `/api/github/deliveries?limit=${limit}`),
   login: (username: string, password: string) =>
     request<Session>('POST', '/api/auth/login', { username, password }),
   logout: () => request<void>('POST', '/api/auth/logout'),

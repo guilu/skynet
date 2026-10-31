@@ -1,10 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FolderGit2, ListTodo, Plus, ShieldCheck, SlidersHorizontal } from 'lucide-react'
+import {
+  FolderGit2,
+  GitPullRequest,
+  ListTodo,
+  Plus,
+  ShieldCheck,
+  SlidersHorizontal,
+} from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api, WORK_ITEM_TYPES, type Repository, type WorkItem, type WorkItemType } from '../api'
 import { ArchivedBanner, ArchiveMenu, ArchivedToggle } from '../components/archive/Archive'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { AccessPill } from '../components/github/GitHubSettings'
+import { useGitHub } from '../components/github/github'
 import { DataTable, EmptyState, type Column } from '../components/list/DataTable'
 import { ListToolbar } from '../components/list/Toolbar'
 import { ProjectMemory } from '../components/memory/ProjectMemory'
@@ -327,6 +336,8 @@ function RepositoryCard({
         )}
       </section>
 
+      <GitHubSection repository={r} />
+
       <section className="repo-section" aria-label={`Política de agentes de ${r.name}`}>
         <div className="repo-section-head">
           <h3>
@@ -401,6 +412,54 @@ function RepositoryCard({
         <AgentPolicyForm projectId={projectId} repository={r} />
       </Sheet>
     </article>
+  )
+}
+
+/** Si la GitHub App llega al repositorio; sin App configurada, solo su URL remota. */
+function GitHubSection({ repository: r }: { repository: Repository }) {
+  const github = useGitHub()
+  const link = github.data?.repositories.find((l) => l.id === r.id)
+  const configured = github.data?.configured === true
+  return (
+    <section className="repo-section" aria-label={`GitHub de ${r.name}`}>
+      <div className="repo-section-head">
+        <h3>
+          <GitPullRequest size={18} strokeWidth={2.5} aria-hidden="true" /> GitHub{' '}
+          {configured && link && <AccessPill access={link.access} />}
+        </h3>
+      </div>
+      {!r.remoteUrl ? (
+        <p className="muted small">Sin URL remota: Skynet no lo enlaza con GitHub.</p>
+      ) : !configured || !link ? (
+        <p className="small">
+          <code>{r.remoteUrl}</code>
+          {github.data && !configured && (
+            <span className="muted">
+              {' '}
+              · la GitHub App no está configurada (
+              <Link to="/settings?tab=github">Ajustes → GitHub</Link>)
+            </span>
+          )}
+        </p>
+      ) : link.access === 'CONNECTED' ? (
+        <p className="small">
+          <code>{link.fullName}</code>
+          <span className="muted"> · instalación de {link.installationAccount}</span>
+        </p>
+      ) : link.access === 'NOT_INSTALLED' ? (
+        <p className="small">
+          <code>{link.fullName}</code>
+          <span className="muted">
+            {' '}
+            · instala la App en este repositorio y <Link to="/settings?tab=github">sincroniza</Link>
+          </span>
+        </p>
+      ) : (
+        <p className="muted small">
+          <code>{r.remoteUrl}</code> no es de GitHub.
+        </p>
+      )}
+    </section>
   )
 }
 

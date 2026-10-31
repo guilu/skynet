@@ -2,6 +2,50 @@ import { describe, expect, it } from 'vitest'
 import { describeEvent, formatCompact, formatDuration, providerName, statusTone } from './format'
 
 describe('describeEvent', () => {
+  it('describe los webhooks de GitHub con su resumen', () => {
+    const base = { repository: 'guilu/demo-repo' }
+    expect(
+      describeEvent('github.pull_request.opened', {
+        ...base,
+        event: 'pull_request',
+        action: 'opened',
+        number: 12,
+        title: 'Corrige add()',
+      }),
+    ).toBe('GitHub guilu/demo-repo: PR #12 opened (Corrige add())')
+    expect(
+      describeEvent('github.pull_request.closed', {
+        ...base,
+        event: 'pull_request',
+        action: 'closed',
+        merged: true,
+        number: 12,
+        title: 'Corrige add()',
+      }),
+    ).toBe('GitHub guilu/demo-repo: PR #12 fusionada (Corrige add())')
+    expect(
+      describeEvent('github.check_run.completed', {
+        ...base,
+        event: 'check_run',
+        name: 'build',
+        conclusion: 'failure',
+        headSha: '4f1c2a9e0b7d3c5e',
+      }),
+    ).toBe('GitHub guilu/demo-repo: check build failure en 4f1c2a9')
+    expect(
+      describeEvent('github.issue_comment.created', {
+        ...base,
+        event: 'issue_comment',
+        number: 3,
+        commentAuthor: 'guilu',
+        isPullRequest: true,
+      }),
+    ).toBe('GitHub guilu/demo-repo: comentario de guilu en la PR #3')
+    expect(describeEvent('github.push', { ...base, event: 'push' })).toBe(
+      'GitHub guilu/demo-repo: push',
+    )
+  })
+
   it('describe la cuota y el límite de uso de la cuenta', () => {
     expect(
       describeEvent('agent.quota', {
