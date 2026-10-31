@@ -21,7 +21,8 @@ jobs:
   alcance:
     name: Qué E2E corren
     if: github.event.action != 'labeled' || github.event.label.name == 'e2e-completo'
-    runs-on: ubuntu-latest
+    # Fijo: Playwright 1.56 no soporta Ubuntu 26.04 (el ubuntu-latest actual).
+    runs-on: ubuntu-24.04
     outputs:
       matriz: ${{ steps.decide.outputs.matriz }}
       rapidas: ${{ steps.decide.outputs.rapidas }}
@@ -45,7 +46,7 @@ jobs:
     name: E2E ${{ matrix.nombre }}
     needs: alcance
     if: needs.alcance.outputs.rapidas == 'true' || needs.alcance.outputs.lentas == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.alcance.outputs.matriz) }}
@@ -96,7 +97,7 @@ jobs:
     name: E2E
     needs: [alcance, playwright]
     if: always() && needs.alcance.result != 'skipped'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           ALCANCE: ${{ needs.alcance.result }}
