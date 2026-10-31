@@ -229,6 +229,27 @@ class GitHubApi {
     return response.body();
   }
 
+  /** {@code GET /repos/{owner}/{repo}/pulls/{n}}: la PR, con su estado y su commit. */
+  JsonNode pullRequest(String token, String fullName, long number) {
+    return send("GET", "/repos/" + fullName + "/pulls/" + number, token, null);
+  }
+
+  /**
+   * {@code PUT /repos/{owner}/{repo}/pulls/{n}/merge}: fusiona solo si la PR sigue en {@code sha}.
+   */
+  JsonNode mergePullRequest(String token, String fullName, long number, String method, String sha) {
+    return send(
+        "PUT",
+        "/repos/" + fullName + "/pulls/" + number + "/merge",
+        token,
+        json.writeValueAsString(Map.of("merge_method", method, "sha", sha)));
+  }
+
+  /** {@code DELETE /repos/{owner}/{repo}/git/refs/heads/{rama}}: borra una rama. */
+  void deleteBranch(String token, String fullName, String branch) {
+    send("DELETE", "/repos/" + fullName + "/git/refs/heads/" + branch, token, null);
+  }
+
   /** {@code POST /repos/{owner}/{repo}/issues/{n}/comments}: comenta en una PR. */
   void comment(String token, String fullName, long number, String body) {
     send(

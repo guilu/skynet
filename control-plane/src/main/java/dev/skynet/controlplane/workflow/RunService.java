@@ -871,6 +871,18 @@ public class RunService {
     return run(workflowRunId);
   }
 
+  /**
+   * Cancela la ejecución con un motivo que no es el usuario, p. ej. su PR se cerró en GitHub
+   * (EN-C). Si ya ha terminado, no hace nada.
+   */
+  void cancelRun(UUID workflowRunId, String reason, Instant now) {
+    lockRun(workflowRunId);
+    WorkflowRun run = runEntity(workflowRunId);
+    if (!run.getStatus().isTerminal()) {
+      cancelTree(run, reason, now);
+    }
+  }
+
   /** Cancela la ejecución y, después, sus hijas activas, con el mismo motivo. */
   private void cancelTree(WorkflowRun run, String reason, Instant now) {
     if (run.requestCancel(now)) {

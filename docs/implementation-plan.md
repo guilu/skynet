@@ -798,7 +798,7 @@ Se entrega en cinco PRs (plan aprobado: login propio con sesión, revocar el tok
 | Hito | Contenido |
 |---|---|
 | GH GitHub conectado (antes S1) — **hecho** | GitHub App propia: instalaciones y enlace de cada repositorio, tokens de instalación limitados a un repositorio, webhooks firmados con cola y red de seguridad, eventos `github.*`, Ajustes → GitHub ([`github.md`](github.md)). GH-A #196, GH-B #197 y GH-C |
-| EN Entrega por PR (antes S2) — **en curso** | `github-pr` (push de rama + PR con descripción y evidencias; EN-A), `github-check` (espera de CI dirigida por webhooks y hasta 2 rondas de corrección; EN-B), `github-merge` (tras gate; EN-C). La verificación post-merge queda para más adelante |
+| EN Entrega por PR (antes S2) — **hecho** | `github-pr` (push de rama + PR con descripción y evidencias; EN-A #203), `github-check` (espera de CI dirigida por webhooks y hasta 2 rondas de corrección; EN-B #204), `github-merge` (tras la puerta, solo con el commit aprobado y la CI en verde; tarjeta de la PR en la web, plantillas con las fases de entrega y E2E; EN-C). Ver [`entrega-por-pr.md`](entrega-por-pr.md). La verificación post-merge queda para más adelante |
 | S3 Plantillas y agentes | Prompts versionados de analyst, architect, developer, test, quality-reviewer, security-reviewer; esquemas de salida |
 | S4 Workflow `sdd-feature` | El YAML de §11 funcionando de extremo a extremo, incluida la fase `fix-review-findings` |
 | S5 Workflows adicionales | Bug fix, revisión de PR, actualización de dependencias |
@@ -846,4 +846,4 @@ Se planificará con datos reales de las fases anteriores: descomposición dinám
 5. ~~**Rediseño visual del control plane**, antes de la Fase 2.~~ Terminado con UI-A a UI-F (issue #37); el resultado está en la [guía de estilo](ui.md). Los colores se personalizan en Ajustes > Apariencia desde UI-G (issue #47).
 6. ~~Fase 2, empezando por W1 (definiciones) y W2 (motor) como primer hito.~~ Terminada el 2026-10-19 (W1–W8).
 7. ~~Fase 3, empezando por GitHub conectado (GH, antes S1).~~ GH terminado: GitHub App, webhooks firmados y Ajustes → GitHub ([`github.md`](github.md)).
-8. En curso: EN, la entrega por PR. EN-A trae la fase `github-pr` (push de la rama con un token por invocación y la PR con evidencias) y EN-B, la fase `github-check` (espera de la CI dirigida por webhooks con consulta de respaldo, y rondas de corrección con los logs de la CI). Falta EN-C (fusionar tras el gate, web y E2E).
+8. ~~EN, la entrega por PR.~~ Terminado: `github-pr` (EN-A), `github-check` (EN-B) y `github-merge` (EN-C), con la tarjeta de la PR en la web y las plantillas terminando en PR, CI, puerta y fusión ([`entrega-por-pr.md`](entrega-por-pr.md)).

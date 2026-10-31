@@ -6,6 +6,8 @@ import { api, type Run } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { eventsOfAgent, toolCallsOf, type ToolCall } from '../components/run/agentEvents'
 import { Conversation } from '../components/run/Conversation'
+import { PullRequestCard } from '../components/run/PullRequestCard'
+import { hasPullRequestStages, pullRequestKey } from '../components/run/pullRequest'
 import { RunProgress } from '../components/run/RunProgress'
 import { runSpans } from '../components/run/runSpans'
 import { Waterfall } from '../components/run/Waterfall'
@@ -53,6 +55,10 @@ export function RunPage() {
 
   // Cada evento se aplica a la vista en caché; solo se relee lo que el evento no trae.
   const { events, state } = useEventStream({ workflowRunId: runId }, (event) => {
+    // La PR, su CI y su fusión van aparte: se releen con sus eventos.
+    if (event.type.includes('.github.')) {
+      void queryClient.invalidateQueries({ queryKey: pullRequestKey(runId) })
+    }
     // Verificaciones y artefactos van aparte de la vista de la ejecución: se releen sus listas.
     if (event.aggregateType === 'verification_run' || event.aggregateType === 'artifact') {
       const agentId = event.payload.agentRunId
@@ -212,6 +218,7 @@ export function RunPage() {
             onSelectAgent={selectAgent}
           />
           <RunBand run={run.data} now={now} gesture={celebrating ? 'hop' : null} />
+          {hasPullRequestStages(run.data) && <PullRequestCard run={run.data} />}
           {celebrating && <Celebration />}
           {narrow ? (
             <div className="run-mobile">

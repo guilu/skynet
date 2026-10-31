@@ -3,6 +3,7 @@ package dev.skynet.controlplane.workflow;
 import dev.skynet.controlplane.definition.AgentDefinition;
 import dev.skynet.controlplane.definition.Condition;
 import dev.skynet.controlplane.definition.DefinitionParser;
+import dev.skynet.controlplane.definition.MergeSpec;
 import dev.skynet.controlplane.definition.PublishedDefinition;
 import dev.skynet.controlplane.definition.PullRequestSpec;
 import dev.skynet.controlplane.definition.StageDefinition;
@@ -129,6 +130,7 @@ public class RunSteps {
   private final Approvals approvals;
   private final PullRequests pullRequests;
   private final CiChecks ciChecks;
+  private final PullRequestMerges pullRequestMerges;
   private final PayloadRedactor redactor;
   private final String publicUrl;
   private final TimeSource time;
@@ -151,6 +153,7 @@ public class RunSteps {
       Approvals approvals,
       PullRequests pullRequests,
       CiChecks ciChecks,
+      PullRequestMerges pullRequestMerges,
       PayloadRedactor redactor,
       @Value("${skynet.github.pull-requests.public-url:}") String publicUrl,
       TimeSource time) {
@@ -171,6 +174,7 @@ public class RunSteps {
     this.approvals = approvals;
     this.pullRequests = pullRequests;
     this.ciChecks = ciChecks;
+    this.pullRequestMerges = pullRequestMerges;
     this.redactor = redactor;
     this.publicUrl = publicUrl;
     this.time = time;
@@ -420,6 +424,12 @@ public class RunSteps {
       }
       if (stageDefinition.type() == StageType.GITHUB_CHECK) {
         ciChecks.start(run, stage, repository, now);
+        return StartOutcome.STARTED;
+      }
+      if (stageDefinition.type() == StageType.GITHUB_MERGE) {
+        MergeSpec spec =
+            stageDefinition.merge() == null ? MergeSpec.DEFAULT : stageDefinition.merge();
+        pullRequestMerges.start(run, stage, repository, spec, now);
         return StartOutcome.STARTED;
       }
       WorkspaceView source = sourceWorkspace(runId, stageDefinition, definition);

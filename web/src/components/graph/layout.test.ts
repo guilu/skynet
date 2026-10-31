@@ -145,6 +145,7 @@ const definition = (over: Partial<StageDefinition>): StageDefinition => ({
   memory: null,
   pullRequest: null,
   ci: null,
+  merge: null,
   ...over,
 })
 

@@ -103,7 +103,8 @@
       "reject" : "La ejecución falla y se cancelan implement.",
       "requestChanges" : "plan recibe tu comentario y la puerta vuelve a preguntar con lo corregido."
     },
-    "changesRequested" : null
+    "changesRequested" : null,
+    "pullRequest" : null
   },
   "decisions" : [ {
     "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a11",

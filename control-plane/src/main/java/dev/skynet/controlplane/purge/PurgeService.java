@@ -152,6 +152,7 @@ class PurgeService {
         scope.runs());
     update("DELETE FROM approval_request WHERE workflow_run_id IN (:ids)", scope.runs());
     // La PR de GitHub sigue en GitHub; aquí solo se olvida (EN-A).
+    update("DELETE FROM github_merge WHERE workflow_run_id IN (:ids)", scope.runs());
     update("DELETE FROM github_ci_wait WHERE workflow_run_id IN (:ids)", scope.runs());
     update("DELETE FROM github_pull_request WHERE workflow_run_id IN (:ids)", scope.runs());
     update("DELETE FROM prompt WHERE agent_run_id IN (:ids)", agents);

@@ -73,6 +73,7 @@
       "memory" : null,
       "pullRequest" : null,
       "ci" : null,
+      "merge" : null,
       "timeoutSeconds" : null
     }, {
       "id" : "fix",
@@ -102,6 +103,7 @@
       "memory" : null,
       "pullRequest" : null,
       "ci" : null,
+      "merge" : null,
       "timeoutSeconds" : null
     }, {
       "id" : "verify",
@@ -143,6 +145,7 @@
       "memory" : null,
       "pullRequest" : null,
       "ci" : null,
+      "merge" : null,
       "timeoutSeconds" : 1800
     } ]
   }

@@ -279,6 +279,14 @@
           "minimum": 1,
           "maximum": 5
         },
+        "method": {
+          "description": "Solo en fases github-merge: cómo se fusiona la PR. squash (por defecto), merge o rebase.",
+          "enum": ["squash", "merge", "rebase"]
+        },
+        "deleteBranch": {
+          "description": "Solo en fases github-merge: si borra la rama de la PR al fusionarla (por defecto, true).",
+          "type": "boolean"
+        },
         "memory": {
           "description": "Acceso del agente (o de los hijos de una parallel) a la memoria del proyecto: write (por defecto) lee y guarda, read solo lee (contexto inicial, mem_search y mem_get) y off no recibe ni el bloque de memoria ni las herramientas. Solo vale en fases agent y parallel.",
           "enum": ["off", "read", "write"]

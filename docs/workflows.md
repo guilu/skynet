@@ -72,7 +72,7 @@ stages:
 - Al lanzar, lo que pide un agente se recorta a la política del repositorio: solo las herramientas que el repositorio permite (`Bash(git:*)` cabe en `Bash`, al revés no), su modo de permisos solo si no es más permisivo (`plan` < `default`/`dontAsk` < `acceptEdits`) y sus límites rebajados a los del repositorio. Lo que el agente no fija sale de la política y, los límites, de los del lanzamiento.
 
 **`stages[]`:**
-- `id` (obligatorio, único) y `type` (obligatorio): `agent`, `command`, `parallel`, `conditional`, `verification`, `human-approval` o `github-pr` (los demás tipos aún no se ejecutan, ver abajo).
+- `id` (obligatorio, único) y `type` (obligatorio): `agent`, `command`, `parallel`, `conditional`, `verification`, `human-approval`, `github-pr`, `github-check` o `github-merge` (los demás tipos aún no se ejecutan, ver abajo).
 - `agent`: un agente de `agents`. Sin él, la fase usa la política del repositorio.
 - `prompt`: el de la fase; si falta, el del agente. Uno de los dos tiene que existir.
 - `dependsOn`: fases que tienen que terminar antes. Con `?` al final (`plan?`) es opcional: también vale si esa fase se omite. Entre corchetes va entre comillas (`dependsOn: ["plan?"]`), porque YAML lee `?` como otra cosa.
@@ -87,6 +87,7 @@ stages:
 - `action`, `risk` y `revise`: solo en las fases `type: human-approval`. Ver «Puertas de aprobación».
 - `pullRequest`: solo en las fases `type: github-pr`. Ver «Entrega por PR».
 - `required`, `ifNoChecks`, `fix` y `maxRounds`: solo en las fases `type: github-check`. Ver «Esperar la CI de la PR».
+- `method` y `deleteBranch`: solo en las fases `type: github-merge`. Ver «Fusionar la PR».
 - `outputSchema`: solo en las fases `type: agent`. La salida estructurada que devuelve la fase, y manda sobre el `output` de su agente, así que un mismo agente sirve en fases con salidas distintas. Es un JSON Schema en línea, como `output`, o la ruta de un fichero del repositorio (`outputSchema: schemas/spec.json`). Ver «Salida de una fase en un fichero».
 
 **Fases `command`:** ejecutan un comando de shell en lugar de un agente, p. ej. los tests después de implementar:
@@ -292,6 +293,39 @@ stages:
   - Si la corrección falla, no cambia nada o se agotan las rondas, la fase falla con lo que falló. La PR se queda abierta.
 - Eventos `stage.github.ci.waiting`, `stage.github.ci.passed` (con `warning` si no hay CI), `stage.github.ci.failed` y `stage.github.ci.fix.started`. `GET /api/workflow-runs/{id}/ci-checks` da el estado de la espera, la ronda y cada check.
 
+**Fusionar la PR.** Una fase `type: github-merge` fusiona la PR de la ejecución, normalmente detrás de su `github-check` y de una puerta que lo aprueba (EN-C):
+
+```yaml
+  - id: aprobar-fusion
+    type: human-approval
+    dependsOn: [ci]
+    condition: repository.github
+    action: "Fusionar la PR de {{workItem.key}}"
+    risk: high
+  - id: fusionar
+    type: github-merge
+    dependsOn: [aprobar-fusion]
+    condition: repository.github
+    method: squash         # squash (por defecto), merge o rebase
+    deleteBranch: true     # borra la rama de la PR al fusionarla (por defecto)
+    timeout: 30m           # por defecto, 30 m
+```
+
+- Va detrás de una `github-pr` (si no, el borrador no se publica). No admite `agent` ni `prompt`.
+- Fusiona **solo el commit aprobado**: el último que subió Skynet, el que pasó la CI y enseñó la puerta. Antes de fusionar comprueba en GitHub que la PR sigue abierta en ese commit y que su CI sigue en verde, y pasa ese `sha` a GitHub, que no fusiona si alguien ha subido algo después.
+  - Si la PR cambió, la fase falla con «La PR cambió después de la aprobación: se aprobó el commit X y ahora tiene el Y. No se fusiona: revísala en GitHub».
+  - Si la CI ya no está en verde, falla con los checks que fallan; si aún está en marcha, espera.
+  - Si GitHub dice que no (p. ej. 405, la PR no se puede fusionar), falla con su mensaje; si no responde, se reintenta con espera creciente hasta 5 veces.
+- Fusionada, borra la rama (si falla, solo se avisa), el trabajo se cierra («Cerrado», `workitem.closed`), se pide eliminar los worktrees que se subieron y la fase termina bien.
+- Una puerta que desbloquea una `github-merge` enseña la PR: su número, la rama, el commit que se aprueba y la CI de ese commit, check a check.
+- Lo que pasa en GitHub cuenta (webhook `pull_request.closed`):
+  - una PR **fusionada a mano** da la fase por hecha (o la que arranque después, en el acto);
+  - una PR **cerrada sin fusionar** cancela la ejecución (`workflow.github.pr.closed` y `workflow.cancel.requested` con `reason: pull-request-closed`).
+- Eventos `stage.github.pr.merged` (con `external: true` si se fusionó a mano) y `stage.github.pr.merge.failed`. `GET /api/workflow-runs/{id}/merges` da la fusión de cada fase: método, commit esperado, commit de la fusión, si se borró la rama y el error.
+- En la ejecución, una tarjeta **Pull request** enseña la PR con su enlace, la rama, el commit, la CI check a check con sus rondas de corrección y la fusión.
+
+Las plantillas `especificar-planificar-implementar`, `implementar-tarea` y `corregir-bug` terminan con estas cuatro fases (`pr`, `ci`, `aprobar-fusion` y `fusionar`), todas con `condition: repository.github`: en un repositorio sin GitHub se omiten y la ejecución termina como antes. `scripts/seed-workflows.sh --actualizar` publica la versión nueva de cada una. Más en [`entrega-por-pr.md`](entrega-por-pr.md).
+
 **Puertas de aprobación.** Una fase `type: human-approval` para la ejecución hasta que alguien decide, p. ej. aprobar el plan antes de implementar:
 
 ```yaml
@@ -392,7 +426,6 @@ El YAML admite ya todo §11 para poder escribir los workflows de la especificaci
 
 | Qué | Hito |
 |---|---|
-| Fase `github-merge` | EN-C |
 | Fase `merge` (sin GitHub) | sin fecha |
 | `promptTemplate` | S3 |
 | `provider: opencode` | sin fecha |

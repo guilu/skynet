@@ -38,11 +38,17 @@ class RunController {
   private final WorkspaceCleanup cleanup;
   private final PullRequests pullRequests;
   private final CiChecks ciChecks;
+  private final PullRequestMerges merges;
 
   RunController(
-      RunService service, WorkspaceCleanup cleanup, PullRequests pullRequests, CiChecks ciChecks) {
+      RunService service,
+      WorkspaceCleanup cleanup,
+      PullRequests pullRequests,
+      CiChecks ciChecks,
+      PullRequestMerges merges) {
     this.pullRequests = pullRequests;
     this.ciChecks = ciChecks;
+    this.merges = merges;
     this.service = service;
     this.cleanup = cleanup;
   }
@@ -181,6 +187,12 @@ class RunController {
   List<CiChecks.View> ciChecks(@PathVariable UUID id) {
     service.run(id);
     return ciChecks.ofRun(id);
+  }
+
+  @GetMapping("/api/workflow-runs/{id}/merges")
+  List<PullRequestMerges.View> merges(@PathVariable UUID id) {
+    service.run(id);
+    return merges.ofRun(id);
   }
 
   @GetMapping("/api/agent-runs/{id}")

@@ -76,9 +76,12 @@ public abstract class IntegrationTest {
     // Todos los tests llaman desde 127.0.0.1: los fallos de uno no bloquean al siguiente.
     authThrottle.clear();
     // TRUNCATE no dispara el trigger append-only de event (es por fila). La secuencia de
-    // eventos no se reinicia: igual que en producción, nunca retrocede.
+    // eventos no se reinicia: igual que en producción, nunca retrocede. TRUNCATE bloquea las tablas
+    // en este orden: quota_snapshot va antes que quota_interval, en el mismo orden en que las
+    // escribe
+    // el latido de un runner que sigue vivo, para que no se bloqueen el uno al otro (deadlock).
     jdbc.sql(
-            "TRUNCATE github_ci_wait, github_pull_request, github_webhook_delivery, github_installation_repository, github_installation, memory_token, memory_access, memory_observation_revision, memory_observation, app_setting, agent_run_quota, quota_interval, quota_snapshot, event, approval_decision, approval_request, runner_command, artifact, verification_run, prompt, agent_run, workspace, runner_provider, runner, stage_run, workflow_job, workflow_run, work_item, repository,"
+            "TRUNCATE github_merge, github_ci_wait, github_pull_request, github_webhook_delivery, github_installation_repository, github_installation, memory_token, memory_access, memory_observation_revision, memory_observation, app_setting, quota_snapshot, agent_run_quota, quota_interval, event, approval_decision, approval_request, runner_command, artifact, verification_run, prompt, agent_run, workspace, runner_provider, runner, stage_run, workflow_job, workflow_run, work_item, repository,"
                 + " project")
         .update();
     // Los workflows de los tests; adhoc viene de las migraciones y se queda. Las versiones

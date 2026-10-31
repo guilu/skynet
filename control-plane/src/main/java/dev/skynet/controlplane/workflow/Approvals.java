@@ -643,7 +643,54 @@ public class Approvals {
             .filter(p -> p.type() != StageType.HUMAN_APPROVAL && p.type() != StageType.CONDITIONAL)
             .toList());
     evidence.put("consequences", consequences);
+    evidence.put(
+        "pullRequest",
+        unlocked.stream().anyMatch(s -> s.type() == StageType.GITHUB_MERGE)
+            ? pullRequest(run.getId(), repository.getId())
+            : null);
     return evidence;
+  }
+
+  /**
+   * La PR que fusionará la fase que desbloquea la puerta (EN-C): su número, su rama, el commit que
+   * se aprueba y la CI de ese commit.
+   */
+  private Map<String, Object> pullRequest(UUID runId, UUID repositoryId) {
+    return jdbc.sql(
+            """
+            SELECT p.number, p.url, p.branch, p.base, p.head_sha, w.status AS ci_status,
+                   w.round AS ci_round, CAST(w.checks AS text) AS ci_checks
+            FROM github_pull_request p
+            LEFT JOIN LATERAL (
+              SELECT status, round, checks FROM github_ci_wait
+              WHERE pull_request_id = p.id ORDER BY created_at DESC LIMIT 1) w ON true
+            WHERE p.workflow_run_id = ? AND p.repository_id = ?
+            """)
+        .params(runId, repositoryId)
+        .query(
+            (rs, n) -> {
+              Map<String, Object> pr = new LinkedHashMap<>();
+              pr.put("number", rs.getObject("number"));
+              pr.put("url", rs.getString("url"));
+              pr.put("branch", rs.getString("branch"));
+              pr.put("base", rs.getString("base"));
+              pr.put("headSha", rs.getString("head_sha"));
+              Map<String, Object> ci = null;
+              if (rs.getString("ci_status") != null) {
+                ci = new LinkedHashMap<>();
+                ci.put("status", rs.getString("ci_status"));
+                ci.put("round", rs.getInt("ci_round"));
+                ci.put(
+                    "checks",
+                    json.readValue(
+                        rs.getString("ci_checks"),
+                        new TypeReference<List<Map<String, Object>>>() {}));
+              }
+              pr.put("ci", ci);
+              return pr;
+            })
+        .optional()
+        .orElse(null);
   }
 
   /** Lo que dejó una fase de la que depende la puerta: el último intento de cada agente. */

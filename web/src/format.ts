@@ -114,7 +114,9 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
     case 'workflow.cancel.requested':
       return payload.reason === 'parent-cancelled'
         ? 'Cancelación pedida: se canceló la ejecución que la lanzó'
-        : 'Cancelación pedida'
+        : payload.reason === 'pull-request-closed'
+          ? 'Cancelación pedida: su PR se cerró sin fusionarla'
+          : 'Cancelación pedida'
     case 'agent.cancel.requested':
       return payload.reason === 'stage-timeout'
         ? 'Parada pedida al runner: se acabó el tiempo de su fase'
@@ -197,6 +199,43 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return payload.cancelled
         ? `La corrección de ${p('reviseStageKey')} se canceló`
         : `La corrección de ${p('reviseStageKey')} falló: ${truncate(p('error'), 120)}`
+    // La entrega por PR (EN): abrir la PR, esperar la CI y fusionarla.
+    case 'stage.github.pr.opened':
+      return `${p('stageKey')} abrió la PR #${p('number')} (${p('branch')} → ${p('base')})`
+    case 'stage.github.pr.updated':
+      return `${p('stageKey')} actualizó la PR #${p('number')} con ${p('headSha').slice(0, 7)}`
+    case 'stage.github.pr.failed':
+      return `${p('stageKey')} no pudo abrir la PR: ${truncate(p('error'), 120)}`
+    case 'stage.github.ci.waiting':
+      return `${p('stageKey')} espera la CI de ${p('headSha').slice(0, 7)}${
+        Number(payload.round) > 0 ? ` (ronda ${p('round')})` : ''
+      }`
+    case 'stage.github.ci.passed':
+      return payload.warning
+        ? `${p('stageKey')}: ${truncate(p('warning'), 120)}`
+        : `${p('stageKey')}: la CI pasó en ${p('headSha').slice(0, 7)}`
+    case 'stage.github.ci.failed':
+      return payload.error
+        ? `${p('stageKey')}: ${truncate(p('error'), 120)}`
+        : `${p('stageKey')}: la CI falló en ${names(payload.failed)}`
+    case 'stage.github.ci.fix.started':
+      return `${p('fixStageKey')} corrige la CI (ronda ${p('round')} de ${p('maxRounds')}): ${names(
+        payload.failed,
+      )}`
+    case 'stage.github.pr.merged':
+      return payload.external
+        ? `La PR #${p('number')} se fusionó en GitHub`
+        : `${p('stageKey')} fusionó la PR #${p('number')}${
+            payload.branchDeleted ? ` y borró la rama ${p('branch')}` : ''
+          }`
+    case 'stage.github.pr.merge.failed':
+      return `${p('stageKey')} no fusionó la PR #${p('number')}: ${truncate(p('error'), 120)}`
+    case 'workflow.github.pr.closed':
+      return `La PR #${p('number')} se cerró en GitHub sin fusionarla: se cancela la ejecución`
+    case 'workitem.closed':
+      return payload.reason === 'pull-request-merged'
+        ? `Trabajo ${p('key')} cerrado: su PR se fusionó`
+        : `Trabajo ${p('key')} cerrado`
     case 'agent.status.changed':
     case 'stage.status.changed':
     case 'workflow.status.changed':
@@ -224,6 +263,11 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
     default:
       return type
   }
+}
+
+/** Los nombres de una lista del payload, separados por comas. */
+function names(value: unknown): string {
+  return Array.isArray(value) ? value.map(String).join(', ') : ''
 }
 
 /** Un webhook de GitHub (GH-B): `github.<evento>.<acción>` con el resumen de la entrega. */

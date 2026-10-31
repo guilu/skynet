@@ -18,10 +18,18 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param webUrl la web de ese GitHub, de la que son las URL remotas de los repositorios ({@code
  *     SKYNET_GITHUB_WEB_URL}); por defecto {@code https://github.com} con la API pública y, con
  *     GitHub Enterprise ({@code https://ghe.example.com/api/v3}), el host de la API
+ * @param gitUrl de dónde cuelgan los repositorios al subir una rama ({@code
+ *     SKYNET_GITHUB_GIT_URL}): por defecto {@code webUrl}. Las E2E lo apuntan a remotos locales
+ *     ({@code file://}) para no subir nada a GitHub
  */
 @ConfigurationProperties("skynet.github")
 record GitHubProperties(
-    String appId, String privateKeyFile, String webhookSecret, String apiUrl, String webUrl) {
+    String appId,
+    String privateKeyFile,
+    String webhookSecret,
+    String apiUrl,
+    String webUrl,
+    String gitUrl) {
 
   static final String DEFAULT_API_URL = "https://api.github.com";
 
@@ -31,6 +39,7 @@ record GitHubProperties(
     webhookSecret = blankToNull(webhookSecret);
     apiUrl = blankToNull(apiUrl) == null ? DEFAULT_API_URL : stripSlash(apiUrl.strip());
     webUrl = blankToNull(webUrl) == null ? defaultWebUrl(apiUrl) : stripSlash(webUrl.strip());
+    gitUrl = blankToNull(gitUrl) == null ? webUrl : stripSlash(gitUrl.strip());
   }
 
   /** Las variables que faltan para hablar con GitHub, por su nombre de entorno. */

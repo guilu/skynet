@@ -96,13 +96,23 @@ public final class DefinitionParser {
           "required",
           "ifNoChecks",
           "fix",
-          "maxRounds");
+          "maxRounds",
+          "method",
+          "deleteBranch");
   static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt", "retry");
   static final Set<String> RETRY_KEYS = Set.of("maxAttempts", "on", "delay");
   static final Set<String> PULL_REQUEST_KEYS = Set.of("title", "body", "base", "draft", "labels");
 
   /** Lo que espera como mucho una fase {@code github-check} sin {@code timeout} (EN-B). */
   static final Duration CI_TIMEOUT = Duration.ofMinutes(60);
+
+  /**
+   * Lo que intenta fusionar como mucho una fase {@code github-merge} sin {@code timeout} (EN-C).
+   */
+  static final Duration MERGE_TIMEOUT = Duration.ofMinutes(30);
+
+  /** Las claves de una fase {@code github-merge} (EN-C). */
+  static final List<String> MERGE_KEYS = List.of("method", "deleteBranch");
 
   /** Las claves de una fase {@code github-check} (EN-B). */
   static final List<String> CI_KEYS = List.of("required", "ifNoChecks", "fix", "maxRounds");
@@ -976,6 +986,7 @@ public final class DefinitionParser {
       String memory = memory(fields, type, path);
       PullRequestSpec pullRequest = pullRequest(fields, type, node, path);
       CiSpec ci = ci(fields, type, path);
+      MergeSpec merge = merge(fields, type, path);
       Entry schemaEntry = fields.get("outputSchema");
       Map<String, Object> outputSchema = null;
       String outputSchemaPath = null;
@@ -1016,7 +1027,8 @@ public final class DefinitionParser {
               phase,
               memory,
               pullRequest,
-              ci);
+              ci,
+              merge);
       return new StageAt(stage, path, node, fields, dependencyNodes, children);
     }
 
@@ -1429,7 +1441,11 @@ public final class DefinitionParser {
       Entry entry = fields.get("timeout");
       if (entry == null) {
         // Una fase github-check no espera a la CI para siempre (EN-B).
-        return type == StageType.GITHUB_CHECK ? CI_TIMEOUT : null;
+        return switch (type) {
+          case GITHUB_CHECK -> CI_TIMEOUT;
+          case GITHUB_MERGE -> MERGE_TIMEOUT;
+          default -> null;
+        };
       }
       if (type == StageType.CONDITIONAL) {
         error(
@@ -1661,6 +1677,53 @@ public final class DefinitionParser {
      * (un dato de entrada metido en un comando de shell podría ejecutar otra cosa). En las demás
      * fases, {@code command} no vale.
      */
+    /**
+     * Cómo fusiona la PR una fase {@code github-merge}: {@code method} y {@code deleteBranch}. En
+     * las demás fases, esas claves no valen.
+     */
+    private MergeSpec merge(Map<String, Entry> fields, StageType type, String path) {
+      if (type != StageType.GITHUB_MERGE) {
+        for (String key : MERGE_KEYS) {
+          Entry used = fields.get(key);
+          if (used != null && type.executable()) {
+            error(
+                used.key(),
+                path + "." + key,
+                "`"
+                    + key
+                    + "` solo vale en fases `type: github-merge`; esta es `"
+                    + type.yaml()
+                    + "`");
+          }
+        }
+        return null;
+      }
+      for (String key : List.of("agent", "prompt")) {
+        Entry used = fields.get(key);
+        if (used != null) {
+          error(
+              used.key(),
+              path + "." + key,
+              "Una fase `github-merge` fusiona la PR, no lanza un agente: quita `" + key + "`");
+        }
+      }
+      String method = text(fields.get("method"), path + ".method");
+      if (method != null && !MergeSpec.METHODS.contains(method)) {
+        error(
+            fields.get("method").value(),
+            path + ".method",
+            "`method: "
+                + method
+                + "` no se conoce"
+                + suggestion(method, MergeSpec.METHODS)
+                + ". Admite: "
+                + String.join(", ", MergeSpec.METHODS));
+        method = null;
+      }
+      Object deleteBranch = bool(fields.get("deleteBranch"), path + ".deleteBranch");
+      return new MergeSpec(method, !Boolean.FALSE.equals(deleteBranch));
+    }
+
     /**
      * Cómo espera la CI una fase {@code github-check}: a qué checks ({@code required}), qué hace si
      * no hay ninguno ({@code ifNoChecks}) y quién la corrige ({@code fix}, que se comprueba con las
@@ -1934,6 +1997,20 @@ public final class DefinitionParser {
         }
         if (stage.type() == StageType.GITHUB_CHECK) {
           checkCi(at, byId);
+          continue;
+        }
+        if (stage.type() == StageType.GITHUB_MERGE) {
+          boolean afterPullRequest =
+              ancestors(stage.id(), byId).stream()
+                  .anyMatch(a -> byId.get(a).stage().type() == StageType.GITHUB_PR);
+          if (!afterPullRequest) {
+            error(
+                at.node(),
+                at.path() + ".dependsOn",
+                "Una fase `github-merge` fusiona la PR de la ejecución: ponla en `dependsOn`"
+                    + " detrás de una fase `github-pr` (mejor, detrás de su `github-check` y de una"
+                    + " `human-approval`)");
+          }
           continue;
         }
         if (stage.type() == StageType.GITHUB_PR) {

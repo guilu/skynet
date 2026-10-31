@@ -68,6 +68,15 @@ public final class FakeGitHub implements AutoCloseable {
   /** Si no es 0, abrir una PR responde con este código (p. ej. 422 o 502). */
   volatile int createPullStatus;
 
+  /** Si no es 0, fusionar una PR responde con este código (p. ej. 405: no se puede fusionar). */
+  volatile int mergeStatus;
+
+  /** Si no es 0, borrar una rama responde con este código. */
+  volatile int deleteBranchStatus;
+
+  /** Las ramas borradas ({@code DELETE …/git/refs/heads/…}), en orden (EN-C). */
+  final List<String> deletedBranches = new CopyOnWriteArrayList<>();
+
   /** El commit de cada rama, para la cabeza de sus PR; si no está, uno de ceros. */
   final Map<String, String> branchShas = new ConcurrentHashMap<>();
 
@@ -110,6 +119,9 @@ public final class FakeGitHub implements AutoCloseable {
     repoRequests.clear();
     createPullStatus = 0;
     branchShas.clear();
+    mergeStatus = 0;
+    deleteBranchStatus = 0;
+    deletedBranches.clear();
     checkRuns.clear();
     statuses.clear();
     annotations.clear();
@@ -313,7 +325,9 @@ public final class FakeGitHub implements AutoCloseable {
   }
 
   private static final Pattern REPO_PATH =
-      Pattern.compile("/repos/([^/]+/[^/]+)(/pulls(?:/(\\d+))?|/issues/(\\d+)/labels)?");
+      Pattern.compile(
+          "/repos/([^/]+/[^/]+)(/pulls(?:/(\\d+)(/merge)?)?|/issues/(\\d+)/labels"
+              + "|/git/refs/heads/(.+))?");
 
   /** La API de un repositorio con un token de instalación: el repositorio y sus PR (EN-A). */
   private void repos(HttpExchange exchange, String method, String path, String bearer)
@@ -370,6 +384,28 @@ public final class FakeGitHub implements AutoCloseable {
       pr.put("base", Map.of("ref", request.path("base").asString()));
       prs.put(number, pr);
       send(exchange, 201, pr);
+    } else if (m.group(3) != null && m.group(4) == null && method.equals("GET")) {
+      Map<String, Object> pr = prs.get(Long.parseLong(m.group(3)));
+      send(exchange, pr == null ? 404 : 200, pr == null ? Map.of("message", "Not Found") : pr);
+    } else if (m.group(4) != null && method.equals("PUT")) {
+      Map<String, Object> pr = prs.get(Long.parseLong(m.group(3)));
+      JsonNode request = JSON.readTree(body);
+      String head = String.valueOf(((Map<?, ?>) pr.get("head")).get("sha"));
+      if (mergeStatus != 0) {
+        send(exchange, mergeStatus, Map.of("message", "Pull Request is not mergeable"));
+      } else if (!head.equals(request.path("sha").asString())) {
+        send(exchange, 409, Map.of("message", "Head branch was modified. Review and try again."));
+      } else {
+        String sha = "e".repeat(40);
+        pr.put("state", "closed");
+        pr.put("merged", true);
+        pr.put("merge_commit_sha", sha);
+        pr.put("merge_method", request.path("merge_method").asString());
+        send(exchange, 200, Map.of("sha", sha, "merged", true, "message", "Pull Request merged"));
+      }
+    } else if (m.group(6) != null && method.equals("DELETE")) {
+      deletedBranches.add(m.group(6));
+      exchange.sendResponseHeaders(deleteBranchStatus == 0 ? 204 : deleteBranchStatus, -1);
     } else if (m.group(3) != null && method.equals("PATCH")) {
       Map<String, Object> pr = prs.get(Long.parseLong(m.group(3)));
       if (pr == null) {
@@ -380,8 +416,8 @@ public final class FakeGitHub implements AutoCloseable {
       pr.put("title", request.path("title").asString());
       pr.put("body", request.path("body").asString());
       send(exchange, 200, pr);
-    } else if (m.group(4) != null && method.equals("POST")) {
-      Map<String, Object> pr = prs.get(Long.parseLong(m.group(4)));
+    } else if (m.group(5) != null && method.equals("POST")) {
+      Map<String, Object> pr = prs.get(Long.parseLong(m.group(5)));
       @SuppressWarnings("unchecked")
       List<String> labels = (List<String>) pr.get("labels");
       JSON.readTree(body).path("labels").forEach(l -> labels.add(l.asString()));
