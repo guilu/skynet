@@ -82,7 +82,8 @@ class GitPushTest {
     Files.writeString(ws.path().resolve("a.txt"), "1\n");
     GitPush.push(ws.path(), push(remote, ws, false), TOKEN);
     Files.writeString(ws.path().resolve("a.txt"), "2\n");
-    TestRepos.git(ws.path(), "commit", "-qam", "segundo");
+    TestRepos.git(
+        ws.path(), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "segundo");
 
     GitPush.Result second = GitPush.push(ws.path(), push(remote, ws, false), TOKEN);
 
