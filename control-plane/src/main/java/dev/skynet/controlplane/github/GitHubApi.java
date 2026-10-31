@@ -32,6 +32,7 @@ class GitHubApi {
   private final ObjectMapper json;
   private final TimeSource time;
   private final HttpClient http;
+  private final HttpClient noRedirects;
   private PrivateKey key;
 
   GitHubApi(GitHubProperties properties, ObjectMapper json, TimeSource time) {
@@ -42,6 +43,11 @@ class GitHubApi {
         HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
+    this.noRedirects =
+        HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .followRedirects(HttpClient.Redirect.NEVER)
             .build();
   }
 
@@ -141,6 +147,98 @@ class GitHubApi {
   }
 
   /**
+   * {@code GET /repos/{owner}/{repo}/commits/{sha}/check-runs}: los check-runs del commit, el
+   * último de cada nombre.
+   */
+  List<JsonNode> checkRuns(String token, String fullName, String sha) {
+    List<JsonNode> all = new ArrayList<>();
+    for (int page = 1; ; page++) {
+      JsonNode items =
+          send(
+                  "GET",
+                  "/repos/"
+                      + fullName
+                      + "/commits/"
+                      + sha
+                      + "/check-runs?filter=latest&per_page="
+                      + PAGE_SIZE
+                      + "&page="
+                      + page,
+                  token,
+                  null)
+              .path("check_runs");
+      items.forEach(all::add);
+      if (items.size() < PAGE_SIZE) {
+        return all;
+      }
+    }
+  }
+
+  /** {@code GET /repos/{owner}/{repo}/commits/{sha}/status}: los statuses del commit. */
+  List<JsonNode> statuses(String token, String fullName, String sha) {
+    List<JsonNode> all = new ArrayList<>();
+    send(
+            "GET",
+            "/repos/" + fullName + "/commits/" + sha + "/status?per_page=" + PAGE_SIZE,
+            token,
+            null)
+        .path("statuses")
+        .forEach(all::add);
+    return all;
+  }
+
+  /** {@code GET /repos/{owner}/{repo}/check-runs/{id}/annotations}: las primeras 50. */
+  List<JsonNode> annotations(String token, String fullName, long checkRunId) {
+    List<JsonNode> all = new ArrayList<>();
+    send(
+            "GET",
+            "/repos/" + fullName + "/check-runs/" + checkRunId + "/annotations?per_page=50",
+            token,
+            null)
+        .forEach(all::add);
+    return all;
+  }
+
+  /**
+   * {@code GET /repos/{owner}/{repo}/actions/jobs/{id}/logs}: el log de un job de GitHub Actions.
+   * GitHub redirige a una URL firmada, que se pide sin el token.
+   */
+  String jobLog(String token, String fullName, long jobId) {
+    HttpRequest request =
+        base("/repos/" + fullName + "/actions/jobs/" + jobId + "/logs", token).GET().build();
+    HttpResponse<String> response = call(noRedirects, request, "GET", "/actions/jobs/logs");
+    if (response.statusCode() / 100 == 3) {
+      String location = response.headers().firstValue("Location").orElse(null);
+      if (location == null) {
+        throw new GitHubException(
+            response.statusCode(), "GitHub no dio la URL del log del job " + jobId);
+      }
+      HttpRequest download =
+          HttpRequest.newBuilder(URI.create(location)).timeout(TIMEOUT).GET().build();
+      response = call(noRedirects, download, "GET", "log del job " + jobId);
+    }
+    if (response.statusCode() / 100 != 2) {
+      throw new GitHubException(
+          response.statusCode(),
+          "GitHub respondió "
+              + response.statusCode()
+              + " al pedir el log del job "
+              + jobId
+              + message(response.body()));
+    }
+    return response.body();
+  }
+
+  /** {@code POST /repos/{owner}/{repo}/issues/{n}/comments}: comenta en una PR. */
+  void comment(String token, String fullName, long number, String body) {
+    send(
+        "POST",
+        "/repos/" + fullName + "/issues/" + number + "/comments",
+        token,
+        json.writeValueAsString(Map.of("body", body)));
+  }
+
+  /**
    * {@code GET /app/hook/deliveries}: las últimas entregas de webhooks de la App, con su código.
    */
   List<JsonNode> hookDeliveries() {
@@ -155,13 +253,7 @@ class GitHubApi {
   }
 
   private JsonNode send(String method, String path, String bearer, String body) {
-    HttpRequest.Builder request =
-        HttpRequest.newBuilder(URI.create(properties.apiUrl() + path))
-            .timeout(TIMEOUT)
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", API_VERSION)
-            .header("User-Agent", "skynet")
-            .header("Authorization", "Bearer " + bearer);
+    HttpRequest.Builder request = base(path, bearer);
     if (body == null) {
       request.method(method, HttpRequest.BodyPublishers.noBody());
     } else {
@@ -169,15 +261,7 @@ class GitHubApi {
           .header("Content-Type", "application/json")
           .method(method, HttpRequest.BodyPublishers.ofString(body));
     }
-    HttpResponse<String> response;
-    try {
-      response = http.send(request.build(), HttpResponse.BodyHandlers.ofString());
-    } catch (IOException e) {
-      throw new GitHubException("No se puede conectar con " + properties.apiUrl(), e);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new GitHubException("Interrumpido al llamar a GitHub", e);
-    }
+    HttpResponse<String> response = call(http, request.build(), method, path);
     if (response.statusCode() / 100 != 2) {
       throw new GitHubException(
           response.statusCode(),
@@ -190,6 +274,27 @@ class GitHubApi {
               + message(response.body()));
     }
     return response.body().isBlank() ? json.createObjectNode() : json.readTree(response.body());
+  }
+
+  private HttpRequest.Builder base(String path, String bearer) {
+    return HttpRequest.newBuilder(URI.create(properties.apiUrl() + path))
+        .timeout(TIMEOUT)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", API_VERSION)
+        .header("User-Agent", "skynet")
+        .header("Authorization", "Bearer " + bearer);
+  }
+
+  private HttpResponse<String> call(
+      HttpClient client, HttpRequest request, String method, String path) {
+    try {
+      return client.send(request, HttpResponse.BodyHandlers.ofString());
+    } catch (IOException e) {
+      throw new GitHubException("No se puede conectar con " + properties.apiUrl(), e);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new GitHubException("Interrumpido al llamar a GitHub: " + method + " " + path, e);
+    }
   }
 
   private String message(String body) {

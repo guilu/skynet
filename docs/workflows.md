@@ -86,6 +86,7 @@ stages:
 - `artifacts`, `checks` y `scope`: lo que Skynet comprueba en el worktree de la fase antes de darla por buena. Ver «Verificación de una fase».
 - `action`, `risk` y `revise`: solo en las fases `type: human-approval`. Ver «Puertas de aprobación».
 - `pullRequest`: solo en las fases `type: github-pr`. Ver «Entrega por PR».
+- `required`, `ifNoChecks`, `fix` y `maxRounds`: solo en las fases `type: github-check`. Ver «Esperar la CI de la PR».
 - `outputSchema`: solo en las fases `type: agent`. La salida estructurada que devuelve la fase, y manda sobre el `output` de su agente, así que un mismo agente sirve en fases con salidas distintas. Es un JSON Schema en línea, como `output`, o la ruta de un fichero del repositorio (`outputSchema: schemas/spec.json`). Ver «Salida de una fase en un fichero».
 
 **Fases `command`:** ejecutan un comando de shell en lugar de un agente, p. ej. los tests después de implementar:
@@ -268,6 +269,29 @@ stages:
 - La fase termina bien cuando la PR está abierta. Si GitHub no responde, se reintenta con espera creciente; si dice que no (p. ej. 422) o falla 5 veces, la fase falla con el motivo.
 - En la ejecución es una invocación más de su fase, con proveedor `git-push`: una herramienta `git push` con su salida. Eventos `agent.git.pushed` (rama, commit y cuántos commits), `stage.github.pr.opened`, `stage.github.pr.updated` y `stage.github.pr.failed`. `GET /api/workflow-runs/{id}/pull-requests` da la PR de la ejecución.
 
+**Esperar la CI de la PR.** Una fase `type: github-check` espera a que pase la CI del último commit de la PR que abrió una fase `github-pr` anterior y, si falla, puede corregirla (EN-B):
+
+```yaml
+  - id: ci
+    type: github-check
+    dependsOn: [pr]
+    condition: repository.github
+    required: [test]       # por defecto, espera a todos los checks
+    ifNoChecks: pass       # sin ningún check en 5 min: pass (con un aviso) o fail
+    fix: implementar       # la fase agent que corrige la CI roja
+    maxRounds: 2           # rondas de corrección como mucho (por defecto 2)
+    timeout: 60m           # por defecto, 60 m
+```
+
+- Va detrás de una `github-pr`. No admite `agent` ni `prompt`: el agente que corrige es el de `fix`.
+- Cuenta los check-runs (el último de cada nombre) y los statuses del commit. Pasa cuando todos (o todos los de `required`) terminan en `success`, `neutral` o `skipped`, y falla si alguno termina en `failure`, `timed_out`, `cancelled` o `action_required`.
+- Los webhooks `check_run`, `check_suite` y `status` de ese commit hacen que pregunte en el acto, pero siempre decide la API de GitHub. Si un webhook se pierde, pregunta igual cada 2 minutos.
+- **Corrección:** con la CI roja, `fix` y rondas por delante, el agente de `fix` sigue en su sesión y en su worktree con lo que falló: cada check fallido con su resumen, sus anotaciones (fichero y línea) y las últimas 200 líneas del log de su job, redactadas. Al terminar, el runner sube la rama otra vez (sin forzar) y la fase vuelve a esperar. En la PR queda un comentario por ronda.
+  - `fix` tiene que ser una fase `agent` anterior a la `github-pr`: la que dejó el worktree que se sube.
+  - Los logs piden el permiso **Actions: lectura** de la App. Sin él, el agente recibe solo las anotaciones, y se le dice.
+  - Si la corrección falla, no cambia nada o se agotan las rondas, la fase falla con lo que falló. La PR se queda abierta.
+- Eventos `stage.github.ci.waiting`, `stage.github.ci.passed` (con `warning` si no hay CI), `stage.github.ci.failed` y `stage.github.ci.fix.started`. `GET /api/workflow-runs/{id}/ci-checks` da el estado de la espera, la ronda y cada check.
+
 **Puertas de aprobación.** Una fase `type: human-approval` para la ejecución hasta que alguien decide, p. ej. aprobar el plan antes de implementar:
 
 ```yaml
@@ -368,7 +392,6 @@ El YAML admite ya todo §11 para poder escribir los workflows de la especificaci
 
 | Qué | Hito |
 |---|---|
-| Fase `github-check` | EN-B |
 | Fase `github-merge` | EN-C |
 | Fase `merge` (sin GitHub) | sin fecha |
 | `promptTemplate` | S3 |

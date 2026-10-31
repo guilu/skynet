@@ -37,9 +37,12 @@ class RunController {
   private final RunService service;
   private final WorkspaceCleanup cleanup;
   private final PullRequests pullRequests;
+  private final CiChecks ciChecks;
 
-  RunController(RunService service, WorkspaceCleanup cleanup, PullRequests pullRequests) {
+  RunController(
+      RunService service, WorkspaceCleanup cleanup, PullRequests pullRequests, CiChecks ciChecks) {
     this.pullRequests = pullRequests;
+    this.ciChecks = ciChecks;
     this.service = service;
     this.cleanup = cleanup;
   }
@@ -171,6 +174,13 @@ class RunController {
   List<PullRequests.View> pullRequests(@PathVariable UUID id) {
     service.run(id);
     return pullRequests.ofRun(id);
+  }
+
+  /** La espera de la CI de cada fase {@code github-check} de la ejecución (EN-B). */
+  @GetMapping("/api/workflow-runs/{id}/ci-checks")
+  List<CiChecks.View> ciChecks(@PathVariable UUID id) {
+    service.run(id);
+    return ciChecks.ofRun(id);
   }
 
   @GetMapping("/api/agent-runs/{id}")

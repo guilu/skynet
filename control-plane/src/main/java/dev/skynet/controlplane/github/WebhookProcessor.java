@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -41,6 +42,7 @@ class WebhookProcessor {
   private final WebhookProperties properties;
   private final TransactionTemplate transactions;
   private final TimeSource time;
+  private final ApplicationEventPublisher publisher;
 
   WebhookProcessor(
       WebhookQueue queue,
@@ -49,7 +51,8 @@ class WebhookProcessor {
       PayloadRedactor redactor,
       WebhookProperties properties,
       TransactionTemplate transactions,
-      TimeSource time) {
+      TimeSource time,
+      ApplicationEventPublisher publisher) {
     this.queue = queue;
     this.installations = installations;
     this.events = events;
@@ -57,6 +60,7 @@ class WebhookProcessor {
     this.properties = properties;
     this.transactions = transactions;
     this.time = time;
+    this.publisher = publisher;
   }
 
   @Scheduled(fixedDelayString = "${skynet.github.webhooks.poll-interval:1s}")
@@ -158,7 +162,25 @@ class WebhookProcessor {
               "github:" + delivery.deliveryId() + ":" + repository,
               delivery.receivedAt()));
     }
+    String sha = checkedSha(delivery.event(), payload);
+    if (sha != null) {
+      for (UUID repository : repositories) {
+        publisher.publishEvent(new GitHubCommitChecked(repository, sha));
+      }
+    }
     return Outcome.processed(repositories.size());
+  }
+
+  /** El commit cuya CI cambia con esta entrega, o {@code null} si no es de CI. */
+  static String checkedSha(String event, JsonNode payload) {
+    JsonNode sha =
+        switch (event) {
+          case "check_run" -> payload.path("check_run").path("head_sha");
+          case "check_suite" -> payload.path("check_suite").path("head_sha");
+          case "status" -> payload.path("sha");
+          default -> null;
+        };
+    return sha != null && sha.isString() ? sha.asString() : null;
   }
 
   private static long requiredId(JsonNode node) {

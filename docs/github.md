@@ -6,7 +6,7 @@ Skynet se conecta a GitHub con una **GitHub App propia** (hito GH). Con ella, el
 - pide tokens de instalación de corta vida, limitados a un repositorio;
 - recibe webhooks firmados y los publica como eventos `github.*`.
 
-Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la rama y abre la PR (EN-A, ver «Entrega por PR» en [`workflows.md`](workflows.md)). Esperar la CI y fusionar llegan con EN-B y EN-C, y lanzar workflows desde issues o comentarios, con DS.
+Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la rama y abre la PR (EN-A) y la fase `github-check` espera su CI y la corrige (EN-B); ver «Entrega por PR» y «Esperar la CI de la PR» en [`workflows.md`](workflows.md). Fusionar llega con EN-C, y lanzar workflows desde issues o comentarios, con DS.
 
 ## 1. Crear la App
 
@@ -27,9 +27,10 @@ Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la 
    | Pull requests | lectura y escritura | abrir y fusionar las PR (EN) |
    | Checks | lectura | esperar la CI (EN) |
    | Commit statuses | lectura | la CI que usa statuses (EN) |
+   | Actions | lectura | leer los logs de la CI que falla (EN-B) |
    | Issues | lectura y escritura | leer etiquetas y comentar (DS) |
 
-   Se piden ya los permisos de EN y DS para no tener que volver a aceptar la instalación más adelante. **Sin el permiso `Workflows`**: así ningún agente puede tocar `.github/workflows`.
+   Se piden ya los permisos de EN y DS para no tener que volver a aceptar la instalación más adelante. **Actions: lectura** llegó con EN-B: si la App ya estaba creada, añádelo en sus permisos y acepta el cambio en la instalación (Settings → Applications). Hasta entonces, la CI roja se corrige solo con las anotaciones. **Sin el permiso `Workflows`**: así ningún agente puede tocar `.github/workflows`.
 4. **Eventos:**
    - Pull request
    - Pull request review
@@ -99,6 +100,7 @@ Ajustes → GitHub enseña las últimas 50 entregas con su estado y su error (`G
 - El webhook no lleva sesión: lo protege solo la firma. No cuenta para el bloqueo por intentos fallidos de login.
 - Los textos libres que llegan de GitHub (comentarios y revisiones) pasan por el mismo redactor de secretos que los eventos de los agentes.
 - El token del push (EN-A) no viaja en la orden del runner: el runner lo pide justo antes y solo para su invocación en curso. Se lo da a git como cabecera (`http.extraHeader` en `GIT_CONFIG_*`), así que no queda en la URL, en los argumentos, en `.git/config` ni en el disco. El título y la descripción de la PR pasan por el redactor antes de guardarse.
+- Lo que se lee de una CI que falla (resúmenes, anotaciones y logs) pasa por el redactor antes de llegar al agente. El log se descarga de la URL firmada a la que redirige GitHub, sin mandarle el token.
 - Nada de la CI llama al GitHub real:
   - los IT usan `FakeGitHub` (JDK `HttpServer`);
   - las E2E usan `web/e2e/fake-github.ts`;
@@ -113,4 +115,5 @@ Ajustes → GitHub enseña las últimas 50 entregas con su estado y su error (`G
 | `GET` | `/api/github/deliveries?limit=` | últimas entregas, sin el cuerpo (`limit` de 1 a 200) |
 | `POST` | `/api/github/webhooks` | el webhook, sin sesión y firmado |
 | `GET` | `/api/workflow-runs/{id}/pull-requests` | la PR que ha abierto la ejecución: rama, estado, número, URL y commit |
+| `GET` | `/api/workflow-runs/{id}/ci-checks` | la espera de la CI de cada fase `github-check`: estado, commit, ronda y cada check |
 | `POST` | `/api/runner/agent-runs/{id}/push-token` | solo el runner de un push en curso: su token, limitado al repositorio y a `contents: write` |

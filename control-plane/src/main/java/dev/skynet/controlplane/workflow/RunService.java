@@ -80,6 +80,7 @@ public class RunService {
   private final ApplicationEventPublisher publisher;
   private final Verifications verifications;
   private final Approvals approvals;
+  private final CiChecks ciChecks;
   private final QuotaShares quotaShares;
 
   RunService(
@@ -99,6 +100,7 @@ public class RunService {
       ApplicationEventPublisher publisher,
       Verifications verifications,
       Approvals approvals,
+      CiChecks ciChecks,
       QuotaShares quotaShares) {
     this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
@@ -116,6 +118,7 @@ public class RunService {
     this.publisher = publisher;
     this.verifications = verifications;
     this.approvals = approvals;
+    this.ciChecks = ciChecks;
     this.quotaShares = quotaShares;
   }
 
@@ -992,6 +995,8 @@ public class RunService {
         .correction(stage.getId())
         .flatMap(c -> agentRuns.findById(c.agentRunId()))
         .ifPresent(toStop::add);
+    // Una fase github-check que corrige la CI espera a la corrección, en la fase `fix` (EN-B).
+    ciChecks.fixAgent(stage.getId()).flatMap(agentRuns::findById).ifPresent(toStop::add);
     for (AgentRun agent : toStop) {
       if (agent.getStatus().isTerminal()) {
         continue;

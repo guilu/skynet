@@ -1,5 +1,6 @@
 import {
   Bot,
+  CircleCheckBig,
   GitBranch,
   GitPullRequest,
   Hand,
@@ -21,6 +22,7 @@ export const TYPE_ICON: Record<string, LucideIcon> = {
   verification: ListChecks,
   'human-approval': Hand,
   'github-pr': GitPullRequest,
+  'github-check': CircleCheckBig,
 }
 
 /** Lo que hace la fase, en una línea corta: el agente, el comando, la condición… */
@@ -40,6 +42,8 @@ export function stageDetail(stage: StageDefinition): string {
       return stage.approval ? `Aprobar: ${stage.approval.action}` : 'Aprobación'
     case 'github-pr':
       return 'Subir la rama y abrir la PR'
+    case 'github-check':
+      return stage.ci?.fix ? `Esperar la CI · corrige ${stage.ci.fix}` : 'Esperar la CI de la PR'
     default:
       return ''
   }

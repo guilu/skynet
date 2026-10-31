@@ -75,6 +75,7 @@ public class PullRequests {
   private final TransactionTemplate transactions;
   private final ObjectMapper json;
   private final TimeSource time;
+  private final CiChecks ciChecks;
 
   PullRequests(
       JdbcClient jdbc,
@@ -85,7 +86,8 @@ public class PullRequests {
       ApplicationEventPublisher publisher,
       TransactionTemplate transactions,
       ObjectMapper json,
-      TimeSource time) {
+      TimeSource time,
+      CiChecks ciChecks) {
     this.jdbc = jdbc;
     this.github = github;
     this.agentRuns = agentRuns;
@@ -95,6 +97,7 @@ public class PullRequests {
     this.transactions = transactions;
     this.json = json;
     this.time = time;
+    this.ciChecks = ciChecks;
   }
 
   /** Lo que sube una fase {@code github-pr}: el enlace con GitHub y la orden de push. */
@@ -226,6 +229,8 @@ public class PullRequests {
         .param("now", Timestamp.from(now))
         .param("agent", agent.getId())
         .update();
+    // O es la corrección de la CI de una fase github-check (EN-B).
+    ciChecks.pushed(agent, sha, now);
   }
 
   /**

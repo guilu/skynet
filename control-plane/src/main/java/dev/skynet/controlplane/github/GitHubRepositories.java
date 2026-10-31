@@ -25,6 +25,19 @@ public class GitHubRepositories {
   static final Map<String, String> PULL_REQUESTS_WRITE =
       Map.of("metadata", "read", "pull_requests", "write");
 
+  /** Leer la CI de un commit: check-runs y statuses. */
+  static final Map<String, String> CHECKS_READ =
+      Map.of("metadata", "read", "checks", "read", "statuses", "read");
+
+  /** Leer los logs de los jobs de GitHub Actions (EN-B): el permiso que se añade en EN. */
+  static final Map<String, String> ACTIONS_READ = Map.of("metadata", "read", "actions", "read");
+
+  /** El {@code slug} de la App de GitHub Actions: sus check-runs son jobs con log. */
+  static final String ACTIONS_APP = "github-actions";
+
+  /** Líneas del final del log de un job que se dan al agente. */
+  public static final int LOG_LINES = 200;
+
   private final GitHubProperties properties;
   private final GitHubApi api;
   private final GitHubTokens tokens;
@@ -164,6 +177,172 @@ public class GitHubRepositories {
         pr.path("base").path("ref").asString(base),
         pr.path("state").asString("open"),
         created);
+  }
+
+  /**
+   * Una comprobación de la CI de un commit: un check-run o un status.
+   *
+   * @param kind {@code check} o {@code status}
+   * @param state {@code pending}, {@code success} o {@code failure}, ya normalizado
+   * @param conclusion lo que dijo GitHub: la conclusión del check-run o el estado del status
+   * @param summary el título o la descripción, si los tiene
+   * @param checkRunId el id del check-run, para sus anotaciones; {@code null} en un status
+   * @param jobId el job de GitHub Actions del check-run, para su log; {@code null} si no es uno
+   */
+  public record Check(
+      String name,
+      String kind,
+      String state,
+      String conclusion,
+      String summary,
+      String url,
+      Long checkRunId,
+      Long jobId) {
+
+    public static final String PENDING = "pending";
+    public static final String SUCCESS = "success";
+    public static final String FAILURE = "failure";
+  }
+
+  /** La CI del commit {@code sha}: sus check-runs (el último de cada nombre) y sus statuses. */
+  public List<Check> checks(Link link, String sha) {
+    String token =
+        tokens.forRepository(link.installationId(), link.githubRepositoryId(), CHECKS_READ);
+    List<Check> checks = new java.util.ArrayList<>();
+    for (JsonNode run : api.checkRuns(token, link.fullName(), sha)) {
+      String conclusion = run.path("conclusion").asString(null);
+      String state =
+          !"completed".equals(run.path("status").asString(""))
+              ? Check.PENDING
+              : switch (conclusion == null ? "" : conclusion) {
+                case "success", "neutral", "skipped" -> Check.SUCCESS;
+                default -> Check.FAILURE;
+              };
+      String title = run.path("output").path("title").asString(null);
+      boolean actions = ACTIONS_APP.equals(run.path("app").path("slug").asString(""));
+      checks.add(
+          new Check(
+              run.path("name").asString("?"),
+              "check",
+              state,
+              conclusion,
+              title,
+              run.path("html_url").asString(null),
+              run.path("id").asLong(),
+              actions ? run.path("id").asLong() : null));
+    }
+    for (JsonNode status : api.statuses(token, link.fullName(), sha)) {
+      String value = status.path("state").asString("pending");
+      String state =
+          switch (value) {
+            case "success" -> Check.SUCCESS;
+            case "failure", "error" -> Check.FAILURE;
+            default -> Check.PENDING;
+          };
+      checks.add(
+          new Check(
+              status.path("context").asString("?"),
+              "status",
+              state,
+              value,
+              status.path("description").asString(null),
+              status.path("target_url").asString(null),
+              null,
+              null));
+    }
+    return checks;
+  }
+
+  /**
+   * Lo que se sabe de por qué fallaron {@code failed}: sus anotaciones (fichero, línea y mensaje)
+   * y, en los jobs de GitHub Actions, las últimas {@value #LOG_LINES} líneas de su log. Sin el
+   * permiso Actions: lectura, solo las anotaciones, y lo dice.
+   */
+  public String failureReport(Link link, List<Check> failed) {
+    String checksToken =
+        tokens.forRepository(link.installationId(), link.githubRepositoryId(), CHECKS_READ);
+    String actionsToken = null;
+    String actionsError = null;
+    StringBuilder report = new StringBuilder();
+    for (Check check : failed) {
+      report.append("### ").append(check.name());
+      if (check.conclusion() != null) {
+        report.append(" (").append(check.conclusion()).append(')');
+      }
+      report.append('\n');
+      if (check.summary() != null && !check.summary().isBlank()) {
+        report.append(check.summary().strip()).append('\n');
+      }
+      if (check.checkRunId() != null) {
+        try {
+          List<JsonNode> annotations =
+              api.annotations(checksToken, link.fullName(), check.checkRunId());
+          if (!annotations.isEmpty()) {
+            report.append("\nAnotaciones:\n");
+            for (JsonNode a : annotations) {
+              report
+                  .append("- ")
+                  .append(a.path("path").asString("?"))
+                  .append(':')
+                  .append(a.path("start_line").asInt(0))
+                  .append(" [")
+                  .append(a.path("annotation_level").asString("?"))
+                  .append("] ")
+                  .append(a.path("message").asString("").strip().replace("\n", " "))
+                  .append('\n');
+            }
+          }
+        } catch (GitHubException e) {
+          report
+              .append("\n(No se pudieron leer sus anotaciones: ")
+              .append(e.getMessage())
+              .append(")\n");
+        }
+      }
+      if (check.jobId() != null && actionsError == null) {
+        try {
+          if (actionsToken == null) {
+            actionsToken =
+                tokens.forRepository(
+                    link.installationId(), link.githubRepositoryId(), ACTIONS_READ);
+          }
+          String log = api.jobLog(actionsToken, link.fullName(), check.jobId());
+          report
+              .append("\nÚltimas líneas del log:\n```\n")
+              .append(tail(log, LOG_LINES))
+              .append("\n```\n");
+        } catch (GitHubException e) {
+          actionsError =
+              "Sin los logs de los jobs: la App necesita el permiso Actions: lectura ("
+                  + e.getMessage()
+                  + ")";
+        }
+      }
+      report.append('\n');
+    }
+    if (actionsError != null) {
+      report.append("_").append(actionsError).append("_\n");
+    }
+    return report.toString().strip();
+  }
+
+  /** Comenta en la PR {@code number}. */
+  public void comment(Link link, long number, String body) {
+    api.comment(token(link), link.fullName(), number, body);
+  }
+
+  /** Las últimas {@code lines} líneas de {@code text}, sin la marca de tiempo de Actions. */
+  static String tail(String text, int lines) {
+    String[] all = text.strip().split("\\R", -1);
+    int from = Math.max(0, all.length - lines);
+    StringBuilder out = new StringBuilder();
+    for (int i = from; i < all.length; i++) {
+      out.append(all[i].replaceFirst("^\\d{4}-\\d{2}-\\d{2}T[\\d:.]+Z ", ""));
+      if (i < all.length - 1) {
+        out.append('\n');
+      }
+    }
+    return out.toString();
   }
 
   private String token(Link link) {

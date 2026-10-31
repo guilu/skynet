@@ -10,13 +10,17 @@ export function useGitHub() {
   return useQuery({ queryKey: GITHUB_KEY, queryFn: api.gitHub, staleTime: 30_000 })
 }
 
-/** Los permisos que pide la App: los de EN y DS ya, para no volver a aceptar la instalación. */
+/**
+ * Los permisos que pide la App: los de EN y DS. Actions: lectura llegó con EN-B; sin él, la CI
+ * roja se corrige solo con las anotaciones.
+ */
 export const PERMISSIONS: { name: string; level: string; why: string }[] = [
   { name: 'Metadata', level: 'lectura', why: 'obligatorio' },
   { name: 'Contents', level: 'lectura y escritura', why: 'subir las ramas de los agentes' },
   { name: 'Pull requests', level: 'lectura y escritura', why: 'abrir y fusionar las PR' },
   { name: 'Checks', level: 'lectura', why: 'esperar la CI' },
   { name: 'Commit statuses', level: 'lectura', why: 'la CI que usa statuses' },
+  { name: 'Actions', level: 'lectura', why: 'leer los logs de la CI que falla' },
   { name: 'Issues', level: 'lectura y escritura', why: 'leer etiquetas y comentar' },
 ]
 
