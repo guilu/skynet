@@ -1,8 +1,8 @@
 # Disparadores
 
-Con la GitHub App conectada ([`github.md`](github.md)), Skynet lanza workflows **desde GitHub, sin abrir la web** (hito DS). En DS-A, con una **etiqueta en una issue**. Los comentarios `/skynet` llegan con DS-B, y el cron, la cola por repositorio y la web de los disparadores, con DS-C.
+Con la GitHub App conectada ([`github.md`](github.md)), Skynet lanza workflows **desde GitHub, sin abrir la web** (hito DS): con una **etiqueta en una issue** (DS-A) y con **comentarios `/skynet`** y **revisiones que piden cambios** (DS-B, §5). El cron, la cola por repositorio y la web de los disparadores llegan con DS-C.
 
-La App no necesita permisos nuevos: **Issues: lectura y escritura** y los eventos **Issues** e **Issue comment** se pidieron con GH.
+La App no necesita permisos nuevos: **Issues: lectura y escritura** y los eventos **Issues**, **Issue comment** y **Pull request review** se pidieron con GH.
 
 ## 1. Cómo funciona
 
@@ -101,17 +101,40 @@ En él, la etiqueta es `skynet:run` y el cuerpo de la issue tiene que ser **solo
 - El trabajo toma `description` como descripción, no el bloque. Su `externalRef` es la issue de órdenes, así que la PR lleva `Closes guilu/skynet-commands#n`.
 - Los avisos (👀, comentarios y etiquetas) van a la issue de órdenes.
 
-## 5. Seguridad
+## 5. Comentarios `/skynet` y revisiones
+
+Un comentario cuya **primera línea** empieza por `/skynet` es una orden. Vale en una issue y en una PR que abrió Skynet.
+
+| Orden | Dónde | Qué hace |
+|---|---|---|
+| `/skynet <workflow> [clave=valor…]` | issue | lanza ese workflow, como su etiqueta; el repositorio necesita una regla activa de él |
+| `/skynet run` | issue de un repositorio de órdenes | lanza la orden del cuerpo, como la etiqueta `skynet:run` |
+| `/skynet corrige <qué cambiar>` | PR o issue | si la ejecución espera en una puerta, le pide los cambios (lo mismo que «Pedir cambios» en la web) |
+| `/skynet cancela` | PR o issue | cancela la ejecución |
+| `/skynet estado` | PR o issue | contesta con el estado, las fases, la PR y el enlace |
+
+- En una PR, la ejecución es la que abrió la PR. En una issue, la última del trabajo de la issue.
+- El texto de `corrige` es el resto de la primera línea y las líneas siguientes. Llega a la fase que corrige (el `revise` de la puerta), con el redactor de secretos aplicado.
+- Los datos `clave=valor` de `/skynet <workflow>` se suman a los del bloque `skynet` de la issue, y pasan por el mismo `inputPolicy`. `alcance=tests` vale; con espacios en el valor, usa el bloque.
+- **Una revisión que pide cambios** («Request changes») en una PR de Skynet es un `/skynet corrige` con el texto de la revisión. Si la revisión no tiene texto, la corrección enlaza la revisión.
+- **No se puede aprobar ni fusionar desde GitHub**: `/skynet aprueba` o `fusiona` contestan que se haga en la web (hasta AU).
+- Skynet reacciona con 👀 **al comentario** y contesta con otro. Si no puede, contesta «No puedo: <motivo>», por ejemplo «ahora no se puede corregir» cuando la puerta no está esperando.
+
+Quien comenta o revisa tiene que estar autorizado, como quien pone la etiqueta. Para `corrige`, `cancela` y `estado` no cuenta el autor de la issue o la PR (las PR las abre la App). Para lanzar con `/skynet <workflow>`, sí, porque la issue entra en el trabajo.
+
+Un comentario que no empieza por `/skynet` y una revisión en una PR que no es de Skynet no son para Skynet: quedan como un evento más en Actividad.
+
+## 6. Seguridad
 
 El texto de una issue **no es de confianza**. Hasta que llegue el hito SE, que lo marcará como tal dentro del prompt:
 
 - Solo lanzan **los autorizados**, y la issue también la tiene que haber escrito uno: una issue de un desconocido no lanza nada aunque tú le pongas la etiqueta.
 - A quien no está autorizado **no se le contesta**. La petición queda rechazada, con el motivo, en `GET /api/triggers/launches`.
-- El título y el cuerpo pasan por el redactor de secretos y se recortan (300 y 20.000 caracteres). Solo cuenta el cuerpo en el momento de la etiqueta; los comentarios no entran.
+- El título y el cuerpo pasan por el redactor de secretos y se recortan (300 y 20.000 caracteres). Solo cuenta el cuerpo en el momento de la etiqueta o del comentario. De los comentarios solo entra el texto de `/skynet corrige`, de un autorizado.
 - Nada se fusiona solo: las puertas de los workflows siguen esperando tu aprobación en la web.
 - Los avisos usan un token de la App limitado al repositorio y a `issues: write`.
 
-## 6. Qué puede salir mal
+## 7. Qué puede salir mal
 
 Cada petición queda en `GET /api/triggers/launches` con su estado:
 
@@ -121,13 +144,16 @@ Cada petición queda en `GET /api/triggers/launches` con su estado:
 | `LAUNCHED` | lanzada; la ejecución está en marcha |
 | `FINISHED` | la ejecución terminó |
 | `DUPLICATE` | el trabajo ya tenía una ejecución en marcha; se comenta y no se lanza otra |
-| `REJECTED` | no se lanzó; `reason` dice por qué |
+| `DONE` | una orden `corrige`, `cancela` o `estado` hecha |
+| `REJECTED` | no se lanzó o no se hizo; `reason` dice por qué |
 
-Los rechazos por el interruptor o por permisos no se comentan en GitHub. Los demás (workflow sin publicar, datos que no valen, orden mal escrita, trabajo archivado…) sí, con «No lo lanzo: <motivo>».
+Las órdenes `/skynet` van con `mode = COMMAND` (salvo las que lanzan: `ISSUE` u `ORDER`), su primera línea en `command` y `pullRequest` si son de una PR.
+
+Los rechazos por el interruptor o por permisos no se comentan en GitHub. Los demás (workflow sin publicar, datos que no valen, orden mal escrita, trabajo archivado…) sí, con «No lo lanzo: <motivo>», o «No puedo: <motivo>» en una orden.
 
 Si GitHub falla al avisar, el aviso se reintenta con espera creciente, hasta 5 veces, y queda su error en `noticeError`. El lanzamiento nunca se repite por eso. Una etiqueta sin regla es un evento `github.issues.labeled` más, en Actividad.
 
-## 7. API
+## 8. API
 
 | Método | Ruta | Qué hace |
 |---|---|---|
@@ -138,9 +164,9 @@ Si GitHub falla al avisar, el aviso se reintenta con espera creciente, hasta 5 v
 | `GET`, `PUT`, `DELETE` | `/api/triggers/{id}` | lee, cambia o borra una regla |
 | `GET` | `/api/triggers/launches?limit=&repositoryId=` | las últimas peticiones, sin el cuerpo de la issue |
 
-Eventos en el agregado `repository`: `trigger.launched`, `trigger.duplicate` y `trigger.rejected` (este último solo cuando se sabe el repositorio).
+Eventos en el agregado `repository`: `trigger.launched`, `trigger.duplicate` y `trigger.rejected` (este último solo cuando se sabe el repositorio). Las órdenes: `trigger.command.corrige`, `trigger.command.cancela`, `trigger.command.estado` y `trigger.command.rejected`.
 
-## 8. Del puente `skynet-commands` a Skynet
+## 9. Del puente `skynet-commands` a Skynet
 
 El puente en Python hacía lo mismo desde fuera, con su propio webhook, su cola en SQLite, la contraseña de Skynet y un token de GitHub. Ahora:
 

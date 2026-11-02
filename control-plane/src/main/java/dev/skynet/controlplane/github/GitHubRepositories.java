@@ -365,6 +365,11 @@ public class GitHubRepositories {
     api.react(issuesToken(link), link.fullName(), number, content);
   }
 
+  /** Reacciona con {@code content} al comentario {@code commentId} de una issue o una PR (DS-B). */
+  public void reactToComment(Link link, long commentId, String content) {
+    api.reactToComment(issuesToken(link), link.fullName(), commentId, content);
+  }
+
   /**
    * Pone las etiquetas {@code add} en la issue {@code number} y quita {@code remove}; quitar una
    * que no tiene no es un error.

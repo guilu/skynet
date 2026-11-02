@@ -2,6 +2,7 @@ package dev.skynet.controlplane.trigger;
 
 import dev.skynet.controlplane.event.EventDraft;
 import dev.skynet.controlplane.event.EventStore;
+import dev.skynet.controlplane.github.GitHubComment;
 import dev.skynet.controlplane.github.GitHubIssue;
 import dev.skynet.controlplane.github.IssueHandler;
 import dev.skynet.controlplane.project.CodeRepository;
@@ -21,6 +22,7 @@ import dev.skynet.controlplane.workitem.WorkItemService;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -64,7 +66,9 @@ class IssueTriggers implements IssueHandler {
 
   enum Mode {
     ISSUE,
-    ORDER
+    ORDER,
+    /** Una orden {@code /skynet} que no lanza nada: corrige, cancela o estado (DS-B). */
+    COMMAND
   }
 
   private final JdbcClient jdbc;
@@ -78,6 +82,7 @@ class IssueTriggers implements IssueHandler {
   private final RunService runs;
   private final EventStore events;
   private final PayloadRedactor redactor;
+  private final TriggerCommands commands;
   private final String publicUrl;
 
   IssueTriggers(
@@ -92,6 +97,7 @@ class IssueTriggers implements IssueHandler {
       RunService runs,
       EventStore events,
       PayloadRedactor redactor,
+      TriggerCommands commands,
       @Value("${skynet.github.pull-requests.public-url:}") String publicUrl) {
     this.jdbc = jdbc;
     this.json = json;
@@ -104,6 +110,7 @@ class IssueTriggers implements IssueHandler {
     this.runs = runs;
     this.events = events;
     this.redactor = redactor;
+    this.commands = commands;
     this.publicUrl = publicUrl == null ? "" : publicUrl.replaceAll("/+$", "");
   }
 
@@ -121,7 +128,7 @@ class IssueTriggers implements IssueHandler {
       if (!label.equals(TriggerRules.ORDER_LABEL)) {
         return false;
       }
-      queue(issue, label, Mode.ORDER, null, null);
+      queue(Request.of(issue, label, Mode.ORDER, null, null));
       return true;
     }
     if (TriggerRules.RESERVED.contains(label)) {
@@ -129,33 +136,190 @@ class IssueTriggers implements IssueHandler {
     }
     List<TriggerRules.Rule> matching = rules.forLabel(issue.repositoryIds(), label);
     for (TriggerRules.Rule rule : matching) {
-      queue(issue, label, Mode.ISSUE, rule.id(), rule.repositoryId());
+      queue(Request.of(issue, label, Mode.ISSUE, rule.id(), rule.repositoryId()));
     }
     return !matching.isEmpty();
   }
 
-  private void queue(GitHubIssue issue, String label, Mode mode, UUID ruleId, UUID repositoryId) {
+  /**
+   * Un comentario {@code /skynet}, o una revisión que pide cambios en una PR de Skynet (DS-B):
+   *
+   * <ul>
+   *   <li>{@code /skynet run} en una issue de un repositorio de órdenes la lanza como con la
+   *       etiqueta;
+   *   <li>{@code /skynet <workflow> [clave=valor…]} en una issue lanza ese workflow si el
+   *       repositorio tiene un disparador activo de él;
+   *   <li>lo demás ({@code corrige}, {@code cancela}, {@code estado}…) es una orden sobre la
+   *       ejecución de la PR o de la issue.
+   * </ul>
+   *
+   * Una revisión que pide cambios es {@code /skynet corrige} con su texto.
+   */
+  @Override
+  public boolean handleComment(GitHubComment comment) {
+    UUID first = comment.repositoryIds().isEmpty() ? null : comment.repositoryIds().getFirst();
+    if (comment.kind() == GitHubComment.Kind.CHANGES_REQUESTED) {
+      if (!commands.isSkynetPullRequest(comment.fullName(), comment.number())) {
+        return false;
+      }
+      String text = comment.text() == null ? "" : comment.text().strip();
+      if (text.isEmpty()) {
+        text =
+            "Corrige lo que pide la revisión de GitHub"
+                + (comment.issueUrl() == null ? "." : ": " + comment.issueUrl());
+      }
+      SkynetCommand command = new SkynetCommand(SkynetCommand.CORRECT, "", text);
+      queue(Request.of(comment, command, Mode.COMMAND, null, first, text));
+      return true;
+    }
+    SkynetCommand command = SkynetCommand.parse(comment.text());
+    if (command == null) {
+      return false;
+    }
+    if (!comment.pullRequest()) {
+      if (command.verb().equals(SkynetCommand.RUN)
+          && settings.isOrderRepository(comment.fullName())) {
+        queue(
+            Request.of(comment, command, Mode.ORDER, null, null, comment.issueBody())
+                .withLabel(TriggerRules.ORDER_LABEL));
+        return true;
+      }
+      List<TriggerRules.Rule> matching = new ArrayList<>();
+      if (!command.verb().isEmpty()) {
+        for (UUID repositoryId : comment.repositoryIds()) {
+          rules.forWorkflow(repositoryId, command.verb()).ifPresent(matching::add);
+        }
+      }
+      for (TriggerRules.Rule rule : matching) {
+        queue(
+            Request.of(
+                    comment,
+                    command,
+                    Mode.ISSUE,
+                    rule.id(),
+                    rule.repositoryId(),
+                    comment.issueBody())
+                .withLabel(rule.label()));
+      }
+      if (!matching.isEmpty()) {
+        return true;
+      }
+    }
+    queue(Request.of(comment, command, Mode.COMMAND, null, first, command.text()));
+    return true;
+  }
+
+  /** Lo que se apunta de una petición. */
+  private record Request(
+      String deliveryId,
+      String source,
+      long number,
+      String url,
+      String label,
+      Mode mode,
+      String author,
+      String sender,
+      String title,
+      String body,
+      UUID ruleId,
+      UUID repositoryId,
+      Long commentId,
+      String command,
+      boolean pullRequest,
+      Instant receivedAt) {
+
+    static Request of(GitHubIssue issue, String label, Mode mode, UUID ruleId, UUID repositoryId) {
+      return new Request(
+          issue.deliveryId(),
+          issue.fullName(),
+          issue.number(),
+          issue.url(),
+          label,
+          mode,
+          issue.author(),
+          issue.sender(),
+          issue.title(),
+          issue.body(),
+          ruleId,
+          repositoryId,
+          null,
+          null,
+          false,
+          issue.receivedAt());
+    }
+
+    static Request of(
+        GitHubComment comment,
+        SkynetCommand command,
+        Mode mode,
+        UUID ruleId,
+        UUID repositoryId,
+        String body) {
+      return new Request(
+          comment.deliveryId(),
+          comment.fullName(),
+          comment.number(),
+          comment.issueUrl(),
+          "/skynet " + command.verb(),
+          mode,
+          comment.issueAuthor(),
+          comment.sender(),
+          comment.issueTitle(),
+          body,
+          ruleId,
+          repositoryId,
+          comment.commentId(),
+          command.line(),
+          comment.pullRequest(),
+          comment.receivedAt());
+    }
+
+    Request withLabel(String label) {
+      return new Request(
+          deliveryId,
+          source,
+          number,
+          url,
+          label,
+          mode,
+          author,
+          sender,
+          title,
+          body,
+          ruleId,
+          repositoryId,
+          commentId,
+          command,
+          pullRequest,
+          receivedAt);
+    }
+  }
+
+  private void queue(Request request) {
     Instant now = time.now();
     jdbc.sql(
             "INSERT INTO trigger_launch (id, delivery_id, source, issue_number, issue_url, label,"
-                + " mode, author, sender, title, body, trigger_id, repository_id, status,"
-                + " run_after, created_at, updated_at)"
-                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?, ?)")
+                + " mode, author, sender, title, body, trigger_id, repository_id, comment_id,"
+                + " command, pull_request, status, run_after, created_at, updated_at)"
+                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?, ?)")
         .params(
             UUID.randomUUID(),
-            issue.deliveryId(),
-            issue.fullName(),
-            issue.number(),
-            issue.url(),
-            label,
-            mode.name(),
-            issue.author(),
-            issue.sender(),
-            cut(redactor.redact(oneLine(issue.title())), MAX_TITLE),
-            cut(redactor.redact(issue.body() == null ? "" : issue.body().strip()), MAX_BODY),
-            ruleId,
-            repositoryId,
-            Timestamp.from(issue.receivedAt()),
+            request.deliveryId(),
+            request.source(),
+            request.number(),
+            request.url(),
+            request.label(),
+            request.mode().name(),
+            request.author(),
+            request.sender(),
+            cut(redactor.redact(oneLine(request.title())), MAX_TITLE),
+            cut(redactor.redact(request.body() == null ? "" : request.body().strip()), MAX_BODY),
+            request.ruleId(),
+            request.repositoryId(),
+            request.commentId(),
+            request.command() == null ? null : cut(request.command(), 1000),
+            request.pullRequest(),
+            Timestamp.from(request.receivedAt()),
             Timestamp.from(now),
             Timestamp.from(now))
         .update();
@@ -216,6 +380,10 @@ class IssueTriggers implements IssueHandler {
           "@" + launch.sender() + " no está entre quienes pueden lanzar desde GitHub",
           null,
           false);
+      return;
+    }
+    if (launch.mode() == Mode.COMMAND) {
+      command(launch);
       return;
     }
     if (!settings.authorized(launch.author())) {
@@ -348,7 +516,61 @@ class IssueTriggers implements IssueHandler {
       throw new InvalidRequestException(
           "El disparador de la etiqueta " + launch.label() + " ya no existe o está desactivado");
     }
-    return new Target(rule, IssueBody.inputs(launch.body(), json), launch.body());
+    Map<String, Object> given = new LinkedHashMap<>(IssueBody.inputs(launch.body(), json));
+    SkynetCommand command = launch.command() == null ? null : SkynetCommand.parse(launch.command());
+    if (command != null) {
+      command.args().forEach((name, value) -> given.put(name, typed(rule, name, value)));
+    }
+    return new Target(rule, given, launch.body());
+  }
+
+  /** El valor de un {@code clave=valor} de un comentario, del tipo que pide la política. */
+  private static Object typed(TriggerRules.Rule rule, String name, String value) {
+    InputPolicy.Rule policy = rule.inputPolicy().get(name);
+    if (policy == null) {
+      return value;
+    }
+    return switch (policy.type()) {
+      case "number" -> {
+        try {
+          yield new java.math.BigDecimal(value);
+        } catch (NumberFormatException e) {
+          throw new InvalidRequestException("El dato `" + name + "` tiene que ser un número");
+        }
+      }
+      case "boolean" -> {
+        if (!value.equals("true") && !value.equals("false")) {
+          throw new InvalidRequestException("El dato `" + name + "` tiene que ser true o false");
+        }
+        yield Boolean.valueOf(value);
+      }
+      default -> value;
+    };
+  }
+
+  /** Una orden que no lanza nada: la hace y deja la respuesta en GitHub. */
+  private void command(Launch launch) {
+    SkynetCommand command = SkynetCommand.parse(launch.command());
+    if (command == null) {
+      throw new InvalidRequestException("la orden no empieza por `/skynet`");
+    }
+    // El texto (el de corrige) es el del comentario o la revisión, ya redactado y recortado.
+    command = new SkynetCommand(command.verb(), command.rest(), launch.body());
+    TriggerCommands.Outcome outcome =
+        commands.run(
+            command, launch.source(), launch.number(), launch.pullRequest(), launch.sender());
+    finish(
+        launch, "DONE", null, outcome.repositoryId(), null, outcome.workItemId(), outcome.runId());
+    notice(launch.id(), outcome.text(), List.of(), List.of(), true);
+    if (outcome.repositoryId() != null) {
+      event(
+          launch,
+          outcome.repositoryId(),
+          "trigger.command." + outcome.verb(),
+          outcome.key(),
+          outcome.runId(),
+          null);
+    }
   }
 
   private Optional<UUID> workItem(UUID projectId, String externalRef) {
@@ -374,10 +596,21 @@ class IssueTriggers implements IssueHandler {
   private void reject(Launch launch, String reason, UUID repositoryId, boolean tell) {
     finish(launch, "REJECTED", reason, repositoryId, launch.ruleId(), null, null);
     if (tell) {
-      notice(launch.id(), "No lo lanzo: " + reason + ".", List.of(), List.of(), true);
+      String text =
+          launch.mode() == Mode.COMMAND
+              ? "No puedo: " + reason + "."
+              : "No lo lanzo: " + reason + ".";
+      notice(launch.id(), text, List.of(), List.of(), true);
     }
     if (repositoryId != null) {
-      event(launch, repositoryId, "trigger.rejected", null, null, null, reason);
+      event(
+          launch,
+          repositoryId,
+          launch.mode() == Mode.COMMAND ? "trigger.command.rejected" : "trigger.rejected",
+          null,
+          null,
+          null,
+          reason);
     }
   }
 
@@ -476,6 +709,9 @@ class IssueTriggers implements IssueHandler {
     if (launch.sender() != null) {
       payload.put("sender", launch.sender());
     }
+    if (launch.command() != null) {
+      payload.put("command", launch.command());
+    }
     if (workItemKey != null) {
       payload.put("workItemKey", workItemKey);
     }
@@ -501,12 +737,14 @@ class IssueTriggers implements IssueHandler {
       String body,
       UUID ruleId,
       UUID repositoryId,
-      int attempts) {}
+      int attempts,
+      String command,
+      boolean pullRequest) {}
 
   private Optional<Launch> claim() {
     return jdbc.sql(
             "SELECT id, source, issue_number, label, mode, author, sender, title, body,"
-                + " trigger_id, repository_id, attempts FROM trigger_launch"
+                + " trigger_id, repository_id, attempts, command, pull_request FROM trigger_launch"
                 + " WHERE status = 'QUEUED' AND run_after <= ?"
                 + " ORDER BY run_after LIMIT 1 FOR UPDATE SKIP LOCKED")
         .param(Timestamp.from(time.now()))
@@ -524,7 +762,9 @@ class IssueTriggers implements IssueHandler {
                     rs.getString("body"),
                     rs.getObject("trigger_id", UUID.class),
                     rs.getObject("repository_id", UUID.class),
-                    rs.getInt("attempts")))
+                    rs.getInt("attempts"),
+                    rs.getString("command"),
+                    rs.getBoolean("pull_request")))
         .optional();
   }
 

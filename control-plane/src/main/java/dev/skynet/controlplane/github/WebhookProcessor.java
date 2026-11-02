@@ -147,7 +147,9 @@ class WebhookProcessor {
       return Outcome.ignored("La entrega no es de un repositorio");
     }
     List<UUID> repositories = installations.repositoriesNamed(name.asString());
-    boolean handled = issueLabeled(delivery, payload, name.asString(), repositories);
+    boolean labeled = issueLabeled(delivery, payload, name.asString(), repositories);
+    boolean commented = commented(delivery, payload, name.asString(), repositories);
+    boolean handled = labeled || commented;
     if (repositories.isEmpty()) {
       return handled
           ? Outcome.processed(0)
@@ -223,6 +225,71 @@ class WebhookProcessor {
     boolean handled = false;
     for (IssueHandler handler : issueHandlers) {
       handled |= handler.handle(labeled);
+    }
+    return handled;
+  }
+
+  /**
+   * Pasa un comentario nuevo, o una revisión que pide cambios, a quien lo atienda (DS-B).
+   *
+   * @return si alguien lo ha atendido
+   */
+  private boolean commented(
+      Claimed delivery, JsonNode payload, String fullName, List<UUID> repositories) {
+    GitHubComment comment;
+    if ("issue_comment".equals(delivery.event()) && "created".equals(delivery.action())) {
+      JsonNode issue = payload.path("issue");
+      JsonNode body = payload.path("comment");
+      if (!issue.path("number").isIntegralNumber() || !body.path("body").isString()) {
+        return false;
+      }
+      comment =
+          new GitHubComment(
+              delivery.deliveryId(),
+              fullName,
+              repositories,
+              GitHubComment.Kind.COMMENT,
+              issue.path("number").asLong(),
+              issue.has("pull_request"),
+              body.path("id").isIntegralNumber() ? body.path("id").asLong() : null,
+              body.path("body").asString(),
+              body.path("user").path("login").asString(null),
+              issue.path("user").path("login").asString(null),
+              issue.path("title").asString(""),
+              issue.path("body").asString(""),
+              issue.path("html_url").asString(null),
+              delivery.receivedAt());
+    } else if ("pull_request_review".equals(delivery.event())
+        && "submitted".equals(delivery.action())
+        && "changes_requested"
+            .equalsIgnoreCase(payload.path("review").path("state").asString(""))) {
+      JsonNode pr = payload.path("pull_request");
+      JsonNode review = payload.path("review");
+      if (!pr.path("number").isIntegralNumber()) {
+        return false;
+      }
+      comment =
+          new GitHubComment(
+              delivery.deliveryId(),
+              fullName,
+              repositories,
+              GitHubComment.Kind.CHANGES_REQUESTED,
+              pr.path("number").asLong(),
+              true,
+              null,
+              review.path("body").asString(""),
+              review.path("user").path("login").asString(null),
+              pr.path("user").path("login").asString(null),
+              pr.path("title").asString(""),
+              pr.path("body").asString(""),
+              review.path("html_url").asString(pr.path("html_url").asString(null)),
+              delivery.receivedAt());
+    } else {
+      return false;
+    }
+    boolean handled = false;
+    for (IssueHandler handler : issueHandlers) {
+      handled |= handler.handleComment(comment);
     }
     return handled;
   }

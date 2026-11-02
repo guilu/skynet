@@ -1,0 +1,20 @@
+{
+  "action": "submitted",
+  "review": {
+    "id": 7001,
+    "state": "changes_requested",
+    "body": "Falta el caso con negativos.",
+    "html_url": "https://github.com/guilu/demo-repo/pull/12#pullrequestreview-7001",
+    "user": {"login": "guilu"}
+  },
+  "pull_request": {
+    "number": 12,
+    "title": "DEMO-1: Añadir resta()",
+    "body": "Closes #7",
+    "html_url": "https://github.com/guilu/demo-repo/pull/12",
+    "user": {"login": "skynet-guilu[bot]"}
+  },
+  "repository": {"id": 5001, "full_name": "guilu/demo-repo", "private": true},
+  "installation": {"id": 7},
+  "sender": {"login": "guilu"}
+}

@@ -438,8 +438,24 @@ public final class FakeGitHub implements AutoCloseable {
   private static final Pattern ISSUE_PATH =
       Pattern.compile("/repos/([^/]+/[^/]+)/issues/(\\d+)/(?:labels(?:/(.+))?|(reactions))");
 
+  private static final Pattern COMMENT_REACTION_PATH =
+      Pattern.compile("/repos/([^/]+/[^/]+)/issues/comments/(\\d+)/reactions");
+
   /** Etiquetas y reacciones de las issues que no son PR (DS-A). Si no es una de esas, false. */
   private boolean issues(HttpExchange exchange, String method, String path) throws IOException {
+    Matcher c = COMMENT_REACTION_PATH.matcher(path);
+    if (c.matches() && method.equals("POST")) {
+      // Reacción a un comentario (DS-B): «owner/repo comentario 99: eyes».
+      byte[] body = exchange.getRequestBody().readAllBytes();
+      reactions.add(
+          c.group(1)
+              + " comentario "
+              + c.group(2)
+              + ": "
+              + JSON.readTree(body).path("content").asString());
+      send(exchange, 201, Map.of("id", reactions.size()));
+      return true;
+    }
     Matcher m = ISSUE_PATH.matcher(path);
     if (!m.matches()) {
       return false;
