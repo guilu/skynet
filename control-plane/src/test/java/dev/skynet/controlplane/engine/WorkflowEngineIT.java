@@ -167,6 +167,25 @@ class WorkflowEngineIT extends IntegrationTest {
           retry: {maxAttempts: 3, on: [timeout], delay: 1s}
       """;
 
+  /** Implementar y revisar, con un agente que falla en cuanto se acaba la cuota (CQ-A). */
+  static final String QUOTA =
+      """
+      id: quota
+      version: 1
+      agents:
+        impaciente:
+          prompt: Revisa
+          onQuota: fail
+      stages:
+        - id: implement
+          type: agent
+          prompt: Implementa
+        - id: review
+          type: agent
+          agent: impaciente
+          dependsOn: [implement]
+      """;
+
   /** Implementar con un tiempo máximo, que se reintenta si se acaba (W6-B), y pasar los tests. */
   static final String TIMED =
       """
@@ -899,6 +918,139 @@ class WorkflowEngineIT extends IntegrationTest {
                 .query(Long.class)
                 .single())
         .isEqualTo(1);
+  }
+
+  /** El agente arranca su sesión y el proveedor rechaza el turno porque se acabó la cuota. */
+  private static void outOfQuota(Runner runner, JsonNode command, String worktree, Instant resets) {
+    Events events = new Events(UUID.fromString(command.path("agentRunId").asString()));
+    events.add(
+        AgentEventType.WORKSPACE_READY,
+        Map.of(
+            "path",
+            worktree,
+            "branch",
+            "skynet/q",
+            "baseCommit",
+            "abc1234",
+            "snapshot",
+            "5a0001a"));
+    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", QUOTA_SESSION));
+    events.add(
+        AgentEventType.RATE_LIMIT,
+        Map.of(
+            "status", "rejected",
+            "blocked", true,
+            "provider", "claude-code",
+            "window", "five_hour",
+            "resetsAt", resets.getEpochSecond()));
+    events.add(AgentEventType.RESULT, Map.of("subtype", "success", "isError", true));
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 1));
+    runner.send(events);
+  }
+
+  private static final String QUOTA_SESSION = "8c1d6a52-3b7e-4f0a-9c2e-5d4b3a291f60";
+
+  @Test
+  void anAgentOutOfQuotaWaitsForTheResetAndResumesItsSessionInTheSameWorktree() {
+    String definitionId = publish(QUOTA);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    JsonNode first = runner.claim().getFirst();
+    Instant resets = Instant.now().plusSeconds(2);
+    outOfQuota(runner, first, "/w/eng/implement", resets);
+
+    // Sin retry en el YAML, la fase espera igual a que se renueve la cuota, sin fallar.
+    JsonNode run = get("/api/workflow-runs/" + runId);
+    assertThat(run.path("status").asString()).isEqualTo("RUNNING");
+    List<JsonNode> implement = stagesOf(run, "implement");
+    assertThat(implement)
+        .extracting(f -> f.path("status").asString())
+        .containsExactly("FAILED", "PENDING");
+    assertThat(implement.get(0).path("agents").get(0).path("failure").asString())
+        .isEqualTo("quota");
+    JsonNode wait = implement.get(1).path("quotaWait");
+    assertThat(wait.path("provider").asString()).isEqualTo("claude-code");
+    assertThat(wait.path("window").asString()).isEqualTo("five_hour");
+    assertThat(Instant.parse(wait.path("resetsAt").asString()).getEpochSecond())
+        .isEqualTo(resets.getEpochSecond());
+    assertThat(get("/api/quota/waits")).hasSize(1);
+    assertThat(eventTypes(runId)).contains("stage.retry.scheduled");
+
+    // A su hora reanuda la sesión en el mismo worktree, sin volver a la instantánea.
+    JsonNode resume = awaitCommand(runner);
+    assertThat(resume.path("type").asString()).isEqualTo("RESUME");
+    assertThat(resume.path("start").path("sessionId").asString()).isEqualTo(QUOTA_SESSION);
+    assertThat(resume.path("start").path("resume").path("workspacePath").asString())
+        .isEqualTo("/w/eng/implement");
+    assertThat(
+            resume.path("start").path("workspace").path("restore").isMissingNode()
+                || resume.path("start").path("workspace").path("restore").isNull())
+        .isTrue();
+    assertThat(taskPrompt(resume.path("start"))).contains("límite de uso");
+    complete(runner, resume, "/w/eng/implement", null, QUOTA_SESSION);
+    assertThat(stageStatuses(runId)).containsEntry("implement", "SUCCEEDED");
+  }
+
+  @Test
+  void anAgentWithOnQuotaFailFailsTheRunAndOthersWaitBeforeStarting() {
+    String definitionId = publish(QUOTA);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    JsonNode review = runner.claim().getFirst();
+    outOfQuota(runner, review, "/w/eng/implement", Instant.now().plusSeconds(3600));
+    await(() -> "FAILED".equals(get("/api/workflow-runs/" + runId).path("status").asString()));
+    assertThat(stagesOf(get("/api/workflow-runs/" + runId), "review"))
+        .extracting(f -> f.path("status").asString())
+        .containsExactly("FAILED");
+
+    // Con Claude Code sin cuota durante otra hora, una ejecución nueva no arranca su agente:
+    // espera lista, sin gastar nada, hasta que se renueve.
+    String second = launch(definitionId, Map.of()).path("id").asString();
+    await(() -> eventTypes(second).contains("stage.quota.waiting"));
+    assertThat(runner.claim()).isEmpty();
+    JsonNode waiting = stagesOf(get("/api/workflow-runs/" + second), "implement").getFirst();
+    assertThat(waiting.path("status").asString()).isEqualTo("READY");
+    assertThat(waiting.path("quotaWait").path("provider").asString()).isEqualTo("claude-code");
+
+    // «Reintentar ahora» la arranca sin mirar la cuota.
+    post("/api/workflow-runs/" + second + "/stages/implement/skip-quota-wait", Map.of());
+    JsonNode started = awaitCommand(runner);
+    assertThat(started.path("type").asString()).isEqualTo("START");
+    assertThat(eventTypes(second)).contains("stage.quota.skipped");
+  }
+
+  @Test
+  void aBlockedQuotaBeyondTheMaximumWaitFailsTheStage() {
+    put("/api/settings/quota", Map.of("maxWaitHours", 6));
+    String definitionId = publish(QUOTA);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    outOfQuota(
+        runner,
+        runner.claim().getFirst(),
+        "/w/eng/implement",
+        Instant.now().plus(java.time.Duration.ofDays(3)));
+
+    await(() -> "FAILED".equals(get("/api/workflow-runs/" + runId).path("status").asString()));
+    assertThat(stagesOf(get("/api/workflow-runs/" + runId), "implement"))
+        .extracting(f -> f.path("agents").get(0).path("failure").asString())
+        .containsExactly("quota");
+  }
+
+  @Test
+  void turningItOffFailsLikeBefore() {
+    put("/api/settings/quota", Map.of("enabled", false));
+    try {
+      String definitionId = publish(QUOTA);
+      Runner runner = register("laptop");
+      String runId = launch(definitionId, Map.of()).path("id").asString();
+      outOfQuota(
+          runner, runner.claim().getFirst(), "/w/eng/implement", Instant.now().plusSeconds(2));
+      await(() -> "FAILED".equals(get("/api/workflow-runs/" + runId).path("status").asString()));
+    } finally {
+      put("/api/settings/quota", Map.of("enabled", true));
+    }
   }
 
   @Test

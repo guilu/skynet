@@ -9,6 +9,7 @@ import dev.skynet.controlplane.definition.PullRequestSpec;
 import dev.skynet.controlplane.definition.StageDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.ChildDefinition;
 import dev.skynet.controlplane.definition.StageDefinition.Dependency;
+import dev.skynet.controlplane.definition.StageDefinition.Retry;
 import dev.skynet.controlplane.definition.StageDefinition.WorkspaceMode;
 import dev.skynet.controlplane.definition.StageType;
 import dev.skynet.controlplane.definition.WorkflowDefinition;
@@ -19,10 +20,15 @@ import dev.skynet.controlplane.shared.PayloadRedactor;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.controlplane.workitem.WorkItem;
 import dev.skynet.controlplane.workitem.WorkItemService;
+import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.AgentObservableStatus;
+import dev.skynet.protocol.AgentProviderKind;
+import dev.skynet.protocol.AgentProviderKind.Capability;
+import dev.skynet.protocol.SafeIds;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
 import dev.skynet.protocol.runner.AgentLimits;
+import dev.skynet.protocol.runner.ResumeFrom;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -40,6 +46,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
@@ -112,7 +119,11 @@ public class RunSteps {
     /** Su condición es falsa y se ha omitido. */
     SKIPPED,
     /** Es una {@code conditional} y su condición es verdadera: ha terminado bien. */
-    SUCCEEDED
+    SUCCEEDED,
+    /**
+     * Su proveedor está sin cuota (CQ-A): sigue lista y arranca cuando se renueve, sin gastar nada.
+     */
+    WAITING
   }
 
   private final RunService runs;
@@ -136,6 +147,8 @@ public class RunSteps {
   private final PayloadRedactor redactor;
   private final String publicUrl;
   private final TimeSource time;
+  private final QuotaWaits quotaWaits;
+  private final ApplicationEventPublisher publisher;
 
   RunSteps(
       RunService runs,
@@ -159,7 +172,9 @@ public class RunSteps {
       PayloadRedactor redactor,
       @Value("${skynet.github.pull-requests.public-url:}") String publicUrl,
       TimeSource time,
-      RunQueue queue) {
+      RunQueue queue,
+      QuotaWaits quotaWaits,
+      ApplicationEventPublisher publisher) {
     this.runs = runs;
     this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
@@ -182,6 +197,8 @@ public class RunSteps {
     this.queue = queue;
     this.publicUrl = publicUrl;
     this.time = time;
+    this.quotaWaits = quotaWaits;
+    this.publisher = publisher;
   }
 
   /**
@@ -248,8 +265,11 @@ public class RunSteps {
       StageRun stage = retries.latest();
       StageDefinition stageDefinition = definition.stage(entry.getKey()).orElse(null);
       List<AgentRun> agents = retries.agentsOf(stage);
+      Retries.QuotaPolicy quota = quotaPolicy(stageDefinition, definition);
       StageStatus ending =
-          stage.getStatus().isTerminal() ? null : ending(stage, stageDefinition, retries, agents);
+          stage.getStatus().isTerminal()
+              ? null
+              : ending(stage, stageDefinition, retries, agents, quota);
       stages.put(
           stage.getStageKey(),
           new StageState(
@@ -257,7 +277,7 @@ public class RunSteps {
               stage.getStatus(),
               !agents.isEmpty(),
               ending,
-              retries.plan(stageDefinition).retries(),
+              retries.plan(stageDefinition, quota).retries(),
               stage.getNotBefore(),
               stage.getTimedOutAt() == null ? stage.getDeadline() : null));
     }
@@ -271,12 +291,16 @@ public class RunSteps {
    * siguen.
    */
   private StageStatus ending(
-      StageRun stage, StageDefinition definition, Retries retries, List<AgentRun> agents) {
+      StageRun stage,
+      StageDefinition definition,
+      Retries retries,
+      List<AgentRun> agents,
+      Retries.QuotaPolicy quota) {
     List<AgentRun> finished = agents.stream().filter(a -> a.getStatus().isTerminal()).toList();
     if (definition != null && definition.type() == StageType.PARALLEL) {
       StageStatus ending = null;
       for (AgentRun agent : finished) {
-        if (retries.failed(agent) && !retries.childRetries(definition, agent)) {
+        if (retries.failed(agent) && !retries.childRetries(definition, agent, quota)) {
           return StageStatus.FAILED;
         }
         if (agent.getStatus() == AgentObservableStatus.CANCELLED) {
@@ -302,13 +326,18 @@ public class RunSteps {
     Instant now = time.now();
     Retries retries = attempts(runId).get(stageKey);
     StageDefinition definition = published.definition().stage(stageKey).orElseThrow();
-    Retries.Plan plan = retries.plan(definition);
+    Retries.Plan plan = retries.plan(definition, quotaPolicy(definition, published.definition()));
     if (!plan.retries()) {
       throw new IllegalStateException("La fase " + stageKey + " no se reintenta");
     }
     StageRun failed = retries.latest();
     Instant notBefore = now.plus(plan.delay());
-    StageRun next = stageRuns.save(StageRun.retry(failed, notBefore, now));
+    StageRun retry = StageRun.retry(failed, notBefore, now);
+    QuotaWaits.Blocked quota = plan.quota();
+    if (quota != null) {
+      retry.waitForQuota(quota.provider(), quota.window(), quota.resetsAt(), notBefore, now);
+    }
+    StageRun next = stageRuns.save(retry);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("stageKey", stageKey);
     payload.put("attempt", next.getAttempt());
@@ -326,9 +355,8 @@ public class RunSteps {
                     Map<String, Object> child = new LinkedHashMap<>();
                     child.put("childKey", c.child());
                     child.put("attempt", c.attempts() + 1);
-                    child.put(
-                        "maxAttempts",
-                        definition.child(c.child()).orElseThrow().retry().maxAttempts());
+                    Retry childRetry = definition.child(c.child()).orElseThrow().retry();
+                    child.put("maxAttempts", childRetry == null ? null : childRetry.maxAttempts());
                     child.put("failure", c.failure() == null ? null : c.failure().id());
                     return child;
                   })
@@ -336,7 +364,50 @@ public class RunSteps {
     }
     payload.put("delaySeconds", plan.delay().toSeconds());
     payload.put("notBefore", notBefore);
+    if (quota != null) {
+      payload.put("reason", "quota");
+      payload.putAll(quotaPayload(quota));
+    }
     transitions.append("stage_run", next.getId(), "stage.retry.scheduled", runId, payload, now);
+    if (quota != null) {
+      publisher.publishEvent(
+          new QuotaWaitStarted(
+              runId, stageKey, quota.provider(), quota.window(), quota.resetsAt(), notBefore));
+    }
+  }
+
+  private static Map<String, Object> quotaPayload(QuotaWaits.Blocked quota) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("provider", quota.provider());
+    payload.put("window", quota.window());
+    payload.put("resetsAt", quota.resetsAt());
+    return payload;
+  }
+
+  /**
+   * Si un agente de la fase que falló por {@code quota} espera a que se renueve (CQ-A): lo decide
+   * {@link QuotaWaits} con los ajustes y el {@code onQuota} de su agente.
+   */
+  private Retries.QuotaPolicy quotaPolicy(StageDefinition stage, WorkflowDefinition definition) {
+    if (stage == null) {
+      return Retries.QuotaPolicy.NEVER;
+    }
+    return (agent, child, failures, blind, attemptId) -> {
+      String name =
+          child == null
+              ? stage.agent()
+              : stage.child(child).map(ChildDefinition::agent).orElse(null);
+      AgentDefinition agentDefinition = name == null ? null : definition.agent(name).orElse(null);
+      return quotaWaits
+          .afterFailure(agent, agentDefinition, failures, blind, attemptId)
+          .map(
+              w -> {
+                Duration delay = Duration.between(quotaWaits.now(), w.notBefore());
+                return new Retries.QuotaDelay(
+                    delay.isNegative() ? Duration.ZERO : delay, w.blocked());
+              })
+          .orElse(null);
+    };
   }
 
   /** Todos los intentos de cada fase, con sus agentes y verificaciones, por orden de creación. */
@@ -560,6 +631,9 @@ public class RunSteps {
             (child, invocation) ->
                 retrying(runId, stageKey, child, invocation, continued, definition));
       }
+      if (waitForQuota(run, stage, invocations, now)) {
+        return StartOutcome.WAITING;
+      }
       invocations.forEach(
           (child, invocation) ->
               agentQueue.queue(run, stage, workItem, repository, invocation, child, now));
@@ -717,6 +791,13 @@ public class RunSteps {
       WorkspaceView source,
       WorkflowDefinition definition) {
     Retries retries = attempts(runId).get(stageKey);
+    AgentRun previous = retries.previousAgent(child);
+    if (previous != null && previous.getFailure() == AgentFailure.QUOTA) {
+      Invocation continued = afterQuota(previous, invocation);
+      if (continued != null) {
+        return continued;
+      }
+    }
     AgentRun snapshot =
         source != null && invocation.workspace() != null && !invocation.workspace().copy()
             ? retries.snapshotAgent(source.id())
@@ -725,7 +806,122 @@ public class RunSteps {
         snapshot == null || rerunUpstream(snapshot, stageKey, definition)
             ? null
             : snapshot.getBaseSnapshot();
-    return invocation.retrying(retries.previousAgent(child), restore);
+    return invocation.retrying(previous, restore);
+  }
+
+  /** Lo que se le dice a un agente que reanuda su sesión tras quedarse sin cuota (CQ-A). */
+  static final String QUOTA_RESUME_PROMPT =
+      "Te cortó el límite de uso de tu cuenta y ya se ha renovado. Sigue donde lo dejaste: el"
+          + " worktree está como lo dejaste.";
+
+  /** Lo que se añade al prompt de un agente nuevo que sigue el trabajo de uno sin cuota (CQ-A). */
+  static final String QUOTA_RETRY_NOTE =
+      "\n\nNota: un intento anterior de esta tarea se cortó porque la cuenta se quedó sin cuota."
+          + " El worktree conserva lo que hizo: revísalo y sigue desde ahí, sin rehacer lo que ya"
+          + " está bien.";
+
+  /**
+   * El intento que sigue a un agente que se quedó sin cuota (CQ-A): en su mismo worktree, sin
+   * volver a la instantánea. Reanuda su sesión si el proveedor lo permite y la sesión arrancó; si
+   * no, una sesión nueva con el prompt original y una nota. {@code null} si su worktree ya no se
+   * puede usar: entonces es un reintento como los demás.
+   */
+  private Invocation afterQuota(AgentRun previous, Invocation invocation) {
+    if (previous.getWorkspaceId() == null || invocation.command() != null) {
+      return null;
+    }
+    WorkspaceView workspace = workspaces.find(previous.getWorkspaceId()).orElse(null);
+    if (workspace == null
+        || workspace.removedAt() != null
+        || workspace.cleanupRequestedAt() != null
+        || workspaces.hasLiveInvocation(workspace.id())) {
+      return null;
+    }
+    boolean resumable =
+        AgentProviderKind.byId(previous.getProvider())
+                .map(k -> k.supports(Capability.RESUME))
+                .orElse(false)
+            && SafeIds.isSessionId(previous.getProviderSessionId())
+            && sessionStarted(previous);
+    if (resumable) {
+      return new Invocation(
+          AgentRunKind.RESUME,
+          previous,
+          UUID.fromString(previous.getProviderSessionId()),
+          QUOTA_RESUME_PROMPT,
+          invocation.policy(),
+          workspace.id(),
+          new ResumeFrom(
+              previous.getProviderSessionId(), false, workspace.path(), workspace.branch()),
+          null,
+          previous.getRunnerId());
+    }
+    return Invocation.inWorkspace(
+            invocation.prompt() + QUOTA_RETRY_NOTE, invocation.policy(), workspace)
+        .retrying(previous, null);
+  }
+
+  private boolean sessionStarted(AgentRun agent) {
+    return jdbc.sql(
+                "SELECT count(*) FROM event WHERE aggregate_id = ?"
+                    + " AND event_type = 'agent.session.started'")
+            .param(agent.getId())
+            .query(Integer.class)
+            .single()
+        > 0;
+  }
+
+  /**
+   * La comprobación previa (CQ-A): si el proveedor de alguno de los agentes que va a arrancar ya
+   * está sin cuota, la fase no arranca y espera a que se renueve, con {@code stage.quota.waiting}.
+   * Así no se gasta un arranque para fallar. Devuelve si espera.
+   */
+  private boolean waitForQuota(
+      WorkflowRun run, StageRun stage, Map<String, Invocation> invocations, Instant now) {
+    if (stage.getQuotaSkippedBy() != null) {
+      return false;
+    }
+    QuotaWaits.Wait wait = null;
+    for (Invocation invocation : invocations.values()) {
+      if (invocation.command() != null || invocation.push() != null) {
+        continue;
+      }
+      String provider =
+          invocation.parent() != null
+              ? invocation.parent().getProvider()
+              : invocation.policy().providerOrDefault();
+      QuotaWaits.Wait found =
+          quotaWaits
+              .blocked(provider, invocation.policy().model(), invocation.runnerId())
+              .flatMap(blocked -> quotaWaits.beforeStart(blocked, stage.getId()))
+              .orElse(null);
+      if (found != null && (wait == null || found.notBefore().isAfter(wait.notBefore()))) {
+        wait = found;
+      }
+    }
+    if (wait == null) {
+      return false;
+    }
+    QuotaWaits.Blocked blocked = wait.blocked();
+    stage.waitForQuota(
+        blocked.provider(), blocked.window(), blocked.resetsAt(), wait.notBefore(), now);
+    stageRuns.save(stage);
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("stageKey", stage.getStageKey());
+    payload.put("attempt", stage.getAttempt());
+    payload.putAll(quotaPayload(blocked));
+    payload.put("notBefore", wait.notBefore());
+    transitions.append(
+        "stage_run", stage.getId(), "stage.quota.waiting", run.getId(), payload, now);
+    publisher.publishEvent(
+        new QuotaWaitStarted(
+            run.getId(),
+            stage.getStageKey(),
+            blocked.provider(),
+            blocked.window(),
+            blocked.resetsAt(),
+            wait.notBefore()));
+    return true;
   }
 
   /**

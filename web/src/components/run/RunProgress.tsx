@@ -9,6 +9,7 @@ import { LinesSkeleton } from '../ui/Skeleton'
 import { outputSummary } from './agentOutput'
 import { spanDuration, type Span } from './runSpans'
 import { RISK_LABEL } from '../approval/approvalFormat'
+import { StageQuotaSkip } from './StageQuotaSkip'
 import { StageRetry } from './StageRetry'
 import { ACTIVE, stageActivity, stepState, WAITING } from './stageState'
 import {
@@ -186,6 +187,7 @@ export function RunProgress({
               <p className="step-detail-note muted small">{stageNote(open, run)}</p>
             )}
             <StageRetry key={open.id} stage={open} run={run} />
+            <StageQuotaSkip stage={open} run={run} />
             {open.reads.length > 0 && (
               <p className="muted small">
                 Recibe{' '}

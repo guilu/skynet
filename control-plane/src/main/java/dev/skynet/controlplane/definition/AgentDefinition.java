@@ -16,6 +16,8 @@ import java.util.Map;
  * @param provider proveedor; por ahora solo {@code claude-code}
  * @param output JSON Schema (un objeto con {@code properties}) de la salida estructurada que
  *     devuelve el agente, o {@code null}; las condiciones leen sus campos
+ * @param onQuota qué hace si su cuenta se queda sin cuota (CQ-A): {@link #ON_QUOTA_WAIT} espera a
+ *     que se renueve (lo de siempre, también con {@code null}) y {@link #ON_QUOTA_FAIL} falla
  */
 public record AgentDefinition(
     String name,
@@ -28,7 +30,14 @@ public record AgentDefinition(
     Integer timeoutMinutes,
     String model,
     String provider,
-    Map<String, Object> output) {
+    Map<String, Object> output,
+    String onQuota) {
+
+  /** Esperar a que se renueve la cuota (CQ-A): lo que se hace si no se dice nada. */
+  public static final String ON_QUOTA_WAIT = "wait";
+
+  /** Fallar en cuanto se acaba la cuota, como antes de CQ. */
+  public static final String ON_QUOTA_FAIL = "fail";
 
   /** Proveedor por defecto. */
   public static final String CLAUDE_CODE = "claude-code";
@@ -44,6 +53,39 @@ public record AgentDefinition(
 
   public AgentDefinition {
     tools = tools == null ? null : List.copyOf(tools);
+  }
+
+  /** Un agente con salida estructurada que espera a la cuota. */
+  public AgentDefinition(
+      String name,
+      String description,
+      String prompt,
+      List<String> tools,
+      String permissionMode,
+      Integer maxTurns,
+      BigDecimal maxBudgetUsd,
+      Integer timeoutMinutes,
+      String model,
+      String provider,
+      Map<String, Object> output) {
+    this(
+        name,
+        description,
+        prompt,
+        tools,
+        permissionMode,
+        maxTurns,
+        maxBudgetUsd,
+        timeoutMinutes,
+        model,
+        provider,
+        output,
+        null);
+  }
+
+  /** Si espera a que se renueve la cuota en vez de fallar (CQ-A). */
+  public boolean waitsForQuota() {
+    return !ON_QUOTA_FAIL.equals(onQuota);
   }
 
   /** Un agente sin salida estructurada. */

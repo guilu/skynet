@@ -1,4 +1,5 @@
 import type { AgentFailure, Run, StageDependency, StageRun, VerificationCheck } from '../../api'
+import { providerName } from '../../format'
 
 /** Por qué falló un agente, para «Falló: …». */
 export const FAILURE_LABEL: Record<AgentFailure, string> = {
@@ -8,6 +9,7 @@ export const FAILURE_LABEL: Record<AgentFailure, string> = {
   timeout: 'se acabó el tiempo',
   budget: 'superó el presupuesto',
   verification: 'no pasó las comprobaciones',
+  quota: 'se quedó sin cuota',
 }
 
 /** El último intento de cada fase, en el orden de las fases. */
@@ -33,8 +35,49 @@ export function failureOf(stage: StageRun): string | null {
   return failure ? FAILURE_LABEL[failure] : null
 }
 
+/** Si la fase espera ahora a que se renueve la cuota de su proveedor (CQ-A). */
+export function waitsForQuota(stage: StageRun, now: number = Date.now()): boolean {
+  return (
+    !!stage.quotaWait &&
+    (stage.status === 'PENDING' || stage.status === 'READY') &&
+    !!stage.notBefore &&
+    new Date(stage.notBefore).getTime() > now
+  )
+}
+
+const WINDOW_LABEL = { five_hour: 'ventana de 5 h', seven_day: 'ventana semanal' } as const
+
+/** «15:04», o «jue 6, 10:00» si no es hoy. */
+function shortTime(iso: string, now: number): string {
+  const at = new Date(iso)
+  const today = at.toDateString() === new Date(now).toDateString()
+  return today
+    ? at.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+    : at.toLocaleString('es-ES', {
+        weekday: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+}
+
+/**
+ * «Esperando la cuota de Claude Code · se renueva a las 15:04 (ventana de 5 h)» mientras la fase
+ * espera a la cuota; sin hora de renovación, cuándo vuelve a probar.
+ */
+export function quotaNote(stage: StageRun, now: number = Date.now()): string | null {
+  if (!waitsForQuota(stage, now)) return null
+  const wait = stage.quotaWait!
+  const who = `Esperando la cuota de ${providerName(wait.provider)}`
+  const window = wait.window ? ` (${WINDOW_LABEL[wait.window]})` : ''
+  if (wait.resetsAt) return `${who} · se renueva a las ${shortTime(wait.resetsAt, now)}${window}`
+  return `${who} · vuelve a probar a las ${shortTime(stage.notBefore!, now)}`
+}
+
 /** «Reintenta a las 10:30:15 (intento 2 de 3)» mientras un reintento espera su hora. */
 function retryNote(stage: StageRun): string | null {
+  const quota = quotaNote(stage)
+  if (quota) return quota
   if (stage.status !== 'PENDING' || !stage.notBefore) return null
   const at = new Date(stage.notBefore).toLocaleTimeString('es-ES')
   const of = attemptOf(stage)

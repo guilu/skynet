@@ -45,6 +45,9 @@ public abstract class IntegrationTest {
     registry.add("skynet.runner.max-request", () -> "4MB");
     // La cola por repositorio (DS-C) la prueban sus tests, con el límite de cada repositorio.
     registry.add("skynet.runs.max-concurrent-per-repository", () -> "50");
+    // Esperar a la cuota (CQ-A) sin margen ni dispersión: los tests ponen la renovación cerca.
+    registry.add("skynet.quota.margin", () -> "0s");
+    registry.add("skynet.quota.jitter", () -> "0s");
   }
 
   protected static final String RUNNER_REGISTRATION_TOKEN = "test-registration-token";

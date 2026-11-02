@@ -161,6 +161,7 @@ const CONVERSATION_MESSAGE: Keys<ConversationMessage> = {
 const STAGE_RUN: Keys<StageRun> = {
   children: true,
   phase: true,
+  quotaWait: true,
   retry: true,
   notBefore: true,
   timeoutSeconds: true,
@@ -558,6 +559,7 @@ const AGENT_DEFINITION: Keys<AgentDefinition> = {
   model: true,
   provider: true,
   output: true,
+  onQuota: true,
 }
 const STAGE_DEFINITION: Keys<StageDefinition> = {
   phase: true,

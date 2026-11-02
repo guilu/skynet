@@ -14,6 +14,7 @@ import dev.skynet.runner.provider.EventJson.Payload;
 import dev.skynet.runner.provider.EventParser;
 import dev.skynet.runner.provider.ModelPrices;
 import dev.skynet.runner.provider.ParsedEvent;
+import dev.skynet.runner.provider.UsageLimits;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -267,6 +268,11 @@ public final class AntigravityEventParser implements EventParser {
             .put("result", response == null || response.isBlank() ? lastMessage : response.strip());
     if (!success) {
       String status = text(result, "status");
+      // Sin evento propio: si el estado o la respuesta dicen que se acabó la cuota (CQ-A).
+      String said = UsageLimits.matches(status) ? status : response;
+      if (UsageLimits.matches(said)) {
+        events.add(UsageLimits.blocked("antigravity", said));
+      }
       events.add(
           event(
               AgentEventType.RESULT,

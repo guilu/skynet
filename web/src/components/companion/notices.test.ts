@@ -49,6 +49,18 @@ describe('noticeFor', () => {
       `El agente de ${run.workItemKey} no responde`,
     ],
     ['agent.rate_limit', { status: 'rejected' }, 'limit', 'Claude Code está al límite'],
+    [
+      'stage.retry.scheduled',
+      { reason: 'quota', provider: 'claude-code', notBefore: '2026-11-02T15:04:00Z' },
+      'limit',
+      'Pausada por la cuota de Claude Code',
+    ],
+    [
+      'stage.quota.waiting',
+      { provider: 'codex', notBefore: '2026-11-02T15:04:00Z' },
+      'limit',
+      'Pausada por la cuota de Codex',
+    ],
   ])('%s %j avisa como %s', (type, payload, kind, title) => {
     const notice = noticeFor(event(type, payload), run, NOW)
     expect(notice).toMatchObject({ kind, title, runKey: run.workItemKey })
@@ -60,6 +72,9 @@ describe('noticeFor', () => {
     ['stage.status.changed', { status: 'RUNNING' }],
     ['workflow.status.changed', { status: 'CANCELLED' }],
     ['agent.rate_limit', { status: 'allowed' }],
+    // Sin cuota avisa la fase al ponerse en pausa, con la hora a la que sigue.
+    ['agent.rate_limit', { status: 'rejected', blocked: true }],
+    ['stage.retry.scheduled', { attempt: 2 }],
     ['approval.granted', { approvalId: 'a1' }],
   ])('%s %j no avisa: es un cambio interno', (type, payload) => {
     expect(noticeFor(event(type, payload), run, NOW)).toBeNull()

@@ -65,7 +65,8 @@ public final class DefinitionParser {
           "limits",
           "model",
           "provider",
-          "output");
+          "output",
+          "onQuota");
   static final Set<String> LIMIT_KEYS = Set.of("maxTurns", "maxBudgetUsd", "timeoutMinutes");
   static final Set<String> STAGE_KEYS =
       Set.of(
@@ -481,6 +482,7 @@ public final class DefinitionParser {
                       + " fija `permissionMode` (`plan` es solo lectura)");
             }
             Map<String, Object> output = output(fields.get("output"), path + ".output", "output");
+            String onQuota = onQuota(fields.get("onQuota"), path + ".onQuota");
             Integer maxTurns = null;
             BigDecimal maxBudgetUsd = null;
             Integer timeoutMinutes = null;
@@ -523,9 +525,38 @@ public final class DefinitionParser {
                     timeoutMinutes,
                     model,
                     provider,
-                    output));
+                    output,
+                    onQuota));
           });
       return agents;
+    }
+
+    /** {@code onQuota} de un agente (CQ-A): {@code wait} o {@code fail}. */
+    private String onQuota(Entry entry, String path) {
+      String value = text(entry, path);
+      if (value == null) {
+        return null;
+      }
+      if ("fallback".equals(value)) {
+        error(
+            entry.value(),
+            path,
+            "`onQuota: fallback` todavía no existe: llega con el proveedor de reserva (CQ-B)."
+                + " Usa `wait` o `fail`");
+        return null;
+      }
+      if (!AgentDefinition.ON_QUOTA_WAIT.equals(value)
+          && !AgentDefinition.ON_QUOTA_FAIL.equals(value)) {
+        error(
+            entry.value(),
+            path,
+            "`onQuota` vale `wait` (esperar a que se renueve la cuota, lo de siempre) o `fail`"
+                + " (fallar en cuanto se acabe); no `"
+                + value
+                + "`");
+        return null;
+      }
+      return value;
     }
 
     /**

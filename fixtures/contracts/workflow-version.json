@@ -43,7 +43,8 @@
       "timeoutMinutes" : 20,
       "model" : "claude-haiku-4-5",
       "provider" : "claude-code",
-      "output" : null
+      "output" : null,
+      "onQuota" : null
     } ],
     "stages" : [ {
       "id" : "review",

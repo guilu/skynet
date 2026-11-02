@@ -151,7 +151,8 @@ export interface AgentRun {
 }
 
 /** Por qué falló un agente: `lost`, `start`, `error`, `timeout`, `budget` o `verification`. */
-export type AgentFailure = 'lost' | 'start' | 'error' | 'timeout' | 'budget' | 'verification'
+export type AgentFailure =
+  'lost' | 'start' | 'error' | 'timeout' | 'budget' | 'verification' | 'quota'
 
 /** `retry` de una fase o de un hijo: intentos en total, qué fallos y la primera espera. */
 export interface RetryPolicy {
@@ -243,6 +244,35 @@ export interface StageRun {
   /** Hijos de una fase `parallel`, en el orden del YAML; vacío en las demás. */
   children: string[] /** Macrofase de la fase en el YAML (carril del grafo); null si no la dice. */
   phase: Phase | null
+  /** La cuota que espera antes de empezar (CQ-A); sigue en `notBefore`. Null si no espera. */
+  quotaWait: QuotaWait | null
+}
+
+/** La cuota que espera una fase: de qué proveedor, qué ventana y cuándo se renueva. */
+export interface QuotaWait {
+  provider: string
+  window: QuotaWindowKind | null
+  resetsAt: string | null
+}
+
+/** «Continuar tras la cuota» (CQ-A). `maxWaitHours: 0` es sin límite. */
+export interface QuotaSettings {
+  enabled: boolean
+  maxWaitHours: number
+  maxWaits: number
+  updatedAt: string | null
+}
+
+/** Una fase que espera ahora a la cuota. */
+export interface QuotaWaitRow {
+  workflowRunId: string
+  workItemKey: string
+  stageKey: string
+  attempt: number
+  provider: string
+  window: QuotaWindowKind | null
+  resetsAt: string | null
+  notBefore: string
 }
 
 export type ApprovalRisk = 'LOW' | 'MEDIUM' | 'HIGH'
@@ -743,6 +773,8 @@ export interface AgentDefinition {
   provider: string | null
   /** JSON Schema de la salida estructurada, o null si no devuelve ninguna. */
   output: { type: 'object'; properties: Record<string, { type: string }> } | null
+  /** Qué hace si su cuenta se queda sin cuota (CQ-A): `wait` (también con null) o `fail`. */
+  onQuota: 'wait' | 'fail' | null
 }
 
 /** Las macrofases de `phase`, en el orden de los carriles del grafo. */
@@ -1567,6 +1599,17 @@ export const api = {
   /** «Reintentar fase»: la ejecución fallida o cancelada sigue desde `stageKey`. */
   retryStage: (id: string, stageKey: string) =>
     request<Run>('POST', `/api/workflow-runs/${id}/stages/${encodeURIComponent(stageKey)}/retry`),
+  /** «Reintentar ahora»: la fase que espera a la cuota arranca ya (CQ-A). */
+  skipQuotaWait: (id: string, stageKey: string) =>
+    request<Run>(
+      'POST',
+      `/api/workflow-runs/${id}/stages/${encodeURIComponent(stageKey)}/skip-quota-wait`,
+    ),
+  quotaSettings: () => request<QuotaSettings>('GET', '/api/settings/quota'),
+  saveQuotaSettings: (
+    changes: Partial<Pick<QuotaSettings, 'enabled' | 'maxWaitHours' | 'maxWaits'>>,
+  ) => request<QuotaSettings>('PUT', '/api/settings/quota', changes),
+  quotaWaits: () => request<QuotaWaitRow[]>('GET', '/api/quota/waits'),
   cancelAgent: (id: string) => request<AgentRunDetail>('POST', `/api/agent-runs/${id}/cancel`),
   cleanupWorkspace: (id: string) =>
     request<AgentRunDetail>('POST', `/api/agent-runs/${id}/workspace/cleanup`),
