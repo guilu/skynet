@@ -43,6 +43,7 @@ class WebhookProcessor {
   private final TransactionTemplate transactions;
   private final TimeSource time;
   private final ApplicationEventPublisher publisher;
+  private final List<IssueHandler> issueHandlers;
 
   WebhookProcessor(
       WebhookQueue queue,
@@ -52,7 +53,8 @@ class WebhookProcessor {
       WebhookProperties properties,
       TransactionTemplate transactions,
       TimeSource time,
-      ApplicationEventPublisher publisher) {
+      ApplicationEventPublisher publisher,
+      List<IssueHandler> issueHandlers) {
     this.queue = queue;
     this.installations = installations;
     this.events = events;
@@ -61,6 +63,7 @@ class WebhookProcessor {
     this.transactions = transactions;
     this.time = time;
     this.publisher = publisher;
+    this.issueHandlers = List.copyOf(issueHandlers);
   }
 
   @Scheduled(fixedDelayString = "${skynet.github.webhooks.poll-interval:1s}")
@@ -144,8 +147,11 @@ class WebhookProcessor {
       return Outcome.ignored("La entrega no es de un repositorio");
     }
     List<UUID> repositories = installations.repositoriesNamed(name.asString());
+    boolean handled = issueLabeled(delivery, payload, name.asString(), repositories);
     if (repositories.isEmpty()) {
-      return Outcome.ignored("Ningún repositorio de Skynet es " + name.asString());
+      return handled
+          ? Outcome.processed(0)
+          : Outcome.ignored("Ningún repositorio de Skynet es " + name.asString());
     }
     String type =
         "github." + delivery.event() + (delivery.action() == null ? "" : "." + delivery.action());
@@ -182,6 +188,43 @@ class WebhookProcessor {
       }
     }
     return Outcome.processed(repositories.size());
+  }
+
+  /**
+   * Pasa una etiqueta nueva en una issue (no en una PR) a quien la atienda (DS-A).
+   *
+   * @return si alguien la ha atendido
+   */
+  private boolean issueLabeled(
+      Claimed delivery, JsonNode payload, String fullName, List<UUID> repositories) {
+    if (!"issues".equals(delivery.event()) || !"labeled".equals(delivery.action())) {
+      return false;
+    }
+    JsonNode issue = payload.path("issue");
+    JsonNode label = payload.path("label").path("name");
+    if (issue.has("pull_request")
+        || !issue.path("number").isIntegralNumber()
+        || !label.isString()) {
+      return false;
+    }
+    GitHubIssue labeled =
+        new GitHubIssue(
+            delivery.deliveryId(),
+            fullName,
+            repositories,
+            label.asString(),
+            issue.path("number").asLong(),
+            issue.path("title").asString(""),
+            issue.path("body").asString(""),
+            issue.path("html_url").asString(null),
+            issue.path("user").path("login").asString(null),
+            payload.path("sender").path("login").asString(null),
+            delivery.receivedAt());
+    boolean handled = false;
+    for (IssueHandler handler : issueHandlers) {
+      handled |= handler.handle(labeled);
+    }
+    return handled;
   }
 
   /** El commit cuya CI cambia con esta entrega, o {@code null} si no es de CI. */

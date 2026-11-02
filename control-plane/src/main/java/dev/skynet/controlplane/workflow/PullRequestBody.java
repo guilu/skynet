@@ -35,7 +35,8 @@ final class PullRequestBody {
       List<StageLine> stages,
       BigDecimal costUsd,
       String publicUrl,
-      UUID runId) {
+      UUID runId,
+      String closes) {
     StringBuilder body = new StringBuilder();
     if (intro != null && !intro.isBlank()) {
       body.append(intro.strip()).append("\n\n");
@@ -71,6 +72,9 @@ final class PullRequestBody {
           .append(costUsd.setScale(2, RoundingMode.HALF_UP).toPlainString())
           .append(" US$\n");
     }
+    if (closes != null) {
+      body.append("\n").append(closes).append('\n');
+    }
     body.append("\n---\nAbierta por Skynet");
     if (publicUrl != null && !publicUrl.isBlank()) {
       body.append(" · [ver la ejecución](")
@@ -81,6 +85,25 @@ final class PullRequestBody {
     }
     body.append(".\n");
     return cut(body.toString(), MAX_LENGTH);
+  }
+
+  /**
+   * {@code Closes #n} si el trabajo viene de una issue de GitHub ({@code externalRef} {@code
+   * github:owner/nombre#n}, DS-A): al fusionar la PR, GitHub cierra la issue. Si la issue es de
+   * otro repositorio (un repositorio de órdenes), {@code Closes owner/nombre#n}. Si no, {@code
+   * null}.
+   */
+  static String closing(String externalRef, String fullName) {
+    if (externalRef == null) {
+      return null;
+    }
+    java.util.regex.Matcher m =
+        java.util.regex.Pattern.compile("github:([A-Za-z0-9-]+/[A-Za-z0-9._-]+)#(\\d+)")
+            .matcher(externalRef);
+    if (!m.matches()) {
+      return null;
+    }
+    return "Closes " + (m.group(1).equalsIgnoreCase(fullName) ? "" : m.group(1)) + "#" + m.group(2);
   }
 
   /** Un texto que cabe en una celda de una tabla Markdown. */

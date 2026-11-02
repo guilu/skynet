@@ -250,7 +250,31 @@ class GitHubApi {
     send("DELETE", "/repos/" + fullName + "/git/refs/heads/" + branch, token, null);
   }
 
-  /** {@code POST /repos/{owner}/{repo}/issues/{n}/comments}: comenta en una PR. */
+  /** {@code DELETE /repos/{owner}/{repo}/issues/{n}/labels/{nombre}}: quita una etiqueta. */
+  void removeLabel(String token, String fullName, long number, String label) {
+    send(
+        "DELETE",
+        "/repos/"
+            + fullName
+            + "/issues/"
+            + number
+            + "/labels/"
+            + java.net.URLEncoder.encode(label, java.nio.charset.StandardCharsets.UTF_8)
+                .replace("+", "%20"),
+        token,
+        null);
+  }
+
+  /** {@code POST /repos/{owner}/{repo}/issues/{n}/reactions}: reacciona a una issue. */
+  void react(String token, String fullName, long number, String content) {
+    send(
+        "POST",
+        "/repos/" + fullName + "/issues/" + number + "/reactions",
+        token,
+        json.writeValueAsString(Map.of("content", content)));
+  }
+
+  /** {@code POST /repos/{owner}/{repo}/issues/{n}/comments}: comenta en una issue o una PR. */
   void comment(String token, String fullName, long number, String body) {
     send(
         "POST",

@@ -573,7 +573,8 @@ public class RunSteps {
             evidence(run, definition, stage.getStageKey()),
             costOf(run.getId()),
             publicUrl,
-            run.getId());
+            run.getId(),
+            PullRequestBody.closing(workItem.getExternalRef(), delivery.link().fullName()));
     EffectivePolicy policy =
         EffectivePolicy.of(projects.agentPolicy(repository), AgentLimits.none());
     Invocation invocation = Invocation.inWorkspace("", policy, source).asPush(delivery.push());

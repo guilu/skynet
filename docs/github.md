@@ -6,7 +6,7 @@ Skynet se conecta a GitHub con una **GitHub App propia** (hito GH). Con ella, el
 - pide tokens de instalación de corta vida, limitados a un repositorio;
 - recibe webhooks firmados y los publica como eventos `github.*`.
 
-Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la rama y abre la PR (EN-A), la fase `github-check` espera su CI y la corrige (EN-B) y la fase `github-merge` la fusiona tras una puerta, solo con el commit aprobado (EN-C). El recorrido completo está en [`entrega-por-pr.md`](entrega-por-pr.md) y cada fase, en [`workflows.md`](workflows.md). Lanzar workflows desde issues o comentarios llega con DS.
+Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la rama y abre la PR (EN-A), la fase `github-check` espera su CI y la corrige (EN-B) y la fase `github-merge` la fusiona tras una puerta, solo con el commit aprobado (EN-C). El recorrido completo está en [`entrega-por-pr.md`](entrega-por-pr.md) y cada fase, en [`workflows.md`](workflows.md). Con DS, una etiqueta en una issue lanza un workflow sin abrir la web: ver [`disparadores.md`](disparadores.md).
 
 ## 1. Crear la App
 
@@ -28,7 +28,7 @@ Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la 
    | Checks | lectura | esperar la CI (EN) |
    | Commit statuses | lectura | la CI que usa statuses (EN) |
    | Actions | lectura | leer los logs de la CI que falla (EN-B) |
-   | Issues | lectura y escritura | leer etiquetas y comentar (DS) |
+   | Issues | lectura y escritura | lanzar desde una etiqueta y comentar en la issue (DS) |
 
    Se piden ya los permisos de EN y DS para no tener que volver a aceptar la instalación más adelante. **Actions: lectura** llegó con EN-B: si la App ya estaba creada, añádelo en sus permisos y acepta el cambio en la instalación (Settings → Applications). Hasta entonces, la CI roja se corrige solo con las anotaciones. **Sin el permiso `Workflows`**: así ningún agente puede tocar `.github/workflows`.
 4. **Eventos:**
