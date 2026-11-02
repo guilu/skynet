@@ -29,6 +29,9 @@ public class GitHubRepositories {
   static final Map<String, String> PULL_REQUESTS_WRITE =
       Map.of("metadata", "read", "pull_requests", "write");
 
+  /** Comentar, reaccionar y poner o quitar etiquetas en una issue (DS-A). */
+  static final Map<String, String> ISSUES_WRITE = Map.of("metadata", "read", "issues", "write");
+
   /** Leer la CI de un commit: check-runs y statuses. */
   static final Map<String, String> CHECKS_READ =
       Map.of("metadata", "read", "checks", "read", "statuses", "read");
@@ -97,7 +100,15 @@ public class GitHubRepositories {
             .optional()
             .flatMap(RemoteName::parse)
             .filter(name -> name.host().equals(host));
-    if (remote.isEmpty()) {
+    return remote.flatMap(name -> linkNamed(name.fullName()));
+  }
+
+  /**
+   * El enlace de un repositorio de GitHub por su nombre ({@code owner/nombre}, sin distinguir
+   * mayúsculas), esté o no en Skynet: p. ej. un repositorio de órdenes (DS-A).
+   */
+  public Optional<Link> linkNamed(String fullName) {
+    if (!properties.configured()) {
       return Optional.empty();
     }
     return jdbc.sql(
@@ -108,7 +119,7 @@ public class GitHubRepositories {
             WHERE lower(r.full_name) = lower(:name) AND i.suspended_at IS NULL
             ORDER BY r.installation_id LIMIT 1
             """)
-        .param("name", remote.get().fullName())
+        .param("name", fullName)
         .query(
             (rs, n) ->
                 new Link(
@@ -116,6 +127,15 @@ public class GitHubRepositories {
                     rs.getLong("repository_id"),
                     rs.getString("full_name")))
         .optional();
+  }
+
+  /** Las cuentas donde está instalada la App, sin las suspendidas, en minúsculas. */
+  public List<String> installationAccounts() {
+    return jdbc.sql(
+            "SELECT DISTINCT lower(account_login) FROM github_installation"
+                + " WHERE suspended_at IS NULL ORDER BY 1")
+        .query(String.class)
+        .list();
   }
 
   /** La URL https a la que sube el runner: la del repositorio en este GitHub. */
@@ -335,6 +355,36 @@ public class GitHubRepositories {
     api.comment(token(link), link.fullName(), number, body);
   }
 
+  /** Comenta en la issue {@code number} (DS-A). */
+  public void commentOnIssue(Link link, long number, String body) {
+    api.comment(issuesToken(link), link.fullName(), number, body);
+  }
+
+  /** Reacciona con {@code content} (p. ej. {@code eyes}) a la issue {@code number}. */
+  public void reactToIssue(Link link, long number, String content) {
+    api.react(issuesToken(link), link.fullName(), number, content);
+  }
+
+  /**
+   * Pone las etiquetas {@code add} en la issue {@code number} y quita {@code remove}; quitar una
+   * que no tiene no es un error.
+   */
+  public void relabelIssue(Link link, long number, List<String> add, List<String> remove) {
+    String token = issuesToken(link);
+    for (String label : remove) {
+      try {
+        api.removeLabel(token, link.fullName(), number, label);
+      } catch (GitHubException e) {
+        if (e.status() != 404) {
+          throw e;
+        }
+      }
+    }
+    if (!add.isEmpty()) {
+      api.addLabels(token, link.fullName(), number, add);
+    }
+  }
+
   /**
    * El estado de una PR en GitHub.
    *
@@ -388,6 +438,10 @@ public class GitHubRepositories {
       }
     }
     return out.toString();
+  }
+
+  private String issuesToken(Link link) {
+    return tokens.forRepository(link.installationId(), link.githubRepositoryId(), ISSUES_WRITE);
   }
 
   private String token(Link link) {

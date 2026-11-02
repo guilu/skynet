@@ -129,6 +129,8 @@ public final class FakeGitHub implements AutoCloseable {
     comments.clear();
     deniedPermissions.clear();
     logDownloadAuthorized = false;
+    issueLabels.clear();
+    reactions.clear();
   }
 
   /** Los check-runs de cada commit, por SHA (EN-B). */
@@ -136,6 +138,12 @@ public final class FakeGitHub implements AutoCloseable {
 
   /** Los statuses de cada commit, por SHA (EN-B). */
   final Map<String, List<Map<String, Object>>> statuses = new ConcurrentHashMap<>();
+
+  /** Las etiquetas de cada issue (no PR): {@code owner/nombre#número} (DS-A). */
+  final Map<String, List<String>> issueLabels = new ConcurrentHashMap<>();
+
+  /** Las reacciones a las issues: {@code owner/nombre#número: contenido}, en orden. */
+  final List<String> reactions = new CopyOnWriteArrayList<>();
 
   /** Las anotaciones de cada check-run, por id. */
   final Map<Long, List<Map<String, Object>>> annotations = new ConcurrentHashMap<>();
@@ -333,7 +341,7 @@ public final class FakeGitHub implements AutoCloseable {
   private void repos(HttpExchange exchange, String method, String path, String bearer)
       throws IOException {
     Long installation = issuedTokens.get(bearer);
-    if (installation != null && ci(exchange, method, path)) {
+    if (installation != null && (issues(exchange, method, path) || ci(exchange, method, path))) {
       return;
     }
     Matcher m = REPO_PATH.matcher(path);
@@ -425,6 +433,56 @@ public final class FakeGitHub implements AutoCloseable {
     } else {
       send(exchange, 404, Map.of("message", "Not Found"));
     }
+  }
+
+  private static final Pattern ISSUE_PATH =
+      Pattern.compile("/repos/([^/]+/[^/]+)/issues/(\\d+)/(?:labels(?:/(.+))?|(reactions))");
+
+  /** Etiquetas y reacciones de las issues que no son PR (DS-A). Si no es una de esas, false. */
+  private boolean issues(HttpExchange exchange, String method, String path) throws IOException {
+    Matcher m = ISSUE_PATH.matcher(path);
+    if (!m.matches()) {
+      return false;
+    }
+    String fullName = m.group(1);
+    long number = Long.parseLong(m.group(2));
+    if (m.group(4) == null && pull(fullName, number) != null) {
+      return false;
+    }
+    byte[] body = exchange.getRequestBody().readAllBytes();
+    repoRequests.add(
+        method
+            + " "
+            + path
+            + (body.length == 0 ? "" : " " + new String(body, StandardCharsets.UTF_8)));
+    String issue = fullName + "#" + number;
+    if (m.group(4) != null && method.equals("POST")) {
+      reactions.add(issue + ": " + JSON.readTree(body).path("content").asString());
+      send(exchange, 201, Map.of("id", reactions.size()));
+    } else if (m.group(3) == null && method.equals("POST")) {
+      List<String> labels = issueLabels.computeIfAbsent(issue, k -> new CopyOnWriteArrayList<>());
+      JSON.readTree(body)
+          .path("labels")
+          .forEach(
+              l -> {
+                if (!labels.contains(l.asString())) {
+                  labels.add(l.asString());
+                }
+              });
+      send(exchange, 200, labels);
+    } else if (m.group(3) != null && method.equals("DELETE")) {
+      String label = java.net.URLDecoder.decode(m.group(3), StandardCharsets.UTF_8);
+      List<String> labels = issueLabels.getOrDefault(issue, List.of());
+      if (!labels.contains(label)) {
+        send(exchange, 404, Map.of("message", "Label does not exist"));
+      } else {
+        labels.remove(label);
+        send(exchange, 200, labels);
+      }
+    } else {
+      send(exchange, 404, Map.of("message", "Not Found"));
+    }
+    return true;
   }
 
   private static final Pattern CI_PATH =
