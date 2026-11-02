@@ -80,10 +80,21 @@ public abstract class IntegrationTest {
     // en este orden: quota_snapshot va antes que quota_interval, en el mismo orden en que las
     // escribe
     // el latido de un runner que sigue vivo, para que no se bloqueen el uno al otro (deadlock).
-    jdbc.sql(
-            "TRUNCATE trigger_launch, trigger_rule, github_merge, github_ci_wait, github_pull_request, github_webhook_delivery, github_installation_repository, github_installation, memory_token, memory_access, memory_observation_revision, memory_observation, app_setting, quota_snapshot, agent_run_quota, quota_interval, event, approval_decision, approval_request, runner_command, artifact, verification_run, prompt, agent_run, workspace, runner_provider, runner, stage_run, workflow_job, workflow_run, work_item, repository,"
-                + " project")
-        .update();
+    // Si un worker de fondo del test anterior (webhooks, disparadores) aún tiene filas
+    // bloqueadas en otro orden, TRUNCATE puede chocar con él: se reintenta.
+    for (int attempt = 1; ; attempt++) {
+      try {
+        jdbc.sql(
+                "TRUNCATE trigger_launch, trigger_rule, github_merge, github_ci_wait, github_pull_request, github_webhook_delivery, github_installation_repository, github_installation, memory_token, memory_access, memory_observation_revision, memory_observation, app_setting, quota_snapshot, agent_run_quota, quota_interval, event, approval_decision, approval_request, runner_command, artifact, verification_run, prompt, agent_run, workspace, runner_provider, runner, stage_run, workflow_job, workflow_run, work_item, repository,"
+                    + " project")
+            .update();
+        break;
+      } catch (org.springframework.dao.PessimisticLockingFailureException e) {
+        if (attempt >= 3) {
+          throw e;
+        }
+      }
+    }
     // Los workflows de los tests; adhoc viene de las migraciones y se queda. Las versiones
     // publicadas solo se borran dentro de una purga.
     jdbc.sql(

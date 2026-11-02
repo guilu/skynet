@@ -274,6 +274,17 @@ class GitHubApi {
         json.writeValueAsString(Map.of("content", content)));
   }
 
+  /**
+   * {@code POST /repos/{owner}/{repo}/issues/comments/{id}/reactions}: reacciona a un comentario.
+   */
+  void reactToComment(String token, String fullName, long commentId, String content) {
+    send(
+        "POST",
+        "/repos/" + fullName + "/issues/comments/" + commentId + "/reactions",
+        token,
+        json.writeValueAsString(Map.of("content", content)));
+  }
+
   /** {@code POST /repos/{owner}/{repo}/issues/{n}/comments}: comenta en una issue o una PR. */
   void comment(String token, String fullName, long number, String body) {
     send(

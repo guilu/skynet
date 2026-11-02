@@ -27,10 +27,11 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Los avisos en GitHub de las peticiones (DS-A): una reacción 👀, un comentario en la issue y sus
- * etiquetas {@code skynet:en-curso}, {@code skynet:hecho} o {@code skynet:fallido}. Todo como la
- * App, con un token limitado al repositorio y a {@code issues: write}. Un aviso que falla se
- * reintenta con espera creciente y, tras {@link #MAX_ATTEMPTS}, se deja con su error.
+ * Los avisos en GitHub de las peticiones (DS-A): una reacción 👀 (en el comentario, si la pidió una
+ * orden {@code /skynet}), un comentario en la issue y sus etiquetas {@code skynet:en-curso}, {@code
+ * skynet:hecho} o {@code skynet:fallido}. Todo como la App, con un token limitado al repositorio y
+ * a {@code issues: write}. Un aviso que falla se reintenta con espera creciente y, tras {@link
+ * #MAX_ATTEMPTS}, se deja con su error.
  */
 @Service
 class TriggerNotices {
@@ -134,6 +135,7 @@ class TriggerNotices {
       List<String> add,
       List<String> remove,
       boolean react,
+      Long commentId,
       int attempts) {}
 
   /**
@@ -149,7 +151,7 @@ class TriggerNotices {
               Optional<Pending> next =
                   jdbc.sql(
                           "SELECT id, source, issue_number, notice, notice_add, notice_remove,"
-                              + " notice_react, notice_attempts FROM trigger_launch"
+                              + " notice_react, comment_id, notice_attempts FROM trigger_launch"
                               + " WHERE notice_after <= ? ORDER BY notice_after LIMIT 1"
                               + " FOR UPDATE SKIP LOCKED")
                       .param(Timestamp.from(now))
@@ -163,6 +165,7 @@ class TriggerNotices {
                                   json.readValue(rs.getString("notice_add"), LABELS),
                                   json.readValue(rs.getString("notice_remove"), LABELS),
                                   rs.getBoolean("notice_react"),
+                                  rs.getObject("comment_id", Long.class),
                                   rs.getInt("notice_attempts")))
                       .optional();
               next.ifPresent(
@@ -183,7 +186,10 @@ class TriggerNotices {
                   () ->
                       new IllegalStateException(
                           "La App no llega a " + pending.source() + " o no está configurada"));
-      if (pending.react()) {
+      if (pending.react() && pending.commentId() != null) {
+        // Una orden /skynet: la reacción va a su comentario.
+        github.reactToComment(link, pending.commentId(), "eyes");
+      } else if (pending.react()) {
         github.reactToIssue(link, pending.number(), "eyes");
       }
       if (pending.text() != null) {
@@ -213,7 +219,7 @@ class TriggerNotices {
                         + "   THEN '[]'::jsonb ELSE notice_remove END,"
                         + " notice_react = false, notice_attempts = 0, notice_error = NULL,"
                         + " notice_after = CASE WHEN notice IS NOT DISTINCT FROM ? THEN NULL"
-                        + "   ELSE ? END"
+                        + "   ELSE CAST(? AS timestamptz) END"
                         + " WHERE id = ?")
                 .params(
                     pending.text(),

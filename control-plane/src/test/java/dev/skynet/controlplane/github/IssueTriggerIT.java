@@ -153,6 +153,16 @@ class IssueTriggerIT extends IntegrationTest {
         "la segunda ejecución");
     assertThat(get("/api/projects/" + projectId + "/work-items")).hasSize(1);
     assertThat(eventTypes()).contains("trigger.launched", "trigger.duplicate");
+    // Cada aviso se manda una vez: ninguno queda con error para reintentarse.
+    await(
+        () ->
+            count("SELECT count(*) FROM trigger_launch WHERE notice_after IS NOT NULL") == 0
+                ? true
+                : null,
+        "los avisos mandados");
+    assertThat(count("SELECT count(*) FROM trigger_launch WHERE notice_error IS NOT NULL"))
+        .isZero();
+    assertThat(GITHUB.comments.stream().filter(c -> c.contains("En marcha")).count()).isEqualTo(2);
   }
 
   @Test

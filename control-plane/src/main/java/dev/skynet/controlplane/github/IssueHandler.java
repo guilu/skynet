@@ -11,4 +11,14 @@ public interface IssueHandler {
    *     repositorio no esté en Skynet
    */
   boolean handle(GitHubIssue issue);
+
+  /**
+   * Un comentario o una revisión que pide cambios (DS-B).
+   *
+   * @return si era para él (una orden {@code /skynet}); si lo era, la entrega cuenta como procesada
+   *     aunque su repositorio no esté en Skynet
+   */
+  default boolean handleComment(GitHubComment comment) {
+    return false;
+  }
 }
