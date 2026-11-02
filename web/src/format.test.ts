@@ -2,6 +2,39 @@ import { describe, expect, it } from 'vitest'
 import { describeEvent, formatCompact, formatDuration, providerName, statusTone } from './format'
 
 describe('describeEvent', () => {
+  it('describe los disparadores y la cola (DS)', () => {
+    expect(describeEvent('workflow.queued', { repositoryId: 'r1', running: 2, limit: 2 })).toBe(
+      'En cola: el repositorio ya tiene 2 en marcha (límite 2)',
+    )
+    expect(
+      describeEvent('trigger.launched', {
+        sender: 'guilu',
+        source: 'guilu/demo-repo',
+        issue: 7,
+        workflow: 'tarea',
+        workItemKey: 'DEMO-7',
+      }),
+    ).toBe('@guilu en guilu/demo-repo#7 lanzó tarea en DEMO-7')
+    expect(
+      describeEvent('trigger.command.cancela', {
+        sender: 'guilu',
+        source: 'guilu/demo-repo',
+        issue: 12,
+        command: '/skynet cancela',
+        workItemKey: 'DEMO-7',
+      }),
+    ).toBe('@guilu en guilu/demo-repo#12 con «/skynet cancela» canceló DEMO-7')
+    expect(
+      describeEvent('trigger.schedule.skipped', { cron: '0 0 9 * * MON', workflow: 'revisar' }),
+    ).toBe('Disparador programado (0 0 9 * * MON) saltado: la ejecución anterior sigue en marcha')
+    expect(
+      describeEvent('trigger.schedule.rejected', {
+        cron: '0 0 9 * * MON',
+        reason: 'Los disparadores están apagados',
+      }),
+    ).toBe('Disparador programado (0 0 9 * * MON) no lanzó: Los disparadores están apagados')
+  })
+
   it('describe la entrega por PR: la PR, la CI y la fusión', () => {
     expect(
       describeEvent('stage.github.pr.opened', {

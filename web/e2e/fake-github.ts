@@ -15,6 +15,9 @@ import { join } from 'node:path'
  * (`SKYNET_GITHUB_GIT_URL=file://…`) y este GitHub lee de ahí el commit de cada rama: abre la PR,
  * da la CI de cualquier commit en verde (un check `test`), la fusiona solo con el `sha` de su
  * cabeza y borra la rama. Lo que pasa con cada PR se ve en `GET /_e2e/pulls`.
+ *
+ * Los avisos de los disparadores (DS) comentan en issues que no son PR: se guardan y se ven en
+ * `GET /_e2e/issues`.
  */
 export const INSTALLATION = 7
 export const REPOSITORY = { id: 5001, full_name: 'guilu/demo-repo', private: true }
@@ -45,6 +48,9 @@ interface Pull {
 }
 
 const pulls = new Map<string, Pull[]>()
+
+/** Comentarios en issues que no son PR (los avisos de los disparadores, DS): `owner/repo#n`. */
+const issueComments = new Map<string, string[]>()
 
 /** El commit de la rama en el remoto local, o null si no existe. */
 function branchSha(fullName: string, branch: string): string | null {
@@ -177,6 +183,16 @@ async function repos(req: IncomingMessage, res: ServerResponse, path: string, qu
     pr.comments.push(String(request.body))
     return json(res, 201, { id: pr.comments.length })
   }
+  if (req.method === 'POST' && (m = rest.match(/^\/issues\/(\d+)\/comments$/))) {
+    const key = `${fullName}#${m[1]}`
+    const list = issueComments.get(key) ?? []
+    list.push(String((await body(req)).body))
+    issueComments.set(key, list)
+    return json(res, 201, { id: 10_000 + list.length })
+  }
+  if (req.method === 'POST' && rest.match(/^\/issues\/(comments\/)?\d+\/reactions$/)) {
+    return json(res, 201, { id: 1, content: (await body(req)).content })
+  }
   if (req.method === 'GET' && (m = rest.match(/^\/commits\/([0-9a-f]+)\/check-runs$/))) {
     const run = {
       id: 9001,
@@ -199,6 +215,9 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
   const [path, query = ''] = (req.url ?? '/').split('?')
   if (req.method === 'GET' && path === '/_e2e/pulls') {
     return json(res, 200, Object.fromEntries(pulls))
+  }
+  if (req.method === 'GET' && path === '/_e2e/issues') {
+    return json(res, 200, Object.fromEntries(issueComments))
   }
   if (!req.headers.authorization?.startsWith('Bearer ')) {
     return json(res, 401, { message: 'Requires authentication' })

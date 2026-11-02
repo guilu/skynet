@@ -86,7 +86,12 @@ export function WorkItemPage() {
             <p className="muted small">
               {TYPE_LABEL[item.data.type] ?? item.data.type} · creado el{' '}
               {formatDateTime(item.data.createdAt)}
-              {item.data.externalRef && <> · {item.data.externalRef}</>}
+              {item.data.externalRef && (
+                <>
+                  {' '}
+                  · <WorkItemOrigin externalRef={item.data.externalRef} />
+                </>
+              )}
             </p>
           )}
         </div>
@@ -177,4 +182,25 @@ export function WorkItemPage() {
       </Sheet>
     </>
   )
+}
+
+/**
+ * De dónde viene el trabajo (DS): una issue o PR de GitHub, un disparador programado, o la
+ * referencia tal cual.
+ */
+function WorkItemOrigin({ externalRef }: { externalRef: string }) {
+  const github = /^github:([\w.-]+\/[\w.-]+)#(\d+)$/.exec(externalRef)
+  if (github) {
+    return (
+      <a
+        href={`https://github.com/${github[1]}/issues/${github[2]}`}
+        target="_blank"
+        rel="noreferrer"
+      >
+        Desde {github[1]}#{github[2]}
+      </a>
+    )
+  }
+  if (externalRef.startsWith('skynet:schedule:')) return <>Programado</>
+  return <>{externalRef}</>
 }

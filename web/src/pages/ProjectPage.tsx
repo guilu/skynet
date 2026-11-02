@@ -22,6 +22,7 @@ import {
   RegisterRepositoryForm,
   VerificationForm,
 } from '../components/project/RepositoryForms'
+import { RepositoryTriggers } from '../components/project/RepositoryTriggers'
 import { StatusBadge } from '../components/StatusBadge'
 import { Button } from '../components/ui/Button'
 import { Sheet } from '../components/ui/Sheet'
@@ -337,6 +338,8 @@ function RepositoryCard({
       </section>
 
       <GitHubSection repository={r} />
+
+      <RepositoryTriggers repository={r} editable={editable} />
 
       <section className="repo-section" aria-label={`Política de agentes de ${r.name}`}>
         <div className="repo-section-head">

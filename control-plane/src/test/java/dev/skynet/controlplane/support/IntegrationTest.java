@@ -43,6 +43,8 @@ public abstract class IntegrationTest {
     registry.add("skynet.artifacts.max-size", () -> "64KB");
     registry.add("skynet.artifacts.max-upload", () -> "512KB");
     registry.add("skynet.runner.max-request", () -> "4MB");
+    // La cola por repositorio (DS-C) la prueban sus tests, con el límite de cada repositorio.
+    registry.add("skynet.runs.max-concurrent-per-repository", () -> "50");
   }
 
   protected static final String RUNNER_REGISTRATION_TOKEN = "test-registration-token";

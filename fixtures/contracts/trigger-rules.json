@@ -1,0 +1,45 @@
+[ {
+  "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a20",
+  "repositoryId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a03",
+  "kind" : "ISSUE",
+  "workflowKey" : "feature",
+  "label" : "skynet:feature",
+  "workItemType" : "FEATURE",
+  "inputs" : { },
+  "inputPolicy" : {
+    "priority" : {
+      "type" : "string",
+      "maxLength" : 20,
+      "allowedValues" : [ "alta", "baja" ]
+    }
+  },
+  "enabled" : true,
+  "createdAt" : "2026-10-05T09:00:00Z",
+  "updatedAt" : "2026-10-05T09:00:00Z",
+  "schedule" : null
+}, {
+  "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a21",
+  "repositoryId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a03",
+  "kind" : "SCHEDULE",
+  "workflowKey" : "revision-semanal",
+  "label" : null,
+  "workItemType" : "FEATURE",
+  "inputs" : {
+    "prompt" : "Revisa las dependencias"
+  },
+  "inputPolicy" : { },
+  "enabled" : true,
+  "createdAt" : "2026-10-05T09:00:00Z",
+  "updatedAt" : "2026-10-05T09:00:00Z",
+  "schedule" : {
+    "cron" : "0 0 9 * * MON",
+    "timeZone" : "Europe/Madrid",
+    "workItemTitle" : "revision-semanal (programado)",
+    "workItemId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a02",
+    "nextFireAt" : "2026-10-12T09:00:00Z",
+    "lastFiredAt" : "2026-10-05T09:00:00Z",
+    "lastOutcome" : "LAUNCHED",
+    "lastReason" : null,
+    "lastRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04"
+  }
+} ]

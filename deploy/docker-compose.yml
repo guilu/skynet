@@ -67,6 +67,8 @@ services:
       SKYNET_WORKTREE_RETENTION: ${SKYNET_WORKTREE_RETENTION:-7d}
       SKYNET_VERIFICATION_TIMEOUT: ${SKYNET_VERIFICATION_TIMEOUT:-30m}
       SKYNET_CANCEL_TIMEOUT: ${SKYNET_CANCEL_TIMEOUT:-70s}
+      # Ejecuciones a la vez por repositorio; las demás esperan en cola (docs/disparadores.md).
+      SKYNET_RUNS_MAX_CONCURRENT_PER_REPOSITORY: ${SKYNET_RUNS_MAX_CONCURRENT_PER_REPOSITORY:-2}
       # GitHub App (docs/github.md). La clave se monta de solo lectura desde la ruta del equipo.
       SKYNET_GITHUB_APP_ID: ${SKYNET_GITHUB_APP_ID:-}
       SKYNET_GITHUB_PRIVATE_KEY_FILE: ${SKYNET_GITHUB_PRIVATE_KEY_FILE:+/run/skynet/github-app.pem}

@@ -6,7 +6,7 @@ Skynet se conecta a GitHub con una **GitHub App propia** (hito GH). Con ella, el
 - pide tokens de instalación de corta vida, limitados a un repositorio;
 - recibe webhooks firmados y los publica como eventos `github.*`.
 
-Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la rama y abre la PR (EN-A), la fase `github-check` espera su CI y la corrige (EN-B) y la fase `github-merge` la fusiona tras una puerta, solo con el commit aprobado (EN-C). El recorrido completo está en [`entrega-por-pr.md`](entrega-por-pr.md) y cada fase, en [`workflows.md`](workflows.md). Con DS, una etiqueta en una issue o un comentario `/skynet` lanza un workflow sin abrir la web, y `/skynet corrige` o una revisión que pide cambios corrige en la puerta: ver [`disparadores.md`](disparadores.md).
+Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la rama y abre la PR (EN-A), la fase `github-check` espera su CI y la corrige (EN-B) y la fase `github-merge` la fusiona tras una puerta, solo con el commit aprobado (EN-C). El recorrido completo está en [`entrega-por-pr.md`](entrega-por-pr.md) y cada fase, en [`workflows.md`](workflows.md). Con DS, una etiqueta en una issue o un comentario `/skynet` lanza un workflow sin abrir la web, `/skynet corrige` o una revisión que pide cambios corrige en la puerta, y la issue avisa cuando la ejecución espera tu aprobación. Ajustes → GitHub tiene también la sección **Disparadores**: el interruptor, quién puede lanzar, los repositorios de órdenes, el freno diario y las últimas peticiones. Ver [`disparadores.md`](disparadores.md).
 
 ## 1. Crear la App
 

@@ -194,6 +194,36 @@ class IssueTriggerIT extends IntegrationTest {
   }
 
   @Test
+  void theDailyLimitStopsLaunchesFromGitHub() throws Exception {
+    rule(Map.of("workflowKey", "tarea"));
+    JsonNode settings = put("/api/triggers/settings", Map.of("enabled", true, "dailyLimit", 1));
+    assertThat(settings.path("dailyLimit").asInt()).isEqualTo(1);
+    assertThat(settings.path("launchedToday").asInt()).isZero();
+
+    label("guilu/demo-repo", 7, "skynet:tarea", "guilu", "guilu", "Uno", "");
+    awaitLaunch("LAUNCHED", 7);
+    assertThat(get("/api/triggers/settings").path("launchedToday").asInt()).isEqualTo(1);
+    label("guilu/demo-repo", 8, "skynet:tarea", "guilu", "guilu", "Dos", "");
+    assertThat(awaitLaunch("REJECTED", 8).path("reason").asString())
+        .contains("Límite diario alcanzado");
+    await(
+        () ->
+            GITHUB.comments.stream()
+                    .anyMatch(c -> c.startsWith("guilu/demo-repo#8: No lo lanzo: Límite diario"))
+                ? true
+                : null,
+        "el aviso del límite");
+    assertThat(count("SELECT count(*) FROM work_item")).isEqualTo(1);
+
+    Integer status =
+        http.put()
+            .uri("/api/triggers/settings")
+            .body(Map.of("dailyLimit", -1))
+            .exchange((request, response) -> response.getStatusCode().value());
+    assertThat(status).isEqualTo(400);
+  }
+
+  @Test
   void aLabelWithoutARuleIsAnOrdinaryEvent() throws Exception {
     enable();
     String delivery = label("guilu/demo-repo", 7, "skynet:otra", "guilu", "guilu", "Uno", "");

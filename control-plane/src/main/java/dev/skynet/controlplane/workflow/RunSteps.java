@@ -55,6 +55,8 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 public class RunSteps {
 
+  private final RunQueue queue;
+
   /** Una ejecución bloqueada por el motor. */
   public record RunState(UUID runId, UUID definitionId, WorkflowRunStatus status) {}
 
@@ -156,7 +158,8 @@ public class RunSteps {
       PullRequestMerges pullRequestMerges,
       PayloadRedactor redactor,
       @Value("${skynet.github.pull-requests.public-url:}") String publicUrl,
-      TimeSource time) {
+      TimeSource time,
+      RunQueue queue) {
     this.runs = runs;
     this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
@@ -176,6 +179,7 @@ public class RunSteps {
     this.ciChecks = ciChecks;
     this.pullRequestMerges = pullRequestMerges;
     this.redactor = redactor;
+    this.queue = queue;
     this.publicUrl = publicUrl;
     this.time = time;
   }
@@ -199,6 +203,41 @@ public class RunSteps {
     }
     WorkflowRun run = workflowRuns.findById(runId).orElseThrow();
     return Optional.of(new RunState(runId, run.getDefinitionId(), run.getStatus()));
+  }
+
+  /**
+   * Una ejecución en cola ({@code PENDING}, DS-C) arranca si le toca y hay hueco en su repositorio,
+   * o si se ha pedido cancelarla (para que el motor la cierre).
+   *
+   * @return si ya está en marcha
+   */
+  public boolean admit(UUID runId) {
+    WorkflowRun run = workflowRuns.findById(runId).orElseThrow();
+    if (run.getStatus() != WorkflowRunStatus.PENDING) {
+      return true;
+    }
+    UUID repositoryId =
+        jdbc.sql("SELECT repository_id FROM workflow_run WHERE id = ?")
+            .param(runId)
+            .query(UUID.class)
+            .optional()
+            .orElse(null);
+    boolean cancelling = run.getCancelRequestedAt() != null;
+    if (!cancelling && repositoryId != null && !queue.admits(repositoryId, runId)) {
+      return false;
+    }
+    transitions.advanceRun(run, WorkflowRunStatus.RUNNING, "admitted", time.now());
+    return true;
+  }
+
+  /** Las ejecuciones en cola del repositorio de {@code runId}, por orden de llegada. */
+  public List<UUID> queuedBehind(UUID runId) {
+    return jdbc.sql("SELECT repository_id FROM workflow_run WHERE id = ?")
+        .param(runId)
+        .query(UUID.class)
+        .optional()
+        .map(queue::queuedRuns)
+        .orElse(List.of());
   }
 
   /** El último intento de cada fase de la ejecución, como lo ve el motor. */

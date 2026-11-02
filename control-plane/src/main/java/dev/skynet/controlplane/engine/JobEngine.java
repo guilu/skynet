@@ -2,7 +2,9 @@ package dev.skynet.controlplane.engine;
 
 import dev.skynet.controlplane.engine.JobQueue.Job;
 import dev.skynet.controlplane.engine.RunEvaluator.Outcome;
+import dev.skynet.controlplane.workflow.RunSteps;
 import dev.skynet.controlplane.workflow.WorkflowRunChanged;
+import dev.skynet.controlplane.workflow.WorkflowRunFinished;
 import jakarta.annotation.PreDestroy;
 import java.util.List;
 import java.util.UUID;
@@ -31,13 +33,15 @@ class JobEngine implements WorkflowEngine {
 
   private final JobQueue jobs;
   private final RunEvaluator evaluator;
+  private final RunSteps steps;
   private final EngineProperties properties;
   private final ExecutorService workers;
   private final Semaphore idle;
 
-  JobEngine(JobQueue jobs, RunEvaluator evaluator, EngineProperties properties) {
+  JobEngine(JobQueue jobs, RunEvaluator evaluator, RunSteps steps, EngineProperties properties) {
     this.jobs = jobs;
     this.evaluator = evaluator;
+    this.steps = steps;
     this.properties = properties;
     this.workers =
         Executors.newFixedThreadPool(
@@ -48,6 +52,17 @@ class JobEngine implements WorkflowEngine {
   @EventListener
   void on(WorkflowRunChanged changed) {
     runChanged(changed.workflowRunId());
+  }
+
+  /**
+   * Al terminar una ejecución se libera un hueco en su repositorio: las que esperan en cola se
+   * vuelven a mirar enseguida (DS-C). Solo se encolan; las evalúan los workers al confirmarse.
+   */
+  @EventListener
+  void on(WorkflowRunFinished finished) {
+    for (UUID queued : steps.queuedBehind(finished.workflowRunId())) {
+      jobs.enqueue(queued);
+    }
   }
 
   @Override

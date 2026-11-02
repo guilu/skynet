@@ -66,6 +66,10 @@ skynet:
     lease: ${SKYNET_ENGINE_LEASE:2m}
     # Espera antes de reintentar una evaluación que falló o tuvo que esperar a su worktree.
     retry-delay: ${SKYNET_ENGINE_RETRY_DELAY:5s}
+  runs:
+    # Ejecuciones a la vez en cada repositorio (DS-C); cada repositorio puede fijar el suyo. Las que
+    # no caben esperan en cola (PENDING) hasta que se libera un hueco.
+    max-concurrent-per-repository: ${SKYNET_RUNS_MAX_CONCURRENT_PER_REPOSITORY:2}
   verification:
     # Tiempo máximo del comando de validación de un repositorio.
     timeout: ${SKYNET_VERIFICATION_TIMEOUT:30m}
