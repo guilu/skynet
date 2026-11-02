@@ -82,6 +82,7 @@ public class RunService {
   private final Approvals approvals;
   private final CiChecks ciChecks;
   private final QuotaShares quotaShares;
+  private final RunQueue queue;
 
   RunService(
       WorkflowRunRepository workflowRuns,
@@ -101,7 +102,8 @@ public class RunService {
       Verifications verifications,
       Approvals approvals,
       CiChecks ciChecks,
-      QuotaShares quotaShares) {
+      QuotaShares quotaShares,
+      RunQueue queue) {
     this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
     this.agentRuns = agentRuns;
@@ -120,6 +122,7 @@ public class RunService {
     this.approvals = approvals;
     this.ciChecks = ciChecks;
     this.quotaShares = quotaShares;
+    this.queue = queue;
   }
 
   /**
@@ -202,7 +205,11 @@ public class RunService {
     Instant now = time.now();
 
     WorkflowRun run = WorkflowRun.create(workItem.getId(), definition.id(), now);
-    run.transitionTo(WorkflowRunStatus.RUNNING, now);
+    // Si el repositorio está lleno (DS-C), se queda en cola (PENDING) y el motor la arranca al
+    // liberarse un hueco.
+    if (queue.admitsNew(repository.getId())) {
+      run.transitionTo(WorkflowRunStatus.RUNNING, now);
+    }
     run = workflowRuns.save(run);
     jdbc.sql(
             "UPDATE workflow_run SET repository_id = ?, inputs = CAST(? AS jsonb),"
@@ -223,6 +230,13 @@ public class RunService {
     started.put("definitionId", definition.id());
     started.put("status", run.getStatus());
     append("workflow_run", run.getId(), "workflow.started", run.getId(), started, now);
+    if (run.getStatus() == WorkflowRunStatus.PENDING) {
+      Map<String, Object> queued = new LinkedHashMap<>();
+      queued.put("repositoryId", repository.getId());
+      queued.put("running", queue.occupied(repository.getId()));
+      queued.put("limit", queue.limit(repository.getId()));
+      append("workflow_run", run.getId(), "workflow.queued", run.getId(), queued, now);
+    }
     for (StageDefinition stageDefinition : definition.definition().stages()) {
       StageRun stage = stageRuns.save(StageRun.create(run.getId(), stageDefinition.id(), now));
       Map<String, Object> pending = new LinkedHashMap<>();

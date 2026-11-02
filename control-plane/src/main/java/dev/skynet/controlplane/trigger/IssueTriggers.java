@@ -449,6 +449,13 @@ class IssueTriggers implements IssueHandler {
       event(launch, repository.getId(), "trigger.duplicate", key, active.get(), null);
       return;
     }
+    int limit = settings.dailyLimit();
+    if (settings.launchedToday() >= limit) {
+      throw new InvalidRequestException(
+          "Límite diario alcanzado: ya van "
+              + limit
+              + " ejecuciones lanzadas desde GitHub hoy. Se puede subir en Ajustes → GitHub");
+    }
     WorkflowRun run =
         runs.launch(
             workItemId,

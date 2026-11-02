@@ -1169,6 +1169,126 @@ export interface WebhookDelivery {
   processedAt: string | null
 }
 
+/** Los ajustes de los disparadores (DS): `GET /api/triggers/settings`. */
+export interface TriggerSettings {
+  /** El interruptor general: apagado, nada se lanza desde GitHub ni desde el cron. */
+  enabled: boolean
+  /** Quién puede lanzar desde GitHub, ya resuelto. */
+  authorizedLogins: string[]
+  /** Si son las cuentas de la instalación porque no se ha fijado nadie. */
+  authorizedByDefault: boolean
+  /** Repositorios de órdenes (`owner/nombre`), con el contrato `skynet-order`. */
+  orderRepositories: string[]
+  /** Ejecuciones que se pueden lanzar desde GitHub al día (0: ninguna). */
+  dailyLimit: number
+  /** Las lanzadas hoy, desde las 00:00 en Madrid. */
+  launchedToday: number
+  updatedAt: string | null
+}
+
+export type TriggerKind = 'ISSUE' | 'SCHEDULE'
+
+/** Lo propio de un disparador programado. */
+export interface TriggerSchedule {
+  /** Expresión cron de Spring, con segundos: `0 0 9 * * MON`. */
+  cron: string
+  timeZone: string
+  workItemTitle: string
+  /** El trabajo de sus ejecuciones, cuando ya se ha creado. */
+  workItemId: string | null
+  nextFireAt: string | null
+  lastFiredAt: string | null
+  lastOutcome: 'LAUNCHED' | 'SKIPPED' | 'REJECTED' | null
+  lastReason: string | null
+  lastRunId: string | null
+}
+
+/** Un disparador de un repositorio: con una etiqueta o comentario de GitHub, o programado. */
+export interface TriggerRule {
+  id: string
+  repositoryId: string
+  kind: TriggerKind
+  workflowKey: string
+  /** La etiqueta que lo lanza; null en los programados. */
+  label: string | null
+  workItemType: WorkItemType
+  inputs: Record<string, unknown>
+  inputPolicy: Record<
+    string,
+    { type: string; maxLength: number | null; allowedValues: unknown[] | null }
+  >
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+  schedule: TriggerSchedule | null
+}
+
+/** Para crear o cambiar un disparador; lo que no llegue toma su valor por defecto. */
+export interface TriggerDraft {
+  kind?: TriggerKind
+  workflowKey?: string
+  label?: string
+  enabled?: boolean
+  cron?: string
+  timeZone?: string
+  workItemTitle?: string
+  inputs?: Record<string, unknown>
+}
+
+export type TriggerLaunchStatus =
+  'QUEUED' | 'LAUNCHED' | 'FINISHED' | 'DUPLICATE' | 'REJECTED' | 'DONE'
+
+/** Una petición que llegó de GitHub: una etiqueta, un comentario `/skynet` o una revisión. */
+export interface TriggerLaunch {
+  id: string
+  deliveryId: string
+  /** `owner/nombre` de la issue o la PR. */
+  source: string
+  issueNumber: number
+  issueUrl: string | null
+  label: string
+  mode: 'ISSUE' | 'ORDER' | 'COMMAND'
+  /** La primera línea de la orden `/skynet`, si la hubo. */
+  command: string | null
+  pullRequest: boolean
+  author: string | null
+  sender: string | null
+  title: string
+  status: TriggerLaunchStatus
+  reason: string | null
+  triggerId: string | null
+  repositoryId: string | null
+  workItemId: string | null
+  workflowRunId: string | null
+  noticePending: boolean
+  noticeError: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** La cola de ejecuciones de un repositorio (DS-C). */
+export interface RunQueue {
+  repositoryId: string
+  /** El límite que se aplica. */
+  maxConcurrentRuns: number
+  /** Si el repositorio tiene el suyo; si no, es el general (`defaultLimit`). */
+  custom: boolean
+  defaultLimit: number
+  /** Las que ocupan un hueco ahora. */
+  running: number
+  /** Las que esperan, de la primera a la última. */
+  queued: string[]
+}
+
+/** El sitio de una ejecución en la cola de su repositorio; `position` 0 si no está en cola. */
+export interface RunQueuePosition {
+  workflowRunId: string
+  repositoryId: string | null
+  position: number
+  running: number
+  maxConcurrentRuns: number
+}
+
 /** Qué enseña una lista respecto a lo archivado: lo vigente (por defecto), lo archivado o todo. */
 export type ArchivedFilter = 'false' | 'true' | 'all'
 
@@ -1319,6 +1439,31 @@ export const api = {
   syncGitHub: () => request<GitHubStatus>('POST', '/api/github/sync'),
   gitHubDeliveries: (limit = 50) =>
     request<WebhookDelivery[]>('GET', `/api/github/deliveries?limit=${limit}`),
+  triggerSettings: () => request<TriggerSettings>('GET', '/api/triggers/settings'),
+  saveTriggerSettings: (
+    body: Partial<
+      Pick<TriggerSettings, 'enabled' | 'authorizedLogins' | 'orderRepositories' | 'dailyLimit'>
+    >,
+  ) => request<TriggerSettings>('PUT', '/api/triggers/settings', body),
+  triggerLaunches: (limit = 20, repositoryId?: string) =>
+    request<TriggerLaunch[]>(
+      'GET',
+      `/api/triggers/launches?limit=${limit}${repositoryId ? `&repositoryId=${repositoryId}` : ''}`,
+    ),
+  repositoryTriggers: (repositoryId: string) =>
+    request<TriggerRule[]>('GET', `/api/repositories/${repositoryId}/triggers`),
+  createTrigger: (repositoryId: string, body: TriggerDraft) =>
+    request<TriggerRule>('POST', `/api/repositories/${repositoryId}/triggers`, body),
+  updateTrigger: (id: string, body: TriggerDraft) =>
+    request<TriggerRule>('PUT', `/api/triggers/${id}`, body),
+  deleteTrigger: (id: string) => request<void>('DELETE', `/api/triggers/${id}`),
+  fireTrigger: (id: string) => request<TriggerRule>('POST', `/api/triggers/${id}/fire`),
+  runQueue: (repositoryId: string) =>
+    request<RunQueue>('GET', `/api/repositories/${repositoryId}/run-queue`),
+  saveRunQueue: (repositoryId: string, maxConcurrentRuns: number | null) =>
+    request<RunQueue>('PUT', `/api/repositories/${repositoryId}/run-queue`, { maxConcurrentRuns }),
+  runQueuePosition: (runId: string) =>
+    request<RunQueuePosition>('GET', `/api/workflow-runs/${runId}/queue`),
   login: (username: string, password: string) =>
     request<Session>('POST', '/api/auth/login', { username, password }),
   logout: () => request<void>('POST', '/api/auth/logout'),

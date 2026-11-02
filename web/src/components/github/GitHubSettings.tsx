@@ -15,6 +15,7 @@ import {
   PERMISSIONS,
   useGitHub,
 } from './github'
+import { TriggerSettingsSection } from './TriggerSettings'
 
 export function AccessPill({ access }: { access: GitHubAccess }) {
   return <Pill tone={ACCESS[access].tone}>{ACCESS[access].label}</Pill>
@@ -22,7 +23,8 @@ export function AccessPill({ access }: { access: GitHubAccess }) {
 
 /**
  * Ajustes → GitHub: el estado de la App, cómo crearla, sus instalaciones con el botón
- * Sincronizar, el enlace de cada repositorio de Skynet y las últimas entregas de webhooks.
+ * Sincronizar, el enlace de cada repositorio de Skynet, los disparadores (DS) y las últimas
+ * entregas de webhooks.
  */
 export function GitHubSettings() {
   const status = useGitHub()
@@ -36,6 +38,7 @@ export function GitHubSettings() {
           <SetupSection open={!status.data.configured} />
           <InstallationsSection status={status.data} />
           <RepositoriesSection status={status.data} />
+          <TriggerSettingsSection />
           {status.data.configured && <DeliveriesSection />}
         </>
       )}

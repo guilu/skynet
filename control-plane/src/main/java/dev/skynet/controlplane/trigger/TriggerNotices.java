@@ -3,6 +3,7 @@ package dev.skynet.controlplane.trigger;
 import dev.skynet.controlplane.github.GitHubRepositories;
 import dev.skynet.controlplane.github.GitHubRepositories.Link;
 import dev.skynet.controlplane.shared.TimeSource;
+import dev.skynet.controlplane.workflow.ApprovalRequested;
 import dev.skynet.controlplane.workflow.PullRequests;
 import dev.skynet.controlplane.workflow.RunService;
 import dev.skynet.controlplane.workflow.RunView;
@@ -18,6 +19,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -54,6 +56,7 @@ class TriggerNotices {
   private final IssueTriggers triggers;
   private final RunService runs;
   private final PullRequests pullRequests;
+  private final String publicUrl;
 
   TriggerNotices(
       JdbcClient jdbc,
@@ -63,7 +66,8 @@ class TriggerNotices {
       GitHubRepositories github,
       IssueTriggers triggers,
       RunService runs,
-      PullRequests pullRequests) {
+      PullRequests pullRequests,
+      @Value("${skynet.github.pull-requests.public-url:}") String publicUrl) {
     this.jdbc = jdbc;
     this.json = json;
     this.time = time;
@@ -72,6 +76,7 @@ class TriggerNotices {
     this.triggers = triggers;
     this.runs = runs;
     this.pullRequests = pullRequests;
+    this.publicUrl = publicUrl == null ? "" : publicUrl.replaceAll("/+$", "");
   }
 
   /** Al terminar una ejecución lanzada desde una issue, deja el aviso del resultado. */
@@ -115,6 +120,48 @@ class TriggerNotices {
           List.of(ok ? TriggerRules.DONE : TriggerRules.FAILED),
           List.of(TriggerRules.RUNNING, ok ? TriggerRules.FAILED : TriggerRules.DONE),
           false);
+    }
+  }
+
+  /**
+   * Una puerta de una ejecución lanzada desde GitHub espera: se avisa en la issue (DS-C), con el
+   * enlace a la aprobación si está {@code SKYNET_PUBLIC_URL}. Aprobar sigue siendo en la web.
+   */
+  @EventListener
+  void approvalRequested(ApprovalRequested requested) {
+    List<UUID> launches =
+        jdbc.sql("SELECT id FROM trigger_launch WHERE workflow_run_id = ? AND status = 'LAUNCHED'")
+            .param(requested.workflowRunId())
+            .query(UUID.class)
+            .list();
+    if (launches.isEmpty()) {
+      return;
+    }
+    RunView run = runs.run(requested.workflowRunId());
+    String stage =
+        run.stages().stream()
+            .filter(s -> s.stageKey().equals(requested.stageKey()) && s.name() != null)
+            .map(s -> s.name())
+            .findFirst()
+            .orElse(requested.stageKey());
+    String text =
+        "Esperando tu aprobación en Skynet: **"
+            + stage
+            + "** de **"
+            + run.workItemKey()
+            + "**"
+            + (requested.round() > 1 ? " (otra vez, tras la corrección)" : "")
+            + "."
+            + (publicUrl.isEmpty()
+                ? ""
+                : " [Abrir la aprobación]("
+                    + publicUrl
+                    + "/approvals/"
+                    + requested.approvalId()
+                    + ")")
+            + " Desde GitHub puedes pedir cambios con `/skynet corrige <qué cambiar>`.";
+    for (UUID launch : launches) {
+      triggers.notice(launch, text, List.of(), List.of(), false);
     }
   }
 

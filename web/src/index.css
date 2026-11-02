@@ -4525,6 +4525,93 @@
     overflow-wrap: anywhere;
   }
 
+  /* ---------- Disparadores y cola por repositorio (DS-C) ---------- */
+  .triggers-switch {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    margin: var(--space-2) 0;
+    border-radius: 12px;
+    background: var(--surface-2);
+  }
+
+  .triggers-switch p {
+    margin: 0;
+  }
+
+  .triggers-subtitle {
+    margin: var(--space-4) 0 var(--space-2);
+    font-size: 1rem;
+  }
+
+  .trigger-list {
+    display: grid;
+    gap: var(--space-2);
+    margin: var(--space-2) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .trigger-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  .trigger-main {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .trigger-main p {
+    margin: 0;
+  }
+
+  .trigger-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .queue-notice {
+    margin: var(--space-2) 0 0;
+    padding: 6px var(--space-2);
+    border-radius: 10px;
+    background: var(--surface-2);
+  }
+
+  .form-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--space-2);
+  }
+
+  .form-choice {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .form-choice label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
   /* ---------- Ajustes: paleta personalizable (UI-G) ---------- */
   .settings {
     display: grid;

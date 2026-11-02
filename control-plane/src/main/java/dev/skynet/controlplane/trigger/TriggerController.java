@@ -36,7 +36,8 @@ class TriggerController {
   record SaveSettings(
       Boolean enabled,
       @Size(max = 100) List<String> authorizedLogins,
-      @Size(max = 100) List<String> orderRepositories) {}
+      @Size(max = 100) List<String> orderRepositories,
+      Integer dailyLimit) {}
 
   record SaveRule(
       TriggerRules.Kind kind,
@@ -45,11 +46,23 @@ class TriggerController {
       WorkItemType workItemType,
       @Size(max = 100) Map<String, Object> inputs,
       @Size(max = 50) Map<String, InputPolicy.Rule> inputPolicy,
-      Boolean enabled) {
+      Boolean enabled,
+      @Size(max = 200) String cron,
+      @Size(max = 100) String timeZone,
+      @Size(max = 300) String workItemTitle) {
 
     TriggerRules.Draft draft() {
       return new TriggerRules.Draft(
-          kind, workflowKey, label, workItemType, inputs, inputPolicy, enabled);
+          kind,
+          workflowKey,
+          label,
+          workItemType,
+          inputs,
+          inputPolicy,
+          enabled,
+          cron,
+          timeZone,
+          workItemTitle);
     }
   }
 
@@ -86,7 +99,10 @@ class TriggerController {
   @PutMapping("/api/triggers/settings")
   TriggerSettings.View saveSettings(@RequestBody @jakarta.validation.Valid SaveSettings request) {
     return settings.save(
-        request.enabled(), request.authorizedLogins(), request.orderRepositories());
+        request.enabled(),
+        request.authorizedLogins(),
+        request.orderRepositories(),
+        request.dailyLimit());
   }
 
   @GetMapping("/api/repositories/{repositoryId}/triggers")
@@ -119,6 +135,11 @@ class TriggerController {
   }
 
   /** Las últimas peticiones, de la más reciente a la más antigua. */
+  @PostMapping("/api/triggers/{id}/fire")
+  TriggerRules.Rule fire(@PathVariable UUID id) {
+    return rules.fireNow(id);
+  }
+
   @GetMapping("/api/triggers/launches")
   List<LaunchView> launches(
       @RequestParam(defaultValue = "50") int limit,

@@ -1,0 +1,9 @@
+{
+  "enabled" : true,
+  "authorizedLogins" : [ "guilu" ],
+  "authorizedByDefault" : true,
+  "orderRepositories" : [ "guilu/skynet-commands" ],
+  "dailyLimit" : 10,
+  "launchedToday" : 3,
+  "updatedAt" : "2026-10-05T09:00:00Z"
+}

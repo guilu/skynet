@@ -26,7 +26,18 @@ import workflow from '../../fixtures/contracts/workflow.json'
 import workflows from '../../fixtures/contracts/workflows.json'
 import gitHubDeliveries from '../../fixtures/contracts/github-deliveries.json'
 import gitHubStatus from '../../fixtures/contracts/github-status.json'
+import triggerSettings from '../../fixtures/contracts/trigger-settings.json'
+import triggerRules from '../../fixtures/contracts/trigger-rules.json'
+import triggerLaunches from '../../fixtures/contracts/trigger-launches.json'
+import runQueue from '../../fixtures/contracts/run-queue.json'
+import runQueuePosition from '../../fixtures/contracts/run-queue-position.json'
 import type {
+  TriggerSettings,
+  TriggerRule,
+  TriggerSchedule,
+  TriggerLaunch,
+  RunQueue,
+  RunQueuePosition,
   GitHubApp,
   GitHubInstallation,
   GitHubInstallationRepository,
@@ -633,6 +644,85 @@ const WEBHOOK_DELIVERY: Keys<WebhookDelivery> = {
   processedAt: true,
 }
 
+const TRIGGER_SETTINGS: Keys<TriggerSettings> = {
+  enabled: true,
+  authorizedLogins: true,
+  authorizedByDefault: true,
+  orderRepositories: true,
+  dailyLimit: true,
+  launchedToday: true,
+  updatedAt: true,
+}
+
+const TRIGGER_RULE: Keys<TriggerRule> = {
+  id: true,
+  repositoryId: true,
+  kind: true,
+  workflowKey: true,
+  label: true,
+  workItemType: true,
+  inputs: true,
+  inputPolicy: true,
+  enabled: true,
+  createdAt: true,
+  updatedAt: true,
+  schedule: true,
+}
+
+const TRIGGER_SCHEDULE: Keys<TriggerSchedule> = {
+  cron: true,
+  timeZone: true,
+  workItemTitle: true,
+  workItemId: true,
+  nextFireAt: true,
+  lastFiredAt: true,
+  lastOutcome: true,
+  lastReason: true,
+  lastRunId: true,
+}
+
+const TRIGGER_LAUNCH: Keys<TriggerLaunch> = {
+  id: true,
+  deliveryId: true,
+  source: true,
+  issueNumber: true,
+  issueUrl: true,
+  label: true,
+  mode: true,
+  command: true,
+  pullRequest: true,
+  author: true,
+  sender: true,
+  title: true,
+  status: true,
+  reason: true,
+  triggerId: true,
+  repositoryId: true,
+  workItemId: true,
+  workflowRunId: true,
+  noticePending: true,
+  noticeError: true,
+  createdAt: true,
+  updatedAt: true,
+}
+
+const RUN_QUEUE: Keys<RunQueue> = {
+  repositoryId: true,
+  maxConcurrentRuns: true,
+  custom: true,
+  defaultLimit: true,
+  running: true,
+  queued: true,
+}
+
+const RUN_QUEUE_POSITION: Keys<RunQueuePosition> = {
+  workflowRunId: true,
+  repositoryId: true,
+  position: true,
+  running: true,
+  maxConcurrentRuns: true,
+}
+
 const expectShape = (value: object, shape: object) => expect(keysOf(value)).toEqual(keysOf(shape))
 
 function expectAgent(agent: AgentRun) {
@@ -808,5 +898,18 @@ describe('contratos con el backend', () => {
     status.repositories.forEach((r) => expectShape(r, GITHUB_REPOSITORY_LINK))
     expect(status.repositories.map((r) => r.access)).toEqual(['CONNECTED'])
     ;(gitHubDeliveries as WebhookDelivery[]).forEach((d) => expectShape(d, WEBHOOK_DELIVERY))
+  })
+
+  it('disparadores y cola por repositorio', () => {
+    expectShape(triggerSettings, TRIGGER_SETTINGS)
+    const rules = triggerRules as TriggerRule[]
+    rules.forEach((r) => {
+      expectShape(r, TRIGGER_RULE)
+      if (r.schedule) expectShape(r.schedule, TRIGGER_SCHEDULE)
+    })
+    expect(rules.map((r) => r.kind)).toEqual(['ISSUE', 'SCHEDULE'])
+    ;(triggerLaunches as TriggerLaunch[]).forEach((l) => expectShape(l, TRIGGER_LAUNCH))
+    expectShape(runQueue, RUN_QUEUE)
+    expectShape(runQueuePosition, RUN_QUEUE_POSITION)
   })
 })

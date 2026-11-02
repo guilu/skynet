@@ -128,6 +128,10 @@ class TriggerCommandIT extends IntegrationTest {
             },
             "la puerta");
     pullRequest(runId, plan, 12);
+    // La puerta que espera se avisa en la issue (DS-C).
+    assertThat(awaitComment("guilu/demo-repo#7: Esperando tu aprobación en Skynet"))
+        .contains("**Aprobar el plan** de **DEMO-1**")
+        .contains("https://skynet.example/approvals/" + first);
 
     long comment = comment(12, true, "guilu", "/skynet corrige Añade los tests de resta()");
     JsonNode done = awaitLaunch("DONE", "/skynet corrige");

@@ -163,6 +163,8 @@ public class Approvals {
     payload.put("action", action);
     payload.put("risk", risk);
     transitions.append("approval_request", id, "approval.requested", run.getId(), payload, now);
+    publisher.publishEvent(
+        new ApprovalRequested(id, run.getId(), stage.getStageKey(), round, action));
   }
 
   /**

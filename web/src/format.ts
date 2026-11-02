@@ -240,6 +240,29 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
     case 'stage.status.changed':
     case 'workflow.status.changed':
       return `${statusLabel(p('previousStatus'))} → ${statusLabel(p('status'))}`
+    // La cola por repositorio y los disparadores (DS).
+    case 'workflow.queued':
+      return `En cola: el repositorio ya tiene ${p('running')} en marcha (límite ${p('limit')})`
+    case 'trigger.launched':
+      return `${triggerSource(payload)} lanzó ${p('workflow')} en ${p('workItemKey')}`
+    case 'trigger.duplicate':
+      return `${triggerSource(payload)}: ${p('workItemKey')} ya tenía una ejecución en marcha`
+    case 'trigger.rejected':
+      return `${triggerSource(payload)} no lanzó nada: ${truncate(p('reason'), 120)}`
+    case 'trigger.command.corrige':
+      return `${triggerSource(payload)} pidió cambios en ${p('workItemKey')}`
+    case 'trigger.command.cancela':
+      return `${triggerSource(payload)} canceló ${p('workItemKey')}`
+    case 'trigger.command.estado':
+      return `${triggerSource(payload)} preguntó el estado de ${p('workItemKey')}`
+    case 'trigger.command.rejected':
+      return `${triggerSource(payload)}: ${truncate(p('reason'), 120)}`
+    case 'trigger.schedule.launched':
+      return `Disparador programado (${p('cron')}) lanzó ${p('workflow')}`
+    case 'trigger.schedule.skipped':
+      return `Disparador programado (${p('cron')}) saltado: la ejecución anterior sigue en marcha`
+    case 'trigger.schedule.rejected':
+      return `Disparador programado (${p('cron')}) no lanzó: ${truncate(p('reason'), 120)}`
     case 'workflow.definition.created':
       return `Borrador de ${p('key')} v${p('version')} creado`
     case 'workflow.definition.published':
@@ -263,6 +286,13 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
     default:
       return type
   }
+}
+
+/** «@guilu en la issue guilu/demo-repo#7»: quién y desde dónde pidió algo desde GitHub. */
+function triggerSource(payload: Record<string, unknown>): string {
+  const sender = payload.sender ? `@${String(payload.sender)}` : 'GitHub'
+  const command = payload.command ? ` con «${String(payload.command)}»` : ''
+  return `${sender} en ${String(payload.source ?? '')}#${String(payload.issue ?? '')}${command}`
 }
 
 /** Los nombres de una lista del payload, separados por comas. */

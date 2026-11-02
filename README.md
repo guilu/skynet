@@ -12,7 +12,7 @@ La definición funcional y técnica inicial se encuentra en:
 - [`docs/ui.md`](docs/ui.md): guía de estilo de la interfaz (tokens, componentes, movimiento, accesibilidad y capturas).
 - [`docs/github.md`](docs/github.md): conectar Skynet con una GitHub App propia (permisos, variables, el túnel para los webhooks y la seguridad).
 - [`docs/entrega-por-pr.md`](docs/entrega-por-pr.md): la entrega por PR, de la rama a la fusión.
-- [`docs/disparadores.md`](docs/disparadores.md): lanzar workflows desde GitHub con una etiqueta en una issue, y corregir, cancelar o ver el estado con comentarios `/skynet`.
+- [`docs/disparadores.md`](docs/disparadores.md): lanzar workflows desde GitHub con una etiqueta en una issue o a una hora (cron), corregir, cancelar o ver el estado con comentarios `/skynet`, y la cola de ejecuciones de cada repositorio.
 - [`docs/arranque-local.md`](docs/arranque-local.md): empezar de cero en local y los workflows iniciales, con qué proveedor y modelo hace cada fase.
 
 ## Arquitectura prevista
@@ -118,6 +118,8 @@ Credenciales de la base de datos: `SKYNET_DB_USER` / `SKYNET_DB_PASSWORD`. Con e
 - recibe webhooks firmados y los publica como eventos `github.*`;
 - entrega el trabajo como una PR: sube la rama, abre la PR, espera su CI (y la corrige), pide aprobar la fusión y la fusiona con el commit aprobado ([`docs/entrega-por-pr.md`](docs/entrega-por-pr.md));
 - se lanza con una etiqueta en una issue o un comentario `/skynet`, y se corrige desde la PR con `/skynet corrige` o una revisión que pide cambios, sin abrir la web ([`docs/disparadores.md`](docs/disparadores.md)).
+
+Sin GitHub, un disparador programado lanza un workflow a su hora (cron, hora de Madrid). Cada repositorio admite como mucho 2 ejecuciones a la vez (`SKYNET_RUNS_MAX_CONCURRENT_PER_REPOSITORY`, o el suyo en su ficha); las demás esperan «En cola» ([`docs/disparadores.md`](docs/disparadores.md) §6 y §7).
 
 Ajustes → GitHub explica cómo crear la App y muestra sus instalaciones, el acceso de cada repositorio y las últimas entregas. Sin esas variables todo funciona igual, sin GitHub. Los detalles están en [`docs/github.md`](docs/github.md).
 

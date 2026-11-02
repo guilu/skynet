@@ -15,6 +15,7 @@ import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.controlplane.workflow.RunSteps;
 import dev.skynet.controlplane.workflow.RunSteps.RunState;
 import dev.skynet.controlplane.workflow.RunSteps.StartOutcome;
+import dev.skynet.protocol.WorkflowRunStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -98,6 +99,10 @@ class RunEvaluator {
         return Outcome.DONE;
       }
       RunState state = locked.get();
+      if (state.status() == WorkflowRunStatus.PENDING && !steps.admit(runId)) {
+        // En cola (DS-C): se vuelve a mirar más tarde, o en cuanto termine otra del repositorio.
+        return Outcome.RETRY_LATER;
+      }
       PublishedDefinition published = definitions.published(state.definitionId());
       if (steps.settleCorrections(runId, published)) {
         // Una puerta ha vuelto a preguntar o ha terminado: se planifica con su estado nuevo.

@@ -80,7 +80,8 @@ export function RunHeader({
   })
   const verification = verifications.data?.[0]
   // Con varias fases se cancela la ejecución entera; con una, su agente.
-  const wholeRun = run.stages.length > 1
+  // Una en cola (DS-C) aún no tiene agente: se cancela la ejecución.
+  const wholeRun = run.stages.length > 1 || run.status === 'PENDING'
   // Se pidió cancelarla y sus agentes aún no han parado: «Cancelando», sin volver a ofrecerlo.
   const cancelling = run.cancelRequestedAt != null && run.finishedAt == null
   const cancellable =
@@ -173,6 +174,9 @@ export function RunHeader({
               </Chip>
             )}
           </ul>
+          {run.status === 'PENDING' && run.cancelRequestedAt == null && (
+            <QueueNotice runId={run.id} />
+          )}
         </div>
         <div className="hero-actions">
           {agent && (
@@ -345,5 +349,26 @@ function Kpi({
       <dd>{children}</dd>
       {sub && <dd className="kpi-sub">{sub}</dd>}
     </div>
+  )
+}
+
+/**
+ * Una ejecución en cola (DS-C): su repositorio ya tiene todas las que admite a la vez. Entra sola,
+ * por orden de llegada, cuando termina una o se queda esperando a una persona.
+ */
+function QueueNotice({ runId }: { runId: string }) {
+  const position = useQuery({
+    queryKey: ['run-queue-position', runId],
+    queryFn: () => api.runQueuePosition(runId),
+    refetchInterval: 5_000,
+  })
+  const p = position.data
+  if (!p || p.position === 0) return null
+  return (
+    <p className="queue-notice small" role="status">
+      <strong>En cola</strong>: puesto {p.position}. Su repositorio tiene {p.running} de{' '}
+      {p.maxConcurrentRuns} {p.maxConcurrentRuns === 1 ? 'ejecución' : 'ejecuciones'} a la vez en
+      marcha; entra sola cuando quede un hueco.
+    </p>
   )
 }
