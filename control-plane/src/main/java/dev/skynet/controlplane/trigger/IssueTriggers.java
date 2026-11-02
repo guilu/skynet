@@ -189,6 +189,9 @@ class IssueTriggers implements IssueHandler {
     } catch (InvalidRequestException | ConflictException | NotFoundException e) {
       // La transacción se ha deshecho entera (también el trabajo, si se creó): se rechaza aparte.
       Launch launch = claimed.get();
+      if (launch == null) {
+        throw e;
+      }
       transactions.executeWithoutResult(
           status -> reject(launch, e.getMessage(), launch.repositoryId(), true));
     } catch (RuntimeException e) {

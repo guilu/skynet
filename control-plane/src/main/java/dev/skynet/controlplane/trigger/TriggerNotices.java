@@ -143,7 +143,7 @@ class TriggerNotices {
    */
   boolean sendNext() {
     Instant now = time.now();
-    Optional<Pending> claimed =
+    Pending pending =
         transactions.execute(
             status -> {
               Optional<Pending> next =
@@ -170,12 +170,11 @@ class TriggerNotices {
                       jdbc.sql("UPDATE trigger_launch SET notice_after = ? WHERE id = ?")
                           .params(Timestamp.from(now.plus(LEASE)), p.id())
                           .update());
-              return next;
+              return next.orElse(null);
             });
-    if (claimed == null || claimed.isEmpty()) {
+    if (pending == null) {
       return false;
     }
-    Pending pending = claimed.get();
     try {
       Link link =
           github
