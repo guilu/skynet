@@ -35,6 +35,8 @@ export interface Repository {
   validationCommand: string | null
   /** Globs de los informes JUnit XML, relativos al worktree. */
   testReportPaths: string[]
+  /** Rutas que ningún agente puede cambiar (VA-A), globs relativos a la raíz. */
+  protectedPaths: string[]
   /** Política efectiva de los agentes: la propia o, sin ella, la global. */
   agentPolicy: AgentPolicy
   /** Si el repositorio tiene política propia. */
@@ -994,6 +996,8 @@ export interface CheckResult {
   reason: string | null
   /** En `artifacts`: ficheros declarados que no se guardaron, con el motivo (#145). */
   omitted: { path: string; reason: string }[]
+  /** Lo que se avisa sin fallar, p. ej. menos aserciones en `tests-intact` (VA-A). */
+  warnings: string[]
 }
 
 /** Lanzamiento de un agente; los límites que falten usan los valores por defecto del servidor. */
@@ -1543,7 +1547,12 @@ export const api = {
   configureVerification: (
     projectId: string,
     repositoryId: string,
-    body: { validationCommand: string | null; testReportPaths?: string[] },
+    body: {
+      validationCommand: string | null
+      testReportPaths?: string[]
+      /** Sin ellas, las rutas protegidas se quedan como estaban. */
+      protectedPaths?: string[]
+    },
   ) =>
     request<Repository>(
       'PUT',

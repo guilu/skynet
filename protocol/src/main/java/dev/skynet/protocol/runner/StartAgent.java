@@ -35,6 +35,9 @@ import java.util.UUID;
  *     herramientas MCP de memoria. {@code null} sin memoria; nunca en un comando.
  * @param push rama que sube una fase {@code github-pr} (EN-A): el runner confirma lo que quede sin
  *     confirmar en el worktree y lo sube, en lugar de lanzar un agente; {@code null} si no
+ * @param protectedPaths globs relativos al worktree que el agente no puede cambiar (VA-A): Claude
+ *     Code los recibe como reglas {@code deny}; los demás proveedores, solo en el prompt. Vacío si
+ *     no hay ninguno
  */
 public record StartAgent(
     UUID workflowRunId,
@@ -54,7 +57,8 @@ public record StartAgent(
     String outputSchema,
     String provider,
     String memory,
-    PushBranch push) {
+    PushBranch push,
+    List<String> protectedPaths) {
 
   public static final String MEMORY_READ = "read";
   public static final String MEMORY_WRITE = "write";
@@ -65,6 +69,7 @@ public record StartAgent(
     Objects.requireNonNull(sessionId, "sessionId");
     Objects.requireNonNull(prompt, "prompt");
     allowedTools = allowedTools == null ? List.of() : List.copyOf(allowedTools);
+    protectedPaths = protectedPaths == null ? List.of() : List.copyOf(protectedPaths);
     limits = limits == null ? AgentLimits.none() : limits;
     environment = environment == null ? null : List.copyOf(environment);
     if (resume != null && workspace != null) {
@@ -91,6 +96,48 @@ public record StartAgent(
       throw new IllegalArgumentException(
           "Un push solo sube un worktree existente: sin comando, reanudación, salida ni memoria");
     }
+  }
+
+  /** Invocación sin rutas protegidas. */
+  public StartAgent(
+      UUID workflowRunId,
+      String workItemKey,
+      String repositoryPath,
+      String baseBranch,
+      UUID sessionId,
+      String prompt,
+      List<String> allowedTools,
+      String permissionMode,
+      String model,
+      AgentLimits limits,
+      ResumeFrom resume,
+      List<String> environment,
+      WorkspaceRef workspace,
+      String command,
+      String outputSchema,
+      String provider,
+      String memory,
+      PushBranch push) {
+    this(
+        workflowRunId,
+        workItemKey,
+        repositoryPath,
+        baseBranch,
+        sessionId,
+        prompt,
+        allowedTools,
+        permissionMode,
+        model,
+        limits,
+        resume,
+        environment,
+        workspace,
+        command,
+        outputSchema,
+        provider,
+        memory,
+        push,
+        List.of());
   }
 
   /** Invocación que no sube ninguna rama. */

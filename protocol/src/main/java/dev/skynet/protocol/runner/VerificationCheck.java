@@ -15,11 +15,14 @@ import java.util.Set;
  *   <li>{@code commit}: hay commits nuevos y no quedan cambios sin confirmar.
  *   <li>{@code scope}: todos los ficheros cambiados caben en algún glob de {@code paths}.
  *   <li>{@code command}: {@code command} sale con 0.
+ *   <li>{@code tests-intact} (VA-A): el cambio no borra, quita ni salta tests.
+ *   <li>{@code protected} (VA-A): ningún fichero cambiado cae en los globs de {@code paths}.
  * </ul>
  *
  * @param name tipo de comprobación
  * @param command comando de shell de un check {@code command}; {@code null} en los demás
- * @param paths globs relativos al worktree de {@code artifacts} y {@code scope}; vacío en los demás
+ * @param paths globs relativos al worktree de {@code artifacts}, {@code scope} y {@code protected};
+ *     vacío en los demás
  */
 public record VerificationCheck(String name, String command, List<String> paths) {
 
@@ -29,11 +32,14 @@ public record VerificationCheck(String name, String command, List<String> paths)
   public static final String COMMIT = "commit";
   public static final String SCOPE = "scope";
   public static final String COMMAND = "command";
+  public static final String TESTS_INTACT = "tests-intact";
+  public static final String PROTECTED = "protected";
 
   /** Los tipos que se escriben por su nombre en {@code checks}. */
-  public static final List<String> NAMED = List.of(TESTS, DIFF, COMMIT, SCOPE);
+  public static final List<String> NAMED = List.of(TESTS, DIFF, COMMIT, SCOPE, TESTS_INTACT);
 
-  private static final Set<String> NAMES = Set.of(ARTIFACTS, TESTS, DIFF, COMMIT, SCOPE, COMMAND);
+  private static final Set<String> NAMES =
+      Set.of(ARTIFACTS, TESTS, DIFF, COMMIT, SCOPE, COMMAND, TESTS_INTACT, PROTECTED);
 
   public VerificationCheck {
     Objects.requireNonNull(name, "name");

@@ -10,6 +10,9 @@ function globs(text: string): string[] | undefined {
   return list.length > 0 ? list : undefined
 }
 
+/** Lo que se sugiere proteger en un repositorio (VA-A). */
+const PROTECTED_SUGGESTIONS = ['.github/workflows/**', 'docs/tests/**', '**/acceptance/**']
+
 /** Una entrada por línea, sin vacías. */
 function lines(text: string): string[] {
   return text
@@ -129,11 +132,14 @@ export function VerificationForm({
   const queryClient = useQueryClient()
   const [command, setCommand] = useState(repository.validationCommand ?? '')
   const [reportPaths, setReportPaths] = useState(repository.testReportPaths.join('\n'))
+  const [protectedPaths, setProtectedPaths] = useState((repository.protectedPaths ?? []).join('\n'))
+  const missing = PROTECTED_SUGGESTIONS.filter((s) => !lines(protectedPaths).includes(s))
   const save = useMutation({
     mutationFn: () =>
       api.configureVerification(projectId, repository.id, {
         validationCommand: command.trim() || null,
         testReportPaths: globs(reportPaths),
+        protectedPaths: lines(protectedPaths),
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['repositories', projectId] })
@@ -159,6 +165,36 @@ export function VerificationForm({
         Informes JUnit XML, un glob por línea
         <textarea value={reportPaths} onChange={(e) => setReportPaths(e.target.value)} rows={2} />
       </label>
+      <label>
+        Rutas protegidas, un glob por línea
+        <textarea
+          value={protectedPaths}
+          onChange={(e) => setProtectedPaths(e.target.value)}
+          rows={3}
+          placeholder="docs/tests/**"
+        />
+        <span className="hint">
+          Ningún agente puede cambiarlas: la fase que lo haga no pasa su verificación. Se suman a
+          las de cada workflow.
+        </span>
+      </label>
+      {missing.length > 0 && (
+        <p className="small">
+          <span className="muted">Sugerencias: </span>
+          {missing.map((s) => (
+            <Button
+              key={s}
+              type="button"
+              size="sm"
+              variant="secondary"
+              aria-label={`Proteger ${s}`}
+              onClick={() => setProtectedPaths((current) => [...lines(current), s].join('\n'))}
+            >
+              + {s}
+            </Button>
+          ))}
+        </p>
+      )}
       <div className="form-actions">
         <Button type="submit" disabled={save.isPending}>
           Guardar verificación

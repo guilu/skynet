@@ -57,7 +57,7 @@ stages:
 
 ## Referencia
 
-**Raíz:** `id` (obligatorio; de 2 a 49 minúsculas, números y guiones; `new`, `schema` y `validate` están reservados), `version`, `name`, `description`, `inputs`, `agents` y `stages` (obligatorio, al menos una fase).
+**Raíz:** `id` (obligatorio; de 2 a 49 minúsculas, números y guiones; `new`, `schema` y `validate` están reservados), `version`, `name`, `description`, `inputs`, `agents`, `protected` (rutas que ningún agente puede cambiar, ver «Verificación de una fase») y `stages` (obligatorio, al menos una fase).
 
 **`inputs.<nombre>`:** `type` (`string` por defecto), `required`, `default` y `description`. Los prompts los usan como `{{inputs.<nombre>}}`.
 
@@ -83,7 +83,7 @@ stages:
 - `phase`: la macrofase de la fase, para el carril del grafo: `spec`, `plan`, `implement`, `test`, `review` o `deliver`. Opcional y solo visual: no cambia cómo se ejecuta.
 - `memory`: solo en las fases `agent` y `parallel` (vale para todos sus hijos). Cómo usa su agente la memoria del proyecto: `write` (por defecto) recibe el bloque de memoria al principio del prompt y tiene las herramientas para buscar y guardar; `read` recibe el bloque y puede buscar (`mem_search`, `mem_get`), pero no guardar, lo que viene bien en un revisor o un investigador; `off` no recibe ni el bloque ni las herramientas. Ver «Memoria del proyecto».
 - `condition`: la fase solo se ejecuta si es verdadera; si es falsa, se omite. Ver «Condiciones».
-- `artifacts`, `checks` y `scope`: lo que Skynet comprueba en el worktree de la fase antes de darla por buena. Ver «Verificación de una fase».
+- `artifacts`, `checks`, `scope`, `protected` y `allowTestRemoval`: lo que Skynet comprueba en el worktree de la fase antes de darla por buena. Ver «Verificación de una fase».
 - `action`, `risk` y `revise`: solo en las fases `type: human-approval`. Ver «Puertas de aprobación».
 - `pullRequest`: solo en las fases `type: github-pr`. Ver «Entrega por PR».
 - `required`, `ifNoChecks`, `fix` y `maxRounds`: solo en las fases `type: github-check`. Ver «Esperar la CI de la PR».
@@ -225,6 +225,19 @@ stages:
   - `commit`: hay commits nuevos desde el inicio de la fase y nada sin confirmar.
   - `scope`: todo lo que cambió está dentro de la lista `scope` (obligatoria con este check; una `scope` sin el check es un aviso).
   - `{command: <cmd>}`: el comando termina con código 0, con `sh -c` en el worktree y el tiempo máximo de las verificaciones. Sin variables `{{...}}`, como las fases `command`. Su salida queda como artefacto (`check-1.log`).
+  - `tests-intact` (VA-A): el cambio no debilita los tests para ponerse en verde. **`tests` lo incluye solo**, justo detrás; se escribe a mano para pedirlo sin `tests`. Mira el diff desde el inicio de la fase (no ejecuta nada) y falla si:
+    - se borra un fichero de tests («Se ha borrado el test `CalculadoraTest.divideEntreCero`») o se mueve fuera de donde están los tests;
+    - un fichero de tests que sigue existiendo tiene menos casos (`@Test`, `@ParameterizedTest`…, `it(`/`test(`, `def test_`, `func Test…`);
+    - se añade una forma de saltarlos: `@Disabled`, `@Ignore`, `assumeTrue(false)`, `.skip`, `.only`, `xit`, `fit`, `@pytest.mark.skip`, `pytest.skip()`, `t.Skip()`.
+
+    Si solo baja el número de aserciones de un fichero de tests, **avisa sin fallar** («Hay menos aserciones en `…` (de 3 a 2)»). Reconoce los tests de Java y Kotlin (`src/*test*/`, `*Test.java`, `*IT.kt`…), JavaScript y TypeScript (`*.test.ts`, `*.spec.js`, `__tests__/`, `tests/`, `e2e/`), Python (`test_*.py`, `*_test.py`, `tests/`) y Go (`*_test.go`). Una fase que de verdad tiene que quitar tests (p. ej. al borrar un módulo con los suyos) lleva `allowTestRemoval: true`, que quita `tests-intact` de su `tests`.
+- **Rutas protegidas** (VA-A): `protected` es una lista de globs que **ningún agente puede cambiar**, borrar ni mover:
+  - en la raíz del workflow vale para todas sus fases `agent` y `parallel`; en una fase, se suma a lo de la raíz;
+  - en la ficha del repositorio (**Configurar verificación → Rutas protegidas**, `PUT /api/projects/{id}/repositories/{rid}/verification` con `protectedPaths`) vale para todas las fases `agent` y `parallel` de cualquier workflow en ese repositorio, sin tocar el YAML;
+  - las tres se suman y no se pueden quitar desde un nivel más bajo. Una ruta que está en `scope` y en `protected` es un aviso: gana `protected`;
+  - se comprueban con el check `protected`, que se añade solo al final de esas fases: «Ha cambiado una ruta protegida: `docs/tests/probar.md`». Cuenta tanto la ruta vieja como la nueva de un fichero renombrado. No se deshace nada: la fase falla y, si tiene `retry`, el reintento vuelve a la instantánea;
+  - el agente recibe antes de su prompt «Rutas protegidas: no cambies, borres ni muevas nada en …». Claude Code, además, las recibe como reglas `--disallowedTools Edit(<glob>)`, así que ni siquiera puede editarlas; Codex y Antigravity no tienen nada equivalente por ruta, y lo que hagan lo detecta el check;
+  - los globs son los de Java, como `scope`: `docs/tests/**` casa con todo lo que hay debajo de `docs/tests/`, y `**/acceptance/**` no casa con un `acceptance/` en la raíz (para eso, `acceptance/**`).
 - Las rutas no pueden salir del repositorio (ni `/` al principio ni `..`).
 - **Cuándo:** cuando el agente termina bien, la fase **sigue en curso** («Verificando») mientras el runner comprueba su worktree; solo si pasan todas termina bien y arranca la siguiente. Si alguna no pasa, la fase falla con el motivo de cada una y se aplica el fail-fast. Corregirla llega en W5/W6.
 - «El inicio de la fase» es el commit con el que su agente encontró el worktree.

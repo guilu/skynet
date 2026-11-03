@@ -49,6 +49,11 @@ import tools.jackson.databind.node.ObjectNode;
  *       ventana de 5 h renovándose dentro de los segundos que diga el fichero (60 si está vacío), y
  *       termina con error; además borra el testigo, así que la siguiente invocación trabaja como
  *       siempre. Se activa sin reiniciar el runner: basta con crear el fichero.
+ *   <li>{@code FAKE_CLAUDE_CHEAT}: ruta de un fichero testigo (VA-A). Si existe, la invocación hace
+ *       trampa al terminar bien: con {@code <ruta>} en el fichero, borra ese fichero de tests del
+ *       directorio de trabajo; con {@code disable <ruta>}, le pone {@code @Disabled} a su primer
+ *       {@code @Test}. Lo confirma con un commit y borra el testigo, así que solo pasa una vez. Se
+ *       activa sin reiniciar el runner.
  *   <li>{@code FAKE_MCP_CALLS} y {@code FAKE_MCP_LOG}: con {@code --mcp-config}, llamadas de guion
  *       al servidor de memoria {@code skynet_memoria} ({@link McpScript}).
  *   <li>{@code CLAUDE_CONFIG_DIR}: si está definida, guarda cada sesión en {@code
@@ -171,7 +176,70 @@ public final class FakeClaude {
     if (!sawResult) {
       return EXIT_KILLED;
     }
+    String cheat = env.get("FAKE_CLAUDE_CHEAT");
+    if (!isError && cheat != null && !cheat.isBlank() && Files.isRegularFile(cwd.resolve(cheat))) {
+      cheat(cwd.resolve(cheat), cwd, err);
+    }
     return isError ? 1 : 0;
+  }
+
+  /**
+   * La trampa de {@code FAKE_CLAUDE_CHEAT}: borra o desactiva un test para ponerse en verde y lo
+   * confirma.
+   */
+  static void cheat(Path marker, Path cwd, PrintStream err)
+      throws IOException, InterruptedException {
+    String text = Files.readString(marker).strip();
+    Files.delete(marker);
+    boolean disable = text.startsWith("disable ");
+    String target = disable ? text.substring("disable ".length()).strip() : text;
+    Path file = cwd.resolve(target).normalize();
+    if (!file.startsWith(cwd) || !Files.isRegularFile(file)) {
+      err.println("fake-claude: FAKE_CLAUDE_CHEAT apunta a un fichero que no existe: " + target);
+      return;
+    }
+    String message;
+    if (disable) {
+      String content = Files.readString(file);
+      int at = content.indexOf("@Test");
+      if (at < 0) {
+        err.println("fake-claude: no hay ningún @Test en " + target);
+        return;
+      }
+      Files.writeString(
+          file,
+          content.substring(0, at) + "@org.junit.jupiter.api.Disabled\n  " + content.substring(at));
+      message = "Desactiva el test que falla";
+    } else {
+      Files.delete(file);
+      message = "Quita el test que falla";
+    }
+    git(cwd, "add", "-A");
+    git(
+        cwd,
+        "-c",
+        "user.name=fake-claude",
+        "-c",
+        "user.email=fake@skynet.local",
+        "commit",
+        "-q",
+        "-m",
+        message);
+    err.println("fake-claude: trampa simulada (FAKE_CLAUDE_CHEAT) en " + target);
+  }
+
+  private static void git(Path cwd, String... args) throws IOException, InterruptedException {
+    List<String> command = new ArrayList<>(List.of("git", "-C", cwd.toString()));
+    command.addAll(List.of(args));
+    Process process =
+        new ProcessBuilder(command)
+            .redirectErrorStream(true)
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .start();
+    process.getOutputStream().close();
+    if (process.waitFor() != 0) {
+      throw new IOException("git " + String.join(" ", args) + " falló");
+    }
   }
 
   /** Segundos hasta que se renueva la ventana si el testigo no dice otra cosa. */

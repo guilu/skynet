@@ -166,6 +166,11 @@ public class ClaudeCodeProvider implements AgentProvider {
     if (!start.allowedTools().isEmpty()) {
       command.addAll(List.of("--allowedTools", String.join(",", start.allowedTools())));
     }
+    if (!start.protectedPaths().isEmpty()) {
+      // VA-A: las reglas Edit valen para todas las herramientas que editan ficheros (Edit, Write,
+      // MultiEdit, NotebookEdit). Lo que cambie por Bash lo detecta el check `protected`.
+      command.addAll(List.of("--disallowedTools", disallowedEdits(start.protectedPaths())));
+    }
     if (start.model() != null) {
       command.addAll(List.of("--model", start.model()));
     }
@@ -184,6 +189,14 @@ public class ClaudeCodeProvider implements AgentProvider {
     // Al final y tras "--": un prompt que empiece por "-" no se confunde con una opción.
     command.addAll(List.of("--", start.prompt()));
     return command;
+  }
+
+  /**
+   * Las reglas {@code deny} de las rutas protegidas: {@code Edit(<glob>)} con el glob relativo al
+   * directorio de trabajo (el worktree).
+   */
+  static String disallowedEdits(List<String> globs) {
+    return String.join(",", globs.stream().map(g -> "Edit(" + g + ")").toList());
   }
 
   /** Versión del CLI instalado ({@code claude --version}), si se puede obtener. */

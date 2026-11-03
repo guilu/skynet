@@ -157,6 +157,69 @@ class StageChecksTest {
     assertThat(results.get(2)).containsEntry("reason", "Se agotó el tiempo máximo de `sleep 99`");
   }
 
+  @Test
+  void protectedPathsFailWhenChangedRemovedOrRenamed() throws Exception {
+    Files.createDirectories(repo.resolve("docs/tests"));
+    Files.writeString(repo.resolve("docs/tests/probar.md"), "# Guía\n");
+    commit("guía");
+    base = git(repo, "rev-parse", "HEAD");
+    git(repo, "mv", "docs/tests/probar.md", "docs/probar.md");
+    Files.writeString(repo.resolve("calc.py"), "def add(a, b):\n    return a + b\n");
+    commit("mueve la guía");
+
+    List<Map<String, Object>> results =
+        run(List.of(VerificationCheck.withPaths("protected", List.of("docs/tests/**"))), PASSING);
+
+    assertThat(results)
+        .containsExactly(
+            Map.of(
+                "name",
+                "protected",
+                "target",
+                "docs/tests/**",
+                "passed",
+                false,
+                "reason",
+                "Ha cambiado una ruta protegida: `docs/tests/probar.md`"));
+  }
+
+  @Test
+  void protectedPathsPassWhenOnlyOtherFilesChange() throws Exception {
+    Files.writeString(repo.resolve("calc.py"), "def add(a, b):\n    return a + b\n");
+    commit("arregla");
+
+    List<Map<String, Object>> results =
+        run(List.of(VerificationCheck.withPaths("protected", List.of("docs/**"))), PASSING);
+
+    assertThat(results).singleElement().satisfies(r -> assertThat(r).containsEntry("passed", true));
+  }
+
+  @Test
+  void testsIntactReportsWarningsWithoutFailing() throws Exception {
+    Files.createDirectories(repo.resolve("tests"));
+    Files.writeString(
+        repo.resolve("tests/test_calc.py"),
+        "def test_add():\n    assert add(1, 2) == 3\n    assert add(0, 0) == 0\n");
+    commit("tests");
+    base = git(repo, "rev-parse", "HEAD");
+    Files.writeString(
+        repo.resolve("tests/test_calc.py"), "def test_add():\n    assert add(1, 2) == 3\n");
+    commit("menos");
+
+    List<Map<String, Object>> results =
+        run(List.of(VerificationCheck.named("tests-intact")), PASSING);
+
+    assertThat(results)
+        .containsExactly(
+            Map.of(
+                "name",
+                "tests-intact",
+                "passed",
+                true,
+                "warnings",
+                List.of("Hay menos aserciones en `tests/test_calc.py` (de 2 a 1)")));
+  }
+
   private List<Map<String, Object>> run(List<VerificationCheck> checks, TestsRun tests)
       throws Exception {
     return StageChecks.run(

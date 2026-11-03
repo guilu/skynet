@@ -183,6 +183,15 @@ function Checks({ checks }: { checks: VerificationResult['checks'] }) {
             </>
           )}
           {c.reason && <span className="muted"> · {c.reason}</span>}
+          {(c.warnings ?? []).length > 0 && (
+            <ul className="list" aria-label={`Avisos de ${c.name}`}>
+              {c.warnings?.map((w) => (
+                <li key={w}>
+                  ⚠ <span className="muted">{w}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           {c.omitted?.length > 0 && (
             <ul className="list" aria-label={`No guardados de ${c.name}`}>
               {c.omitted.map((o) => (

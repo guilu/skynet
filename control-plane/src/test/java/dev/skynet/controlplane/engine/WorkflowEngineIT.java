@@ -1653,6 +1653,53 @@ class WorkflowEngineIT extends IntegrationTest {
   }
 
   @Test
+  void protectedPathsOfTheRepositoryAndTheWorkflowReachTheAgentAndItsVerification() {
+    assertBadRequest(
+        () ->
+            put(
+                "/api/projects/" + projectId + "/repositories/" + repositoryId + "/verification",
+                Map.of("protectedPaths", List.of("../fuera"))),
+        "tiene que ser una ruta dentro del repositorio");
+    JsonNode repository =
+        put(
+            "/api/projects/" + projectId + "/repositories/" + repositoryId + "/verification",
+            Map.of("protectedPaths", List.of("docs/tests/**", " ")));
+    assertThat(repository.path("protectedPaths").toString()).isEqualTo("[\"docs/tests/**\"]");
+    String definitionId =
+        publish(
+            """
+            id: protegida
+            version: 1
+            protected: [".github/**"]
+            stages:
+              - id: implement
+                type: agent
+                prompt: Implementa
+            """);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+
+    JsonNode start = runner.claim().getFirst();
+    assertThat(start.path("start").path("protectedPaths").toString())
+        .isEqualTo("[\".github/**\",\"docs/tests/**\"]");
+    assertThat(taskPrompt(start.path("start")))
+        .startsWith("Rutas protegidas: no cambies, borres ni muevas nada en `.github/**`,")
+        .endsWith("\n\nImplementa");
+    complete(runner, start, "/w/eng/implement");
+
+    // Sin checks en el YAML, la fase espera igual a su verificación: la de las rutas protegidas.
+    JsonNode verify = runner.claim().getFirst();
+    assertThat(verify.path("verify").path("checks").toString())
+        .isEqualTo(
+            "[{\"name\":\"protected\",\"command\":null,"
+                + "\"paths\":[\".github/**\",\"docs/tests/**\"]}]");
+    assertThat(stageStatuses(runId)).containsEntry("implement", "RUNNING");
+    verified(runner, verify, false);
+
+    assertThat(stageStatuses(runId)).containsEntry("implement", "FAILED");
+  }
+
+  @Test
   void aFailingVerificationStageFailsWithTheChecksThatDidNotPass() {
     String definitionId = publish(NODE);
     Runner runner = register("laptop");
@@ -1669,7 +1716,8 @@ class WorkflowEngineIT extends IntegrationTest {
         .containsEntry("review", "CANCELLED");
     JsonNode agent = get("/api/workflow-runs/" + runId).path("stages").get(1).path("agents").get(0);
     assertThat(agent.path("status").asString()).isEqualTo("FAILED");
-    assertThat(agent.path("error").asString()).isEqualTo("tests: no pasa; commit: no pasa");
+    assertThat(agent.path("error").asString())
+        .isEqualTo("tests: no pasa; tests-intact: no pasa; commit: no pasa");
   }
 
   @Test

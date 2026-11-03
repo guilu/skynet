@@ -214,16 +214,27 @@ public class ProjectService {
     return repository;
   }
 
-  /** Cambia el comando de validación del repositorio y dónde deja sus informes JUnit. */
+  /**
+   * Cambia el comando de validación del repositorio, dónde deja sus informes JUnit y, si vienen,
+   * sus rutas protegidas (VA-A; {@code null} las deja como estaban).
+   */
   @Transactional
   public CodeRepository configureVerification(
-      UUID projectId, UUID repositoryId, String command, List<String> reportPaths) {
+      UUID projectId,
+      UUID repositoryId,
+      String command,
+      List<String> reportPaths,
+      List<String> protectedPaths) {
     CodeRepository repository = editableRepository(projectId, repositoryId);
     repository.configureVerification(command, reportPaths);
+    if (protectedPaths != null) {
+      repository.configureProtectedPaths(protectedPaths);
+    }
     repository = repositories.save(repository);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("validationCommand", repository.getValidationCommand());
     payload.put("testReportPaths", repository.getTestReportPaths());
+    payload.put("protectedPaths", repository.getProtectedPaths());
     events.append(
         EventDraft.of(
             "repository",

@@ -498,6 +498,7 @@ describe('App', () => {
           defaultBranch: 'main',
           validationCommand: null,
           testReportPaths: [],
+          protectedPaths: [],
           agentPolicy: {
             allowedTools: ['Read', 'Bash(git:*)'],
             permissionMode: 'dontAsk',
@@ -598,6 +599,7 @@ describe('App', () => {
           defaultBranch: 'main',
           validationCommand: null,
           testReportPaths: [],
+          protectedPaths: [],
           agentPolicy: {
             allowedTools: ['Read', 'Edit'],
             permissionMode: 'acceptEdits',

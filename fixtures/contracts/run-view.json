@@ -136,13 +136,15 @@
         "target" : "docs/spec.md",
         "passed" : true,
         "reason" : null,
-        "omitted" : [ ]
+        "omitted" : [ ],
+        "warnings" : [ ]
       }, {
         "name" : "diff",
         "target" : null,
         "passed" : true,
         "reason" : null,
-        "omitted" : [ ]
+        "omitted" : [ ],
+        "warnings" : [ ]
       } ],
       "live" : false
     } ],

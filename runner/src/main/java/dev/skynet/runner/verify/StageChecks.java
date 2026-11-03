@@ -1,13 +1,16 @@
 package dev.skynet.runner.verify;
 
 import dev.skynet.protocol.runner.VerificationCheck;
+import dev.skynet.runner.workspace.FileChanges;
 import dev.skynet.runner.workspace.WorktreeState;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -78,6 +81,7 @@ public final class StageChecks {
     for (VerificationCheck check : checks) {
       String reason;
       List<DeclaredFiles.Omitted> omitted = List.of();
+      List<String> warnings = List.of();
       switch (check.name()) {
         case VerificationCheck.ARTIFACTS -> {
           DeclaredFiles.Selection selection = DeclaredFiles.select(worktree, check.paths(), limits);
@@ -88,6 +92,16 @@ public final class StageChecks {
         case VerificationCheck.TESTS -> reason = tests(tests);
         case VerificationCheck.COMMAND ->
             reason = command(check, commands.run(check.command(), commandIndex++));
+        case VerificationCheck.TESTS_INTACT -> {
+          TestIntegrity.Result integrity = TestIntegrity.check(worktree, baseCommit);
+          reason = integrity.reason();
+          warnings = integrity.warnings();
+        }
+        case VerificationCheck.PROTECTED ->
+            reason =
+                protectedPaths(
+                    check.paths(),
+                    FileChanges.of(worktree, FileChanges.base(worktree, baseCommit)));
         default -> {
           if (state == null) {
             state = WorktreeState.of(worktree, baseCommit);
@@ -103,6 +117,9 @@ public final class StageChecks {
       result.put("passed", reason == null);
       if (reason != null) {
         result.put("reason", reason);
+      }
+      if (!warnings.isEmpty()) {
+        result.put("warnings", warnings);
       }
       if (!omitted.isEmpty()) {
         result.put(
@@ -190,6 +207,35 @@ public final class StageChecks {
     String more = outside.size() > MAX_LISTED ? " y " + (outside.size() - MAX_LISTED) + " más" : "";
     return plural(outside.size(), "fichero", "ficheros")
         + " fuera del ámbito permitido: "
+        + listed
+        + more;
+  }
+
+  /**
+   * Ningún fichero cambiado (creado, modificado, borrado o renombrado, por cualquiera de sus dos
+   * rutas) cae en una ruta protegida.
+   */
+  static String protectedPaths(List<String> globs, List<FileChanges.Change> changes) {
+    List<PathMatcher> matchers = globs.stream().map(StageChecks::matcher).toList();
+    List<String> touched = new ArrayList<>();
+    for (FileChanges.Change change : changes) {
+      for (String path : new LinkedHashSet<>(Arrays.asList(change.oldPath(), change.path()))) {
+        if (path != null
+            && matchers.stream().anyMatch(m -> m.matches(Path.of(path)))
+            && !touched.contains(path)) {
+          touched.add(path);
+        }
+      }
+    }
+    if (touched.isEmpty()) {
+      return null;
+    }
+    String listed =
+        String.join(", ", touched.stream().limit(MAX_LISTED).map(f -> "`" + f + "`").toList());
+    String more = touched.size() > MAX_LISTED ? " y " + (touched.size() - MAX_LISTED) + " más" : "";
+    return (touched.size() == 1
+            ? "Ha cambiado una ruta protegida: "
+            : "Ha cambiado rutas protegidas: ")
         + listed
         + more;
   }

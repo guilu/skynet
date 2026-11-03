@@ -52,14 +52,25 @@ public record VerificationResult(
    *     (#145); vacío en los demás
    */
   public record CheckResult(
-      String name, String target, Boolean passed, String reason, List<OmittedFile> omitted) {
+      String name,
+      String target,
+      Boolean passed,
+      String reason,
+      List<OmittedFile> omitted,
+      List<String> warnings) {
 
     public CheckResult {
       omitted = omitted == null ? List.of() : List.copyOf(omitted);
+      warnings = warnings == null ? List.of() : List.copyOf(warnings);
+    }
+
+    public CheckResult(
+        String name, String target, Boolean passed, String reason, List<OmittedFile> omitted) {
+      this(name, target, passed, reason, omitted, List.of());
     }
 
     public CheckResult(String name, String target, Boolean passed, String reason) {
-      this(name, target, passed, reason, List.of());
+      this(name, target, passed, reason, List.of(), List.of());
     }
   }
 

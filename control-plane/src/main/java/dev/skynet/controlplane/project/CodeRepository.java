@@ -33,6 +33,7 @@ public class CodeRepository {
   private Integer agentMaxTurns;
   private BigDecimal agentMaxBudgetUsd;
   private Integer agentTimeoutMinutes;
+  private List<String> protectedPaths;
   private final Instant createdAt;
 
   /** Lo escribe solo el archivado (UPDATE directo); el resto de guardados no lo toca. */
@@ -57,6 +58,7 @@ public class CodeRepository {
       Integer agentMaxTurns,
       BigDecimal agentMaxBudgetUsd,
       Integer agentTimeoutMinutes,
+      List<String> protectedPaths,
       Instant createdAt,
       Long version) {
     this.id = id;
@@ -74,6 +76,7 @@ public class CodeRepository {
     this.agentMaxTurns = agentMaxTurns;
     this.agentMaxBudgetUsd = agentMaxBudgetUsd;
     this.agentTimeoutMinutes = agentTimeoutMinutes;
+    this.protectedPaths = protectedPaths == null ? List.of() : List.copyOf(protectedPaths);
     this.createdAt = createdAt;
     this.version = version;
   }
@@ -101,6 +104,7 @@ public class CodeRepository {
         null,
         null,
         null,
+        List.of(),
         now,
         null);
   }
@@ -119,6 +123,17 @@ public class CodeRepository {
         reportPaths == null
             ? DEFAULT_TEST_REPORT_PATHS
             : reportPaths.stream().map(String::strip).filter(p -> !p.isEmpty()).toList();
+  }
+
+  /**
+   * Rutas que ningún agente de ninguna ejecución puede cambiar en este repositorio (VA-A): globs
+   * relativos a su raíz.
+   */
+  void configureProtectedPaths(List<String> globs) {
+    this.protectedPaths =
+        globs == null
+            ? List.of()
+            : globs.stream().map(String::strip).filter(p -> !p.isEmpty()).distinct().toList();
   }
 
   /** Política propia de los agentes; sustituye a la global. */
@@ -191,6 +206,10 @@ public class CodeRepository {
 
   public List<String> getTestReportPaths() {
     return testReportPaths;
+  }
+
+  public List<String> getProtectedPaths() {
+    return protectedPaths;
   }
 
   public Instant getCreatedAt() {

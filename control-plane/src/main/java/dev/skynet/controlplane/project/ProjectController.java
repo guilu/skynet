@@ -71,10 +71,13 @@ class ProjectController {
 
   /**
    * Verificación del repositorio. Sin {@code validationCommand} no se verifica; sin {@code
-   * testReportPaths} se buscan los informes JUnit de Gradle y Maven.
+   * testReportPaths} se buscan los informes JUnit de Gradle y Maven. {@code protectedPaths} son las
+   * rutas que ningún agente puede cambiar (VA-A); sin ellas, se quedan como estaban.
    */
   record VerificationSettings(
-      @Size(max = 2000) String validationCommand, List<@Size(max = 500) String> testReportPaths) {}
+      @Size(max = 2000) String validationCommand,
+      List<@Size(max = 500) String> testReportPaths,
+      @Size(max = 50) List<@Size(max = 500) String> protectedPaths) {}
 
   /**
    * Política propia de los agentes del repositorio. Sin {@code environment}, el agente recibe todas
@@ -135,6 +138,7 @@ class ProjectController {
       String defaultBranch,
       String validationCommand,
       List<String> testReportPaths,
+      List<String> protectedPaths,
       AgentPolicy agentPolicy,
       boolean agentPolicyCustom,
       Instant createdAt,
@@ -149,6 +153,7 @@ class ProjectController {
           r.getDefaultBranch(),
           r.getValidationCommand(),
           r.getTestReportPaths(),
+          r.getProtectedPaths(),
           policy,
           r.hasCustomAgentPolicy(),
           r.getCreatedAt(),
@@ -216,9 +221,23 @@ class ProjectController {
       @PathVariable UUID id,
       @PathVariable UUID repositoryId,
       @Valid @RequestBody VerificationSettings request) {
+    if (request.protectedPaths() != null) {
+      for (String glob : request.protectedPaths()) {
+        if (glob != null && !glob.isBlank() && !ProtectedPaths.insideRepository(glob.strip())) {
+          throw new InvalidRequestException(
+              "`"
+                  + glob.strip()
+                  + "` tiene que ser una ruta dentro del repositorio, p. ej. `docs/tests/**`");
+        }
+      }
+    }
     return view(
         service.configureVerification(
-            id, repositoryId, request.validationCommand(), request.testReportPaths()));
+            id,
+            repositoryId,
+            request.validationCommand(),
+            request.testReportPaths(),
+            request.protectedPaths()));
   }
 
   @PutMapping("/{id}/repositories/{repositoryId}/agent-policy")
