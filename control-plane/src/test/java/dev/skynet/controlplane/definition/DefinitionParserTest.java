@@ -1280,7 +1280,8 @@ class DefinitionParserTest {
             "`stages.juzgar.judge.threshold` debe estar entre 1 y 5",
             "`comando` es una fase `command`: lo que suspende el juez lo corrige el agente de una"
                 + " fase `agent`",
-            "`fix` solo vale en fases `type: github-check` o en una `verification` con `judge`;"
+            "`fix` solo vale en fases `type: github-check` o en una `verification` con `judge` o"
+                + " `guide`;"
                 + " esta es `verification`",
             "`maxRounds` son las rondas de corrección: sin `fix` no hay ninguna");
   }
@@ -1394,6 +1395,96 @@ class DefinitionParserTest {
     assertThat(messages(parsed, Severity.WARNING))
         .contains(
             "`refuteAgent` no se usa sin `refute`: pon cuántos escépticos, p. ej. `refute: 2`");
+  }
+
+  @Test
+  void aGuideRunsAsAStageWithItsFixRounds() {
+    Parsed parsed =
+        parse(
+            """
+            id: guia
+            agents:
+              autor:
+                provider: claude-code
+              probador:
+                provider: claude-code
+            stages:
+              - id: implementar
+                type: agent
+                agent: autor
+                prompt: Implementa
+              - id: guia
+                type: verification
+                dependsOn: [implementar]
+                guide:
+                  path: "docs/tests/probar-*.md"
+                  agent: probador
+                  skip: ["## 4."]
+                  ifMissing: skip
+                fix: implementar
+                maxRounds: 3
+            """);
+    assertThat(messages(parsed, Severity.ERROR)).isEmpty();
+    assertThat(messages(parsed, Severity.WARNING)).isEmpty();
+    JudgeSpec judge = parsed.definition().stage("guia").orElseThrow().judge();
+    assertThat(judge.isGuide()).isTrue();
+    assertThat(judge.agents()).extracting(JudgeSpec.Judge::agent).containsExactly("probador");
+    assertThat(judge.criteria()).isEmpty();
+    assertThat(judge.fix()).isEqualTo("implementar");
+    assertThat(judge.maxRounds()).isEqualTo(3);
+    assertThat(judge.guide().paths()).containsExactly("docs/tests/probar-*.md");
+    assertThat(judge.guide().skip()).containsExactly("## 4.");
+    assertThat(judge.guide().skipIfMissing()).isTrue();
+  }
+
+  @Test
+  void aWrongGuideSaysWhy() {
+    Parsed parsed =
+        parse(
+            """
+            id: guia-mal
+            agents:
+              juez:
+                provider: codex
+              lector:
+                provider: codex
+                permissionMode: plan
+            stages:
+              - id: implementar
+                type: agent
+                prompt: Implementa
+              - id: sin-ruta
+                type: verification
+                dependsOn: [implementar]
+                guide:
+                  agent: nadie
+                  ifMissing: quizas
+              - id: solo-lee
+                type: verification
+                dependsOn: [implementar]
+                guide:
+                  path: docs/tests/*.md
+                  agent: lector
+              - id: las-dos
+                type: verification
+                dependsOn: [implementar]
+                judge:
+                  agents: [juez]
+                guide:
+                  path: docs/tests/*.md
+                  agent: juez
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .contains(
+            "A la guía le falta `path`: dónde están, p. ej. `path: \"docs/tests/probar-*.md\"`",
+            "`ifMissing: quizas` no se conoce. Admite: fail, skip",
+            "No hay ningún agente `nadie` en `agents`",
+            "Una fase `verification` lleva `judge` o `guide`, no los dos: ponlos en dos fases, p. ej."
+                + " `juzgar` y `guia` detrás");
+    assertThat(messages(parsed, Severity.WARNING))
+        .contains(
+            "`lector` va en `permissionMode: plan` (solo lectura): no podrá ejecutar los pasos de la"
+                + " guía. Dale `dontAsk` o `acceptEdits`");
   }
 
   @Test
@@ -1557,7 +1648,7 @@ class DefinitionParserTest {
     assertThat(messages(parsed, Severity.ERROR))
         .containsExactly(
             "A esta fase le falta qué comprobar: `artifacts` (ficheros que tienen que existir),"
-                + " `checks`, p. ej. `checks: [tests, diff]`, o un `judge`",
+                + " `checks`, p. ej. `checks: [tests, diff]`, un `judge` o una `guide`",
             "Una fase `verification` no ejecuta nada, solo comprueba el worktree que hereda:"
                 + " quita `prompt`",
             "Una fase `verification` comprueba el worktree que hereda: quita `workspace:"

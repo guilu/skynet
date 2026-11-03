@@ -59,6 +59,9 @@ import tools.jackson.databind.node.ObjectNode;
  *       (el que diga el fichero) y lo borra ({@link FakeJudge}).
  *   <li>{@code FAKE_CLAUDE_REFUTE}: ruta de otro testigo (VA-C). Con la salida de un escéptico,
  *       refuta el hallazgo si el fichero existe y su texto está en el prompt (vacío, cualquiera).
+ *   <li>{@code FAKE_CLAUDE_GUIDE}: ruta de otro testigo (VA-D). Con la salida de una guía de
+ *       pruebas, recorre las guías que cambian y pasa todos sus pasos; si el fichero existe, falla
+ *       el paso que diga y lo borra ({@link FakeGuide}).
  *   <li>{@code FAKE_MCP_CALLS} y {@code FAKE_MCP_LOG}: con {@code --mcp-config}, llamadas de guion
  *       al servidor de memoria {@code skynet_memoria} ({@link McpScript}).
  *   <li>{@code CLAUDE_CONFIG_DIR}: si está definida, guarda cada sesión en {@code
@@ -147,6 +150,15 @@ public final class FakeClaude {
           FakeJudge.refutation(
               env,
               "FAKE_CLAUDE_REFUTE",
+              inv.jsonSchema(),
+              inv.rest().isEmpty() ? "" : inv.rest().getLast(),
+              cwd);
+    }
+    if (verdict == null) {
+      verdict =
+          FakeGuide.run(
+              env,
+              "FAKE_CLAUDE_GUIDE",
               inv.jsonSchema(),
               inv.rest().isEmpty() ? "" : inv.rest().getLast(),
               cwd);

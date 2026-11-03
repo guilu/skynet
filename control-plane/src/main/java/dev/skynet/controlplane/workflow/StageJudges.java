@@ -229,6 +229,11 @@ class StageJudges {
                 .toList();
     String author = authorProvider(stage, definition, workflow);
     AgentLimits limits = launchLimits(run);
+    if (spec.isGuide()) {
+      launchGuide(
+          stage, spec, round, source, run, workflow, workItem, repository, author, limits, now);
+      return;
+    }
     String schema = JudgeVerdicts.outputSchema(spec.rubricFile() != null);
     List<Map<String, Object>> launched = new ArrayList<>();
     for (JudgeSpec.Judge judge : spec.agents()) {
@@ -288,6 +293,70 @@ class StageJudges {
     payload.put("judges", launched);
     transitions.append(
         "stage_run", stage.getId(), "stage.judge.started", run.getId(), payload, now);
+  }
+
+  /**
+   * Lanza al agente que ejecuta la guía de pruebas (VA-D), en una copia de {@code source} y sin
+   * memoria. A diferencia de un juez no va en solo lectura: tiene que ejecutar los pasos. Lo que
+   * haga en la copia no llega al cambio.
+   */
+  private void launchGuide(
+      StageRun stage,
+      JudgeSpec spec,
+      int round,
+      WorkspaceView source,
+      WorkflowRun run,
+      WorkflowDefinition workflow,
+      WorkItem workItem,
+      CodeRepository repository,
+      String author,
+      AgentLimits limits,
+      Instant now) {
+    JudgeSpec.Judge judge = spec.agents().getFirst();
+    AgentDefinition agent = workflow.agent(judge.agent()).orElseThrow();
+    String prompt =
+        GuideSteps.prompt(
+            workItem.getKey(),
+            workItem.getTitle(),
+            source.baseCommit(),
+            spec.guide(),
+            round,
+            agent.prompt());
+    EffectivePolicy policy =
+        EffectivePolicy.of(projects.agentPolicy(repository), agent, limits)
+            .withOutputSchema(GuideSteps.outputSchema())
+            .withMemory(StageDefinition.MEMORY_OFF);
+    Invocation invocation =
+        routed(stage, Invocation.inCopyOf(prompt, policy, source), agent, author);
+    AgentRun queued =
+        agentQueue.queue(run, stage, workItem, repository, invocation, judge.agent(), now);
+    queued.asGuide();
+    if (source.baseCommit() != null) {
+      queued.recordBaseCommit(source.baseCommit());
+    }
+    queued = agentRuns.save(queued);
+    jdbc.sql(
+            "INSERT INTO stage_verdict (id, stage_run_id, workflow_run_id, round, judge, lens,"
+                + " agent_run_id, status, created_at, updated_at) VALUES (:id, :stage, :run,"
+                + " :round, :judge, 'guide', :agent, 'PENDING', :now, :now)")
+        .param("id", UUID.randomUUID())
+        .param("stage", stage.getId())
+        .param("run", run.getId())
+        .param("round", round)
+        .param("judge", judge.agent())
+        .param("agent", queued.getId())
+        .param("now", Timestamp.from(now))
+        .update();
+    status(stage.getId(), JUDGING, round, null, now);
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("stageKey", stage.getStageKey());
+    payload.put("round", round);
+    payload.put("agent", judge.agent());
+    payload.put("agentRunId", queued.getId());
+    payload.put("provider", queued.getProvider());
+    payload.put("paths", spec.guide().paths());
+    transitions.append(
+        "stage_run", stage.getId(), "stage.guide.started", run.getId(), payload, now);
   }
 
   /**
@@ -468,6 +537,14 @@ class StageJudges {
         fail(stage, state, "El juez `" + row.judge() + "` " + error, now);
         return;
       }
+      if (spec.isGuide()) {
+        GuideSteps.Run guide = GuideSteps.run(output);
+        Verdict verdict = GuideSteps.verdict(row.judge(), spec.guide(), guide);
+        saveVerdict(row, verdict, now);
+        saveGuide(row, guide);
+        decideGuide(stage, definition, state.round(), verdict, guide, now);
+        return;
+      }
       Verdict verdict = JudgeVerdicts.verdict(row.judge(), row.lens(), spec, output);
       saveVerdict(row, verdict, now);
       verdicts.add(verdict);
@@ -623,6 +700,62 @@ class StageJudges {
   }
 
   /**
+   * El recorrido de la guía de la ronda (VA-D): la fase pasa si no falla ningún paso; si no, la
+   * ronda suspende y el que corrige recibe los pasos que fallan con su evidencia.
+   */
+  private void decideGuide(
+      StageRun stage,
+      StageDefinition definition,
+      int round,
+      Verdict verdict,
+      GuideSteps.Run guide,
+      Instant now) {
+    JudgeSpec spec = definition.judge();
+    Aggregate aggregate = JudgeVerdicts.aggregate(List.of(verdict));
+    String note = GuideSteps.note(guide, spec.guide());
+    jdbc.sql(
+            "UPDATE stage_judge SET score = :score, passed = :passed, approvals = :approvals,"
+                + " judges = 1, findings = CAST(:findings AS jsonb), criteria = '{}'::jsonb,"
+                + " updated_at = :now WHERE stage_run_id = :stage")
+        .param("score", verdict.score())
+        .param("passed", verdict.passed())
+        .param("approvals", verdict.passed() ? 1 : 0)
+        .param("findings", json.writeValueAsString(findings(aggregate.findings())))
+        .param("now", Timestamp.from(now))
+        .param("stage", stage.getId())
+        .update();
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("stageKey", stage.getStageKey());
+    payload.put("round", round);
+    payload.put("passed", verdict.passed());
+    payload.put("guides", guide.guides());
+    payload.put("steps", guide.steps().size());
+    payload.put("stepsPassed", guide.count(GuideSteps.PASSED));
+    payload.put("stepsFailed", guide.count(GuideSteps.FAILED));
+    payload.put("stepsBlocked", guide.count(GuideSteps.BLOCKED));
+    payload.put("note", note);
+    transitions.append(
+        "stage_run", stage.getId(), "stage.guide.verdict", stage.getWorkflowRunId(), payload, now);
+    if (verdict.passed()) {
+      status(stage.getId(), PASSED, round, null, now);
+      transitions.advanceStage(stage, StageStatus.SUCCEEDED, "guide-passed", now);
+      return;
+    }
+    roundFailed(
+        stage,
+        definition,
+        round,
+        "No pasa la guía de pruebas: " + String.join("; ", verdict.reasons()),
+        "La guía de pruebas de la fase `"
+            + stage.getStageKey()
+            + "` no pasa.\n\n"
+            + GuideSteps.markdown(guide, spec.guide())
+            + "\nNo cambies la guía para que pase: corrige el código. Si la guía está mal, dilo"
+            + " en tu respuesta y deja la guía como está.",
+        now);
+  }
+
+  /**
    * La ronda {@code round} ha suspendido: corrige la fase de {@code fix} si quedan rondas o la fase
    * falla con {@code summary}. {@code report} es lo que se le cuenta al que corrige.
    */
@@ -684,6 +817,7 @@ class StageJudges {
     payload.put("fixStageKey", spec.fix());
     payload.put("agentRunId", agent.getId());
     payload.put("reason", summary);
+    payload.put("guide", spec.isGuide());
     transitions.append(
         "stage_run",
         stage.getId(),
@@ -867,7 +1001,40 @@ class StageJudges {
                         .distinct()
                         .count()
                 : 0,
-            state.refuteNote()));
+            state.refuteNote(),
+            spec.isGuide() ? guideView(stageRunId, spec.guide()) : null));
+  }
+
+  private JudgeView.Guide guideView(UUID stageRunId, JudgeSpec.GuideSpec spec) {
+    GuideSteps.Run run = latestGuide(stageRunId);
+    if (run == null) {
+      return new JudgeView.Guide(spec.paths(), List.of(), List.of(), null, null);
+    }
+    return new JudgeView.Guide(
+        spec.paths(),
+        run.guides(),
+        run.steps().stream()
+            .map(
+                s -> new JudgeView.Step(s.guide(), s.section(), s.step(), s.status(), s.evidence()))
+            .toList(),
+        run.summary(),
+        GuideSteps.note(run, spec));
+  }
+
+  /**
+   * Los pasos de la guía de la última ronda en Markdown, para el detalle plegado de la PR (VA-D);
+   * vacío si la fase no la ha recorrido.
+   */
+  Optional<String> guideDetails(UUID stageRunId, StageDefinition definition) {
+    if (definition.judge() == null || !definition.judge().isGuide()) {
+      return Optional.empty();
+    }
+    GuideSteps.Run run = latestGuide(stageRunId);
+    if (run == null) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        GuideSteps.markdown(run, definition.judge().guide()).replaceFirst("^# [^\\n]*\\n+", ""));
   }
 
   /**
@@ -878,6 +1045,10 @@ class StageJudges {
     State state = state(stageRunId).orElse(null);
     if (state == null || state.score() == null) {
       return Optional.empty();
+    }
+    StageDefinition definition = definitionOf(stageRuns.findById(stageRunId).orElseThrow());
+    if (definition != null && definition.judge() != null && definition.judge().isGuide()) {
+      return guideEvidence(state, definition.judge().guide(), latestGuide(stageRunId));
     }
     StringBuilder out = new StringBuilder("Juez: ");
     out.append(
@@ -903,6 +1074,27 @@ class StageJudges {
     }
     if (state.refuteNote() != null) {
       out.append(". ").append(state.refuteNote());
+    }
+    return Optional.of(out.toString());
+  }
+
+  /** «Guía de pruebas: 2 de 3 pasos pasan, en la ronda 2. Falla: …» (VA-D). */
+  private static Optional<String> guideEvidence(
+      State state, JudgeSpec.GuideSpec spec, GuideSteps.Run run) {
+    if (run == null) {
+      return Optional.empty();
+    }
+    StringBuilder out = new StringBuilder("Guía de pruebas: ").append(GuideSteps.note(run, spec));
+    if (state.round() > 1) {
+      out.append(", en la ronda ").append(state.round());
+    }
+    List<String> failed =
+        run.steps().stream()
+            .filter(s -> GuideSteps.FAILED.equals(s.status()))
+            .map(s -> "«" + s.step() + "»")
+            .toList();
+    if (!failed.isEmpty()) {
+      out.append(failed.size() == 1 ? ". Falla: " : ". Fallan: ").append(String.join("; ", failed));
     }
     return Optional.of(out.toString());
   }
@@ -1001,6 +1193,24 @@ class StageJudges {
         .param("now", Timestamp.from(now))
         .param("id", row.id())
         .update();
+  }
+
+  private void saveGuide(VerdictRow row, GuideSteps.Run guide) {
+    jdbc.sql("UPDATE stage_verdict SET guide = CAST(? AS jsonb) WHERE id = ?")
+        .params(json.writeValueAsString(guide), row.id())
+        .update();
+  }
+
+  /** El recorrido de la guía de la última ronda que lo tiene, o {@code null}. */
+  private GuideSteps.Run latestGuide(UUID stageRunId) {
+    return jdbc.sql(
+            "SELECT CAST(guide AS text) FROM stage_verdict WHERE stage_run_id = ? AND guide IS NOT"
+                + " NULL ORDER BY round DESC, created_at DESC LIMIT 1")
+        .param(stageRunId)
+        .query(String.class)
+        .optional()
+        .map(text -> json.readValue(text, GuideSteps.Run.class))
+        .orElse(null);
   }
 
   private void verdictFailed(VerdictRow row, String error, Instant now) {

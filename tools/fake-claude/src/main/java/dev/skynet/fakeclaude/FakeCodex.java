@@ -43,6 +43,9 @@ import tools.jackson.databind.node.ObjectNode;
  *       y lo borra ({@link FakeJudge}).
  *   <li>{@code FAKE_CODEX_REFUTE}: ruta de otro testigo (VA-C). Con la salida de un escéptico,
  *       refuta el hallazgo si el fichero existe y su texto está en el prompt (vacío, cualquiera).
+ *   <li>{@code FAKE_CODEX_GUIDE}: ruta de otro testigo (VA-D). Con la salida de una guía de
+ *       pruebas, recorre las guías que cambian y pasa todos sus pasos; si el fichero existe, falla
+ *       el paso que diga y lo borra ({@link FakeGuide}).
  *   <li>{@code CODEX_HOME}: si está definida, guarda cada sesión en {@code
  *       <dir>/sessions/<sesión>.jsonl}, y reanudar o bifurcar falla si no la encuentra. Sin ella no
  *       comprueba nada. Al final de la sesión añade un {@code token_count} con la cuota de la
@@ -135,6 +138,15 @@ public final class FakeCodex {
           FakeJudge.refutation(
               env,
               "FAKE_CODEX_REFUTE",
+              schemaOf(cwd.resolve(inv.outputSchema())),
+              inv.prompt(),
+              cwd);
+    }
+    if (verdict == null && inv.outputSchema() != null) {
+      verdict =
+          FakeGuide.run(
+              env,
+              "FAKE_CODEX_GUIDE",
               schemaOf(cwd.resolve(inv.outputSchema())),
               inv.prompt(),
               cwd);

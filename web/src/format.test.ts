@@ -56,6 +56,27 @@ describe('describeEvent', () => {
       describeEvent('stage.judge.refuted', { stageKey: 'juzgar', refuted: 1, findings: 3 }),
     ).toBe('juzgar: refutados 1 de 3 hallazgos')
     expect(
+      describeEvent('stage.guide.started', { stageKey: 'guia', agent: 'probador', round: 2 }),
+    ).toBe('guia: probador ejecuta la guía de pruebas (ronda 2)')
+    expect(
+      describeEvent('stage.guide.verdict', {
+        stageKey: 'guia',
+        passed: false,
+        note: '2 de 3 pasos pasan',
+      }),
+    ).toBe('guia: no pasa la guía · 2 de 3 pasos pasan')
+    expect(
+      describeEvent('stage.judge.fix.started', {
+        fixStageKey: 'implementar',
+        round: 1,
+        maxRounds: 2,
+        guide: true,
+      }),
+    ).toBe('implementar corrige lo que falla de la guía (ronda 1 de 2)')
+    expect(
+      describeEvent('stage.judge.round.started', { stageKey: 'guia', round: 2, guide: true }),
+    ).toBe('guia vuelve a ejecutar la guía (ronda 2)')
+    expect(
       describeEvent('stage.github.ci.fix.started', {
         fixStageKey: 'implementar',
         round: 1,

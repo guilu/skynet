@@ -44,6 +44,7 @@ const judge: Judge = {
   refute: 0,
   refuting: 0,
   refuteNote: null,
+  guide: null,
 }
 
 describe('StageJudge', () => {

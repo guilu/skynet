@@ -766,7 +766,10 @@ public class RunSteps {
               stage.name(),
               statusText(stageRun.getStatus()),
               summary instanceof String text ? text : null,
-              done.stream().distinct().toList()));
+              done.stream().distinct().toList(),
+              stage.judge() != null && stage.judge().isGuide()
+                  ? judges.guideDetails(stageRun.getId(), stage).orElse(null)
+                  : null));
     }
     return lines;
   }

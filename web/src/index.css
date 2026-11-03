@@ -3358,6 +3358,43 @@
     margin: 0 0 var(--space-1);
   }
 
+  /* La guía de pruebas como fase (VA-D): los pasos por sección, con su evidencia plegada. */
+  .stage-guide-title {
+    margin: var(--space-1) 0 2px;
+    font-weight: 600;
+  }
+
+  .stage-guide-steps {
+    display: grid;
+    gap: 2px;
+    margin: 0 0 var(--space-2);
+    padding: 0;
+    list-style: none;
+  }
+
+  .stage-guide-step.failed .stage-judge-severity {
+    color: var(--bad-ink);
+  }
+
+  .stage-guide-step.passed .stage-judge-severity {
+    color: var(--ok-ink);
+  }
+
+  .stage-guide-step.blocked .stage-judge-severity {
+    color: var(--warn-ink);
+  }
+
+  .stage-guide-step.skipped,
+  .stage-guide-step.skipped .stage-judge-severity {
+    color: var(--muted);
+  }
+
+  .stage-guide-step pre {
+    margin: 2px 0 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
   .stage-attempts {
     margin: 0 0 var(--space-2);
   }

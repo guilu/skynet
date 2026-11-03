@@ -113,6 +113,34 @@
         }
       }
     },
+    "guide": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "agent"],
+      "properties": {
+        "path": {
+          "description": "Dónde están las guías: un glob o una lista, p. ej. docs/tests/probar-*.md. Se ejecutan las que cambia el diff.",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+          ]
+        },
+        "agent": {
+          "description": "El agente de `agents` que ejecuta la guía.",
+          "type": "string",
+          "minLength": 1
+        },
+        "skip": {
+          "description": "Las secciones que no se ejecutan, por cómo empieza su título, p. ej. [\"## 4.\"]. Sus pasos quedan como saltados.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "ifMissing": {
+          "description": "Qué pasa si el cambio no trae guía: fail (por defecto) o skip (la fase pasa).",
+          "enum": ["fail", "skip"]
+        }
+      }
+    },
     "output": {
       "type": "object",
       "required": ["type", "properties"],
@@ -375,11 +403,11 @@
           "enum": ["pass", "fail"]
         },
         "fix": {
-          "description": "En fases github-check: la fase agent que corrige la CI roja en su sesión, con lo que falló; tiene que ir antes de la github-pr, porque es la que dejó el worktree que se sube. En una verification con judge: la fase agent que corrige lo que suspende el juez, con sus hallazgos.",
+          "description": "En fases github-check: la fase agent que corrige la CI roja en su sesión, con lo que falló; tiene que ir antes de la github-pr, porque es la que dejó el worktree que se sube. En una verification con judge o guide: la fase agent que corrige lo que suspende el juez (con sus hallazgos) o lo que falla de la guía (con sus pasos).",
           "type": "string"
         },
         "maxRounds": {
-          "description": "En fases github-check o verification con judge, con fix: rondas de corrección como mucho (por defecto 2).",
+          "description": "En fases github-check o verification con judge o guide, con fix: rondas de corrección como mucho (por defecto 2).",
           "type": "integer",
           "minimum": 1,
           "maximum": 5
@@ -387,6 +415,10 @@
         "judge": {
           "description": "Solo en fases verification: uno o varios jueces de solo lectura que, si pasan las comprobaciones, puntúan el cambio de 1 a 5 con una rúbrica. No ven lo que dijo el agente que lo hizo. Si suspende y la fase tiene fix, la fase de fix corrige con sus hallazgos.",
           "$ref": "#/$defs/judge"
+        },
+        "guide": {
+          "description": "Solo en fases verification: un agente ejecuta, en una copia del worktree, la guía de pruebas que trae el cambio, paso a paso, y apunta la evidencia de cada uno. La fase pasa si no falla ningún paso; si falla y la fase tiene fix, la fase de fix corrige con los pasos que fallan. No va con judge en la misma fase.",
+          "$ref": "#/$defs/guide"
         },
         "method": {
           "description": "Solo en fases github-merge: cómo se fusiona la PR. squash (por defecto), merge o rebase.",

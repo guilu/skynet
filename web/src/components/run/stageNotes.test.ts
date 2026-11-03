@@ -329,6 +329,7 @@ describe('judgeNote', () => {
     refute: 0,
     refuting: 0,
     refuteNote: null,
+    guide: null,
     ...over,
   })
   const judged = (j: StageJudge, status: StageStatus = 'RUNNING') => ({
@@ -345,6 +346,23 @@ describe('judgeNote', () => {
     )
     expect(judgeNote(judged(judge({ status: 'FIXING' })))).toBe(
       'implementar corrige lo que suspendió el juez (ronda 1 de 2)',
+    )
+  })
+
+  it('con guía de pruebas, lo cuenta como la guía (VA-D)', () => {
+    const guide = {
+      paths: ['docs/tests/probar-*.md'],
+      guides: ['docs/tests/probar-calc.md'],
+      steps: [],
+      summary: null,
+      note: '3 de 3 pasos pasan',
+    }
+    expect(judgeNote(judged(judge({ guide })))).toBe('Ejecutando la guía de pruebas')
+    expect(judgeNote(judged(judge({ guide, status: 'FIXING' })))).toBe(
+      'implementar corrige lo que falla de la guía (ronda 1 de 2)',
+    )
+    expect(judgeNote(judged(judge({ guide, status: 'PASSED' }), 'SUCCEEDED'))).toBe(
+      '3 de 3 pasos pasan',
     )
   })
 

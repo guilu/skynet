@@ -19,6 +19,8 @@ import java.util.List;
  * @param refute escépticos por cada hallazgo {@code blocking} (VA-C); 0 sin verificación
  *     adversarial
  * @param refuteAgent el agente de los escépticos; {@code null} para el del primer juez
+ * @param guide la guía de pruebas que ejecuta el agente (VA-D), o {@code null} en un juez con
+ *     rúbrica; con guía, {@code agents} es solo ese agente
  */
 public record JudgeSpec(
     List<Judge> agents,
@@ -28,7 +30,8 @@ public record JudgeSpec(
     String fix,
     int maxRounds,
     int refute,
-    String refuteAgent) {
+    String refuteAgent,
+    GuideSpec guide) {
 
   /** Media ponderada mínima si no se dice otra. */
   public static final BigDecimal DEFAULT_THRESHOLD = new BigDecimal("3.5");
@@ -70,7 +73,25 @@ public record JudgeSpec(
       BigDecimal threshold,
       String fix,
       int maxRounds) {
-    this(agents, rubric, rubricFile, threshold, fix, maxRounds, 0, null);
+    this(agents, rubric, rubricFile, threshold, fix, maxRounds, 0, null, null);
+  }
+
+  /** Un juez con rúbrica, sin guía (VA-C). */
+  public JudgeSpec(
+      List<Judge> agents,
+      List<Criterion> rubric,
+      String rubricFile,
+      BigDecimal threshold,
+      String fix,
+      int maxRounds,
+      int refute,
+      String refuteAgent) {
+    this(agents, rubric, rubricFile, threshold, fix, maxRounds, refute, refuteAgent, null);
+  }
+
+  /** Si es la guía de pruebas como fase (VA-D) y no un juez con rúbrica. */
+  public boolean isGuide() {
+    return guide != null;
   }
 
   public JudgeSpec {
@@ -79,9 +100,12 @@ public record JudgeSpec(
     threshold = threshold == null ? DEFAULT_THRESHOLD : threshold;
   }
 
-  /** Los criterios con los que se juzga: los del YAML o los de siempre; vacío con un fichero. */
+  /**
+   * Los criterios con los que se juzga: los del YAML o los de siempre; vacío con un fichero o con
+   * una guía.
+   */
   public List<Criterion> criteria() {
-    if (rubricFile != null) {
+    if (rubricFile != null || guide != null) {
       return List.of();
     }
     return rubric.isEmpty() ? DEFAULT_RUBRIC : rubric;
@@ -109,4 +133,23 @@ public record JudgeSpec(
    * @param required si con menos de {@link #REQUIRED_MINIMUM} suspende
    */
   public record Criterion(String id, String text, int weight, boolean required) {}
+
+  /**
+   * La guía de pruebas como fase (VA-D): el bloque {@code guide} de una fase {@code verification}.
+   *
+   * @param paths los globs de la guía, p. ej. {@code docs/tests/probar-*.md}: se ejecutan las que
+   *     cambia el diff
+   * @param agent el agente que la ejecuta, en una copia del worktree
+   * @param skip las secciones que no se ejecutan, por cómo empieza su título (p. ej. {@code ## 4.})
+   * @param skipIfMissing si sin guía en el diff la fase pasa ({@code ifMissing: skip}) en vez de
+   *     fallar
+   */
+  public record GuideSpec(
+      List<String> paths, String agent, List<String> skip, boolean skipIfMissing) {
+
+    public GuideSpec {
+      paths = List.copyOf(paths);
+      skip = skip == null ? List.of() : List.copyOf(skip);
+    }
+  }
 }

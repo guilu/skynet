@@ -46,6 +46,12 @@ export function stageDetail(stage: StageDefinition): string {
             ? '1 comprobación'
             : `${stage.checks.length} comprobaciones`
       if (!stage.judge) return checks
+      if (stage.judge.guide) {
+        const fix = stage.judge.fix ? ` · corrige ${stage.judge.fix}` : ''
+        return [checks, `Guía de pruebas · ${stage.judge.guide.agent}${fix}`]
+          .filter(Boolean)
+          .join(' · ')
+      }
       const n = stage.judge.agents.length
       const judges = `${n === 1 ? '1 juez' : `${n} jueces`} · umbral ${stage.judge.threshold.toLocaleString('es-ES')}`
       const refute = stage.judge.refute ? ` · refuta ×${stage.judge.refute}` : ''

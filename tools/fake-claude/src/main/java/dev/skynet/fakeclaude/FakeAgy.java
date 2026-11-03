@@ -33,9 +33,9 @@ import tools.jackson.databind.node.ObjectNode;
  *   <li>{@code FAKE_AGY_STRUCTURED_OUTPUT}: con {@code --json-schema}, el JSON que devuelve en
  *       {@code structured_output}, o {@code @ruta} para leerlo de ese fichero del directorio de
  *       trabajo. Sin ella, el del fixture (si lo tiene).
- *   <li>{@code FAKE_AGY_JUDGE} y {@code FAKE_AGY_REFUTE}: los testigos del juez (VA-B) y del
- *       escéptico (VA-C), como {@code FAKE_CLAUDE_JUDGE} y {@code FAKE_CLAUDE_REFUTE} ({@link
- *       FakeJudge}).
+ *   <li>{@code FAKE_AGY_JUDGE}, {@code FAKE_AGY_REFUTE} y {@code FAKE_AGY_GUIDE}: los testigos del
+ *       juez (VA-B), del escéptico (VA-C) y de la guía de pruebas (VA-D), como los de fake-claude
+ *       ({@link FakeJudge}, {@link FakeGuide}).
  *   <li>{@code FAKE_AGY_HOME}: si está definida, guarda cada conversación en {@code
  *       <dir>/conversations/<id>.jsonl}; {@code --conversation} falla si no la encuentra.
  * </ul>
@@ -102,6 +102,9 @@ public final class FakeAgy {
       if (structured == null) {
         structured =
             FakeJudge.refutation(env, "FAKE_AGY_REFUTE", inv.jsonSchema(), inv.prompt(), cwd);
+      }
+      if (structured == null) {
+        structured = FakeGuide.run(env, "FAKE_AGY_GUIDE", inv.jsonSchema(), inv.prompt(), cwd);
       }
       if (structured == null) {
         structured = FakeCli.structuredOutput(env, "FAKE_AGY_STRUCTURED_OUTPUT", cwd);

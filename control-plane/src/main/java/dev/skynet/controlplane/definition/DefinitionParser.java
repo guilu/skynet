@@ -104,7 +104,8 @@ public final class DefinitionParser {
           "maxRounds",
           "method",
           "deleteBranch",
-          "judge");
+          "judge",
+          "guide");
   static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt", "retry");
   static final Set<String> RETRY_KEYS = Set.of("maxAttempts", "on", "delay");
   static final Set<String> PULL_REQUEST_KEYS = Set.of("title", "body", "base", "draft", "labels");
@@ -121,6 +122,8 @@ public final class DefinitionParser {
   static final List<String> MERGE_KEYS = List.of("method", "deleteBranch");
 
   /** Las claves del bloque {@code judge} de una fase {@code verification} (VA-B). */
+  static final Set<String> GUIDE_KEYS = Set.of("path", "agent", "skip", "ifMissing");
+
   static final Set<String> JUDGE_KEYS =
       Set.of("agents", "rubric", "rubricFile", "threshold", "refute", "refuteAgent");
 
@@ -1144,6 +1147,16 @@ public final class DefinitionParser {
       CiSpec ci = ci(fields, type, path);
       MergeSpec merge = merge(fields, type, path);
       JudgeSpec judge = judge(fields, type, path);
+      JudgeSpec guide = guide(fields, type, path);
+      if (judge != null && guide != null) {
+        error(
+            fields.get("guide").key(),
+            path + ".guide",
+            "Una fase `verification` lleva `judge` o `guide`, no los dos: ponlos en dos fases, p. ej."
+                + " `juzgar` y `guia` detrás");
+      } else if (judge == null) {
+        judge = guide;
+      }
       Entry schemaEntry = fields.get("outputSchema");
       Map<String, Object> outputSchema = null;
       String outputSchemaPath = null;
@@ -1305,12 +1318,13 @@ public final class DefinitionParser {
       if (type == StageType.VERIFICATION
           && checks.isEmpty()
           && used.isEmpty()
-          && fields.get("judge") == null) {
+          && fields.get("judge") == null
+          && fields.get("guide") == null) {
         error(
             node,
             path + ".checks",
             "A esta fase le falta qué comprobar: `artifacts` (ficheros que tienen que existir),"
-                + " `checks`, p. ej. `checks: [tests, diff]`, o un `judge`");
+                + " `checks`, p. ej. `checks: [tests, diff]`, un `judge` o una `guide`");
       }
       testsIntact(fields, checks, path);
       protectedPaths(fields, type, checks, scope, path);
@@ -1992,7 +2006,7 @@ public final class DefinitionParser {
           Entry used = fields.get(key);
           boolean judged =
               type == StageType.VERIFICATION
-                  && fields.get("judge") != null
+                  && (fields.get("judge") != null || fields.get("guide") != null)
                   && List.of("fix", "maxRounds").contains(key);
           if (used != null && type.executable() && !judged) {
             error(
@@ -2002,7 +2016,7 @@ public final class DefinitionParser {
                     + key
                     + "` solo vale en fases `type: github-check`"
                     + (type == StageType.VERIFICATION && List.of("fix", "maxRounds").contains(key)
-                        ? " o en una `verification` con `judge`"
+                        ? " o en una `verification` con `judge` o `guide`"
                         : "")
                     + "; esta es `"
                     + type.yaml()
@@ -2139,6 +2153,103 @@ public final class DefinitionParser {
           maxRounds == null ? JudgeSpec.DEFAULT_MAX_ROUNDS : maxRounds,
           refute == null ? 0 : refute,
           refuteAgent);
+    }
+
+    /**
+     * El bloque {@code guide} de una fase {@code verification} (VA-D), con {@code fix} y {@code
+     * maxRounds} de la fase: qué guía ejecuta (globs), con qué agente, qué secciones se salta y qué
+     * pasa si el cambio no trae guía. Se lleva como un juez de un solo agente, con sus rondas.
+     */
+    private JudgeSpec guide(Map<String, Entry> fields, StageType type, String path) {
+      Entry entry = fields.get("guide");
+      if (entry == null) {
+        return null;
+      }
+      String at = path + ".guide";
+      if (type != StageType.VERIFICATION) {
+        if (type.executable()) {
+          error(
+              entry.key(),
+              at,
+              "`guide` solo vale en fases `type: verification`; esta es `" + type.yaml() + "`");
+        }
+        return null;
+      }
+      Map<String, Entry> guide = mapping(entry.value(), at, GUIDE_KEYS, Map.of());
+      if (guide == null) {
+        return null;
+      }
+      List<String> paths = new ArrayList<>();
+      Entry pathEntry = guide.get("path");
+      if (pathEntry == null || isNull(pathEntry.value())) {
+        error(
+            entry.key(),
+            at + ".path",
+            "A la guía le falta `path`: dónde están, p. ej. `path: \"docs/tests/probar-*.md\"`");
+      } else if (pathEntry.value() instanceof SequenceNode) {
+        paths.addAll(globs(pathEntry, at + ".path", "path"));
+      } else {
+        String one = text(pathEntry, at + ".path");
+        if (one != null && insideRepository(one)) {
+          paths.add(one);
+        } else if (one != null) {
+          error(
+              pathEntry.value(),
+              at + ".path",
+              "`"
+                  + one
+                  + "` tiene que ser una ruta dentro del repositorio, p. ej. `docs/tests/*.md`");
+        }
+      }
+      String agent = text(guide.get("agent"), at + ".agent");
+      if (agent == null && guide.get("agent") == null) {
+        error(
+            entry.key(),
+            at + ".agent",
+            "A la guía le falta `agent`: el agente que la ejecuta, p. ej. `agent: probador`");
+      }
+      List<String> skip = new ArrayList<>();
+      Entry skipEntry = guide.get("skip");
+      if (skipEntry != null && !isNull(skipEntry.value())) {
+        if (skipEntry.value() instanceof SequenceNode sequence) {
+          for (int i = 0; i < sequence.getValue().size(); i++) {
+            String one = scalarText(sequence.getValue().get(i), at + ".skip[" + i + "]");
+            if (one != null && !one.isBlank()) {
+              skip.add(one.strip());
+            }
+          }
+        } else {
+          error(
+              skipEntry.value(),
+              at + ".skip",
+              "`skip` debe ser una lista de títulos de sección, p. ej. `skip: [\"## 4.\"]`");
+        }
+      }
+      String ifMissing = text(guide.get("ifMissing"), at + ".ifMissing");
+      if (ifMissing != null && !List.of("fail", "skip").contains(ifMissing)) {
+        error(
+            guide.get("ifMissing").value(),
+            at + ".ifMissing",
+            "`ifMissing: " + ifMissing + "` no se conoce. Admite: fail, skip");
+      }
+      String fix = text(fields.get("fix"), path + ".fix");
+      Integer maxRounds = integer(fields.get("maxRounds"), path + ".maxRounds", 1, 5);
+      if (fields.get("maxRounds") != null && fix == null) {
+        error(
+            fields.get("maxRounds").key(),
+            path + ".maxRounds",
+            "`maxRounds` son las rondas de corrección: sin `fix` no hay ninguna");
+      }
+      return new JudgeSpec(
+          agent == null ? List.of() : List.of(new JudgeSpec.Judge(agent, null)),
+          List.of(),
+          null,
+          null,
+          fix,
+          maxRounds == null ? JudgeSpec.DEFAULT_MAX_ROUNDS : maxRounds,
+          0,
+          null,
+          new JudgeSpec.GuideSpec(paths, agent, skip, "skip".equals(ifMissing)));
     }
 
     /** Los jueces de {@code judge.agents}: un nombre de agente o {@code {agent, lens}}. */
@@ -2743,8 +2854,9 @@ public final class DefinitionParser {
     private void checkJudge(
         StageAt at, Map<String, StageAt> byId, Map<String, AgentDefinition> agentsByName) {
       JudgeSpec judge = at.stage().judge();
-      Entry judgeEntry = at.fields().get("judge");
-      String path = at.path() + ".judge";
+      boolean guide = judge.isGuide();
+      Entry judgeEntry = at.fields().get(guide ? "guide" : "judge");
+      String path = at.path() + (guide ? ".guide" : ".judge");
       Set<String> ancestors = ancestors(at.stage().id(), byId);
       StageAt judged = judgedStage(at, byId);
       AgentDefinition author =
@@ -2759,7 +2871,7 @@ public final class DefinitionParser {
         if (agent == null) {
           error(
               judgeEntry.key(),
-              path + ".agents[" + i + "]",
+              guide ? path + ".agent" : path + ".agents[" + i + "]",
               "No hay ningún agente `"
                   + j.agent()
                   + "` en `agents`"
@@ -2767,6 +2879,19 @@ public final class DefinitionParser {
           continue;
         }
         withoutLens += j.lens() == null ? 1 : 0;
+        if (guide) {
+          // Quien ejecuta la guía no puntúa: da igual que sea el mismo modelo que el autor.
+          if ("plan".equals(agent.permissionMode())) {
+            warning(
+                judgeEntry.key(),
+                path + ".agent",
+                "`"
+                    + j.agent()
+                    + "` va en `permissionMode: plan` (solo lectura): no podrá ejecutar los pasos"
+                    + " de la guía. Dale `dontAsk` o `acceptEdits`");
+          }
+          continue;
+        }
         if (judged != null
             && judged.stage().type() == StageType.AGENT
             && providerOf(agent).equals(providerOf(author))
