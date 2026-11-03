@@ -1,4 +1,5 @@
 import type { StatusTone } from '../../format'
+import type { CompanionState } from '../companion/state'
 import type { DrawingTone } from '../icons/ilustrados'
 import type { IconName } from '../icons/registry'
 
@@ -39,3 +40,33 @@ const STATUS_ICON: Record<string, IconName> = {
 
 export const statusIcon = (status: string, tone: StatusTone): IconName =>
   STATUS_ICON[status] ?? TONE_ICON[tone]
+
+/**
+ * Expresión de Skyny para cada estado conocido (boceto «Skyny en los bullets»). Los estados que no
+ * son de trabajo (abierto, cerrado, borrador…) se quedan con su icono.
+ */
+const STATUS_FACE: Record<string, CompanionState> = {
+  PENDING: 'ready',
+  QUEUED: 'ready',
+  READY: 'ready',
+  STARTING: 'thinking',
+  THINKING: 'thinking',
+  RUNNING: 'running',
+  EXECUTING: 'running',
+  WAITING_FOR_INPUT: 'waiting',
+  WAITING_FOR_APPROVAL: 'waiting',
+  UNRESPONSIVE: 'offline',
+  STALE: 'offline',
+  INTERRUPTED: 'offline',
+  SUCCEEDED: 'success',
+  COMPLETED: 'success',
+  PASSED: 'success',
+  FAILED: 'error',
+  ERROR: 'error',
+  CANCELLED: 'cancelled',
+  CANCELLING: 'cancelled',
+  SKIPPED: 'cancelled',
+  ONLINE: 'calm',
+}
+
+export const statusFace = (status: string): CompanionState | undefined => STATUS_FACE[status]

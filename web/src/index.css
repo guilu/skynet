@@ -1367,6 +1367,24 @@
     --ink: var(--live-ink);
   }
 
+  /* Boceto «Skyny en los bullets»: la píldora crece un poco y Skyny hace de bullet. */
+  .pill-skyny {
+    gap: 4px;
+    padding: 4px 12px 4px 4px;
+    font-size: 0.8125rem;
+  }
+
+  .pill-face {
+    display: grid;
+    place-items: center;
+    flex: none;
+    margin: -8px 0 -8px -6px;
+  }
+
+  .pill-face .companion {
+    display: block;
+  }
+
   .pill-active .pill-icon {
     animation: var(--animate-pulse-ring);
   }
