@@ -48,7 +48,9 @@ final class FakeGuide {
   private static final Pattern SKIP = Pattern.compile("empieza por (.+?): apunta");
 
   /** Lo que sobra alrededor de un título: las comillas, enteras o estropeadas. */
-  private static final Pattern QUOTES = Pattern.compile("^[^#\\p{Alnum}]+|[^.\\p{Alnum}]+$");
+  private static final Pattern LEADING = Pattern.compile("^[^#\\p{Alnum}]+");
+
+  private static final Pattern TRAILING = Pattern.compile("[^.\\p{Alnum}]+$");
 
   private static final Pattern STEP = Pattern.compile("^(?:\\d+\\.|[-*]) +(.+)$");
 
@@ -69,7 +71,7 @@ final class FakeGuide {
     String text = prompt == null ? "" : prompt;
     Path file = cwd.resolve(marker);
     boolean fail = Files.isRegularFile(file);
-    String failing = fail ? Files.readString(file, StandardCharsets.UTF_8).strip() : null;
+    String failing = fail ? Files.readString(file, StandardCharsets.UTF_8).strip() : "";
     if (fail) {
       Files.delete(file);
     }
@@ -77,7 +79,7 @@ final class FakeGuide {
     Matcher s = SKIP.matcher(text);
     if (s.find()) {
       for (String one : s.group(1).split(", ")) {
-        String title = QUOTES.matcher(one).replaceAll("");
+        String title = TRAILING.matcher(LEADING.matcher(one).replaceAll("")).replaceAll("");
         if (!title.isEmpty()) {
           skip.add(title);
         }

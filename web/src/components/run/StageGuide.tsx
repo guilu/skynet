@@ -48,8 +48,8 @@ export function StageGuide({ judge }: { judge: Judge }) {
             {j.judge}: {j.error}
           </p>
         ))}
-      {sections.map(([section, steps]) => (
-        <div key={section} className="stage-guide-section">
+      {sections.map(([section, steps], n) => (
+        <div key={n} className="stage-guide-section">
           {section && <p className="stage-guide-title">{section.replace(/^#+\s*/, '')}</p>}
           <ul className="stage-guide-steps" aria-label={`Pasos de ${section || 'la guía'}`}>
             {steps.map((s, i) => (
