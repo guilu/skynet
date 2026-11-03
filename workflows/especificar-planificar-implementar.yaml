@@ -16,15 +16,24 @@ agents:
       Devuelve un resumen de una o dos frases y los riesgos que veas.
   arquitecto:
     model: ${CLAUDE_FUERTE}
+    fallback:
+      provider: codex
+      model: ${CODEX_FUERTE}
     permissionMode: acceptEdits
     prompt: Planifica {{workItem.key}} a partir de openspec/proposal.md.
   desarrollador:
     model: ${CLAUDE_GENERAL}
+    fallback:
+      provider: codex
+      model: ${CODEX_FUERTE}
     permissionMode: acceptEdits
     prompt: Implementa {{workItem.key}} siguiendo openspec/tasks.md y confirma los cambios con un commit.
   revisor:
     provider: codex
     model: ${CODEX_FUERTE}
+    fallback:
+      provider: claude-code
+      model: ${CLAUDE_FUERTE}
     permissionMode: plan
     prompt: |
       Revisa la implementación de {{workItem.key}} ({{workItem.title}}) contra openspec/proposal.md y openspec/tasks.md: que haga lo que dice, con tests, y sin romper nada.

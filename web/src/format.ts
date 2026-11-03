@@ -106,6 +106,8 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
     case 'run.resumed':
       return `${p('actor')} reintentó la fase ${p('stageKey')} (intento ${p('attempt')})`
     case 'stage.retry.scheduled':
+      if (payload.reason === 'quota' && payload.switches)
+        return `Fase ${p('stageKey')}: ${providerName(String(payload.provider ?? ''))} se quedó sin cuota; sigue ya con el otro proveedor del agente`
       if (payload.reason === 'quota')
         return `Fase ${p('stageKey')}: ${providerName(String(payload.provider ?? ''))} se quedó sin cuota; sigue cuando se renueve, en ${formatDuration(Number(payload.delaySeconds ?? 0) * 1000)}`
       return `Fase ${p('stageKey')}: se reintenta (intento ${p('attempt')}${
@@ -163,6 +165,8 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
         : `Límite de uso: ${p('status')}`
     case 'agent.quota':
       return describeQuota(payload)
+    case 'agent.fallback.started':
+      return `Sustituye a ${providerName(String(payload.replaces ?? ''))}, sin cuota: sigue ${providerName(String(payload.provider ?? ''))}${payload.model ? ` (${p('model')})` : ''}`
     case 'agent.result':
       return `Resultado ${p('subtype')} · ${p('numTurns')} turnos${
         payload.costUsdCumulative != null

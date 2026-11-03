@@ -19,7 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 class QuotaController {
 
   /** Lo que llegue vacío se queda como estaba; {@code maxWaitHours: 0} es sin límite. */
-  record UpdateQuotaSettings(Boolean enabled, Integer maxWaitHours, Integer maxWaits) {}
+  record UpdateQuotaSettings(
+      Boolean enabled, Integer maxWaitHours, Integer maxWaits, Integer fallbackAfterMinutes) {}
 
   /** Una fase que espera a la cuota: de qué ejecución, de qué proveedor y hasta cuándo. */
   record QuotaWaitRow(
@@ -49,7 +50,11 @@ class QuotaController {
 
   @PutMapping("/api/settings/quota")
   QuotaSettings.View update(@RequestBody UpdateQuotaSettings request) {
-    return settings.save(request.enabled(), request.maxWaitHours(), request.maxWaits());
+    return settings.save(
+        request.enabled(),
+        request.maxWaitHours(),
+        request.maxWaits(),
+        request.fallbackAfterMinutes());
   }
 
   /** Las fases que esperan ahora a la cuota, la que antes sigue primero. */

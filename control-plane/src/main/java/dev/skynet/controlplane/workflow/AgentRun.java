@@ -117,6 +117,18 @@ public class AgentRun {
   /** Cuándo se renueva la ventana sin cuota, si se sabe (CQ-A). */
   private Instant quotaResetsAt;
 
+  /**
+   * El proveedor sin cuota al que sustituye este agente, que es su reserva (CQ-B); {@code null} si
+   * no sustituye a nadie.
+   */
+  private String fallbackFrom;
+
+  /** La ventana sin cuota del proveedor al que sustituye, si se sabe (CQ-B). */
+  private String fallbackWindow;
+
+  /** Cuándo se renueva la cuota del proveedor al que sustituye, si se sabe (CQ-B). */
+  private Instant fallbackUntil;
+
   @Version private Long version;
 
   @PersistenceCreator
@@ -242,6 +254,27 @@ public class AgentRun {
     return create(
         stageRunId,
         new Origin(parent.getId(), parent.getRepositoryId(), kind, parent.getProvider()),
+        sessionId,
+        workspaceId,
+        limits,
+        now);
+  }
+
+  /**
+   * Reintento en cola que parte de {@code parent} con otro proveedor: la reserva que sigue su
+   * trabajo, o el principal que vuelve tras ella (CQ-B).
+   */
+  static AgentRun queued(
+      UUID stageRunId,
+      AgentRun parent,
+      String provider,
+      UUID sessionId,
+      UUID workspaceId,
+      AgentLimits limits,
+      Instant now) {
+    return create(
+        stageRunId,
+        new Origin(parent.getId(), parent.getRepositoryId(), AgentRunKind.RETRY, provider),
         sessionId,
         workspaceId,
         limits,
@@ -645,6 +678,25 @@ public class AgentRun {
 
   public Instant getQuotaResetsAt() {
     return quotaResetsAt;
+  }
+
+  public String getFallbackFrom() {
+    return fallbackFrom;
+  }
+
+  public String getFallbackWindow() {
+    return fallbackWindow;
+  }
+
+  public Instant getFallbackUntil() {
+    return fallbackUntil;
+  }
+
+  /** Es la reserva de {@code provider}, sin cuota hasta {@code until} (CQ-B). */
+  void replaces(String provider, String window, Instant until) {
+    fallbackFrom = provider;
+    fallbackWindow = window;
+    fallbackUntil = until;
   }
 
   /**

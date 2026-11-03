@@ -334,7 +334,7 @@ public class RunSteps {
     Instant notBefore = now.plus(plan.delay());
     StageRun retry = StageRun.retry(failed, notBefore, now);
     QuotaWaits.Blocked quota = plan.quota();
-    if (quota != null) {
+    if (quota != null && !plan.switches()) {
       retry.waitForQuota(quota.provider(), quota.window(), quota.resetsAt(), notBefore, now);
     }
     StageRun next = stageRuns.save(retry);
@@ -367,9 +367,13 @@ public class RunSteps {
     if (quota != null) {
       payload.put("reason", "quota");
       payload.putAll(quotaPayload(quota));
+      if (plan.switches()) {
+        // Sin esperar: sigue con el otro proveedor del agente (CQ-B).
+        payload.put("switches", true);
+      }
     }
     transitions.append("stage_run", next.getId(), "stage.retry.scheduled", runId, payload, now);
-    if (quota != null) {
+    if (quota != null && !plan.switches()) {
       publisher.publishEvent(
           new QuotaWaitStarted(
               runId, stageKey, quota.provider(), quota.window(), quota.resetsAt(), notBefore));
@@ -393,18 +397,14 @@ public class RunSteps {
       return Retries.QuotaPolicy.NEVER;
     }
     return (agent, child, failures, blind, attemptId) -> {
-      String name =
-          child == null
-              ? stage.agent()
-              : stage.child(child).map(ChildDefinition::agent).orElse(null);
-      AgentDefinition agentDefinition = name == null ? null : definition.agent(name).orElse(null);
+      AgentDefinition agentDefinition = agentDefinition(stage, child, definition);
       return quotaWaits
           .afterFailure(agent, agentDefinition, failures, blind, attemptId)
           .map(
               w -> {
                 Duration delay = Duration.between(quotaWaits.now(), w.notBefore());
                 return new Retries.QuotaDelay(
-                    delay.isNegative() ? Duration.ZERO : delay, w.blocked());
+                    delay.isNegative() ? Duration.ZERO : delay, w.blocked(), w.switches());
               })
           .orElse(null);
     };
@@ -629,9 +629,13 @@ public class RunSteps {
         WorkspaceView continued = source;
         invocations.replaceAll(
             (child, invocation) ->
-                retrying(runId, stageKey, child, invocation, continued, definition));
+                retrying(runId, stage, child, invocation, continued, definition));
       }
-      if (waitForQuota(run, stage, invocations, now)) {
+      invocations.replaceAll(
+          (child, invocation) ->
+              routed(
+                  stage.getId(), invocation, agentDefinition(stageDefinition, child, definition)));
+      if (waitForQuota(run, stage, stageDefinition, definition, invocations, now)) {
         return StartOutcome.WAITING;
       }
       invocations.forEach(
@@ -692,7 +696,7 @@ public class RunSteps {
         EffectivePolicy.of(projects.agentPolicy(repository), AgentLimits.none());
     Invocation invocation = Invocation.inWorkspace("", policy, source).asPush(delivery.push());
     if (stage.getAttempt() > 1) {
-      invocation = retrying(run.getId(), stage.getStageKey(), null, invocation, source, definition);
+      invocation = retrying(run.getId(), stage, null, invocation, source, definition);
     }
     AgentRun agent = agentQueue.queue(run, stage, workItem, repository, invocation, now);
     pullRequests.pushing(
@@ -785,15 +789,18 @@ public class RunSteps {
    */
   private Invocation retrying(
       UUID runId,
-      String stageKey,
+      StageRun stage,
       String child,
       Invocation invocation,
       WorkspaceView source,
       WorkflowDefinition definition) {
+    String stageKey = stage.getStageKey();
     Retries retries = attempts(runId).get(stageKey);
     AgentRun previous = retries.previousAgent(child);
     if (previous != null && previous.getFailure() == AgentFailure.QUOTA) {
-      Invocation continued = afterQuota(previous, invocation);
+      AgentDefinition agent =
+          agentDefinition(definition.stage(stageKey).orElse(null), child, definition);
+      Invocation continued = afterQuota(previous, invocation, agent, stage.getId());
       if (continued != null) {
         return continued;
       }
@@ -821,12 +828,24 @@ public class RunSteps {
           + " está bien.";
 
   /**
-   * El intento que sigue a un agente que se quedó sin cuota (CQ-A): en su mismo worktree, sin
-   * volver a la instantánea. Reanuda su sesión si el proveedor lo permite y la sesión arrancó; si
-   * no, una sesión nueva con el prompt original y una nota. {@code null} si su worktree ya no se
-   * puede usar: entonces es un reintento como los demás.
+   * Lo que se añade al prompt de la reserva que sigue el trabajo de un agente sin cuota, o del
+   * principal que vuelve tras ella (CQ-B); {@code %s} es el proveedor que se quedó sin cuota.
    */
-  private Invocation afterQuota(AgentRun previous, Invocation invocation) {
+  static final String QUOTA_SWITCH_NOTE =
+      "\n\nNota: un agente de %s empezó esta tarea y se quedó sin cuota. El worktree conserva lo"
+          + " que hizo: revísalo y sigue desde ahí, sin rehacer lo que ya está bien.";
+
+  /**
+   * El intento que sigue a un agente que se quedó sin cuota (CQ-A): en su mismo worktree, sin
+   * volver a la instantánea. Con reserva (CQ-B), con el proveedor que diga {@link
+   * QuotaWaits#route}: la reserva si el principal sigue sin cuota para rato, o el principal.
+   *
+   * <p>Con el mismo proveedor reanuda su sesión si el proveedor lo permite y la sesión arrancó; si
+   * no, y al cambiar de proveedor, una sesión nueva con el prompt original y una nota. {@code null}
+   * si su worktree ya no se puede usar: entonces es un reintento como los demás.
+   */
+  private Invocation afterQuota(
+      AgentRun previous, Invocation invocation, AgentDefinition agent, UUID attemptId) {
     if (previous.getWorkspaceId() == null || invocation.command() != null) {
       return null;
     }
@@ -837,28 +856,91 @@ public class RunSteps {
         || workspaces.hasLiveInvocation(workspace.id())) {
       return null;
     }
+    EffectivePolicy policy = invocation.policy();
+    Invocation.Replacing replacing = null;
+    if (agent != null && agent.fallsBack()) {
+      QuotaWaits.Blocked primary = quotaWaits.route(agent, attemptId).orElse(null);
+      if (primary != null) {
+        policy = policy.withProvider(agent.fallback().provider(), agent.fallback().model());
+        replacing =
+            new Invocation.Replacing(primary.provider(), primary.window(), primary.resetsAt());
+      }
+    }
+    if (!policy.providerOrDefault().equals(previous.getProvider())) {
+      String note = QUOTA_SWITCH_NOTE.formatted(QuotaTexts.provider(previous.getProvider()));
+      Invocation switched =
+          Invocation.inWorkspace(invocation.prompt() + note, policy, workspace)
+              .retrying(previous, null);
+      return replacing == null ? switched : switched.asFallback(policy, replacing);
+    }
+    if (replacing == null && previous.getFallbackFrom() != null) {
+      // Una reserva que sigue: sigue sustituyendo al mismo.
+      replacing =
+          new Invocation.Replacing(
+              previous.getFallbackFrom(),
+              previous.getFallbackWindow(),
+              previous.getFallbackUntil());
+    }
     boolean resumable =
         AgentProviderKind.byId(previous.getProvider())
                 .map(k -> k.supports(Capability.RESUME))
                 .orElse(false)
             && SafeIds.isSessionId(previous.getProviderSessionId())
             && sessionStarted(previous);
-    if (resumable) {
-      return new Invocation(
-          AgentRunKind.RESUME,
-          previous,
-          UUID.fromString(previous.getProviderSessionId()),
-          QUOTA_RESUME_PROMPT,
-          invocation.policy(),
-          workspace.id(),
-          new ResumeFrom(
-              previous.getProviderSessionId(), false, workspace.path(), workspace.branch()),
-          null,
-          previous.getRunnerId());
+    Invocation continued =
+        resumable
+            ? new Invocation(
+                AgentRunKind.RESUME,
+                previous,
+                UUID.fromString(previous.getProviderSessionId()),
+                QUOTA_RESUME_PROMPT,
+                policy,
+                workspace.id(),
+                new ResumeFrom(
+                    previous.getProviderSessionId(), false, workspace.path(), workspace.branch()),
+                null,
+                previous.getRunnerId())
+            : Invocation.inWorkspace(invocation.prompt() + QUOTA_RETRY_NOTE, policy, workspace)
+                .retrying(previous, null);
+    return replacing == null ? continued : continued.asFallback(policy, replacing);
+  }
+
+  /**
+   * Un agente con reserva cuyo principal está sin cuota para rato arranca con la reserva (CQ-B). Lo
+   * que ya decidió {@link #afterQuota}, las reanudaciones y los comandos no cambian.
+   */
+  private Invocation routed(UUID attemptId, Invocation invocation, AgentDefinition agent) {
+    if (agent == null
+        || !agent.fallsBack()
+        || invocation.command() != null
+        || invocation.push() != null
+        || invocation.kind() == AgentRunKind.RESUME
+        || invocation.replacing() != null
+        || !invocation.policy().providerOrDefault().equals(agent.provider())) {
+      return invocation;
     }
-    return Invocation.inWorkspace(
-            invocation.prompt() + QUOTA_RETRY_NOTE, invocation.policy(), workspace)
-        .retrying(previous, null);
+    return quotaWaits
+        .route(agent, attemptId)
+        .map(
+            primary ->
+                invocation.asFallback(
+                    invocation
+                        .policy()
+                        .withProvider(agent.fallback().provider(), agent.fallback().model()),
+                    new Invocation.Replacing(
+                        primary.provider(), primary.window(), primary.resetsAt())))
+        .orElse(invocation);
+  }
+
+  /** El agente del YAML de la fase o de su hijo {@code child}, o {@code null} si no usa uno. */
+  private static AgentDefinition agentDefinition(
+      StageDefinition stage, String child, WorkflowDefinition definition) {
+    if (stage == null) {
+      return null;
+    }
+    String name =
+        child == null ? stage.agent() : stage.child(child).map(ChildDefinition::agent).orElse(null);
+    return name == null ? null : definition.agent(name).orElse(null);
   }
 
   private boolean sessionStarted(AgentRun agent) {
@@ -877,17 +959,23 @@ public class RunSteps {
    * Así no se gasta un arranque para fallar. Devuelve si espera.
    */
   private boolean waitForQuota(
-      WorkflowRun run, StageRun stage, Map<String, Invocation> invocations, Instant now) {
+      WorkflowRun run,
+      StageRun stage,
+      StageDefinition stageDefinition,
+      WorkflowDefinition definition,
+      Map<String, Invocation> invocations,
+      Instant now) {
     if (stage.getQuotaSkippedBy() != null) {
       return false;
     }
     QuotaWaits.Wait wait = null;
-    for (Invocation invocation : invocations.values()) {
+    for (Map.Entry<String, Invocation> entry : invocations.entrySet()) {
+      Invocation invocation = entry.getValue();
       if (invocation.command() != null || invocation.push() != null) {
         continue;
       }
       String provider =
-          invocation.parent() != null
+          invocation.kind() == AgentRunKind.RESUME && invocation.parent() != null
               ? invocation.parent().getProvider()
               : invocation.policy().providerOrDefault();
       QuotaWaits.Wait found =
@@ -895,6 +983,14 @@ public class RunSteps {
               .blocked(provider, invocation.policy().model(), invocation.runnerId())
               .flatMap(blocked -> quotaWaits.beforeStart(blocked, stage.getId()))
               .orElse(null);
+      AgentDefinition agent = agentDefinition(stageDefinition, entry.getKey(), definition);
+      if (found != null && agent != null && provider.equals(agent.provider())) {
+        // Con la reserva también sin cuota, sigue en cuanto se renueve una de las dos (CQ-B).
+        QuotaWaits.Wait fallback = quotaWaits.fallbackWait(agent, stage.getId()).orElse(null);
+        if (fallback != null && fallback.notBefore().isBefore(found.notBefore())) {
+          found = fallback;
+        }
+      }
       if (found != null && (wait == null || found.notBefore().isAfter(wait.notBefore()))) {
         wait = found;
       }

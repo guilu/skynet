@@ -11,6 +11,9 @@ inputs:
 agents:
   arquitectura:
     model: ${CLAUDE_FUERTE}
+    fallback:
+      provider: codex
+      model: ${CODEX_FUERTE}
     permissionMode: plan
     prompt: |
       Revisa la arquitectura y el diseño del repositorio para {{workItem.key}} ({{workItem.title}}). Foco: {{inputs.foco}}.
@@ -31,6 +34,9 @@ agents:
   tests:
     provider: codex
     model: ${CODEX_FUERTE}
+    fallback:
+      provider: claude-code
+      model: ${CLAUDE_FUERTE}
     permissionMode: plan
     prompt: |
       Revisa los tests del repositorio para {{workItem.key}} ({{workItem.title}}). Foco: {{inputs.foco}}.
@@ -72,6 +78,9 @@ agents:
               recommendation: {type: string}
   redactor:
     model: ${CLAUDE_GENERAL}
+    fallback:
+      provider: codex
+      model: ${CODEX_FUERTE}
     permissionMode: plan
     prompt: Redacta el informe de la revisión de {{workItem.key}}.
 

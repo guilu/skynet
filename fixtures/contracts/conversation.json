@@ -55,7 +55,8 @@
         "share" : 0.004,
         "method" : "measured"
       } ],
-      "simulated" : false
+      "simulated" : false,
+      "fallback" : null
     },
     "prompt" : "Implementa el importador de precios de modelos",
     "messages" : [ {
@@ -107,7 +108,8 @@
       "structuredOutput" : null,
       "failure" : null,
       "quota" : [ ],
-      "simulated" : false
+      "simulated" : false,
+      "fallback" : null
     },
     "prompt" : "Añade también los precios de caché",
     "messages" : [ {

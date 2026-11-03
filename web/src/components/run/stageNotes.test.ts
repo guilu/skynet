@@ -3,6 +3,7 @@ import type { Run, StageRun, StageStatus, VerificationResult } from '../../api'
 import {
   checkStates,
   earlierAttempts,
+  fallbackNote,
   isCorrecting,
   joinNames,
   latestAttempts,
@@ -77,6 +78,35 @@ describe('quotaNote', () => {
   it('ya pasada la hora, o sin espera, no dice nada', () => {
     expect(quotaNote(waiting('2026-11-02T12:00:00Z', '2026-11-02T12:00:30Z'), now)).toBeNull()
     expect(quotaNote(stage('implement', 'PENDING'), now)).toBeNull()
+  })
+})
+
+describe('fallbackNote', () => {
+  const now = new Date('2026-11-02T13:00:00Z').getTime()
+  type Agent = StageRun['agents'][number]
+  const withAgents = (status: StageStatus, ...agents: Partial<Agent>[]): StageRun => ({
+    ...stage('implement', status),
+    agents: agents.map((a) => ({ provider: 'claude-code', fallback: null, ...a }) as Agent),
+  })
+  const codex: Partial<Agent> = {
+    provider: 'codex',
+    fallback: { provider: 'claude-code', window: 'five_hour', resetsAt: '2026-11-02T15:04:00Z' },
+  }
+
+  it('dice quién sustituye a quién y hasta cuándo no tiene cuota', () => {
+    expect(fallbackNote(withAgents('RUNNING', {}, codex), now)).toMatch(
+      /^Sustituido por Codex \(Claude Code sin cuota hasta las \d\d:04\)$/,
+    )
+  })
+
+  it('sale en la nota de la fase mientras sigue', () => {
+    const s = withAgents('RUNNING', {}, codex)
+    expect(stageNote(s, run(s))).toMatch(/^Sustituido por Codex/)
+  })
+
+  it('si el último agente vuelve al principal, o no hay reserva, no dice nada', () => {
+    expect(fallbackNote(withAgents('RUNNING', {}, codex, {}), now)).toBeNull()
+    expect(fallbackNote(withAgents('RUNNING', {}), now)).toBeNull()
   })
 })
 

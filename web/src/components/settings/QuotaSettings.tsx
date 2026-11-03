@@ -55,13 +55,18 @@ function QuotaForm({ settings }: { settings: QuotaSettings }) {
   const queryClient = useQueryClient()
   const [maxWaitHours, setMaxWaitHours] = useState(settings.maxWaitHours)
   const [maxWaits, setMaxWaits] = useState(String(settings.maxWaits))
+  const [fallbackAfter, setFallbackAfter] = useState(String(settings.fallbackAfterMinutes))
   const save = useMutation({
     mutationFn: (body: Parameters<typeof api.saveQuotaSettings>[0]) => api.saveQuotaSettings(body),
     onSuccess: (saved) => queryClient.setQueryData(QUOTA_SETTINGS_KEY, saved),
   })
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    save.mutate({ maxWaitHours, maxWaits: Number(maxWaits) })
+    save.mutate({
+      maxWaitHours,
+      maxWaits: Number(maxWaits),
+      fallbackAfterMinutes: Number(fallbackAfter),
+    })
   }
   return (
     <>
@@ -110,6 +115,20 @@ function QuotaForm({ settings }: { settings: QuotaSettings }) {
           />
           <span className="hint">
             Para que un proveedor que no renueva su ventana no deje la fase esperando siempre.
+          </span>
+        </label>
+        <label>
+          Cambiar a la reserva si la espera pasa de (minutos)
+          <input
+            type="number"
+            min={0}
+            max={1440}
+            value={fallbackAfter}
+            onChange={(e) => setFallbackAfter(e.target.value)}
+          />
+          <span className="hint">
+            Solo para los agentes con <code>fallback</code> en el YAML: si la cuota tarda más en
+            renovarse, sigue el otro proveedor en el mismo worktree. Con 0, cambia siempre.
           </span>
         </label>
         <div>

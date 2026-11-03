@@ -138,6 +138,8 @@ export interface AgentRun {
   quota: QuotaShare[]
   /** Se ejecutó con un CLI simulado (fake-claude, fake-codex…), no con el real (AR-A). */
   simulated: boolean
+  /** El proveedor sin cuota al que sustituye como su reserva (CQ-B), o null. */
+  fallback: AgentFallback | null
   /** Tipo del último evento del agente, p. ej. `agent.tool.started`. */
   lastEventType: string | null
   /** Herramienta en curso, o null si no hay ninguna. */
@@ -255,11 +257,22 @@ export interface QuotaWait {
   resetsAt: string | null
 }
 
-/** «Continuar tras la cuota» (CQ-A). `maxWaitHours: 0` es sin límite. */
+/** A quién sustituye un agente que es la reserva de otro proveedor sin cuota (CQ-B). */
+export interface AgentFallback {
+  provider: string
+  window: QuotaWindowKind | null
+  resetsAt: string | null
+}
+
+/**
+ * «Continuar tras la cuota» (CQ-A). `maxWaitHours: 0` es sin límite. Con proveedor de reserva
+ * (CQ-B), se cambia a él si la espera pasa de `fallbackAfterMinutes`.
+ */
 export interface QuotaSettings {
   enabled: boolean
   maxWaitHours: number
   maxWaits: number
+  fallbackAfterMinutes: number
   updatedAt: string | null
 }
 
@@ -773,8 +786,13 @@ export interface AgentDefinition {
   provider: string | null
   /** JSON Schema de la salida estructurada, o null si no devuelve ninguna. */
   output: { type: 'object'; properties: Record<string, { type: string }> } | null
-  /** Qué hace si su cuenta se queda sin cuota (CQ-A): `wait` (también con null) o `fail`. */
-  onQuota: 'wait' | 'fail' | null
+  /**
+   * Qué hace si su cuenta se queda sin cuota (CQ-A): `wait`, `fail` o `fallback` (CQ-B). Con null,
+   * `fallback` si tiene reserva y `wait` si no.
+   */
+  onQuota: 'wait' | 'fail' | 'fallback' | null
+  /** Proveedor de reserva (CQ-B), o null. */
+  fallback: { provider: string; model: string | null } | null
 }
 
 /** Las macrofases de `phase`, en el orden de los carriles del grafo. */
@@ -1607,7 +1625,9 @@ export const api = {
     ),
   quotaSettings: () => request<QuotaSettings>('GET', '/api/settings/quota'),
   saveQuotaSettings: (
-    changes: Partial<Pick<QuotaSettings, 'enabled' | 'maxWaitHours' | 'maxWaits'>>,
+    changes: Partial<
+      Pick<QuotaSettings, 'enabled' | 'maxWaitHours' | 'maxWaits' | 'fallbackAfterMinutes'>
+    >,
   ) => request<QuotaSettings>('PUT', '/api/settings/quota', changes),
   quotaWaits: () => request<QuotaWaitRow[]>('GET', '/api/quota/waits'),
   cancelAgent: (id: string) => request<AgentRunDetail>('POST', `/api/agent-runs/${id}/cancel`),

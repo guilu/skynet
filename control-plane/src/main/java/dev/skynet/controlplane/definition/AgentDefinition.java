@@ -17,7 +17,10 @@ import java.util.Map;
  * @param output JSON Schema (un objeto con {@code properties}) de la salida estructurada que
  *     devuelve el agente, o {@code null}; las condiciones leen sus campos
  * @param onQuota qué hace si su cuenta se queda sin cuota (CQ-A): {@link #ON_QUOTA_WAIT} espera a
- *     que se renueve (lo de siempre, también con {@code null}) y {@link #ON_QUOTA_FAIL} falla
+ *     que se renueve, {@link #ON_QUOTA_FAIL} falla y {@link #ON_QUOTA_FALLBACK} (CQ-B) cambia a
+ *     {@code fallback} si la espera es larga. Con {@code null}, {@code fallback} si tiene reserva y
+ *     {@code wait} si no
+ * @param fallback proveedor de reserva (CQ-B), o {@code null}
  */
 public record AgentDefinition(
     String name,
@@ -31,13 +34,29 @@ public record AgentDefinition(
     String model,
     String provider,
     Map<String, Object> output,
-    String onQuota) {
+    String onQuota,
+    Fallback fallback) {
 
-  /** Esperar a que se renueve la cuota (CQ-A): lo que se hace si no se dice nada. */
+  /** Esperar a que se renueve la cuota (CQ-A): lo que se hace sin reserva si no se dice nada. */
   public static final String ON_QUOTA_WAIT = "wait";
 
   /** Fallar en cuanto se acaba la cuota, como antes de CQ. */
   public static final String ON_QUOTA_FAIL = "fail";
+
+  /**
+   * Cambiar al proveedor de reserva si la cuota tarda en renovarse (CQ-B): lo que se hace con
+   * reserva si no se dice nada.
+   */
+  public static final String ON_QUOTA_FALLBACK = "fallback";
+
+  /**
+   * El proveedor de reserva de un agente (CQ-B): quién sigue su trabajo si su cuenta se queda sin
+   * cuota para un rato.
+   *
+   * @param provider proveedor, distinto del del agente
+   * @param model modelo, o {@code null} para el predeterminado del proveedor
+   */
+  public record Fallback(String provider, String model) {}
 
   /** Proveedor por defecto. */
   public static final String CLAUDE_CODE = "claude-code";
@@ -53,6 +72,36 @@ public record AgentDefinition(
 
   public AgentDefinition {
     tools = tools == null ? null : List.copyOf(tools);
+  }
+
+  /** Un agente sin proveedor de reserva. */
+  public AgentDefinition(
+      String name,
+      String description,
+      String prompt,
+      List<String> tools,
+      String permissionMode,
+      Integer maxTurns,
+      BigDecimal maxBudgetUsd,
+      Integer timeoutMinutes,
+      String model,
+      String provider,
+      Map<String, Object> output,
+      String onQuota) {
+    this(
+        name,
+        description,
+        prompt,
+        tools,
+        permissionMode,
+        maxTurns,
+        maxBudgetUsd,
+        timeoutMinutes,
+        model,
+        provider,
+        output,
+        onQuota,
+        null);
   }
 
   /** Un agente con salida estructurada que espera a la cuota. */
@@ -80,12 +129,21 @@ public record AgentDefinition(
         model,
         provider,
         output,
+        null,
         null);
   }
 
-  /** Si espera a que se renueve la cuota en vez de fallar (CQ-A). */
+  /** Si espera a que se renueve la cuota (o cambia de proveedor) en vez de fallar (CQ-A). */
   public boolean waitsForQuota() {
     return !ON_QUOTA_FAIL.equals(onQuota);
+  }
+
+  /**
+   * Si cambia a su proveedor de reserva cuando la cuota tarda en renovarse (CQ-B): tiene reserva y
+   * no dice {@code wait} ni {@code fail}.
+   */
+  public boolean fallsBack() {
+    return fallback != null && (onQuota == null || ON_QUOTA_FALLBACK.equals(onQuota));
   }
 
   /** Un agente sin salida estructurada. */

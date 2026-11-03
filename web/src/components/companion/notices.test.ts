@@ -61,6 +61,12 @@ describe('noticeFor', () => {
       'limit',
       'Pausada por la cuota de Codex',
     ],
+    [
+      'agent.fallback.started',
+      { provider: 'codex', replaces: 'claude-code', resetsAt: '2026-11-02T15:04:00Z' },
+      'limit',
+      'Codex sustituye a Claude Code',
+    ],
   ])('%s %j avisa como %s', (type, payload, kind, title) => {
     const notice = noticeFor(event(type, payload), run, NOW)
     expect(notice).toMatchObject({ kind, title, runKey: run.workItemKey })
@@ -75,6 +81,8 @@ describe('noticeFor', () => {
     // Sin cuota avisa la fase al ponerse en pausa, con la hora a la que sigue.
     ['agent.rate_limit', { status: 'rejected', blocked: true }],
     ['stage.retry.scheduled', { attempt: 2 }],
+    // Cambia de proveedor sin esperar: avisa la reserva al arrancar.
+    ['stage.retry.scheduled', { reason: 'quota', provider: 'claude-code', switches: true }],
     ['approval.granted', { approvalId: 'a1' }],
   ])('%s %j no avisa: es un cambio interno', (type, payload) => {
     expect(noticeFor(event(type, payload), run, NOW)).toBeNull()

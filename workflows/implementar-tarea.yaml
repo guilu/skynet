@@ -16,6 +16,9 @@ agents:
       No cambies nada. Devuelve un resumen de cómo está organizado lo que toca la tarea, los ficheros que habrá que cambiar y los riesgos.
   desarrollador:
     model: ${CLAUDE_GENERAL}
+    fallback:
+      provider: codex
+      model: ${CODEX_FUERTE}
     permissionMode: acceptEdits
     prompt: |
       Implementa {{workItem.key}}: {{workItem.title}}.
@@ -26,6 +29,9 @@ agents:
   calidad:
     provider: codex
     model: ${CODEX_FUERTE}
+    fallback:
+      provider: claude-code
+      model: ${CLAUDE_FUERTE}
     permissionMode: plan
     prompt: |
       Revisa el cambio de {{workItem.key}} ({{workItem.title}}) respecto a la rama por defecto: corrección, tests y casos límite.

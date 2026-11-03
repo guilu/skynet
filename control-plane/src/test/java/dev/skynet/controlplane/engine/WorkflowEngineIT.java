@@ -186,6 +186,23 @@ class WorkflowEngineIT extends IntegrationTest {
           dependsOn: [implement]
       """;
 
+  /** Implementar con un agente de Claude Code que tiene Codex de reserva (CQ-B). */
+  static final String FALLBACK =
+      """
+      id: fallback
+      version: 1
+      agents:
+        desarrollador:
+          prompt: Implementa
+          fallback:
+            provider: codex
+            model: gpt-6.1
+      stages:
+        - id: implement
+          type: agent
+          agent: desarrollador
+      """;
+
   /** Implementar con un tiempo máximo, que se reintenta si se acaba (W6-B), y pasar los tests. */
   static final String TIMED =
       """
@@ -920,8 +937,120 @@ class WorkflowEngineIT extends IntegrationTest {
         .isEqualTo(1);
   }
 
+  /** Un runner con Claude Code y Codex. */
+  private Runner registerWithCodex(String name) {
+    return register(
+        name,
+        List.of(new ProviderInfo("claude-code", "2.1.288"), new ProviderInfo("codex", "0.160.0")));
+  }
+
+  @Test
+  void aLongWaitSwitchesToTheFallbackInTheSameWorktreeAndNewStagesStartWithIt() {
+    String definitionId = publish(FALLBACK);
+    Runner runner = registerWithCodex("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    JsonNode first = runner.claim().getFirst();
+    assertThat(first.path("start").path("provider").asString()).isEqualTo("claude-code");
+    Instant resets = Instant.now().plus(java.time.Duration.ofHours(2));
+    outOfQuota(runner, first, "/w/eng/implement", resets);
+
+    // Dos horas de espera pasan de 15 minutos: sigue ya Codex, en el mismo worktree.
+    JsonNode codex = awaitCommand(runner);
+    assertThat(codex.path("type").asString()).isEqualTo("START");
+    JsonNode start = codex.path("start");
+    assertThat(start.path("provider").asString()).isEqualTo("codex");
+    assertThat(start.path("model").asString()).isEqualTo("gpt-6.1");
+    assertThat(start.path("workspace").path("path").asString()).isEqualTo("/w/eng/implement");
+    assertThat(taskPrompt(start)).contains("Implementa").contains("Claude Code empezó esta tarea");
+    List<JsonNode> implement = stagesOf(get("/api/workflow-runs/" + runId), "implement");
+    assertThat(implement).hasSize(2);
+    assertThat(implement.get(1).path("quotaWait").isNull()).isTrue();
+    JsonNode fallback = implement.get(1).path("agents").get(0).path("fallback");
+    assertThat(fallback.path("provider").asString()).isEqualTo("claude-code");
+    assertThat(fallback.path("window").asString()).isEqualTo("five_hour");
+    assertThat(Instant.parse(fallback.path("resetsAt").asString()).getEpochSecond())
+        .isEqualTo(resets.getEpochSecond());
+    assertThat(eventTypes(runId)).contains("stage.retry.scheduled", "agent.fallback.started");
+    complete(runner, codex, "/w/eng/implement");
+    assertThat(stageStatuses(runId)).containsEntry("implement", "SUCCEEDED");
+
+    // Con Claude Code aún sin cuota, una ejecución nueva arranca ya con la reserva.
+    String second = launch(definitionId, Map.of()).path("id").asString();
+    JsonNode next = awaitCommand(runner);
+    assertThat(next.path("start").path("provider").asString()).isEqualTo("codex");
+    assertThat(eventTypes(second)).contains("agent.fallback.started");
+    assertThat(eventTypes(second)).doesNotContain("stage.quota.waiting");
+  }
+
+  @Test
+  void aShortWaitWaitsForTheMainProviderInsteadOfSwitching() {
+    String definitionId = publish(FALLBACK);
+    Runner runner = registerWithCodex("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    outOfQuota(
+        runner, runner.claim().getFirst(), "/w/eng/implement", Instant.now().plusSeconds(600));
+
+    // Diez minutos no pasan de 15: espera a Claude Code.
+    List<JsonNode> implement = stagesOf(get("/api/workflow-runs/" + runId), "implement");
+    assertThat(implement)
+        .extracting(f -> f.path("status").asString())
+        .containsExactly("FAILED", "PENDING");
+    assertThat(implement.get(1).path("quotaWait").path("provider").asString())
+        .isEqualTo("claude-code");
+    assertThat(runner.claim()).isEmpty();
+  }
+
+  @Test
+  void aFallbackOutOfQuotaGoesBackToTheMainProviderOnceItHasQuota() {
+    put("/api/settings/quota", Map.of("fallbackAfterMinutes", 0));
+    try {
+      String definitionId = publish(FALLBACK);
+      Runner runner = registerWithCodex("laptop");
+      String runId = launch(definitionId, Map.of()).path("id").asString();
+      outOfQuota(
+          runner, runner.claim().getFirst(), "/w/eng/implement", Instant.now().plusSeconds(2));
+      JsonNode codex = awaitCommand(runner);
+      assertThat(codex.path("start").path("provider").asString()).isEqualTo("codex");
+
+      // Codex también se queda sin cuota para una hora: en cuanto Claude Code la recupera, vuelve
+      // a él, con una sesión nueva en el mismo worktree.
+      outOfQuota(
+          runner,
+          codex,
+          "/w/eng/implement",
+          Instant.now().plusSeconds(3600),
+          "codex",
+          CODEX_SESSION);
+      JsonNode back = awaitCommand(runner);
+      assertThat(back.path("type").asString()).isEqualTo("START");
+      assertThat(back.path("start").path("provider").asString()).isEqualTo("claude-code");
+      assertThat(back.path("start").path("workspace").path("path").asString())
+          .isEqualTo("/w/eng/implement");
+      assertThat(taskPrompt(back.path("start"))).contains("Codex empezó esta tarea");
+      complete(runner, back, "/w/eng/implement");
+      assertThat(stageStatuses(runId)).containsEntry("implement", "SUCCEEDED");
+      assertThat(stagesOf(get("/api/workflow-runs/" + runId), "implement"))
+          .extracting(f -> f.path("agents").get(0).path("provider").asString())
+          .containsExactly("claude-code", "codex", "claude-code");
+    } finally {
+      put("/api/settings/quota", Map.of("fallbackAfterMinutes", 15));
+    }
+  }
+
+  private static final String CODEX_SESSION = "1f2e3d4c-5b6a-4978-8a7b-6c5d4e3f2a10";
+
   /** El agente arranca su sesión y el proveedor rechaza el turno porque se acabó la cuota. */
   private static void outOfQuota(Runner runner, JsonNode command, String worktree, Instant resets) {
+    outOfQuota(runner, command, worktree, resets, "claude-code", QUOTA_SESSION);
+  }
+
+  private static void outOfQuota(
+      Runner runner,
+      JsonNode command,
+      String worktree,
+      Instant resets,
+      String provider,
+      String session) {
     Events events = new Events(UUID.fromString(command.path("agentRunId").asString()));
     events.add(
         AgentEventType.WORKSPACE_READY,
@@ -934,15 +1063,20 @@ class WorkflowEngineIT extends IntegrationTest {
             "abc1234",
             "snapshot",
             "5a0001a"));
-    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", QUOTA_SESSION));
+    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", session));
     events.add(
         AgentEventType.RATE_LIMIT,
         Map.of(
-            "status", "rejected",
-            "blocked", true,
-            "provider", "claude-code",
-            "window", "five_hour",
-            "resetsAt", resets.getEpochSecond()));
+            "status",
+            "rejected",
+            "blocked",
+            true,
+            "provider",
+            provider,
+            "window",
+            "five_hour",
+            "resetsAt",
+            resets.getEpochSecond()));
     events.add(AgentEventType.RESULT, Map.of("subtype", "success", "isError", true));
     events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 1));
     runner.send(events);

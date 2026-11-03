@@ -85,15 +85,28 @@ class AgentQueue {
                 invocation.workspaceId(),
                 limits,
                 now)
-            : AgentRun.queued(
-                stage.getId(),
-                parent,
-                invocation.kind(),
-                invocation.sessionId(),
-                invocation.workspaceId(),
-                limits,
-                now);
+            : switchesProvider(invocation)
+                ? AgentRun.queued(
+                    stage.getId(),
+                    parent,
+                    policy.providerOrDefault(),
+                    invocation.sessionId(),
+                    invocation.workspaceId(),
+                    limits,
+                    now)
+                : AgentRun.queued(
+                    stage.getId(),
+                    parent,
+                    invocation.kind(),
+                    invocation.sessionId(),
+                    invocation.workspaceId(),
+                    limits,
+                    now);
     queued.forChild(childKey);
+    Invocation.Replacing replacing = invocation.replacing();
+    if (replacing != null) {
+      queued.replaces(replacing.provider(), replacing.window(), replacing.resetsAt());
+    }
     String memory = memoryMode(invocation, policy);
     queued.useMemory(memory);
     boolean noAgent = invocation.command() != null || invocation.push() != null;
@@ -176,6 +189,20 @@ class AgentQueue {
       spawned.put("memory", memoryPayload);
     }
     transitions.append("agent_run", agent.getId(), "agent.spawned", run.getId(), spawned, now);
+    if (replacing != null) {
+      Map<String, Object> fallback = new LinkedHashMap<>();
+      fallback.put("stageKey", stage.getStageKey());
+      if (childKey != null) {
+        fallback.put("childKey", childKey);
+      }
+      fallback.put("provider", agent.getProvider());
+      fallback.put("model", model);
+      fallback.put("replaces", replacing.provider());
+      fallback.put("window", replacing.window());
+      fallback.put("resetsAt", replacing.resetsAt());
+      transitions.append(
+          "agent_run", agent.getId(), "agent.fallback.started", run.getId(), fallback, now);
+    }
     publisher.publishEvent(
         new AgentRunQueued(
             agent.getId(),
@@ -200,6 +227,19 @@ class AgentQueue {
                 invocation.push()),
             invocation.runnerId()));
     return agent;
+  }
+
+  /**
+   * Si un reintento de agente cambia de proveedor respecto a su anterior (CQ-B): la reserva que
+   * sigue el trabajo de un agente sin cuota, o el principal que vuelve tras ella. Reanudar o
+   * bifurcar siguen con el proveedor de la sesión.
+   */
+  private static boolean switchesProvider(Invocation invocation) {
+    return invocation.kind() == AgentRunKind.RETRY
+        && invocation.command() == null
+        && invocation.push() == null
+        && invocation.policy().provider() != null
+        && !invocation.policy().providerOrDefault().equals(invocation.parent().getProvider());
   }
 
   /**
