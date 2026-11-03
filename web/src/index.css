@@ -1388,7 +1388,7 @@
   /* Cuando Skyny y el tono del estado no casan, la píldora toma el color de Skyny. */
   .pill-skyny[data-face='running'] {
     --soft: color-mix(in srgb, var(--skyny-orange) 16%, var(--surface));
-    --ink: color-mix(in srgb, var(--skyny-orange) 62%, var(--fg));
+    --ink: color-mix(in srgb, var(--skyny-orange) 45%, var(--fg));
   }
 
   .pill-skyny:is([data-face='reviewing'], [data-face='calm']) {
