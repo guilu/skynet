@@ -83,7 +83,8 @@
         "structuredOutput" : null,
         "failure" : null,
         "quota" : [ ],
-        "simulated" : false
+        "simulated" : false,
+        "fallback" : null
       } ],
       "verifications" : [ ],
       "approval" : null,

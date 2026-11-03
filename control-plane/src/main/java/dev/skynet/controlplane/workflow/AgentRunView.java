@@ -26,6 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
  * @param quota parte de las ventanas de cuota de su CLI que se le atribuye (CU-B); vacía si no hay
  *     muestras de cuota en el tiempo en que corrió
  * @param simulated se ejecutó con un CLI simulado (fake-claude, fake-codex…), no con el real (AR-A)
+ * @param fallback el proveedor sin cuota al que sustituye como su reserva (CQ-B), o {@code null}
  */
 public record AgentRunView(
     UUID id,
@@ -60,7 +61,24 @@ public record AgentRunView(
     JsonNode structuredOutput,
     String failure,
     List<QuotaShare> quota,
-    boolean simulated) {
+    boolean simulated,
+    FallbackView fallback) {
+
+  /**
+   * A quién sustituye una reserva (CQ-B).
+   *
+   * @param provider el proveedor que se quedó sin cuota
+   * @param window su ventana bloqueada ({@code five_hour} o {@code seven_day}), o {@code null}
+   * @param resetsAt cuándo se renueva, o {@code null} si no se sabe
+   */
+  public record FallbackView(String provider, String window, Instant resetsAt) {
+
+    static FallbackView of(AgentRun a) {
+      return a.getFallbackFrom() == null
+          ? null
+          : new FallbackView(a.getFallbackFrom(), a.getFallbackWindow(), a.getFallbackUntil());
+    }
+  }
 
   static AgentRunView of(AgentRun a, WorkspaceView workspace, List<QuotaShare> quota) {
     return new AgentRunView(
@@ -98,6 +116,7 @@ public record AgentRunView(
             : JsonMapper.shared().readTree(a.getStructuredOutput()),
         a.getFailure() == null ? null : a.getFailure().id(),
         quota == null ? List.of() : quota,
-        a.isSimulated());
+        a.isSimulated(),
+        FallbackView.of(a));
   }
 }

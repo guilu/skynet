@@ -1986,7 +1986,7 @@ class DefinitionParserTest {
   }
 
   @Test
-  void onQuotaOnlyAcceptsWaitOrFail() {
+  void onQuotaOnlyAcceptsWaitFailOrFallbackWithAFallback() {
     Parsed parsed =
         parse(
             """
@@ -2009,10 +2009,95 @@ class DefinitionParserTest {
 
     assertThat(messages(parsed, Severity.ERROR))
         .containsExactlyInAnyOrder(
-            "`onQuota: fallback` todavía no existe: llega con el proveedor de reserva (CQ-B)."
-                + " Usa `wait` o `fail`",
-            "`onQuota` vale `wait` (esperar a que se renueve la cuota, lo de siempre) o `fail`"
-                + " (fallar en cuanto se acabe); no `luego`");
+            "`onQuota: fallback` necesita un proveedor de reserva: añade `fallback: {provider:"
+                + " codex, model: …}` al agente",
+            "`onQuota` vale `wait` (esperar a que se renueve la cuota), `fail` (fallar en cuanto"
+                + " se acabe) o `fallback` (cambiar al proveedor de reserva); no `luego`");
+  }
+
+  @Test
+  void aFallbackIsAnotherProviderWithAnOptionalModel() {
+    Parsed parsed =
+        parse(
+            """
+            id: cuota
+            agents:
+              desarrollador:
+                model: sonnet
+                fallback:
+                  provider: codex
+                  model: gpt-6.1
+              revisor:
+                provider: codex
+                fallback: {provider: claude-code}
+              paciente:
+                fallback: {provider: antigravity}
+                onQuota: wait
+              explicito:
+                fallback: {provider: codex}
+                onQuota: fallback
+            stages:
+              - id: a
+                type: agent
+                agent: desarrollador
+                prompt: hola
+              - id: b
+                type: agent
+                agent: revisor
+                prompt: hola
+              - id: c
+                type: agent
+                agent: paciente
+                prompt: hola
+              - id: d
+                type: agent
+                agent: explicito
+                prompt: hola
+            """);
+
+    assertThat(errors(parsed)).isEmpty();
+    WorkflowDefinition definition = parsed.definition();
+    AgentDefinition desarrollador = definition.agent("desarrollador").orElseThrow();
+    assertThat(desarrollador.fallback())
+        .isEqualTo(new AgentDefinition.Fallback("codex", "gpt-6.1"));
+    assertThat(desarrollador.fallsBack()).isTrue();
+    assertThat(definition.agent("revisor").orElseThrow().fallback())
+        .isEqualTo(new AgentDefinition.Fallback("claude-code", null));
+    assertThat(definition.agent("paciente").orElseThrow().fallsBack()).isFalse();
+    assertThat(definition.agent("explicito").orElseThrow().fallsBack()).isTrue();
+    assertThat(messages(parsed, Severity.WARNING))
+        .containsExactly(
+            "Con `onQuota: wait` el agente no usa nunca su `fallback`: quítalo o pon `onQuota:"
+                + " fallback`");
+  }
+
+  @Test
+  void aFallbackNeedsAnotherProviderThatRuns() {
+    Parsed parsed =
+        parse(
+            """
+            id: cuota
+            agents:
+              mismo:
+                fallback: {provider: claude-code}
+              sin-proveedor:
+                fallback: {model: gpt-6.1}
+              retirado:
+                fallback: {provider: gemini}
+              raro:
+                fallback: {provider: codex, extra: 1}
+            stages:
+              - id: a
+                type: agent
+                agent: mismo
+                prompt: hola
+            """);
+
+    assertThat(messages(parsed, Severity.ERROR))
+        .anySatisfy(m -> assertThat(m).startsWith("La reserva tiene que ser otro proveedor"))
+        .anySatisfy(m -> assertThat(m).startsWith("`fallback` necesita `provider`"))
+        .anySatisfy(m -> assertThat(m).startsWith("Gemini CLI se ha retirado"))
+        .anySatisfy(m -> assertThat(m).contains("extra"));
   }
 
   private static Parsed parse(String yaml) {

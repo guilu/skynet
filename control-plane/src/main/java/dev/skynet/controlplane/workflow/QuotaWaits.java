@@ -63,8 +63,15 @@ public class QuotaWaits {
    *
    * @param blocked lo que se espera
    * @param notBefore cuándo puede seguir la fase
+   * @param switches si no espera porque cambia de proveedor (CQ-B): a la reserva o, desde ella, de
+   *     vuelta al principal
    */
-  public record Wait(Blocked blocked, Instant notBefore) {}
+  public record Wait(Blocked blocked, Instant notBefore, boolean switches) {
+
+    public Wait(Blocked blocked, Instant notBefore) {
+      this(blocked, notBefore, false);
+    }
+  }
 
   private final JdbcClient jdbc;
   private final QuotaSettings settings;
@@ -143,6 +150,12 @@ public class QuotaWaits {
    * vacío si no espera: apagado, el agente dice {@code onQuota: fail}, ya esperó {@code maxWaits}
    * veces o la renovación queda más allá de la espera máxima.
    *
+   * <p>Con proveedor de reserva (CQ-B), no espera nada si el otro proveedor del agente (la reserva,
+   * o el principal si el que falló era la reserva) tiene cuota y la espera pasa de {@code
+   * fallbackAfterMinutes} (o de la máxima); al principal se vuelve en cuanto tiene cuota. Si los
+   * dos están sin cuota, espera al primero que se renueve. Qué proveedor sigue lo decide {@link
+   * #route} al arrancar.
+   *
    * @param quotaFailures fallos {@code quota} de la fase, incluido este
    * @param blindFailures de ellos, los que no sabían cuándo se renovaba la cuota, incluido este
    */
@@ -168,7 +181,79 @@ public class QuotaWaits {
                 ? null
                 : snapshotBlock(agent.getRunnerId(), agent.getProvider(), agent.getModel(), now)
                     .orElse(null));
-    return waitFor(blocked, blindFailures, attemptId, now, view);
+    Optional<Wait> wait = waitFor(blocked, blindFailures, attemptId, now, view);
+    if (definition == null || !definition.fallsBack()) {
+      return wait;
+    }
+    boolean wasFallback = definition.fallback().provider().equals(agent.getProvider());
+    String other = wasFallback ? primaryProvider(definition) : definition.fallback().provider();
+    String otherModel = wasFallback ? definition.model() : definition.fallback().model();
+    Optional<Blocked> otherBlocked = blocked(other, otherModel, null);
+    if (otherBlocked.isEmpty()) {
+      // El principal con cuota se usa enseguida; la reserva, solo si la espera es larga.
+      return wasFallback || longWait(wait, now, view)
+          ? Optional.of(new Wait(blocked, now, true))
+          : wait;
+    }
+    return earliest(wait, waitFor(otherBlocked.get(), 0, attemptId, now, view));
+  }
+
+  /**
+   * Con qué proveedor arranca ahora un agente con reserva (CQ-B): su reserva si el principal está
+   * sin cuota, la reserva la tiene y la espera del principal pasa de {@code fallbackAfterMinutes}
+   * (o de la máxima). Vacío: con el principal (si los dos están sin cuota, la comprobación previa
+   * espera).
+   *
+   * @return lo que bloquea al principal
+   */
+  public Optional<Blocked> route(AgentDefinition definition, UUID attemptId) {
+    QuotaSettings.View view = settings.view();
+    if (!view.enabled() || definition == null || !definition.fallsBack()) {
+      return Optional.empty();
+    }
+    Optional<Blocked> primary = blocked(primaryProvider(definition), definition.model(), null);
+    if (primary.isEmpty()
+        || blocked(definition.fallback().provider(), definition.fallback().model(), null)
+            .isPresent()) {
+      return Optional.empty();
+    }
+    Instant now = time.now();
+    return longWait(waitFor(primary.get(), 0, attemptId, now, view), now, view)
+        ? primary
+        : Optional.empty();
+  }
+
+  /**
+   * Cuánto espera un agente con reserva cuyo principal está sin cuota si la reserva también lo
+   * está: hasta que se renueve la reserva. Vacío si la reserva tiene cuota o no hay.
+   */
+  public Optional<Wait> fallbackWait(AgentDefinition definition, UUID attemptId) {
+    QuotaSettings.View view = settings.view();
+    if (!view.enabled() || definition == null || !definition.fallsBack()) {
+      return Optional.empty();
+    }
+    return blocked(definition.fallback().provider(), definition.fallback().model(), null)
+        .flatMap(b -> waitFor(b, 0, attemptId, time.now(), view));
+  }
+
+  private static String primaryProvider(AgentDefinition definition) {
+    return definition.provider() == null ? AgentDefinition.CLAUDE_CODE : definition.provider();
+  }
+
+  /** Si la espera pasa de la que se aguanta antes de cambiar a la reserva (o no se espera). */
+  private static boolean longWait(Optional<Wait> wait, Instant now, QuotaSettings.View view) {
+    return wait.isEmpty()
+        || Duration.between(now, wait.get().notBefore()).compareTo(view.fallbackAfter()) > 0;
+  }
+
+  private static Optional<Wait> earliest(Optional<Wait> a, Optional<Wait> b) {
+    if (a.isEmpty()) {
+      return b;
+    }
+    if (b.isEmpty()) {
+      return a;
+    }
+    return b.get().notBefore().isBefore(a.get().notBefore()) ? b : a;
   }
 
   /**

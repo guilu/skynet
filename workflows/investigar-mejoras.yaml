@@ -11,6 +11,9 @@ inputs:
 agents:
   investigador:
     model: ${CLAUDE_FUERTE}
+    fallback:
+      provider: codex
+      model: ${CODEX_FUERTE}
     permissionMode: plan
     prompt: Propón las siguientes mejoras de este repositorio a partir de su memoria.
     output:

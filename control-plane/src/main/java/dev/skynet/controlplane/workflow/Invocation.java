@@ -3,6 +3,7 @@ package dev.skynet.controlplane.workflow;
 import dev.skynet.protocol.runner.PushBranch;
 import dev.skynet.protocol.runner.ResumeFrom;
 import dev.skynet.protocol.runner.WorkspaceRef;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -17,6 +18,8 @@ import java.util.UUID;
  * @param runnerId runner que debe ejecutarla, o {@code null} si vale cualquiera
  * @param command comando de shell de una fase {@code command}, o {@code null} para un agente
  * @param push rama que sube una fase {@code github-pr}, o {@code null} si no sube nada
+ * @param replacing el proveedor sin cuota al que sustituye, si es su reserva (CQ-B); si no, {@code
+ *     null}
  */
 record Invocation(
     AgentRunKind kind,
@@ -29,7 +32,44 @@ record Invocation(
     WorkspaceRef workspace,
     UUID runnerId,
     String command,
-    PushBranch push) {
+    PushBranch push,
+    Replacing replacing) {
+
+  /**
+   * El proveedor al que sustituye una reserva (CQ-B).
+   *
+   * @param provider el que se quedó sin cuota
+   * @param window su ventana bloqueada, o {@code null}
+   * @param resetsAt cuándo se renueva, o {@code null} si no se sabe
+   */
+  record Replacing(String provider, String window, Instant resetsAt) {}
+
+  Invocation(
+      AgentRunKind kind,
+      AgentRun parent,
+      UUID sessionId,
+      String prompt,
+      EffectivePolicy policy,
+      UUID workspaceId,
+      ResumeFrom resume,
+      WorkspaceRef workspace,
+      UUID runnerId,
+      String command,
+      PushBranch push) {
+    this(
+        kind,
+        parent,
+        sessionId,
+        prompt,
+        policy,
+        workspaceId,
+        resume,
+        workspace,
+        runnerId,
+        command,
+        push,
+        null);
+  }
 
   Invocation(
       AgentRunKind kind,
@@ -126,7 +166,28 @@ record Invocation(
         ref,
         runnerId,
         command,
-        push);
+        push,
+        replacing);
+  }
+
+  /**
+   * La misma invocación con la política de su proveedor de reserva, sustituyendo a {@code
+   * replacing} (CQ-B).
+   */
+  Invocation asFallback(EffectivePolicy fallbackPolicy, Replacing replaced) {
+    return new Invocation(
+        kind,
+        parent,
+        sessionId,
+        prompt,
+        fallbackPolicy,
+        workspaceId,
+        resume,
+        workspace,
+        runnerId,
+        command,
+        push,
+        replaced);
   }
 
   /**

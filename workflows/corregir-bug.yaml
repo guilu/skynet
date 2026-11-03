@@ -6,6 +6,9 @@ agents:
   reproductor:
     provider: codex
     model: ${CODEX_FUERTE}
+    fallback:
+      provider: claude-code
+      model: ${CLAUDE_FUERTE}
     permissionMode: acceptEdits
     prompt: |
       Reproduce el bug de {{workItem.key}}: {{workItem.title}}.
@@ -23,11 +26,17 @@ agents:
         cause: {type: string}
   desarrollador:
     model: ${CLAUDE_GENERAL}
+    fallback:
+      provider: codex
+      model: ${CODEX_FUERTE}
     permissionMode: acceptEdits
     prompt: Corrige el bug de {{workItem.key}} y confirma los cambios con un commit.
   vigia:
     provider: antigravity
     model: ${AGY_RAPIDO}
+    fallback:
+      provider: claude-code
+      model: ${CLAUDE_RAPIDO}
     permissionMode: plan
     prompt: |
       Revisa la corrección de {{workItem.key}} ({{workItem.title}}) respecto a la rama por defecto.

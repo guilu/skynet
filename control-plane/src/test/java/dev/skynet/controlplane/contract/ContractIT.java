@@ -194,7 +194,8 @@ class ContractIT extends IntegrationTest {
           List.of(
               new QuotaShare("claude-code", "default", "five_hour", 0.02, "measured"),
               new QuotaShare("claude-code", "default", "seven_day", 0.004, "measured")),
-          false);
+          false,
+          null);
     }
 
     static AgentRunView workingAgent() {
@@ -231,7 +232,8 @@ class ContractIT extends IntegrationTest {
           null,
           null,
           List.of(),
-          false);
+          false,
+          null);
     }
 
     static WorkspaceView worktree() {
@@ -281,7 +283,8 @@ class ContractIT extends IntegrationTest {
           null,
           null,
           List.of(),
-          false);
+          false,
+          null);
     }
 
     static ConversationView conversation() {

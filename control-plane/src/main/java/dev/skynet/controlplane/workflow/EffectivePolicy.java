@@ -60,6 +60,22 @@ record EffectivePolicy(
         stageMemory);
   }
 
+  /**
+   * La misma política con otro proveedor y su modelo ({@code null}: el predeterminado de su CLI):
+   * la de su proveedor de reserva (CQ-B).
+   */
+  EffectivePolicy withProvider(String otherProvider, String otherModel) {
+    return new EffectivePolicy(
+        allowedTools,
+        permissionMode,
+        environment,
+        limits,
+        otherModel,
+        outputSchema,
+        otherProvider,
+        memory);
+  }
+
   /** Proveedor efectivo: {@code claude-code} si el agente no pide otro. */
   String providerOrDefault() {
     return provider == null ? AgentProviderKind.CLAUDE_CODE.id() : provider;

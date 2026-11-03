@@ -9,6 +9,7 @@ export const COMPANION_EVENT_TYPES = [
   'stage.status.changed',
   'stage.retry.scheduled',
   'stage.quota.waiting',
+  'agent.fallback.started',
   'stage.verification.*',
   'agent.status.changed',
   'agent.rate_limit',
@@ -149,6 +150,8 @@ export function noticeFor(
     case 'stage.quota.waiting': {
       // Pausada hasta que se renueve la cuota (CQ-A); un reintento normal no avisa.
       if (event.type === 'stage.retry.scheduled' && p.reason !== 'quota') return null
+      // Sin esperar, con el otro proveedor del agente (CQ-B): avisa su reserva al arrancar.
+      if (p.switches) return null
       const at = typeof p.notBefore === 'string' ? new Date(p.notBefore) : null
       return {
         ...base,
@@ -157,6 +160,18 @@ export function noticeFor(
         body: at
           ? `${runKey} · sigue a las ${at.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
           : runKey,
+      }
+    }
+    case 'agent.fallback.started': {
+      const from = providerName(String(p.replaces ?? ''))
+      const at = typeof p.resetsAt === 'string' ? new Date(p.resetsAt) : null
+      return {
+        ...base,
+        kind: 'limit',
+        title: `${providerName(String(p.provider ?? ''))} sustituye a ${from}`,
+        body: at
+          ? `${runKey} · ${from} sin cuota hasta las ${at.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
+          : `${runKey} · ${from} sin cuota`,
       }
     }
     case 'agent.rate_limit': {

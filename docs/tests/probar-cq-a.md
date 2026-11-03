@@ -32,6 +32,8 @@ CQ-A (#212) es la primera PR del hito CQ (continuar tras la cuota). Cuando la cu
 - **Migración `V38`**: el fallo `QUOTA` en `agent_run`, sus columnas `quota_limited_at`, `quota_window` y `quota_resets_at`, y en `stage_run` las columnas `quota_provider`, `quota_window`, `quota_resets_at` y `quota_skipped_by`. Se aplica sola al arrancar.
 - **fake-claude**: con `FAKE_CLAUDE_QUOTA=<fichero>`, si el fichero existe, la invocación se queda sin cuota una vez. Deja `fake-claude-parcial.txt` en el worktree, avisa de que la ventana de 5 h se renueva en los segundos que diga el fichero (60 si está vacío) y borra el fichero.
 
+> Desde CQ-B, los agentes de los workflows iniciales tienen proveedor de reserva y con una espera de más de 15 minutos cambian a él en vez de esperar ([`probar-cq-b.md`](probar-cq-b.md)). Para repetir esta guía tal cual, usa un workflow cuyo agente no tenga `fallback` (o tenga `onQuota: wait`).
+
 Ninguna prueba de esta guía modifica ficheros versionados de skynet: lo que se crea va a `/tmp/cq-a`. Las secciones 1 a 3 no gastan cuota real. La 4 usa `guilu/demo-repo` y nunca skynet.
 
 ## 1. Pruebas automáticas

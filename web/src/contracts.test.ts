@@ -105,6 +105,7 @@ const AGENT_RUN: Keys<AgentRun> = {
   failure: true,
   quota: true,
   simulated: true,
+  fallback: true,
   id: true,
   stageRunId: true,
   parentAgentRunId: true,
@@ -560,6 +561,7 @@ const AGENT_DEFINITION: Keys<AgentDefinition> = {
   provider: true,
   output: true,
   onQuota: true,
+  fallback: true,
 }
 const STAGE_DEFINITION: Keys<StageDefinition> = {
   phase: true,

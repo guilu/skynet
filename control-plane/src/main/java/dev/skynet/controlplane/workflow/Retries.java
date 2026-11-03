@@ -49,12 +49,24 @@ record Retries(
    * gastar intentos de {@code retry}.
    */
   record Plan(
-      Duration delay, AgentFailure failure, List<FailedChild> children, QuotaWaits.Blocked quota) {
+      Duration delay,
+      AgentFailure failure,
+      List<FailedChild> children,
+      QuotaWaits.Blocked quota,
+      boolean switches) {
 
     static final Plan NONE = new Plan(null, null, List.of(), null);
 
     Plan(Duration delay, AgentFailure failure, List<FailedChild> children) {
       this(delay, failure, children, null);
+    }
+
+    Plan(
+        Duration delay,
+        AgentFailure failure,
+        List<FailedChild> children,
+        QuotaWaits.Blocked quota) {
+      this(delay, failure, children, quota, false);
     }
 
     boolean retries() {
@@ -82,8 +94,16 @@ record Retries(
         AgentRun agent, String child, int quotaFailures, int blindFailures, UUID attemptId);
   }
 
-  /** Cuánto se espera y a qué cuenta. */
-  record QuotaDelay(Duration delay, QuotaWaits.Blocked blocked) {}
+  /**
+   * Cuánto se espera y a qué cuenta; con {@code switches}, no se espera porque cambia de proveedor
+   * (CQ-B).
+   */
+  record QuotaDelay(Duration delay, QuotaWaits.Blocked blocked, boolean switches) {
+
+    QuotaDelay(Duration delay, QuotaWaits.Blocked blocked) {
+      this(delay, blocked, false);
+    }
+  }
 
   StageRun latest() {
     return attempts.getLast();
@@ -248,7 +268,7 @@ record Retries(
               .orElse(null);
       QuotaDelay wait = agent == null ? null : quotaDelay(agent, null, quota);
       if (wait != null) {
-        return new Plan(wait.delay(), failure, List.of(), wait.blocked());
+        return new Plan(wait.delay(), failure, List.of(), wait.blocked(), wait.switches());
       }
     }
     int attempts = attemptsInSeries();
@@ -263,6 +283,7 @@ record Retries(
     List<FailedChild> failed = new ArrayList<>();
     Duration delay = null;
     QuotaWaits.Blocked blocked = null;
+    boolean switches = false;
     for (ChildDefinition child : stage.children()) {
       AgentRun agent = latest.get(child.id());
       if (agent == null || agent.getStatus() == AgentObservableStatus.CANCELLED) {
@@ -288,12 +309,13 @@ record Retries(
       if (delay == null || wait.compareTo(delay) > 0) {
         delay = wait;
         blocked = quotaWait == null ? null : quotaWait.blocked();
+        switches = quotaWait != null && quotaWait.switches();
       }
     }
     if (failed.isEmpty()) {
       return Plan.NONE;
     }
-    return new Plan(delay, failed.getFirst().failure(), List.copyOf(failed), blocked);
+    return new Plan(delay, failed.getFirst().failure(), List.copyOf(failed), blocked, switches);
   }
 
   /**

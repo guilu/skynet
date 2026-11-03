@@ -66,7 +66,9 @@ public final class DefinitionParser {
           "model",
           "provider",
           "output",
-          "onQuota");
+          "onQuota",
+          "fallback");
+  static final Set<String> FALLBACK_KEYS = Set.of("provider", "model");
   static final Set<String> LIMIT_KEYS = Set.of("maxTurns", "maxBudgetUsd", "timeoutMinutes");
   static final Set<String> STAGE_KEYS =
       Set.of(
@@ -482,7 +484,9 @@ public final class DefinitionParser {
                       + " fija `permissionMode` (`plan` es solo lectura)");
             }
             Map<String, Object> output = output(fields.get("output"), path + ".output", "output");
-            String onQuota = onQuota(fields.get("onQuota"), path + ".onQuota");
+            AgentDefinition.Fallback fallback =
+                fallback(fields.get("fallback"), path + ".fallback", provider);
+            String onQuota = onQuota(fields.get("onQuota"), path + ".onQuota", fallback);
             Integer maxTurns = null;
             BigDecimal maxBudgetUsd = null;
             Integer timeoutMinutes = null;
@@ -526,37 +530,97 @@ public final class DefinitionParser {
                     model,
                     provider,
                     output,
-                    onQuota));
+                    onQuota,
+                    fallback));
           });
       return agents;
     }
 
-    /** {@code onQuota} de un agente (CQ-A): {@code wait} o {@code fail}. */
-    private String onQuota(Entry entry, String path) {
+    /**
+     * {@code onQuota} de un agente (CQ-A): {@code wait}, {@code fail} o, con reserva, {@code
+     * fallback} (CQ-B).
+     */
+    private String onQuota(Entry entry, String path, AgentDefinition.Fallback fallback) {
       String value = text(entry, path);
       if (value == null) {
         return null;
       }
-      if ("fallback".equals(value)) {
-        error(
-            entry.value(),
-            path,
-            "`onQuota: fallback` todavía no existe: llega con el proveedor de reserva (CQ-B)."
-                + " Usa `wait` o `fail`");
-        return null;
+      if (AgentDefinition.ON_QUOTA_FALLBACK.equals(value)) {
+        if (fallback == null) {
+          error(
+              entry.value(),
+              path,
+              "`onQuota: fallback` necesita un proveedor de reserva: añade `fallback: {provider:"
+                  + " codex, model: …}` al agente");
+          return null;
+        }
+        return value;
       }
       if (!AgentDefinition.ON_QUOTA_WAIT.equals(value)
           && !AgentDefinition.ON_QUOTA_FAIL.equals(value)) {
         error(
             entry.value(),
             path,
-            "`onQuota` vale `wait` (esperar a que se renueve la cuota, lo de siempre) o `fail`"
-                + " (fallar en cuanto se acabe); no `"
+            "`onQuota` vale `wait` (esperar a que se renueve la cuota), `fail` (fallar en cuanto"
+                + " se acabe) o `fallback` (cambiar al proveedor de reserva); no `"
                 + value
                 + "`");
         return null;
       }
+      if (fallback != null) {
+        warning(
+            entry.value(),
+            path,
+            "Con `onQuota: "
+                + value
+                + "` el agente no usa nunca su `fallback`: quítalo o pon `onQuota: fallback`");
+      }
       return value;
+    }
+
+    /**
+     * {@code fallback} de un agente (CQ-B): un proveedor que se pueda ejecutar, distinto del suyo,
+     * y un modelo opcional.
+     */
+    private AgentDefinition.Fallback fallback(Entry entry, String path, String agentProvider) {
+      if (entry == null || isNull(entry.value())) {
+        return null;
+      }
+      Map<String, Entry> fields = mapping(entry.value(), path, FALLBACK_KEYS, Map.of());
+      if (fields == null) {
+        return null;
+      }
+      Entry providerEntry = fields.get("provider");
+      if (providerEntry == null || text(providerEntry, path + ".provider") == null) {
+        error(
+            entry.value(),
+            path,
+            "`fallback` necesita `provider`: el proveedor que sigue si este se queda sin cuota ("
+                + AgentDefinition.CLAUDE_CODE
+                + ", "
+                + AgentDefinition.CODEX
+                + " o "
+                + AgentDefinition.ANTIGRAVITY
+                + ")");
+        return null;
+      }
+      String provider = provider(providerEntry, path + ".provider");
+      String model = model(fields.get("model"), path + ".model");
+      if (provider == null
+          || AgentDefinition.GEMINI.equals(provider)
+          || FUTURE_PROVIDERS.contains(provider)) {
+        return null;
+      }
+      if (provider.equals(agentProvider)) {
+        error(
+            providerEntry.value(),
+            path + ".provider",
+            "La reserva tiene que ser otro proveedor: la cuota es de la cuenta, así que `"
+                + provider
+                + "` también estaría sin ella. Cambiar de cuenta llegará con FL");
+        return null;
+      }
+      return new AgentDefinition.Fallback(provider, model);
     }
 
     /**

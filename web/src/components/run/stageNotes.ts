@@ -74,6 +74,20 @@ export function quotaNote(stage: StageRun, now: number = Date.now()): string | n
   return `${who} · vuelve a probar a las ${shortTime(stage.notBefore!, now)}`
 }
 
+/**
+ * «Sustituido por Codex (Claude Code sin cuota hasta las 15:04)» si el último agente de la fase es
+ * la reserva de un proveedor sin cuota (CQ-B).
+ */
+export function fallbackNote(stage: StageRun, now: number = Date.now()): string | null {
+  const agent = stage.agents.findLast((a) => a.fallback)
+  if (!agent?.fallback || agent !== stage.agents.at(-1)) return null
+  const from = providerName(agent.fallback.provider)
+  const until = agent.fallback.resetsAt
+    ? ` hasta las ${shortTime(agent.fallback.resetsAt, now)}`
+    : ''
+  return `Sustituido por ${providerName(agent.provider)} (${from} sin cuota${until})`
+}
+
 /** «Reintenta a las 10:30:15 (intento 2 de 3)» mientras un reintento espera su hora. */
 function retryNote(stage: StageRun): string | null {
   const quota = quotaNote(stage)
@@ -235,6 +249,8 @@ export function stageNote(stage: StageRun, run: Run): string {
   const deps = stage.dependsOn
   const retrying = retryNote(stage)
   if (retrying) return retrying
+  const fallback = fallbackNote(stage)
+  if (fallback && stage.status !== 'FAILED' && stage.status !== 'CANCELLED') return fallback
   if (stage.cancelling) return 'Cancelando: espera a que el runner pare sus agentes'
   if (stage.status === 'FAILED' && stage.timedOutAt)
     return stage.type === 'human-approval' ? 'Caducó sin decisión' : 'Falló: se acabó el tiempo'

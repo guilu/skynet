@@ -395,14 +395,24 @@ Las plantillas `especificar-planificar-implementar`, `implementar-tarea` y `corr
 agents:
   impaciente:
     provider: claude-code
-    onQuota: fail             # wait (por defecto) o fail; fallback llegará con el proveedor de reserva
+    onQuota: fail             # wait, fail o fallback; por defecto, fallback si tiene reserva y wait si no
+  desarrollador:
+    model: sonnet
+    fallback:                 # proveedor de reserva: sigue su trabajo si la cuota tarda en renovarse
+      provider: codex         # otro proveedor (claude-code, codex o antigravity)
+      model: gpt-6.1          # opcional: sin él, el de su CLI
 ```
 
 - La fase espera a la ventana bloqueada que más tarde se renueva, más 30 s y hasta 60 s de dispersión (`SKYNET_QUOTA_MARGIN`, `SKYNET_QUOTA_JITTER`), con un intento nuevo `PENDING` y `stage.retry.scheduled` con `reason: quota`, su `provider`, su `window` y su `resetsAt`. Sin hora de renovación, espera 30 minutos, como mucho 2 veces. Como mucho 4 esperas por fase.
 - Al seguir, el agente **reanuda su sesión en el mismo worktree**, sin restaurar la foto. Si el proveedor no puede reanudar, empieza una sesión nueva en el mismo worktree con una nota de que hay trabajo a medias.
 - Una fase lista cuyo proveedor está sin cuota en todos sus runners no arranca: espera igual (`stage.quota.waiting`), sin gastar nada. Mientras espera, la ejecución sigue «En curso» y conserva su hueco en la cola del repositorio.
 - Si la renovación queda más allá de la espera máxima (6 h por defecto), la fase falla con `quota` como cualquier fallo.
-- En **Ajustes → Ejecución** se apaga (falla como antes), se cambia la espera máxima (6 h, 24 h o sin límite) y las esperas por fase, y se ven las fases en pausa (`GET/PUT /api/settings/quota`, `GET /api/quota/waits`).
+- **Proveedor de reserva** (`fallback`): si la cuota del agente se renueva en más de 15 minutos (ajustable) o más allá de la espera máxima, no espera: un agente de la reserva sigue **en el mismo worktree**, con el prompt original, los mismos permisos y la misma salida estructurada, y una nota de que otro agente empezó la tarea (no se puede reanudar la sesión de otro proveedor). Si es menos, espera al principal.
+  - Las fases siguientes del mismo agente arrancan ya con la reserva mientras el principal siga sin cuota, y vuelven a él cuando la recupera.
+  - Si la reserva también se queda sin cuota, se vuelve al principal en cuanto tenga; si los dos están sin ella, espera al primero que se renueve.
+  - En el progreso, «Sustituido por Codex (Claude Code sin cuota hasta las 18:05)»; un aviso al cambiar y, en Actividad, `agent.fallback.started`. El coste y la cuota se apuntan a la reserva. La API lo enseña en `fallback` del agente.
+  - Cambiar a otra cuenta del mismo proveedor no es una reserva (es un error en el YAML): llegará con FL.
+- En **Ajustes → Ejecución** se apaga (falla como antes), se cambia la espera máxima (6 h, 24 h o sin límite), las esperas por fase y a partir de cuántos minutos se cambia a la reserva, y se ven las fases en pausa (`GET/PUT /api/settings/quota`, `GET /api/quota/waits`).
 - En el progreso, la fase dice «Esperando la cuota de Claude Code · se renueva a las 18:05 (ventana de 5 h)» y ofrece **Reintentar ahora** (`POST /api/workflow-runs/{id}/stages/{key}/skip-quota-wait`), que la arranca ya sin mirar la cuota. En una ejecución lanzada desde una issue, Skynet lo comenta en ella.
 
 **Límites de tiempo.** `timeout` limita lo que puede durar cada intento de una fase, desde que queda lista (`READY`) hasta que termina, incluidas la espera a un runner y sus comprobaciones:

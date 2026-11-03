@@ -114,8 +114,25 @@
           }
         },
         "onQuota": {
-          "description": "Qué hace el agente si su cuenta se queda sin cuota (la ventana de 5 h o la semanal): wait (por defecto) espera a que se renueve y sigue en el mismo worktree; fail hace fallar la fase.",
-          "enum": ["wait", "fail"]
+          "description": "Qué hace el agente si su cuenta se queda sin cuota (la ventana de 5 h o la semanal): wait espera a que se renueve y sigue en el mismo worktree; fail hace fallar la fase; fallback cambia al proveedor de reserva si la espera es larga. Por defecto, fallback si tiene reserva y wait si no.",
+          "enum": ["wait", "fail", "fallback"]
+        },
+        "fallback": {
+          "description": "Proveedor de reserva: si la cuota del agente tarda en renovarse, un agente de este proveedor sigue su trabajo en el mismo worktree.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider"],
+          "properties": {
+            "provider": {
+              "description": "Otro proveedor distinto del del agente.",
+              "enum": ["claude-code", "codex", "antigravity"]
+            },
+            "model": {
+              "description": "Modelo de la reserva. Por defecto, el de su CLI.",
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/\\[\\]-]{0,99}$"
+            }
+          }
         }
       }
     },

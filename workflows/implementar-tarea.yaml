@@ -6,6 +6,9 @@ agents:
   explorador:
     provider: antigravity
     model: ${AGY_RAPIDO}
+    fallback:
+      provider: claude-code
+      model: ${CLAUDE_RAPIDO}
     permissionMode: plan
     prompt: |
       Antes de implementar {{workItem.key}} ({{workItem.title}}), explora el repositorio y prepara el terreno.
@@ -16,6 +19,9 @@ agents:
       No cambies nada. Devuelve un resumen de cómo está organizado lo que toca la tarea, los ficheros que habrá que cambiar y los riesgos.
   desarrollador:
     model: ${CLAUDE_GENERAL}
+    fallback:
+      provider: codex
+      model: ${CODEX_FUERTE}
     permissionMode: acceptEdits
     prompt: |
       Implementa {{workItem.key}}: {{workItem.title}}.
@@ -26,6 +32,9 @@ agents:
   calidad:
     provider: codex
     model: ${CODEX_FUERTE}
+    fallback:
+      provider: claude-code
+      model: ${CLAUDE_FUERTE}
     permissionMode: plan
     prompt: |
       Revisa el cambio de {{workItem.key}} ({{workItem.title}}) respecto a la rama por defecto: corrección, tests y casos límite.
@@ -38,6 +47,9 @@ agents:
   seguridad:
     provider: antigravity
     model: ${AGY_FUERTE}
+    fallback:
+      provider: claude-code
+      model: ${CLAUDE_FUERTE}
     permissionMode: plan
     prompt: |
       Revisa la seguridad del cambio de {{workItem.key}} ({{workItem.title}}) respecto a la rama por defecto: entradas, secretos, permisos y dependencias.
