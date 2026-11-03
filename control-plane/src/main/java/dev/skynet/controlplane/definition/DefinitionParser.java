@@ -103,7 +103,8 @@ public final class DefinitionParser {
           "fix",
           "maxRounds",
           "method",
-          "deleteBranch");
+          "deleteBranch",
+          "judge");
   static final Set<String> CHILD_KEYS = Set.of("id", "agent", "prompt", "retry");
   static final Set<String> RETRY_KEYS = Set.of("maxAttempts", "on", "delay");
   static final Set<String> PULL_REQUEST_KEYS = Set.of("title", "body", "base", "draft", "labels");
@@ -118,6 +119,18 @@ public final class DefinitionParser {
 
   /** Las claves de una fase {@code github-merge} (EN-C). */
   static final List<String> MERGE_KEYS = List.of("method", "deleteBranch");
+
+  /** Las claves del bloque {@code judge} de una fase {@code verification} (VA-B). */
+  static final Set<String> JUDGE_KEYS = Set.of("agents", "rubric", "rubricFile", "threshold");
+
+  /** Las claves de un juez de {@code judge.agents} escrito como objeto. */
+  static final Set<String> JUDGE_AGENT_KEYS = Set.of("agent", "lens");
+
+  /** Las claves de un criterio de {@code judge.rubric}. */
+  static final Set<String> CRITERION_KEYS = Set.of("id", "text", "weight", "required");
+
+  /** El id de un criterio de la rúbrica. */
+  static final Pattern CRITERION_ID = Pattern.compile("[a-z][a-z0-9_-]{0,39}");
 
   /** Las claves de una fase {@code github-check} (EN-B). */
   static final List<String> CI_KEYS = List.of("required", "ifNoChecks", "fix", "maxRounds");
@@ -285,6 +298,11 @@ public final class DefinitionParser {
       List<AgentDefinition> agents = agents(fields.get("agents"));
       workflowProtected = globs(fields.get("protected"), "protected", "protected");
       Entry stagesEntry = fields.get("stages");
+      if (stagesEntry != null) {
+        List<String> all = new ArrayList<>(workflowProtected);
+        rubricFiles(stagesEntry.value()).stream().filter(f -> !all.contains(f)).forEach(all::add);
+        workflowProtected = List.copyOf(all);
+      }
       if (stagesEntry == null) {
         error(root, "stages", "Falta `stages`: la lista de fases del workflow");
         return done(key, null);
@@ -301,6 +319,42 @@ public final class DefinitionParser {
           new WorkflowDefinition(
               key, name, description, inputs, agents, stages.stream().map(StageAt::stage).toList());
       return done(key, definition);
+    }
+
+    /**
+     * Los {@code judge.rubricFile} de las fases (VA-B), leídos del YAML sin validar: quedan
+     * protegidos en todas las fases de agente, para que nadie cambie la rúbrica con la que se le
+     * juzga. Los errores se dan al leer cada fase.
+     */
+    private static List<String> rubricFiles(Node stages) {
+      List<String> files = new ArrayList<>();
+      if (!(stages instanceof SequenceNode sequence)) {
+        return files;
+      }
+      for (Node stage : sequence.getValue()) {
+        Node judge = child(stage, "judge");
+        Node file = judge == null ? null : child(judge, "rubricFile");
+        if (file instanceof ScalarNode scalar
+            && !isNull(file)
+            && insideRepository(scalar.getValue())
+            && !files.contains(scalar.getValue())) {
+          files.add(scalar.getValue());
+        }
+      }
+      return files;
+    }
+
+    /** El valor de la clave {@code key} de un objeto del YAML, o {@code null}. */
+    private static Node child(Node node, String key) {
+      if (!(node instanceof MappingNode mapping)) {
+        return null;
+      }
+      for (NodeTuple tuple : mapping.getValue()) {
+        if (tuple.getKeyNode() instanceof ScalarNode k && k.getValue().equals(key)) {
+          return tuple.getValueNode();
+        }
+      }
+      return null;
     }
 
     private Parsed done(String key, WorkflowDefinition definition) {
@@ -1088,6 +1142,7 @@ public final class DefinitionParser {
       PullRequestSpec pullRequest = pullRequest(fields, type, node, path);
       CiSpec ci = ci(fields, type, path);
       MergeSpec merge = merge(fields, type, path);
+      JudgeSpec judge = judge(fields, type, path);
       Entry schemaEntry = fields.get("outputSchema");
       Map<String, Object> outputSchema = null;
       String outputSchemaPath = null;
@@ -1129,7 +1184,8 @@ public final class DefinitionParser {
               memory,
               pullRequest,
               ci,
-              merge);
+              merge,
+              judge);
       return new StageAt(stage, path, node, fields, dependencyNodes, children);
     }
 
@@ -1245,12 +1301,15 @@ public final class DefinitionParser {
             path + ".scope",
             "`scope` no se comprueba: añade `scope` a `checks`");
       }
-      if (type == StageType.VERIFICATION && checks.isEmpty() && used.isEmpty()) {
+      if (type == StageType.VERIFICATION
+          && checks.isEmpty()
+          && used.isEmpty()
+          && fields.get("judge") == null) {
         error(
             node,
             path + ".checks",
-            "A esta fase le falta qué comprobar: `artifacts` (ficheros que tienen que existir) o"
-                + " `checks`, p. ej. `checks: [tests, diff]`");
+            "A esta fase le falta qué comprobar: `artifacts` (ficheros que tienen que existir),"
+                + " `checks`, p. ej. `checks: [tests, diff]`, o un `judge`");
       }
       testsIntact(fields, checks, path);
       protectedPaths(fields, type, checks, scope, path);
@@ -1930,13 +1989,21 @@ public final class DefinitionParser {
       if (type != StageType.GITHUB_CHECK) {
         for (String key : CI_KEYS) {
           Entry used = fields.get(key);
-          if (used != null && type.executable()) {
+          boolean judged =
+              type == StageType.VERIFICATION
+                  && fields.get("judge") != null
+                  && List.of("fix", "maxRounds").contains(key);
+          if (used != null && type.executable() && !judged) {
             error(
                 used.key(),
                 path + "." + key,
                 "`"
                     + key
-                    + "` solo vale en fases `type: github-check`; esta es `"
+                    + "` solo vale en fases `type: github-check`"
+                    + (type == StageType.VERIFICATION && List.of("fix", "maxRounds").contains(key)
+                        ? " o en una `verification` con `judge`"
+                        : "")
+                    + "; esta es `"
                     + type.yaml()
                     + "`");
           }
@@ -1994,6 +2061,207 @@ public final class DefinitionParser {
       }
       return new CiSpec(
           required, ifNoChecks, fix, maxRounds == null ? CiSpec.DEFAULT_MAX_ROUNDS : maxRounds);
+    }
+
+    /**
+     * El bloque {@code judge} de una fase {@code verification} (VA-B), con {@code fix} y {@code
+     * maxRounds} de la fase: quién juzga y con qué lente, con qué rúbrica, con qué umbral y quién
+     * corrige si suspende. Que los agentes existan y {@code fix} se comprueba con las demás fases.
+     */
+    private JudgeSpec judge(Map<String, Entry> fields, StageType type, String path) {
+      Entry entry = fields.get("judge");
+      if (entry == null) {
+        return null;
+      }
+      String at = path + ".judge";
+      if (type != StageType.VERIFICATION) {
+        if (type.executable()) {
+          error(
+              entry.key(),
+              at,
+              "`judge` solo vale en fases `type: verification`; esta es `" + type.yaml() + "`");
+        }
+        return null;
+      }
+      Map<String, Entry> judge = mapping(entry.value(), at, JUDGE_KEYS, Map.of());
+      if (judge == null) {
+        return null;
+      }
+      List<JudgeSpec.Judge> agents = judgeAgents(judge.get("agents"), entry, at);
+      String rubricFile = null;
+      Entry fileEntry = judge.get("rubricFile");
+      if (fileEntry != null) {
+        rubricFile = text(fileEntry, at + ".rubricFile");
+        if (rubricFile != null && !insideRepository(rubricFile)) {
+          error(
+              fileEntry.value(),
+              at + ".rubricFile",
+              "`rubricFile: "
+                  + rubricFile
+                  + "` tiene que ser una ruta dentro del repositorio, p. ej."
+                  + " `.skynet/rubricas/backend.md`");
+          rubricFile = null;
+        }
+      }
+      List<JudgeSpec.Criterion> rubric = rubric(judge.get("rubric"), at + ".rubric");
+      if (fileEntry != null && judge.get("rubric") != null) {
+        error(
+            fileEntry.key(),
+            at + ".rubricFile",
+            "La rúbrica va en `rubric` o en `rubricFile`, no en los dos: quita uno");
+        rubricFile = null;
+      }
+      BigDecimal threshold =
+          decimal(judge.get("threshold"), at + ".threshold", BigDecimal.ONE, new BigDecimal(5));
+      String fix = text(fields.get("fix"), path + ".fix");
+      Integer maxRounds = integer(fields.get("maxRounds"), path + ".maxRounds", 1, 5);
+      if (fields.get("maxRounds") != null && fix == null) {
+        error(
+            fields.get("maxRounds").key(),
+            path + ".maxRounds",
+            "`maxRounds` son las rondas de corrección: sin `fix` no hay ninguna");
+      }
+      return new JudgeSpec(
+          agents,
+          rubric,
+          rubricFile,
+          threshold,
+          fix,
+          maxRounds == null ? JudgeSpec.DEFAULT_MAX_ROUNDS : maxRounds);
+    }
+
+    /** Los jueces de {@code judge.agents}: un nombre de agente o {@code {agent, lens}}. */
+    private List<JudgeSpec.Judge> judgeAgents(Entry entry, Entry judge, String at) {
+      List<JudgeSpec.Judge> agents = new ArrayList<>();
+      if (entry == null || isNull(entry.value())) {
+        error(
+            judge.key(),
+            at + ".agents",
+            "Al juez le faltan sus agentes: `agents: [juez-calidad]`, con agentes de `agents`");
+        return agents;
+      }
+      if (!(entry.value() instanceof SequenceNode sequence)) {
+        error(
+            entry.value(),
+            at + ".agents",
+            "`agents` debe ser una lista, p. ej. `agents: [juez-calidad, juez-seguridad]`");
+        return agents;
+      }
+      Set<String> seen = new HashSet<>();
+      for (int i = 0; i < sequence.getValue().size(); i++) {
+        Node item = sequence.getValue().get(i);
+        String itemPath = at + ".agents[" + i + "]";
+        String name;
+        String lens = null;
+        if (item instanceof MappingNode) {
+          Map<String, Entry> judgeFields = mapping(item, itemPath, JUDGE_AGENT_KEYS, Map.of());
+          if (judgeFields == null) {
+            continue;
+          }
+          if (judgeFields.get("agent") == null) {
+            error(item, itemPath + ".agent", "A este juez le falta `agent`");
+            continue;
+          }
+          name = text(judgeFields.get("agent"), itemPath + ".agent");
+          lens = text(judgeFields.get("lens"), itemPath + ".lens");
+          if (lens != null && !JudgeSpec.LENSES.contains(lens)) {
+            error(
+                judgeFields.get("lens").value(),
+                itemPath + ".lens",
+                "`lens: "
+                    + lens
+                    + "` no se conoce"
+                    + suggestion(lens, JudgeSpec.LENSES)
+                    + ". Admite: "
+                    + String.join(", ", JudgeSpec.LENSES));
+            lens = null;
+          }
+        } else {
+          name = scalarText(item, itemPath);
+        }
+        if (name == null) {
+          continue;
+        }
+        if (!seen.add(name)) {
+          error(
+              item,
+              itemPath,
+              "`" + name + "` ya es juez de esta fase: cada agente juzga una vez por ronda");
+          continue;
+        }
+        if (agents.size() == JudgeSpec.MAX_JUDGES) {
+          error(
+              item,
+              itemPath,
+              "Como mucho " + JudgeSpec.MAX_JUDGES + " jueces por fase: quita `" + name + "`");
+          continue;
+        }
+        agents.add(new JudgeSpec.Judge(name, lens));
+      }
+      if (agents.isEmpty() && sequence.getValue().isEmpty()) {
+        error(entry.value(), at + ".agents", "`agents` está vacía: pon al menos un juez");
+      }
+      return agents;
+    }
+
+    /** Los criterios de {@code judge.rubric}: {@code {id, text, weight, required}}. */
+    private List<JudgeSpec.Criterion> rubric(Entry entry, String at) {
+      List<JudgeSpec.Criterion> criteria = new ArrayList<>();
+      if (entry == null || isNull(entry.value())) {
+        return criteria;
+      }
+      if (!(entry.value() instanceof SequenceNode sequence) || sequence.getValue().isEmpty()) {
+        error(
+            entry.value(),
+            at,
+            "`rubric` debe ser una lista de criterios, p. ej. `- {id: resuelve, text: \"Resuelve"
+                + " la tarea\", weight: 3, required: true}`");
+        return criteria;
+      }
+      Set<String> seen = new HashSet<>();
+      for (int i = 0; i < sequence.getValue().size(); i++) {
+        Node item = sequence.getValue().get(i);
+        String itemPath = at + "[" + i + "]";
+        Map<String, Entry> fields = mapping(item, itemPath, CRITERION_KEYS, Map.of());
+        if (fields == null) {
+          continue;
+        }
+        if (fields.get("id") == null || fields.get("text") == null) {
+          error(
+              item,
+              itemPath,
+              "A este criterio le falta "
+                  + (fields.get("id") == null ? "`id`" : "`text`")
+                  + ": `{id: tests, text: \"Los tests cubren el cambio\"}`");
+          continue;
+        }
+        String id = text(fields.get("id"), itemPath + ".id");
+        String text = text(fields.get("text"), itemPath + ".text");
+        Integer weight = integer(fields.get("weight"), itemPath + ".weight", 1, 10);
+        Object required = bool(fields.get("required"), itemPath + ".required");
+        if (id == null || text == null) {
+          continue;
+        }
+        if (!CRITERION_ID.matcher(id).matches()) {
+          error(
+              fields.get("id").value(),
+              itemPath + ".id",
+              "`"
+                  + id
+                  + "` no vale como id de criterio: usa minúsculas, números, - y _ empezando por"
+                  + " una letra");
+          continue;
+        }
+        if (!seen.add(id)) {
+          error(
+              fields.get("id").value(), itemPath + ".id", "El criterio `" + id + "` está repetido");
+          continue;
+        }
+        criteria.add(
+            new JudgeSpec.Criterion(
+                id, text, weight == null ? 1 : weight, Boolean.TRUE.equals(required)));
+      }
+      return criteria;
     }
 
     /**
@@ -2183,6 +2451,10 @@ public final class DefinitionParser {
                 at.path() + ".dependsOn",
                 "Una fase `verification` comprueba el worktree de la fase de la que depende:"
                     + " ponla en `dependsOn` detrás de una fase `agent`, `command` o `parallel`");
+          }
+          if (stage.judge() != null) {
+            stage.judge().agents().forEach(j -> usedAgents.add(j.agent()));
+            checkJudge(at, byId, agentsByName);
           }
           checkWorkspace(at, byId);
           continue;
@@ -2449,6 +2721,134 @@ public final class DefinitionParser {
     }
 
     /**
+     * El juez de una fase {@code verification} (VA-B): que sus agentes existan, que {@code fix} sea
+     * una fase {@code agent} de la que depende, y los avisos de independencia: un juez con el mismo
+     * proveedor y modelo que el agente que juzga, una reserva que es el proveedor del autor y
+     * varios jueces sin lente.
+     */
+    private void checkJudge(
+        StageAt at, Map<String, StageAt> byId, Map<String, AgentDefinition> agentsByName) {
+      JudgeSpec judge = at.stage().judge();
+      Entry judgeEntry = at.fields().get("judge");
+      String path = at.path() + ".judge";
+      Set<String> ancestors = ancestors(at.stage().id(), byId);
+      StageAt judged = judgedStage(at, byId);
+      AgentDefinition author =
+          judged == null || judged.stage().agent() == null
+              ? null
+              : agentsByName.get(judged.stage().agent());
+      String authorProvider = author == null ? null : providerOf(author);
+      int withoutLens = 0;
+      for (int i = 0; i < judge.agents().size(); i++) {
+        JudgeSpec.Judge j = judge.agents().get(i);
+        AgentDefinition agent = agentsByName.get(j.agent());
+        if (agent == null) {
+          error(
+              judgeEntry.key(),
+              path + ".agents[" + i + "]",
+              "No hay ningún agente `"
+                  + j.agent()
+                  + "` en `agents`"
+                  + suggestion(j.agent(), agentsByName.keySet()));
+          continue;
+        }
+        withoutLens += j.lens() == null ? 1 : 0;
+        if (judged != null
+            && judged.stage().type() == StageType.AGENT
+            && providerOf(agent).equals(providerOf(author))
+            && java.util.Objects.equals(agent.model(), author == null ? null : author.model())) {
+          warning(
+              judgeEntry.key(),
+              path + ".agents[" + i + "]",
+              "El juez `"
+                  + j.agent()
+                  + "` usa el mismo modelo que `"
+                  + judged.stage().id()
+                  + "`: es menos independiente. Mejor otro proveedor u otro modelo");
+        }
+        if (agent.fallsBack()
+            && authorProvider != null
+            && agent.fallback().provider().equals(authorProvider)) {
+          warning(
+              judgeEntry.key(),
+              path + ".agents[" + i + "]",
+              "La reserva del juez `"
+                  + j.agent()
+                  + "` es `"
+                  + authorProvider
+                  + "`, el proveedor de `"
+                  + judged.stage().id()
+                  + "`: si se queda sin cuota, esperará en vez de cambiar a ella");
+        }
+      }
+      if (withoutLens > 1) {
+        warning(
+            judgeEntry.key(),
+            path + ".agents",
+            "Hay "
+                + withoutLens
+                + " jueces sin lente mirando lo mismo: dan más con lentes distintas, p. ej."
+                + " `{agent: juez-calidad, lens: correctness}` y `{agent: juez-seguridad, lens:"
+                + " security}`");
+      }
+      Entry fixEntry = at.fields().get("fix");
+      String fix = judge.fix();
+      if (fixEntry == null || fix == null) {
+        return;
+      }
+      StageAt target = byId.get(fix);
+      if (target == null) {
+        error(
+            fixEntry.value(),
+            at.path() + ".fix",
+            "No hay ninguna fase `" + fix + "`" + suggestion(fix, byId.keySet()));
+      } else if (target.stage().type() != StageType.AGENT) {
+        error(
+            fixEntry.value(),
+            at.path() + ".fix",
+            "`"
+                + fix
+                + "` es una fase `"
+                + target.stage().type().yaml()
+                + "`: lo que suspende el juez lo corrige el agente de una fase `agent`");
+      } else if (!ancestors.contains(fix)) {
+        error(
+            fixEntry.value(),
+            at.path() + ".fix",
+            "`"
+                + fix
+                + "` no va antes de esta fase: `fix` tiene que ser la fase que dejó el worktree"
+                + " que se juzga (ponla en `dependsOn`)");
+      }
+    }
+
+    /**
+     * La fase cuyo trabajo juzga una {@code verification}: la de {@code fix}, la de {@code
+     * workspaceFrom} o la primera de la que depende que deja un worktree; {@code null} si no hay.
+     */
+    private static StageAt judgedStage(StageAt at, Map<String, StageAt> byId) {
+      StageDefinition stage = at.stage();
+      if (stage.judge() != null
+          && stage.judge().fix() != null
+          && byId.containsKey(stage.judge().fix())) {
+        return byId.get(stage.judge().fix());
+      }
+      if (stage.workspaceFrom() != null) {
+        return byId.get(stage.workspaceFrom().split("\\.")[0]);
+      }
+      return stage.dependsOn().stream()
+          .map(d -> byId.get(d.stage()))
+          .filter(d -> d != null && d.stage().type().hasWorkspace())
+          .findFirst()
+          .orElse(null);
+    }
+
+    /** El proveedor de un agente: {@code claude-code} si no dice otro. */
+    private static String providerOf(AgentDefinition agent) {
+      return agent == null || agent.provider() == null ? "claude-code" : agent.provider();
+    }
+
+    /**
      * Comprueba la condición de una fase: que se entienda, que solo lea datos de las fases de las
      * que depende (directa o indirectamente) y de {@code inputs}, y que sus tipos casen. El error
      * va en la línea y la columna del trozo que falla.
@@ -2655,7 +3055,60 @@ public final class DefinitionParser {
         AgentDefinition agent = stage.agent() == null ? null : agents.get(stage.agent());
         return outputType(path, stage, agent, field, first);
       }
+      if (stage.type() == StageType.VERIFICATION && stage.judge() != null) {
+        return judgeType(path, stage, parts);
+      }
       throw new Condition.SyntaxError(usage, path.position());
+    }
+
+    /**
+     * El tipo de un dato del juez de una fase {@code verification} (VA-B): {@code score}, {@code
+     * passed}, {@code findings} o {@code criteria.<id>.score}.
+     */
+    private static Condition.Type judgeType(
+        Condition.Path path, StageDefinition stage, List<String> parts) {
+      String field = parts.get(1);
+      if (parts.size() == 2) {
+        switch (field) {
+          case "score" -> {
+            return Condition.Type.NUMBER;
+          }
+          case "passed" -> {
+            return Condition.Type.BOOLEAN;
+          }
+          case "findings" -> {
+            return Condition.Type.LIST;
+          }
+          default -> {}
+        }
+      }
+      if (parts.size() == 4 && field.equals("criteria") && parts.get(3).equals("score")) {
+        List<String> ids = stage.judge().criteria().stream().map(JudgeSpec.Criterion::id).toList();
+        if (!ids.isEmpty() && !ids.contains(parts.get(2))) {
+          throw new Condition.SyntaxError(
+              "La rúbrica de `"
+                  + stage.id()
+                  + "` no tiene el criterio `"
+                  + parts.get(2)
+                  + "`"
+                  + suggestion(parts.get(2), ids),
+              path.position());
+        }
+        return Condition.Type.NUMBER;
+      }
+      throw new Condition.SyntaxError(
+          "`"
+              + path.text()
+              + "` no es un dato del juez: usa `"
+              + stage.id()
+              + ".score`, `"
+              + stage.id()
+              + ".passed`, `"
+              + stage.id()
+              + ".findings` o `"
+              + stage.id()
+              + ".criteria.<id>.score`",
+          path.position());
     }
 
     /**

@@ -66,7 +66,8 @@ public record StageRunView(
     String retriedBy,
     List<String> children,
     String phase,
-    QuotaWaitView quotaWait) {
+    QuotaWaitView quotaWait,
+    JudgeView judge) {
 
   /**
    * La cuota que espera una fase (CQ-A): de qué proveedor, qué ventana ({@code five_hour} o {@code
@@ -107,7 +108,8 @@ public record StageRunView(
       WorkflowDefinition workflow,
       List<AgentRunView> agents,
       List<VerificationResult> verifications,
-      ApprovalSummary approval) {
+      ApprovalSummary approval,
+      JudgeView judge) {
     StageDefinition definition =
         workflow == null ? null : workflow.stage(s.getStageKey()).orElse(null);
     return new StageRunView(
@@ -139,6 +141,7 @@ public record StageRunView(
             ? List.of()
             : definition.children().stream().map(StageDefinition.ChildDefinition::id).toList(),
         definition == null ? null : definition.phase(),
-        QuotaWaitView.of(s));
+        QuotaWaitView.of(s),
+        judge);
   }
 }

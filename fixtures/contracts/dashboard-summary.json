@@ -97,7 +97,8 @@
       "retriedBy" : null,
       "children" : [ ],
       "phase" : null,
-      "quotaWait" : null
+      "quotaWait" : null,
+      "judge" : null
     } ]
   } ],
   "activeRunsTotal" : 1,

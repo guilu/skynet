@@ -38,8 +38,19 @@ export function stageDetail(stage: StageDefinition): string {
       return `${stage.children.length} a la vez`
     case 'conditional':
       return stage.condition ? `Si ${stage.condition}` : ''
-    case 'verification':
-      return stage.checks.length === 1 ? '1 comprobación' : `${stage.checks.length} comprobaciones`
+    case 'verification': {
+      const checks =
+        stage.checks.length === 0
+          ? ''
+          : stage.checks.length === 1
+            ? '1 comprobación'
+            : `${stage.checks.length} comprobaciones`
+      if (!stage.judge) return checks
+      const n = stage.judge.agents.length
+      const judges = `${n === 1 ? '1 juez' : `${n} jueces`} · umbral ${stage.judge.threshold.toLocaleString('es-ES')}`
+      const fix = stage.judge.fix ? ` · corrige ${stage.judge.fix}` : ''
+      return [checks, judges + fix].filter(Boolean).join(' · ')
+    }
     case 'human-approval':
       return stage.approval ? `Aprobar: ${stage.approval.action}` : 'Aprobación'
     case 'github-pr':

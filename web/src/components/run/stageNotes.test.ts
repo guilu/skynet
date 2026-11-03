@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { Run, StageRun, StageStatus, VerificationResult } from '../../api'
+import type { Run, StageJudge, StageRun, StageStatus, VerificationResult } from '../../api'
 import {
   checkStates,
   earlierAttempts,
   fallbackNote,
   isCorrecting,
   joinNames,
+  judgeNote,
   latestAttempts,
   quotaNote,
   retryScope,
@@ -48,6 +49,7 @@ function stage(
     children: [],
     phase: null,
     quotaWait: null,
+    judge: null,
   }
 }
 
@@ -306,5 +308,62 @@ describe('stageNote', () => {
     expect(retryScope(broken, { ...run(broken, implement), status: 'FAILED' } as Run)).toEqual({
       then: ['implement'],
     })
+  })
+})
+
+describe('judgeNote', () => {
+  const judge = (over: Partial<StageJudge>): StageJudge => ({
+    status: 'JUDGING',
+    round: 1,
+    shownRound: 1,
+    maxRounds: 2,
+    fix: 'implementar',
+    threshold: 3.5,
+    score: null,
+    passed: null,
+    approvals: null,
+    judges: null,
+    findings: [],
+    judgements: [],
+    error: null,
+    ...over,
+  })
+  const judged = (j: StageJudge, status: StageStatus = 'RUNNING') => ({
+    ...stage('juzgar', status),
+    type: 'verification',
+    judge: j,
+  })
+
+  it('dice qué hace el juez en cada momento', () => {
+    expect(judgeNote(judged(judge({ status: 'CHECKING' })))).toBe('Comprobando antes de juzgar')
+    expect(judgeNote(judged(judge({ round: 2 })))).toBe('Juzgando: 1 juez (ronda 2)')
+    expect(judgeNote(judged(judge({ status: 'FIXING' })))).toBe(
+      'implementar corrige lo que suspendió el juez (ronda 1 de 2)',
+    )
+  })
+
+  it('al terminar, la nota de la fase', () => {
+    const passed = judged(
+      judge({ status: 'PASSED', score: 3.8, passed: true, approvals: 2, judges: 2 }),
+      'SUCCEEDED',
+    )
+    expect(judgeNote(passed)).toBe('3,8 / 5 · aprobado por 2 de 2')
+    expect(stageNote(passed, run(passed))).toBe('3,8 / 5 · aprobado por 2 de 2')
+    const failed = judged(
+      judge({
+        status: 'FAILED',
+        score: 2.5,
+        passed: false,
+        approvals: 0,
+        judges: 1,
+        error: 'Suspende',
+      }),
+      'FAILED',
+    )
+    expect(judgeNote(failed)).toBe('No pasó: Suspende')
+  })
+
+  it('sin juez no dice nada', () => {
+    expect(judgeNote(stage('a', 'RUNNING'))).toBeNull()
   })
 })

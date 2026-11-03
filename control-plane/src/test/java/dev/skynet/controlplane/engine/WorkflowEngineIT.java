@@ -1699,6 +1699,176 @@ class WorkflowEngineIT extends IntegrationTest {
     assertThat(stageStatuses(runId)).containsEntry("implement", "FAILED");
   }
 
+  /** Un juez que suspende la primera ronda y aprueba la segunda, tras corregir (VA-B). */
+  static final String JUDGED =
+      """
+      id: juzgada
+      version: 1
+      agents:
+        juez:
+          model: otro-modelo
+      stages:
+        - id: implement
+          type: agent
+          prompt: Implementa
+        - id: juzgar
+          type: verification
+          dependsOn: [implement]
+          checks: [tests]
+          judge:
+            agents: [{agent: juez, lens: correctness}]
+            rubric:
+              - {id: resuelve, text: "Resuelve la tarea", weight: 2, required: true}
+              - {id: tests, text: "Tiene tests"}
+          fix: implement
+          maxRounds: 2
+        - id: entregar
+          type: agent
+          prompt: "Nota {{stages.juzgar.output.score}}"
+          dependsOn: [juzgar]
+          condition: juzgar.passed == true
+      """;
+
+  @Test
+  void aJudgeThatFailsSendsItsFindingsToTheFixStageAndJudgesAgain() {
+    String definitionId = publish(JUDGED);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(
+        runner,
+        runner.claim().getFirst(),
+        "/w/eng/implement",
+        Map.of("summary", "He añadido tests para todos los casos"));
+
+    // Lo barato primero: las comprobaciones.
+    JsonNode checks = runner.claim().getFirst();
+    assertThat(checks.path("verify").path("checks").toString()).contains("tests-intact");
+    verified(runner, checks, true);
+
+    // El juez: en una copia, en solo lectura, con la rúbrica y sin lo que dijo el autor.
+    JsonNode judge = runner.claim().getFirst();
+    JsonNode start = judge.path("start");
+    assertThat(start.path("permissionMode").asString()).isEqualTo("plan");
+    assertThat(start.path("workspace").path("path").asString()).isEqualTo("/w/eng/implement");
+    assertThat(start.path("workspace").path("copy").asBoolean()).isTrue();
+    assertThat(start.path("outputSchema").asString()).contains("\"findings\"");
+    assertThat(start.path("model").asString()).isEqualTo("otro-modelo");
+    assertThat(taskPrompt(start))
+        .contains("- `resuelve` (peso 2, obligatorio): Resuelve la tarea")
+        .contains("- `tests-intact`: pasa")
+        .contains("## Tu lente\n\nCorrección:")
+        .contains("`git diff abc1234`")
+        .doesNotContain("He añadido tests para todos los casos");
+    assertThat(stageStatuses(runId)).containsEntry("juzgar", "RUNNING");
+    complete(
+        runner,
+        judge,
+        "/w/eng/juez",
+        verdict(
+            2,
+            4,
+            List.of(
+                Map.of(
+                    "file",
+                    "src/Calc.java",
+                    "line",
+                    12,
+                    "severity",
+                    "blocking",
+                    "text",
+                    "Divide entre cero sin comprobarlo"))));
+
+    // Suspende: el agente de implement corrige en su sesión con lo que encontró.
+    JsonNode fix = runner.claim().getFirst();
+    assertThat(fix.path("type").asString()).isEqualTo("RESUME");
+    assertThat(taskPrompt(fix.path("start")))
+        .contains("El juez de la fase `juzgar` ha suspendido el cambio.")
+        .contains("- `src/Calc.java:12`: Divide entre cero sin comprobarlo (juez)")
+        .contains("- `resuelve`: 2 / 5.")
+        .contains("(ronda de corrección 1 de 2)");
+    JsonNode fixing = stageOf(get("/api/workflow-runs/" + runId), "juzgar").path("judge");
+    assertThat(fixing.path("status").asString()).isEqualTo("FIXING");
+    assertThat(fixing.path("score").decimalValue()).isEqualByComparingTo("2.67");
+    assertThat(fixing.path("findings").get(0).path("text").asString())
+        .isEqualTo("Divide entre cero sin comprobarlo");
+    assertThat(fixing.path("judgements").get(0).path("criteria").get(0).path("score").asInt())
+        .isEqualTo(2);
+    complete(runner, fix, "/w/eng/implement");
+
+    // La ronda 2 vuelve a comprobar y a juzgar desde cero.
+    JsonNode again = awaitCommand(runner);
+    assertThat(again.path("verify").path("workspacePath").asString()).isEqualTo("/w/eng/implement");
+    verified(runner, again, true);
+    JsonNode second = runner.claim().getFirst();
+    assertThat(taskPrompt(second.path("start"))).contains("Es la ronda 2");
+    complete(runner, second, "/w/eng/juez", verdict(5, 4, List.of()));
+
+    assertThat(stageStatuses(runId)).containsEntry("juzgar", "SUCCEEDED");
+    JsonNode passed = stageOf(get("/api/workflow-runs/" + runId), "juzgar").path("judge");
+    assertThat(passed.path("status").asString()).isEqualTo("PASSED");
+    assertThat(passed.path("round").asInt()).isEqualTo(2);
+    assertThat(passed.path("passed").asBoolean()).isTrue();
+    assertThat(passed.path("approvals").asInt()).isEqualTo(1);
+    // La fase siguiente lee la nota.
+    JsonNode deliver = runner.claim().getFirst();
+    assertThat(taskPrompt(deliver.path("start"))).isEqualTo("Nota 4.67");
+    assertThat(
+            jdbc.sql("SELECT count(*) FROM stage_verdict WHERE workflow_run_id = ?::uuid")
+                .param(runId)
+                .query(Integer.class)
+                .single())
+        .isEqualTo(2);
+    assertThat(eventTypes(runId))
+        .containsSubsequence(
+            "stage.judge.started",
+            "stage.judge.verdict",
+            "stage.judge.fix.started",
+            "stage.judge.round.started",
+            "stage.judge.started",
+            "stage.judge.verdict");
+  }
+
+  @Test
+  void aJudgeThatKeepsFailingFailsTheStageAfterItsRounds() {
+    String definitionId = publish(JUDGED.replace("maxRounds: 2", "maxRounds: 1"));
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    verified(runner, runner.claim().getFirst(), true);
+    complete(runner, runner.claim().getFirst(), "/w/eng/juez", verdict(1, 1, List.of()));
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    // En la ronda 2 ya no pasan ni las comprobaciones: el juez no llega a mirarlo.
+    verified(runner, awaitCommand(runner), false);
+
+    assertThat(stageStatuses(runId))
+        .containsEntry("juzgar", "FAILED")
+        .containsEntry("entregar", "CANCELLED");
+    JsonNode judge = stageOf(get("/api/workflow-runs/" + runId), "juzgar").path("judge");
+    assertThat(judge.path("error").asString())
+        .isEqualTo(
+            "Las comprobaciones no pasan: tests: no pasa; tests-intact: no pasa tras 1 ronda de"
+                + " corrección");
+  }
+
+  /** El veredicto de un juez con la rúbrica de {@link #JUDGED}. */
+  private static Map<String, Object> verdict(
+      int resuelve, int tests, List<Map<String, Object>> findings) {
+    return Map.of(
+        "criteria",
+        List.of(
+            Map.of("id", "resuelve", "score", resuelve, "reason", "motivo"),
+            Map.of("id", "tests", "score", tests, "reason", "motivo")),
+        "findings",
+        findings,
+        "summary",
+        "Resumen del juez");
+  }
+
+  private static JsonNode stageOf(JsonNode run, String stageKey) {
+    List<JsonNode> attempts = stagesOf(run, stageKey);
+    return attempts.getLast();
+  }
+
   @Test
   void aFailingVerificationStageFailsWithTheChecksThatDidNotPass() {
     String definitionId = publish(NODE);

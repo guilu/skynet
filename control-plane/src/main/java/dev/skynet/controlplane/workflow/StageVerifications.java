@@ -38,6 +38,7 @@ class StageVerifications {
   private final VerificationService verificationService;
   private final RunTransitions transitions;
   private final ProjectService projects;
+  private final StageJudges judges;
 
   StageVerifications(
       AgentRunRepository agentRuns,
@@ -48,7 +49,8 @@ class StageVerifications {
       Verifications verifications,
       VerificationService verificationService,
       RunTransitions transitions,
-      ProjectService projects) {
+      ProjectService projects,
+      StageJudges judges) {
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
     this.workflowRuns = workflowRuns;
@@ -58,6 +60,7 @@ class StageVerifications {
     this.verificationService = verificationService;
     this.transitions = transitions;
     this.projects = projects;
+    this.judges = judges;
   }
 
   /** Lo que se comprueba en la fase con el repositorio de {@code agent} (VA-A). */
@@ -72,6 +75,11 @@ class StageVerifications {
    */
   void afterAgent(AgentRun agent, StageRun stage, Instant now) {
     StageDefinition definition = definitionOf(stage);
+    if (agent.isJudge()) {
+      // Un juez solo lee: no hay nada que verificar en su copia (VA-B).
+      finish(stage, definition, now);
+      return;
+    }
     if (agent.getStatus() == AgentObservableStatus.COMPLETED) {
       WorkspaceView workspace = workspaces.find(agent.getWorkspaceId()).orElse(null);
       // Si otro hijo ya no pasó, la fase va a fallar: no hace falta comprobar este. Una fase ya
@@ -91,7 +99,8 @@ class StageVerifications {
   /**
    * Arranca una fase {@code verification} en el worktree que hereda ({@code source}): una
    * invocación sin agente ni comando, con el runner del worktree, cuya verificación mide los
-   * cambios desde el commit con el que se creó.
+   * cambios desde el commit con el que se creó. Con {@code judge} (VA-B), es la primera ronda: si
+   * no tiene comprobaciones, entran directamente los jueces.
    */
   void startNode(
       UUID runId,
@@ -100,6 +109,31 @@ class StageVerifications {
       StageDefinition definition,
       WorkspaceView source,
       Instant now) {
+    if (definition.judge() != null) {
+      judges.open(stage, source, now);
+    }
+    round(runId, repositoryId, stage, definition, source, 1, now);
+  }
+
+  /**
+   * Una ronda de una fase {@code verification}: sus comprobaciones o, con {@code judge} y sin
+   * comprobaciones, sus jueces.
+   */
+  private void round(
+      UUID runId,
+      UUID repositoryId,
+      StageRun stage,
+      StageDefinition definition,
+      WorkspaceView source,
+      int round,
+      Instant now) {
+    if (definition.judge() != null
+        && StageCheckList.of(definition, projects.getRepository(repositoryId)).isEmpty()) {
+      stage = transitions.advanceStage(stage, StageStatus.STARTING, "judge-started", now);
+      stage = transitions.advanceStage(stage, StageStatus.RUNNING, "judge-started", now);
+      judges.launch(stage, definition, round, source, null, now);
+      return;
+    }
     AgentRun agent =
         AgentRun.queued(
             stage.getId(),
@@ -158,6 +192,7 @@ class StageVerifications {
         stage.getWorkflowRunId(),
         payload,
         now);
+    StageDefinition definition = definitionOf(stage);
     if (agent.isVerification() && !agent.getStatus().isTerminal()) {
       boolean passed = Verifications.PASSED.equals(result.status());
       if (!passed) {
@@ -169,8 +204,13 @@ class StageVerifications {
           stage.getWorkflowRunId(),
           passed ? "verification-passed" : "verification-failed",
           now);
+      if (definition != null && definition.judge() != null) {
+        // Pasan las comprobaciones: entran los jueces; si no, la ronda suspende (VA-B).
+        judges.checked(stage, definition, result, now);
+        return;
+      }
     }
-    finish(stage, definitionOf(stage), now);
+    finish(stage, definition, now);
   }
 
   /**
@@ -181,6 +221,13 @@ class StageVerifications {
   private void finish(StageRun stage, StageDefinition definition, Instant now) {
     if (stage.getStatus().isTerminal()) {
       // Se canceló mientras se verificaba.
+      return;
+    }
+    if (definition != null
+        && definition.type() == StageType.VERIFICATION
+        && definition.judge() != null) {
+      // La cierra el juez cuando terminan sus jueces (VA-B).
+      judges.settle(stage, definition, now);
       return;
     }
     List<AgentRun> agents = agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
@@ -222,6 +269,41 @@ class StageVerifications {
         passed ? StageStatus.SUCCEEDED : StageStatus.FAILED,
         passed ? "verification-passed" : "verification-failed",
         now);
+  }
+
+  /**
+   * Las fases con juez cuya corrección ha terminado empiezan su ronda siguiente (VA-B). Devuelve si
+   * alguna ha cambiado.
+   */
+  boolean settleJudges(UUID runId, Instant now) {
+    List<StageJudges.NextRound> next = judges.settleFixes(runId);
+    for (StageJudges.NextRound round : next) {
+      StageJudges.State state = judges.state(round.stage().getId()).orElseThrow();
+      transitions.append(
+          "stage_run",
+          round.stage().getId(),
+          "stage.judge.round.started",
+          runId,
+          Map.of("stageKey", round.stage().getStageKey(), "round", state.round()),
+          now);
+      round(
+          runId,
+          repositoryOf(round.stage()),
+          round.stage(),
+          round.definition(),
+          round.source(),
+          state.round(),
+          now);
+    }
+    return !next.isEmpty();
+  }
+
+  /** El repositorio de la fase: el de su primera invocación (la primera ronda siempre tiene). */
+  private UUID repositoryOf(StageRun stage) {
+    return agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId())).stream()
+        .findFirst()
+        .map(AgentRun::getRepositoryId)
+        .orElseThrow();
   }
 
   private void queue(

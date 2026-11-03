@@ -1133,6 +1133,231 @@ class DefinitionParserTest {
   }
 
   @Test
+  void aJudgeReadsItsAgentsRubricThresholdAndFixRounds() {
+    Parsed parsed =
+        parse(
+            """
+            id: juzgada
+            agents:
+              dev:
+                prompt: Implementa
+              juez-calidad:
+                provider: codex
+              juez-seguridad:
+                provider: codex
+                model: gpt-5.1
+            stages:
+              - id: implementar
+                type: agent
+                agent: dev
+              - id: juzgar
+                type: verification
+                dependsOn: [implementar]
+                checks: [tests]
+                judge:
+                  agents:
+                    - {agent: juez-calidad, lens: correctness}
+                    - {agent: juez-seguridad, lens: security}
+                  rubric:
+                    - {id: resuelve, text: "Resuelve la tarea", weight: 3, required: true}
+                    - {id: tests, text: "Los tests cubren el cambio"}
+                  threshold: 4
+                fix: implementar
+                maxRounds: 3
+              - id: entregar
+                type: agent
+                agent: dev
+                dependsOn: [juzgar]
+                condition: juzgar.passed == true && juzgar.score >= 4 && juzgar.criteria.tests.score > 2
+                prompt: "Nota {{stages.juzgar.output.score}}: {{stages.juzgar.output.findings}}"
+            """);
+    assertThat(messages(parsed, Severity.ERROR)).isEmpty();
+    assertThat(messages(parsed, Severity.WARNING)).isEmpty();
+    JudgeSpec judge = parsed.definition().stage("juzgar").orElseThrow().judge();
+    assertThat(judge.agents())
+        .containsExactly(
+            new JudgeSpec.Judge("juez-calidad", "correctness"),
+            new JudgeSpec.Judge("juez-seguridad", "security"));
+    assertThat(judge.criteria())
+        .containsExactly(
+            new JudgeSpec.Criterion("resuelve", "Resuelve la tarea", 3, true),
+            new JudgeSpec.Criterion("tests", "Los tests cubren el cambio", 1, false));
+    assertThat(judge.threshold()).isEqualByComparingTo("4");
+    assertThat(judge.fix()).isEqualTo("implementar");
+    assertThat(judge.maxRounds()).isEqualTo(3);
+  }
+
+  @Test
+  void aJudgeWithoutRubricOrChecksUsesTheDefaultsAndProtectsItsRubricFile() {
+    Parsed parsed =
+        parse(
+            """
+            id: juzgada
+            agents:
+              juez:
+                provider: codex
+            stages:
+              - id: implementar
+                type: agent
+                prompt: Implementa
+              - id: juzgar
+                type: verification
+                dependsOn: [implementar]
+                judge:
+                  agents: [juez]
+              - id: otra
+                type: verification
+                dependsOn: [implementar]
+                judge:
+                  agents: [juez]
+                  rubricFile: .skynet/rubrica.md
+            """);
+    assertThat(messages(parsed, Severity.ERROR)).isEmpty();
+    WorkflowDefinition definition = parsed.definition();
+    JudgeSpec judge = definition.stage("juzgar").orElseThrow().judge();
+    assertThat(judge.criteria()).isEqualTo(JudgeSpec.DEFAULT_RUBRIC);
+    assertThat(judge.threshold()).isEqualByComparingTo("3.5");
+    assertThat(judge.fix()).isNull();
+    assertThat(definition.stage("otra").orElseThrow().judge().criteria()).isEmpty();
+    // La rúbrica queda protegida en las fases de agente.
+    assertThat(definition.stage("implementar").orElseThrow().checks())
+        .contains(VerificationCheck.withPaths("protected", List.of(".skynet/rubrica.md")));
+  }
+
+  @Test
+  void aWrongJudgeSaysWhy() {
+    Parsed parsed =
+        parse(
+            """
+            id: juez-mal
+            agents:
+              juez:
+                prompt: Juzga
+            stages:
+              - id: implementar
+                type: agent
+                prompt: Implementa
+                judge:
+                  agents: [juez]
+              - id: comando
+                type: command
+                command: make
+              - id: juzgar
+                type: verification
+                dependsOn: [implementar]
+                judge:
+                  agents: [juez, juez, nadie, {agent: juez2, lens: estilo}]
+                  rubric:
+                    - {id: Mal, text: "x"}
+                    - {id: tests}
+                  rubricFile: ../fuera.md
+                  threshold: 7
+                fix: comando
+              - id: otro
+                type: verification
+                dependsOn: [implementar]
+                checks: [tests]
+                fix: implementar
+              - id: tercero
+                type: verification
+                dependsOn: [implementar]
+                maxRounds: 2
+                judge:
+                  agents: [juez]
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .contains(
+            "`judge` solo vale en fases `type: verification`; esta es `agent`",
+            "`juez` ya es juez de esta fase: cada agente juzga una vez por ronda",
+            "No hay ningún agente `nadie` en `agents`",
+            "`lens: estilo` no se conoce. Admite: correctness, security, performance, reproduce,"
+                + " completeness",
+            "`Mal` no vale como id de criterio: usa minúsculas, números, - y _ empezando por una"
+                + " letra",
+            "A este criterio le falta `text`: `{id: tests, text: \"Los tests cubren el cambio\"}`",
+            "`rubricFile: ../fuera.md` tiene que ser una ruta dentro del repositorio, p. ej."
+                + " `.skynet/rubricas/backend.md`",
+            "`stages.juzgar.judge.threshold` debe estar entre 1 y 5",
+            "`comando` es una fase `command`: lo que suspende el juez lo corrige el agente de una"
+                + " fase `agent`",
+            "`fix` solo vale en fases `type: github-check` o en una `verification` con `judge`;"
+                + " esta es `verification`",
+            "`maxRounds` son las rondas de corrección: sin `fix` no hay ninguna");
+  }
+
+  @Test
+  void aJudgeAsIndependentAsTheAuthorIsAWarning() {
+    Parsed parsed =
+        parse(
+            """
+            id: juez-igual
+            agents:
+              dev:
+                prompt: Implementa
+                provider: codex
+              juez:
+                provider: codex
+              otro:
+                fallback: {provider: codex}
+            stages:
+              - id: implementar
+                type: agent
+                agent: dev
+              - id: juzgar
+                type: verification
+                dependsOn: [implementar]
+                judge:
+                  agents: [juez, otro]
+                fix: implementar
+            """);
+    assertThat(messages(parsed, Severity.ERROR)).isEmpty();
+    assertThat(messages(parsed, Severity.WARNING))
+        .contains(
+            "El juez `juez` usa el mismo modelo que `implementar`: es menos independiente. Mejor"
+                + " otro proveedor u otro modelo",
+            "La reserva del juez `otro` es `codex`, el proveedor de `implementar`: si se queda sin"
+                + " cuota, esperará en vez de cambiar a ella",
+            "Hay 2 jueces sin lente mirando lo mismo: dan más con lentes distintas, p. ej. `{agent:"
+                + " juez-calidad, lens: correctness}` y `{agent: juez-seguridad, lens: security}`");
+  }
+
+  @Test
+  void aConditionReadsOnlyTheDataOfTheJudge() {
+    Parsed parsed =
+        parse(
+            """
+            id: juez-datos
+            agents:
+              juez:
+                provider: codex
+            stages:
+              - id: implementar
+                type: agent
+                prompt: Implementa
+              - id: juzgar
+                type: verification
+                dependsOn: [implementar]
+                judge:
+                  agents: [juez]
+              - id: a
+                type: agent
+                prompt: a
+                dependsOn: [juzgar]
+                condition: juzgar.criteria.nada.score > 3
+              - id: b
+                type: agent
+                prompt: b
+                dependsOn: [juzgar]
+                condition: juzgar.nota > 3
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .contains(
+            "La rúbrica de `juzgar` no tiene el criterio `nada`",
+            "`juzgar.nota` no es un dato del juez: usa `juzgar.score`, `juzgar.passed`,"
+                + " `juzgar.findings` o `juzgar.criteria.<id>.score`");
+  }
+
+  @Test
   void protectedInsideTheScopeAndContradictionsSayWhy() {
     Parsed parsed =
         parse(
@@ -1256,8 +1481,8 @@ class DefinitionParserTest {
             """);
     assertThat(messages(parsed, Severity.ERROR))
         .containsExactly(
-            "A esta fase le falta qué comprobar: `artifacts` (ficheros que tienen que existir) o"
-                + " `checks`, p. ej. `checks: [tests, diff]`",
+            "A esta fase le falta qué comprobar: `artifacts` (ficheros que tienen que existir),"
+                + " `checks`, p. ej. `checks: [tests, diff]`, o un `judge`",
             "Una fase `verification` no ejecuta nada, solo comprueba el worktree que hereda:"
                 + " quita `prompt`",
             "Una fase `verification` comprueba el worktree que hereda: quita `workspace:"

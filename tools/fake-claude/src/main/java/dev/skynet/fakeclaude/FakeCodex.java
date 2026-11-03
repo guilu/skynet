@@ -38,6 +38,9 @@ import tools.jackson.databind.node.ObjectNode;
  *   <li>{@code FAKE_CODEX_STRUCTURED_OUTPUT}: con {@code --output-schema}, el JSON que devuelve el
  *       último mensaje del agente, o {@code @ruta} para leerlo de ese fichero del directorio de
  *       trabajo. Sin ella el mensaje se queda en texto, como un agente que no cumple el schema.
+ *   <li>{@code FAKE_CODEX_JUDGE}: ruta de un fichero testigo (VA-B). Con la salida estructurada de
+ *       un juez de Skynet, aprueba si no existe y, si existe, suspende con un hallazgo que bloquea
+ *       y lo borra ({@link FakeJudge}).
  *   <li>{@code CODEX_HOME}: si está definida, guarda cada sesión en {@code
  *       <dir>/sessions/<sesión>.jsonl}, y reanudar o bifurcar falla si no la encuentra. Sin ella no
  *       comprueba nada. Al final de la sesión añade un {@code token_count} con la cuota de la
@@ -116,10 +119,21 @@ public final class FakeCodex {
             ? env.getOrDefault("FAKE_CODEX_FIXTURE", DEFAULT_FIXTURE)
             : env.getOrDefault("FAKE_CODEX_RESUME_FIXTURE", RESUME_FIXTURE);
     long delayMs = Long.parseLong(env.getOrDefault("FAKE_CODEX_DELAY_MS", "10"));
+    String verdict =
+        inv.outputSchema() == null
+            ? null
+            : FakeJudge.verdict(
+                env,
+                "FAKE_CODEX_JUDGE",
+                schemaOf(cwd.resolve(inv.outputSchema())),
+                inv.prompt(),
+                cwd);
     String structured =
         inv.outputSchema() == null
             ? null
-            : FakeCli.structuredOutput(env, "FAKE_CODEX_STRUCTURED_OUTPUT", cwd);
+            : verdict != null
+                ? verdict
+                : FakeCli.structuredOutput(env, "FAKE_CODEX_STRUCTURED_OUTPUT", cwd);
     List<String> lines = FakeCli.loadFixture("codex", fixture);
     int lastMessage = -1;
     for (int i = 0; i < lines.size(); i++) {
@@ -266,6 +280,11 @@ public final class FakeCodex {
       return null;
     }
     return Path.of(home).resolve("sessions").resolve(threadId + ".jsonl");
+  }
+
+  /** El JSON Schema de {@code --output-schema}, o {@code null} si no se puede leer. */
+  private static String schemaOf(Path file) throws IOException {
+    return Files.isRegularFile(file) ? Files.readString(file, StandardCharsets.UTF_8) : null;
   }
 
   /** Lo que importa de {@code codex exec [opciones] [resume|fork <sesión>] [--] <prompt>}. */

@@ -140,6 +140,7 @@ public class RunSteps {
   private final VerificationProperties verification;
   private final Verifications verifications;
   private final StageVerifications stageVerifications;
+  private final StageJudges judges;
   private final Approvals approvals;
   private final PullRequests pullRequests;
   private final CiChecks ciChecks;
@@ -165,6 +166,7 @@ public class RunSteps {
       VerificationProperties verification,
       Verifications verifications,
       StageVerifications stageVerifications,
+      StageJudges judges,
       Approvals approvals,
       PullRequests pullRequests,
       CiChecks ciChecks,
@@ -189,6 +191,7 @@ public class RunSteps {
     this.verification = verification;
     this.verifications = verifications;
     this.stageVerifications = stageVerifications;
+    this.judges = judges;
     this.approvals = approvals;
     this.pullRequests = pullRequests;
     this.ciChecks = ciChecks;
@@ -296,6 +299,10 @@ public class RunSteps {
       Retries retries,
       List<AgentRun> agents,
       Retries.QuotaPolicy quota) {
+    if (definition != null && definition.judge() != null) {
+      // Una ronda que suspende no la acaba: el juez decide si corrige o falla (VA-B).
+      return null;
+    }
     List<AgentRun> finished = agents.stream().filter(a -> a.getStatus().isTerminal()).toList();
     if (definition != null && definition.type() == StageType.PARALLEL) {
       StageStatus ending = null;
@@ -733,7 +740,9 @@ public class RunSteps {
         continue;
       }
       Object summary =
-          stage.type() == StageType.AGENT ? data.value(List.of(stage.id(), "summary")) : null;
+          stage.type() == StageType.AGENT
+              ? data.value(List.of(stage.id(), "summary"))
+              : stage.judge() != null ? judges.evidence(stageRun.getId()).orElse(null) : null;
       List<String> done = new ArrayList<>();
       for (VerificationResult result : checks.getOrDefault(stageRun.getId(), List.of())) {
         for (VerificationResult.CheckResult check : result.checks()) {
@@ -1124,6 +1133,8 @@ public class RunSteps {
     }
     // Las correcciones de la CI de las fases github-check (EN-B).
     changed |= ciChecks.settleFixes(runId);
+    // Las correcciones de lo que suspendió un juez (VA-B).
+    changed |= stageVerifications.settleJudges(runId, time.now());
     return changed;
   }
 
@@ -1211,6 +1222,9 @@ public class RunSteps {
       String field = parts.get(1);
       if (parts.size() == 2 && field.equals("status")) {
         return stage.getStatus().name();
+      }
+      if (stageDefinition.type() == StageType.VERIFICATION && stageDefinition.judge() != null) {
+        return judges.value(stage.getId(), parts);
       }
       List<AgentRun> agents =
           agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
