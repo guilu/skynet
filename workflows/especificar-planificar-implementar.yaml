@@ -6,6 +6,9 @@ agents:
   analista:
     provider: antigravity
     model: ${AGY_FUERTE}
+    fallback:
+      provider: claude-code
+      model: ${CLAUDE_FUERTE}
     permissionMode: acceptEdits
     prompt: |
       Especifica {{workItem.key}}: {{workItem.title}}.

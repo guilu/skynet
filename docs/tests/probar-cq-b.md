@@ -22,7 +22,7 @@ CQ-B (#213) es la segunda y última PR del hito CQ (continuar tras la cuota). Co
   - `fallback` en el agente de la vista de la ejecución (`provider`, `window`, `resetsAt`);
   - `fallback` en los agentes de la definición;
   - `fallbackAfterMinutes` en `/api/settings/quota`.
-- **Workflows iniciales**: cada agente de Claude Code lleva Codex de reserva y cada uno de Codex lleva Claude Code. Las equivalencias están en `workflows/modelos.env`; los de Antigravity no llevan reserva.
+- **Workflows iniciales**: cada agente de Claude Code lleva Codex de reserva y cada uno de Codex o de Antigravity lleva Claude Code. Las equivalencias están en `workflows/modelos.env`; Antigravity no es reserva de nadie.
 - **Migración `V39`**: `agent_run.fallback_from`, `fallback_window` y `fallback_until`. Se aplica sola al arrancar.
 
 Ninguna prueba de esta guía modifica ficheros versionados de skynet: lo que se crea va a `/tmp/cq-b`. Las secciones 1 a 3 no gastan cuota real. La 4 usa `guilu/demo-repo` y nunca skynet.

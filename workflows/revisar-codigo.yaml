@@ -57,6 +57,9 @@ agents:
   seguridad:
     provider: antigravity
     model: ${AGY_FUERTE}
+    fallback:
+      provider: claude-code
+      model: ${CLAUDE_FUERTE}
     # Antigravity sin terminal deniega en `plan` hasta `find` o `ls`: con `dontAsk` se salta los
     # permisos, siempre dentro de su sandbox (ver docs/antigravity-stream-json.md).
     permissionMode: dontAsk

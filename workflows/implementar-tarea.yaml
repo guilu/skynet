@@ -6,6 +6,9 @@ agents:
   explorador:
     provider: antigravity
     model: ${AGY_RAPIDO}
+    fallback:
+      provider: claude-code
+      model: ${CLAUDE_RAPIDO}
     permissionMode: plan
     prompt: |
       Antes de implementar {{workItem.key}} ({{workItem.title}}), explora el repositorio y prepara el terreno.
@@ -44,6 +47,9 @@ agents:
   seguridad:
     provider: antigravity
     model: ${AGY_FUERTE}
+    fallback:
+      provider: claude-code
+      model: ${CLAUDE_FUERTE}
     permissionMode: plan
     prompt: |
       Revisa la seguridad del cambio de {{workItem.key}} ({{workItem.title}}) respecto a la rama por defecto: entradas, secretos, permisos y dependencias.

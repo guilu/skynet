@@ -23,6 +23,9 @@ agents:
   cartografo:
     provider: antigravity
     model: ${AGY_FUERTE}
+    fallback:
+      provider: claude-code
+      model: ${CLAUDE_FUERTE}
     permissionMode: acceptEdits
     prompt: Escribe el mapa del repositorio en docs/skynet/mapa-{{project.slug}}.md.
 
