@@ -86,7 +86,8 @@ stages:
 - `artifacts`, `checks`, `scope`, `protected` y `allowTestRemoval`: lo que Skynet comprueba en el worktree de la fase antes de darla por buena. Ver «Verificación de una fase».
 - `action`, `risk` y `revise`: solo en las fases `type: human-approval`. Ver «Puertas de aprobación».
 - `pullRequest`: solo en las fases `type: github-pr`. Ver «Entrega por PR».
-- `required`, `ifNoChecks`, `fix` y `maxRounds`: solo en las fases `type: github-check`. Ver «Esperar la CI de la PR».
+- `required`, `ifNoChecks`, `fix` y `maxRounds`: solo en las fases `type: github-check` (`fix` y `maxRounds`, también en una `verification` con `judge`). Ver «Esperar la CI de la PR».
+- `judge`: solo en las fases `type: verification`. Ver «Juez con rúbrica (VA-B)».
 - `method` y `deleteBranch`: solo en las fases `type: github-merge`. Ver «Fusionar la PR».
 - `outputSchema`: solo en las fases `type: agent`. La salida estructurada que devuelve la fase, y manda sobre el `output` de su agente, así que un mismo agente sirve en fases con salidas distintas. Es un JSON Schema en línea, como `output`, o la ruta de un fichero del repositorio (`outputSchema: schemas/spec.json`). Ver «Salida de una fase en un fichero».
 
@@ -256,10 +257,51 @@ stages:
     checks: [tests, commit]
 ```
 
-- Necesitan `artifacts` o `checks`, y una dependencia con worktree (`agent`, `command` o `parallel`); no admiten `agent`, `prompt`, `command`, `children`, `outputSchema` ni `workspace: isolated-worktree`.
+- Necesitan `artifacts`, `checks` o un `judge` (ver abajo), y una dependencia con worktree (`agent`, `command` o `parallel`); no admiten `agent`, `prompt`, `command`, `children`, `outputSchema` ni `workspace: isolated-worktree`.
 - `diff`, `commit` y `scope` miden desde el commit con el que se creó el worktree.
 - En la ejecución, su única invocación tiene proveedor `verification`: no arranca ningún proceso, termina bien si pasan las comprobaciones y falla con los motivos si no. No se continúa ni se reintenta por separado.
 - La fase siguiente continúa el mismo worktree.
+
+**Juez con rúbrica** (VA-B). Una fase `verification` puede llevar un `judge`: uno o varios agentes que, si pasan las comprobaciones, **puntúan el cambio de 1 a 5 con una rúbrica**. Si suspende y la fase tiene `fix`, el agente de esa fase corrige en su sesión con lo que encontraron, y la fase vuelve a comprobar y a juzgar:
+
+```yaml
+agents:
+  juez-calidad:
+    provider: codex
+  juez-seguridad:
+    provider: antigravity
+stages:
+  - id: juzgar
+    type: verification
+    dependsOn: [implementar]
+    checks: [tests]                 # lo barato primero: si falla, no se llama a ningún juez
+    judge:
+      agents:
+        - {agent: juez-calidad, lens: correctness}
+        - {agent: juez-seguridad, lens: security}
+      rubric:
+        - {id: resuelve, text: "Resuelve la tarea tal y como se pidió", weight: 3, required: true}
+        - {id: tests, text: "Los tests cubren el cambio y sus casos límite", weight: 2}
+        - {id: alcance, text: "No cambia nada que la tarea no pida", weight: 1}
+      threshold: 3.5
+    fix: implementar
+    maxRounds: 2
+```
+
+- `judge.agents` (obligatorio, de 1 a 5): agentes de `agents`, que juzgan **a la vez**, cada uno en una copia del worktree y **siempre en solo lectura** (`permissionMode: plan`, diga lo que diga el agente). Un nombre o `{agent, lens}`; el mismo agente no puede juzgar dos veces en una fase. No necesitan `prompt`: Skynet escribe el del juez y, si el agente tiene uno, lo añade como «Indicaciones».
+- `lens`: qué mira además de la rúbrica: `correctness` (lógica, casos límite, regresiones), `security` (entradas, secretos, permisos), `performance` (trabajo de más), `reproduce` (que quede demostrado que se resuelve) o `completeness` («¿qué falta para que esto esté terminado?»: tests, documentación, migraciones; lo que falte es un hallazgo). Sin lente, mira todo.
+- `rubric`: los criterios, con `id` (minúsculas, números, `-` y `_`), `text`, `weight` (de 1 a 10, 1 por defecto) y `required` (con menos de 3, el juez suspende sea cual sea su media). Sin `rubric` ni `rubricFile` se usa la de siempre: `resuelve` (peso 3, obligatorio), `tests` (2) y `alcance` (1).
+- `rubricFile`: la rúbrica en un fichero del repositorio, que el juez lee del worktree y puntúa con el peso y si es obligatorio que diga el fichero. **Queda protegido** en todas las fases de agente del workflow (como `protected` en la raíz), para que nadie cambie la rúbrica con la que se le juzga. No se puede poner con `rubric`.
+- `threshold`: la media ponderada mínima, de 1 a 5 (3.5 por defecto).
+- `fix` y `maxRounds` (de la fase, como en `github-check`): la fase `agent` que corrige, que tiene que ser una de las que van antes (la que dejó el worktree que se juzga), y cuántas rondas de corrección como mucho (2 por defecto). Sin `fix`, suspender hace fallar la fase.
+- **Qué recibe el juez:** la tarea (clave, título y descripción), el commit desde el que mirar el cambio (`git diff <commit>` en su copia), el resultado de las comprobaciones de la ronda con sus avisos (p. ej. «Hay menos aserciones en …»), la rúbrica, el umbral y su lente. **No recibe nada de lo que dijo el agente que hizo el cambio**, ni su resumen ni su salida estructurada: si el juez lee «he añadido tests para todos los casos», tiende a creérselo.
+- **Qué devuelve:** Skynet le pide una salida estructurada con la nota y la justificación de cada criterio, sus hallazgos (fichero, línea si la sabe, gravedad `blocking` o `minor` y por qué) y un resumen.
+- **Cómo se decide:** cada juez aprueba si su media ponderada llega al umbral, ningún criterio obligatorio baja de 3 y no encuentra nada `blocking`. La fase pasa si **aprueba la mayoría** de los jueces y **ninguno encuentra nada que bloquee**; con un juez, manda él. La nota de la fase es la media de las medias. Un criterio que el juez no puntúa cuenta como un 1. Un juez que no termina bien o no devuelve su veredicto hace fallar la fase (corregir no lo arreglaría).
+- **Las rondas:** cada una empieza por las comprobaciones de la fase (si las tiene). Si no pasan, la ronda suspende sin llamar a los jueces. Si la ronda suspende y quedan rondas, el agente de `fix` sigue en su sesión con lo que se encontró (los hallazgos que bloquean, los criterios con nota baja y lo menor); cuando termina, y si pasan las comprobaciones de su propia fase, empieza la ronda siguiente desde cero. Sin rondas, la fase falla con «Suspende el juez: 2,8 / 5 · suspenso: aprueba 0 de 1 tras 2 rondas de corrección».
+- Las fases siguientes leen `juzgar.score`, `juzgar.passed`, `juzgar.findings` y `juzgar.criteria.<id>.score` en sus condiciones, y `{{stages.juzgar.output.score}}` (o `findings`, como JSON) en sus prompts.
+- **Al publicar se avisa** si un juez usa el mismo proveedor y modelo que el agente que juzga («es menos independiente»), si la reserva de un juez (CQ-B) es el proveedor del autor (y entonces, sin cuota, el juez espera en vez de cambiar a ella) y si hay varios jueces sin lente («dan más con lentes distintas»).
+- Cada ronda deja `stage.judge.started`, `stage.judge.verdict` (nota, aprobados, hallazgos que bloquean), `stage.judge.fix.started` y `stage.judge.round.started`; si falla, `stage.judge.failed` con el motivo. El veredicto de cada juez en cada ronda queda en `stage_verdict`, y el estado del juez de la fase en `stage_judge`.
+- **En la web:** la fase dice «Juzgando: 2 jueces», «implementar corrige lo que suspendió el juez (ronda 1 de 2)» o su nota, «3,8 / 5 · aprobado por 2 de 2». Al abrirla se ve la nota de cada criterio por juez (con su justificación), los hallazgos con su fichero y el resumen de cada juez. En el grafo, la caja de la fase dice cuántos jueces, el umbral y quién corrige. Con una fase `github-pr` detrás, la descripción de la PR lleva la nota y los hallazgos.
 
 **Entrega por PR.** Una fase `type: github-pr` sube el worktree que hereda a GitHub y abre una PR con lo que ha hecho el workflow (EN-A). Necesita la GitHub App ([`github.md`](github.md)) instalada en el repositorio:
 

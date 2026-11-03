@@ -1,4 +1,11 @@
-import type { AgentFailure, Run, StageDependency, StageRun, VerificationCheck } from '../../api'
+import type {
+  AgentFailure,
+  JudgeLens,
+  Run,
+  StageDependency,
+  StageRun,
+  VerificationCheck,
+} from '../../api'
 import { providerName } from '../../format'
 
 /** Por qué falló un agente, para «Falló: …». */
@@ -196,6 +203,55 @@ export function isCorrecting(stage: StageRun): boolean {
   )
 }
 
+/** Cómo se nombra cada lente de un juez. */
+export const LENS_LABEL: Record<JudgeLens, string> = {
+  correctness: 'corrección',
+  security: 'seguridad',
+  performance: 'rendimiento',
+  reproduce: 'reproducir',
+  completeness: 'completitud',
+}
+
+/** 3.8 → «3,8», 4 → «4», 3.75 → «3,75». */
+export function formatScore(score: number): string {
+  return score.toLocaleString('es-ES', { maximumFractionDigits: 2 })
+}
+
+/** «3,8 / 5 · aprobado por 2 de 2» o «2,5 / 5 · suspenso: aprueba 0 de 1»; null sin veredicto. */
+export function judgeScore(stage: StageRun): string | null {
+  const judge = stage.judge
+  if (!judge || judge.score == null) return null
+  const approvals = judge.approvals ?? 0
+  const judges = judge.judges ?? 0
+  return judge.passed
+    ? `${formatScore(judge.score)} / 5 · aprobado por ${approvals} de ${judges}`
+    : `${formatScore(judge.score)} / 5 · suspenso: aprueba ${approvals} de ${judges}`
+}
+
+/**
+ * Lo que hace el juez de la fase ahora (VA-B): comprobando, juzgando, corrigiendo con la fase de
+ * `fix` o su nota al terminar; null si la fase no tiene juez.
+ */
+export function judgeNote(stage: StageRun): string | null {
+  const judge = stage.judge
+  if (!judge) return null
+  const round = judge.round > 1 ? ` (ronda ${judge.round})` : ''
+  switch (judge.status) {
+    case 'CHECKING':
+      return stage.status === 'RUNNING' ? `Comprobando antes de juzgar${round}` : null
+    case 'JUDGING': {
+      const n = judge.judgements.length || 1
+      return `Juzgando: ${n === 1 ? '1 juez' : `${n} jueces`}${round}`
+    }
+    case 'FIXING':
+      return `${judge.fix} corrige lo que suspendió el juez (ronda ${judge.round} de ${judge.maxRounds})`
+    case 'PASSED':
+      return judgeScore(stage)
+    case 'FAILED':
+      return judge.error ? `No pasó: ${judge.error}` : judgeScore(stage)
+  }
+}
+
 /** Si la fase está comprobando su worktree: su agente terminó y su verificación sigue en curso. */
 export function isVerifying(stage: StageRun): boolean {
   return stage.status === 'RUNNING' && stage.verifications.some((v) => v.live)
@@ -215,7 +271,9 @@ export interface CheckState {
  * `parallel`, cada hijo se comprueba en su worktree) y pasa si la pasaron todos.
  */
 export function checkStates(stage: StageRun): CheckState[] {
-  const finished = stage.verifications.filter((v) => !v.live)
+  // Con juez, cada ronda vuelve a comprobar: cuenta la última (VA-B).
+  const verifications = stage.judge ? stage.verifications.slice(-1) : stage.verifications
+  const finished = verifications.filter((v) => !v.live)
   const expected = stage.type === 'parallel' ? stage.agents.length : 1
   return stage.checks.map((check, i) => {
     const results = finished.map((v) => v.checks[i]).filter((c) => c != null)
@@ -252,6 +310,8 @@ export function stageNote(stage: StageRun, run: Run): string {
   const fallback = fallbackNote(stage)
   if (fallback && stage.status !== 'FAILED' && stage.status !== 'CANCELLED') return fallback
   if (stage.cancelling) return 'Cancelando: espera a que el runner pare sus agentes'
+  const judging = judgeNote(stage)
+  if (judging && !(stage.status === 'FAILED' && stage.timedOutAt)) return judging
   if (stage.status === 'FAILED' && stage.timedOutAt)
     return stage.type === 'human-approval' ? 'Caducó sin decisión' : 'Falló: se acabó el tiempo'
   if (isVerifying(stage)) return `Verificando: ${joinNames(stage.checks.map((c) => c.name))}`

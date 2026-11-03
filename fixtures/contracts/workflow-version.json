@@ -76,6 +76,7 @@
       "pullRequest" : null,
       "ci" : null,
       "merge" : null,
+      "judge" : null,
       "timeoutSeconds" : null
     }, {
       "id" : "fix",
@@ -106,6 +107,7 @@
       "pullRequest" : null,
       "ci" : null,
       "merge" : null,
+      "judge" : null,
       "timeoutSeconds" : null
     }, {
       "id" : "verify",
@@ -152,6 +154,7 @@
       "pullRequest" : null,
       "ci" : null,
       "merge" : null,
+      "judge" : null,
       "timeoutSeconds" : 1800
     } ]
   }

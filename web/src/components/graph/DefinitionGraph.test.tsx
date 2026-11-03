@@ -26,6 +26,7 @@ const stage = (id: string, dependsOn: string[] = []): StageDefinition => ({
   pullRequest: null,
   ci: null,
   merge: null,
+  judge: null,
 })
 
 const definition: WorkflowModel = {

@@ -83,6 +83,7 @@ public class RunService {
   private final CiChecks ciChecks;
   private final QuotaShares quotaShares;
   private final RunQueue queue;
+  private final StageJudges judges;
 
   RunService(
       WorkflowRunRepository workflowRuns,
@@ -103,7 +104,8 @@ public class RunService {
       Approvals approvals,
       CiChecks ciChecks,
       QuotaShares quotaShares,
-      RunQueue queue) {
+      RunQueue queue,
+      StageJudges judges) {
     this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
     this.agentRuns = agentRuns;
@@ -123,6 +125,7 @@ public class RunService {
     this.ciChecks = ciChecks;
     this.quotaShares = quotaShares;
     this.queue = queue;
+    this.judges = judges;
   }
 
   /**
@@ -1637,10 +1640,21 @@ public class RunService {
                                                   quota.get(a.getId())))
                                       .toList(),
                                   stageChecks.getOrDefault(s.getId(), List.of()),
-                                  stageApprovals.get(s.getId())))
+                                  stageApprovals.get(s.getId()),
+                                  judgeOf(definition, s)))
                       .toList());
             })
         .toList();
+  }
+
+  /** El juez de una fase {@code verification} con {@code judge} (VA-B); {@code null} si no. */
+  private JudgeView judgeOf(PublishedDefinition definition, StageRun stage) {
+    StageDefinition stageDefinition =
+        definition == null ? null : definition.definition().stage(stage.getStageKey()).orElse(null);
+    if (stageDefinition == null || stageDefinition.judge() == null) {
+      return null;
+    }
+    return judges.view(stage.getId(), stageDefinition).orElse(null);
   }
 
   /**

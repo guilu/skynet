@@ -35,6 +35,9 @@ public class AgentRun {
    */
   public static final String PROVIDER_VERIFICATION = "verification";
 
+  /** Un juez de una fase {@code verification} (VA-B). */
+  public static final String ROLE_JUDGE = "judge";
+
   @Id private final UUID id;
   private final UUID stageRunId;
   private final UUID parentAgentRunId;
@@ -128,6 +131,9 @@ public class AgentRun {
 
   /** Cuándo se renueva la cuota del proveedor al que sustituye, si se sabe (CQ-B). */
   private Instant fallbackUntil;
+
+  /** Qué hace en su fase: {@code null} para el agente de siempre, {@link #ROLE_JUDGE} (VA-B). */
+  private String role;
 
   @Version private Long version;
 
@@ -655,6 +661,20 @@ public class AgentRun {
 
   public boolean isVerification() {
     return PROVIDER_VERIFICATION.equals(provider);
+  }
+
+  public String getRole() {
+    return role;
+  }
+
+  /** Es un juez de una fase {@code verification} (VA-B). */
+  public boolean isJudge() {
+    return ROLE_JUDGE.equals(role);
+  }
+
+  /** La invocación es un juez (VA-B). */
+  void asJudge() {
+    this.role = ROLE_JUDGE;
   }
 
   public String getBaseCommit() {

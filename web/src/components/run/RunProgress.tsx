@@ -11,6 +11,7 @@ import { spanDuration, type Span } from './runSpans'
 import { RISK_LABEL } from '../approval/approvalFormat'
 import { StageQuotaSkip } from './StageQuotaSkip'
 import { StageRetry } from './StageRetry'
+import { StageJudge } from './StageJudge'
 import { ACTIVE, stageActivity, stepState, WAITING } from './stageState'
 import {
   attemptOf,
@@ -200,6 +201,7 @@ export function RunProgress({
               </p>
             )}
             {open.checks.length > 0 && <StageChecks checks={checkStates(open)} />}
+            {open.judge && <StageJudge judge={open.judge} />}
             {earlier.length > 0 && (
               <EarlierAttempts
                 attempts={earlier}

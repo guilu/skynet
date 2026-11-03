@@ -54,6 +54,9 @@ import tools.jackson.databind.node.ObjectNode;
  *       directorio de trabajo; con {@code disable <ruta>}, le pone {@code @Disabled} a su primer
  *       {@code @Test}. Lo confirma con un commit y borra el testigo, así que solo pasa una vez. Se
  *       activa sin reiniciar el runner.
+ *   <li>{@code FAKE_CLAUDE_JUDGE}: ruta de un fichero testigo (VA-B). Con la salida estructurada de
+ *       un juez de Skynet, aprueba si no existe y, si existe, suspende con un hallazgo que bloquea
+ *       (el que diga el fichero) y lo borra ({@link FakeJudge}).
  *   <li>{@code FAKE_MCP_CALLS} y {@code FAKE_MCP_LOG}: con {@code --mcp-config}, llamadas de guion
  *       al servidor de memoria {@code skynet_memoria} ({@link McpScript}).
  *   <li>{@code CLAUDE_CONFIG_DIR}: si está definida, guarda cada sesión en {@code
@@ -130,6 +133,13 @@ public final class FakeClaude {
         "1".equals(env.get("FAKE_CLAUDE_APPLY")) ? new ToolApplier(cwd, err) : null;
     boolean sawResult = false;
     boolean isError = false;
+    String verdict =
+        FakeJudge.verdict(
+            env,
+            "FAKE_CLAUDE_JUDGE",
+            inv.jsonSchema(),
+            inv.rest().isEmpty() ? "" : inv.rest().getLast(),
+            cwd);
 
     for (String line : loadFixture(inv.fixture(env))) {
       if (line.isBlank()) {
@@ -149,7 +159,7 @@ public final class FakeClaude {
       if ("result".equals(type)) {
         sawResult = true;
         isError = node.path("is_error").asBoolean(false);
-        String structured = structuredOutput(env, cwd);
+        String structured = verdict != null ? verdict : structuredOutput(env, cwd);
         if (inv.jsonSchema() != null && structured != null && !isError) {
           node.set("structured_output", JSON.readTree(structured));
         }

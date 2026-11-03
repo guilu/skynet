@@ -250,6 +250,8 @@ export interface StageRun {
   phase: Phase | null
   /** La cuota que espera antes de empezar (CQ-A); sigue en `notBefore`. Null si no espera. */
   quotaWait: QuotaWait | null
+  /** El juez de una fase `verification` con `judge` (VA-B); null en las demás. */
+  judge: StageJudge | null
 }
 
 /** La cuota que espera una fase: de qué proveedor, qué ventana y cuándo se renueva. */
@@ -849,11 +851,74 @@ export interface StageDefinition {
   } | null
   /** Cómo fusiona la PR una fase `github-merge`; null en las demás. */
   merge: { method: 'squash' | 'merge' | 'rebase'; deleteBranch: boolean } | null
+  /** El juez de una fase `verification` (VA-B); null si no tiene. */
+  judge: JudgeSpec | null
+}
+
+/** Una lente de juez: qué mira además de la rúbrica. */
+export type JudgeLens = 'correctness' | 'security' | 'performance' | 'reproduce' | 'completeness'
+
+/** El bloque `judge` de una fase `verification`, con `fix` y `maxRounds` de la fase. */
+export interface JudgeSpec {
+  agents: { agent: string; lens: JudgeLens | null }[]
+  /** Los criterios del YAML; vacío con `rubricFile` o con la rúbrica de siempre. */
+  rubric: { id: string; text: string; weight: number; required: boolean }[]
+  rubricFile: string | null
+  threshold: number
+  fix: string | null
+  maxRounds: number
+}
+
+/** Un hallazgo de un juez. */
+export interface JudgeFinding {
+  file: string | null
+  line: number | null
+  severity: 'blocking' | 'minor'
+  text: string
+  judge: string
+}
+
+/** El juez de una fase en una ejecución: en qué ronda va y el veredicto de la última ronda. */
+export interface StageJudge {
+  status: 'CHECKING' | 'JUDGING' | 'FIXING' | 'PASSED' | 'FAILED'
+  round: number
+  /** La ronda de `judgements`: la anterior mientras se corrige. */
+  shownRound: number
+  /** Rondas de corrección como mucho; 0 sin `fix`. */
+  maxRounds: number
+  fix: string | null
+  threshold: number
+  /** La media de las medias; null sin veredicto. */
+  score: number | null
+  passed: boolean | null
+  approvals: number | null
+  judges: number | null
+  findings: JudgeFinding[]
+  judgements: {
+    judge: string
+    lens: JudgeLens | null
+    agentRunId: string
+    status: 'PENDING' | 'DONE' | 'FAILED'
+    score: number | null
+    passed: boolean | null
+    criteria: {
+      id: string
+      score: number
+      reason: string | null
+      weight: number
+      required: boolean
+    }[]
+    findings: JudgeFinding[]
+    summary: string | null
+    error: string | null
+  }[]
+  error: string | null
 }
 
 /** Una comprobación de fase: `artifacts`, `tests`, `diff`, `commit`, `scope` o `command`. */
 export interface VerificationCheck {
-  name: 'artifacts' | 'tests' | 'diff' | 'commit' | 'scope' | 'command'
+  name:
+    'artifacts' | 'tests' | 'tests-intact' | 'diff' | 'commit' | 'scope' | 'protected' | 'command'
   /** El comando de `command`. */
   command: string | null
   /** Los globs de `artifacts` y `scope`. */

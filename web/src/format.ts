@@ -230,6 +230,27 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return payload.error
         ? `${p('stageKey')}: ${truncate(p('error'), 120)}`
         : `${p('stageKey')}: la CI falló en ${names(payload.failed)}`
+    // El juez de las fases verification (VA-B).
+    case 'stage.judge.started':
+      return `${p('stageKey')} llama a ${
+        Array.isArray(payload.judges) && payload.judges.length === 1
+          ? '1 juez'
+          : `${Array.isArray(payload.judges) ? payload.judges.length : 0} jueces`
+      }${Number(payload.round) > 1 ? ` (ronda ${p('round')})` : ''}`
+    case 'stage.judge.verdict':
+      return `${p('stageKey')}: ${Number(payload.score).toLocaleString('es-ES', {
+        maximumFractionDigits: 2,
+      })} / 5 · ${payload.passed ? 'aprobado' : 'suspenso'}, aprueba ${p('approvals')} de ${p(
+        'judges',
+      )}${Number(payload.blocking) > 0 ? ` · ${p('blocking')} bloquea` : ''}`
+    case 'stage.judge.fix.started':
+      return `${p('fixStageKey')} corrige lo que suspendió el juez (ronda ${p('round')} de ${p(
+        'maxRounds',
+      )})`
+    case 'stage.judge.round.started':
+      return `${p('stageKey')} vuelve a comprobar y juzgar (ronda ${p('round')})`
+    case 'stage.judge.failed':
+      return `${p('stageKey')}: ${truncate(p('error'), 120)}`
     case 'stage.github.ci.fix.started':
       return `${p('fixStageKey')} corrige la CI (ronda ${p('round')} de ${p('maxRounds')}): ${names(
         payload.failed,

@@ -76,6 +76,12 @@ record EffectivePolicy(
         memory);
   }
 
+  /** La misma política con otro modo de permisos: el de solo lectura de un juez (VA-B). */
+  EffectivePolicy withPermissionMode(String mode) {
+    return new EffectivePolicy(
+        allowedTools, mode, environment, limits, model, outputSchema, provider, memory);
+  }
+
   /** Proveedor efectivo: {@code claude-code} si el agente no pide otro. */
   String providerOrDefault() {
     return provider == null ? AgentProviderKind.CLAUDE_CODE.id() : provider;
