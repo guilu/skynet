@@ -5,6 +5,8 @@ import dev.skynet.controlplane.github.GitHubRepositories.Link;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.controlplane.workflow.ApprovalRequested;
 import dev.skynet.controlplane.workflow.PullRequests;
+import dev.skynet.controlplane.workflow.QuotaTexts;
+import dev.skynet.controlplane.workflow.QuotaWaitStarted;
 import dev.skynet.controlplane.workflow.RunService;
 import dev.skynet.controlplane.workflow.RunView;
 import dev.skynet.controlplane.workflow.WorkflowRunFinished;
@@ -160,6 +162,36 @@ class TriggerNotices {
                     + requested.approvalId()
                     + ")")
             + " Desde GitHub puedes pedir cambios con `/skynet corrige <qué cambiar>`.";
+    for (UUID launch : launches) {
+      triggers.notice(launch, text, List.of(), List.of(), false);
+    }
+  }
+
+  /**
+   * Una ejecución lanzada desde GitHub se pone en pausa hasta que se renueve la cuota de su
+   * proveedor (CQ-A): se avisa en la issue una vez por pausa. Al seguir no se dice nada hasta el
+   * final.
+   */
+  @EventListener
+  void quotaWaitStarted(QuotaWaitStarted waiting) {
+    List<UUID> launches =
+        jdbc.sql("SELECT id FROM trigger_launch WHERE workflow_run_id = ? AND status = 'LAUNCHED'")
+            .param(waiting.workflowRunId())
+            .query(UUID.class)
+            .list();
+    if (launches.isEmpty()) {
+      return;
+    }
+    RunView run = runs.run(waiting.workflowRunId());
+    String text =
+        "En pausa hasta "
+            + QuotaTexts.time(waiting.notBefore(), time.now())
+            + " por la cuota de "
+            + QuotaTexts.provider(waiting.provider())
+            + QuotaTexts.window(waiting.window())
+            + ": **"
+            + run.workItemKey()
+            + "** sigue sola cuando se renueve.";
     for (UUID launch : launches) {
       triggers.notice(launch, text, List.of(), List.of(), false);
     }

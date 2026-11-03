@@ -16,7 +16,9 @@ start() {
   case $service in
     control-plane)
       # El lanzador hace exec: el pid es el de la JVM.
-      java -jar "$ROOT/control-plane/build/libs/control-plane.jar" >> "$OUT/control-plane.log" 2>&1 &
+      # Sin margen ni apenas dispersión en la espera de cuota (web/e2e/quota-wait.e2e.ts).
+      SKYNET_QUOTA_MARGIN=0s SKYNET_QUOTA_JITTER=1s \
+        java -jar "$ROOT/control-plane/build/libs/control-plane.jar" >> "$OUT/control-plane.log" 2>&1 &
       echo $! > "$pidfile"
       for _ in $(seq 90); do
         curl -fsS "${SKYNET_URL:-http://127.0.0.1:8080}/actuator/health" 2>/dev/null \
@@ -38,12 +40,12 @@ start() {
       SKYNET_RUNNER_NAME=${E2E_RUNNER_NAME:-e2e} \
       SKYNET_CLAUDE_BIN=$FAKE/fake-claude SKYNET_CODEX_BIN=$FAKE/fake-codex \
       SKYNET_AGY_BIN=$FAKE/fake-agy \
-      SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE,FAKE_CLAUDE_DELAY_MS,FAKE_CLAUDE_APPLY,FAKE_CLAUDE_STRUCTURED_OUTPUT,FAKE_CODEX_FIXTURE,FAKE_CODEX_DELAY_MS,FAKE_CODEX_STRUCTURED_OUTPUT,FAKE_AGY_FIXTURE,FAKE_AGY_DELAY_MS,FAKE_AGY_STRUCTURED_OUTPUT,FAKE_AGY_HOME,FAKE_CODEX_QUOTA_STEP,FAKE_MCP_CALLS \
+      SKYNET_AGENT_ENV=FAKE_CLAUDE_FIXTURE,FAKE_CLAUDE_DELAY_MS,FAKE_CLAUDE_APPLY,FAKE_CLAUDE_STRUCTURED_OUTPUT,FAKE_CODEX_FIXTURE,FAKE_CODEX_DELAY_MS,FAKE_CODEX_STRUCTURED_OUTPUT,FAKE_AGY_FIXTURE,FAKE_AGY_DELAY_MS,FAKE_AGY_STRUCTURED_OUTPUT,FAKE_AGY_HOME,FAKE_CODEX_QUOTA_STEP,FAKE_MCP_CALLS,FAKE_CLAUDE_QUOTA \
       FAKE_CLAUDE_FIXTURE=02-tools FAKE_CLAUDE_DELAY_MS=${FAKE_CLAUDE_DELAY_MS:-500} FAKE_CLAUDE_APPLY=1 \
       FAKE_CLAUDE_STRUCTURED_OUTPUT=@.revision.json \
       FAKE_CODEX_DELAY_MS=200 FAKE_CODEX_STRUCTURED_OUTPUT=@.revision.json FAKE_CODEX_QUOTA_STEP=3,1 \
       FAKE_AGY_DELAY_MS=200 FAKE_AGY_STRUCTURED_OUTPUT=@.revision.json FAKE_AGY_HOME=$OUT/agy \
-      FAKE_MCP_CALLS=@.memoria.json \
+      FAKE_MCP_CALLS=@.memoria.json FAKE_CLAUDE_QUOTA=$OUT/claude-sin-cuota \
       CLAUDE_CONFIG_DIR=$OUT/claude CODEX_HOME=$OUT/codex \
         "$ROOT/runner/build/install/skynet-runner/bin/skynet-runner" >> "$OUT/runner.log" 2>&1 &
       echo $! > "$pidfile"

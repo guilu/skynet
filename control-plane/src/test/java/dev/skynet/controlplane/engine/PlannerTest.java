@@ -141,6 +141,16 @@ class PlannerTest {
   }
 
   @Test
+  void aReadyStageWaitingForQuotaStartsWhenItRenews() {
+    Map<String, StageState> stages = states("PENDING", "SUCCEEDED", "PENDING", "PENDING");
+    Instant renews = NOW.plusSeconds(600);
+    stages.put("plan", new StageState("plan", StageStatus.READY, false, null, false, renews));
+
+    assertThat(Planner.plan(DAG, stages, NOW)).containsExactly(new Wake(renews));
+    assertThat(Planner.plan(DAG, stages, renews)).containsExactly(new Start("plan"));
+  }
+
+  @Test
   void aPendingRetryDoesNotRunIfAnotherStageFailsForGood() {
     Map<String, StageState> stages = states("FAILED", "FAILED", "CANCELLED", "CANCELLED");
     stages.put("plan", new StageState("plan", StageStatus.FAILED, true, null, true, null));

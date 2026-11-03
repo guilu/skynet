@@ -35,7 +35,8 @@ import tools.jackson.databind.json.JsonMapper;
  *   <li>Cada {@code rate_limit_event} con {@code unifiedWindows} produce un {@link
  *       AgentEventType#QUOTA} con las ventanas de 5 h y semanal, solo si cambian respecto al
  *       anterior de la invocación (CU-A). Si su estado no es {@code allowed} ni {@code
- *       allowed_warning}, produce además un {@link AgentEventType#RATE_LIMIT}.
+ *       allowed_warning}, produce además un {@link AgentEventType#RATE_LIMIT}; si rechaza el turno
+ *       por falta de cuota y sin uso extra, con {@code blocked} (CQ-A).
  *   <li>Todo lo que no se reconoce (tipo, subtipo, bloque o JSON inválido) se conserva como {@link
  *       AgentEventType#RAW}: el parser nunca falla por una línea.
  * </ul>
@@ -307,15 +308,71 @@ public final class ClaudeStreamParser implements dev.skynet.runner.provider.Even
     }
     String status = text(info, "status");
     if (!"allowed".equals(status) && !"allowed_warning".equals(status)) {
-      events.add(
-          event(
-              AgentEventType.RATE_LIMIT,
-              payload()
-                  .put("status", status)
-                  .put("limitType", text(info, "rateLimitType"))
-                  .put(RESETS_AT, longValue(info, RESETS_AT))));
+      Payload payload =
+          payload()
+              .put("status", status)
+              .put("limitType", text(info, "rateLimitType"))
+              .put(RESETS_AT, longValue(info, RESETS_AT));
+      if (blocked(info, status)) {
+        Blocked window = blockedWindow(info);
+        payload
+            .put("blocked", true)
+            .put("provider", "claude-code")
+            .put("window", window.window())
+            .put(RESETS_AT, window.resetsAt());
+      }
+      events.add(event(AgentEventType.RATE_LIMIT, payload));
     }
     return events;
+  }
+
+  /** La ventana que bloquea un rechazo y cuándo se renueva (epoch en segundos), si se sabe. */
+  private record Blocked(String window, Long resetsAt) {}
+
+  /**
+   * Si un {@code rate_limit_event} rechaza el turno porque la cuenta se quedó sin cuota (CQ-A):
+   * {@code rejected}, sin uso extra al que pasar ({@code overageStatus} distinto de {@code allowed}
+   * o {@code allowed_warning}, o {@code isUsingOverage} a {@code false}) y en una ventana de la
+   * cuenta ({@code five_hour}, {@code seven_day}, {@code overage} o sin tipo), no la de un modelo.
+   */
+  private static boolean blocked(JsonNode info, String status) {
+    if (!"rejected".equals(status)) {
+      return false;
+    }
+    String overage = text(info, "overageStatus");
+    boolean onCredits =
+        info.path("isUsingOverage").isBoolean()
+            ? info.get("isUsingOverage").asBoolean()
+            : "allowed".equals(overage) || "allowed_warning".equals(overage);
+    String type = text(info, "rateLimitType");
+    boolean accountWide =
+        type == null || Set.of("five_hour", "seven_day", "overage").contains(type);
+    return !onCredits && accountWide;
+  }
+
+  /**
+   * La ventana bloqueada que más tarde se renueva: despertar con la de 5 h mientras la semanal
+   * sigue a cero solo sirve para fallar otra vez. Sin ventanas al 100 %, la del propio evento.
+   */
+  private static Blocked blockedWindow(JsonNode info) {
+    JsonNode windows = info.path("unifiedWindows");
+    Blocked latest = null;
+    for (String window : List.of(QuotaSample.FIVE_HOUR, QuotaSample.SEVEN_DAY)) {
+      JsonNode w = windows.path(window);
+      Long resetsAt = longValue(w, RESETS_AT);
+      if (w.path("utilization").asDouble(0) >= 1
+          && resetsAt != null
+          && (latest == null || resetsAt > latest.resetsAt())) {
+        latest = new Blocked(window, resetsAt);
+      }
+    }
+    if (latest != null) {
+      return latest;
+    }
+    String type = text(info, "rateLimitType");
+    return new Blocked(
+        QuotaSample.FIVE_HOUR.equals(type) || QuotaSample.SEVEN_DAY.equals(type) ? type : null,
+        longValue(info, RESETS_AT));
   }
 
   /**

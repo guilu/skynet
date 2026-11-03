@@ -379,6 +379,7 @@ Las plantillas `especificar-planificar-implementar`, `implementar-tarea` y `corr
   | `timeout` | se acabó el tiempo del agente (`limits.timeoutMinutes`) o el de su fase (`timeout`) | no |
   | `budget` | superó el presupuesto o los turnos | no |
   | `verification` | la salida estructurada o las comprobaciones de la fase (`artifacts`, `checks`) no pasaron | no |
+  | `quota` | la cuenta del proveedor se quedó sin su ventana de 5 h o semanal | no: espera a que se renueve (ver «Sin cuota») |
 
   Cancelar no es un fallo y nunca se reintenta.
 - Cada intento es una fase nueva de la misma ejecución (`attempt` 2, 3…) con agentes nuevos y sesión nueva. El intento que falló se queda como estaba, con sus agentes, sus logs y su coste.
@@ -387,6 +388,22 @@ Las plantillas `especificar-planificar-implementar`, `implementar-tarea` y `corr
 - En una fase `parallel`, `retry` va en cada hijo de `children` (en la fase es un error). Si un hijo falla, sus hermanos terminan; después, el intento nuevo de la fase repite solo los hijos que fallaron y pueden reintentarse. Los que terminaron bien no se repiten y sus salidas y worktrees siguen valiendo.
 - `retry` en una fase `conditional`, `verification` o `human-approval` es un error.
 - **En la web:** el progreso enseña el último intento de cada fase («Reintenta a las 10:30:15 (intento 2 de 3)»), por qué falló cada agente («Falló: terminó con error») y, al abrir la fase, sus intentos anteriores con sus agentes. El resumen del workflow dice qué fases se reintentan.
+
+**Sin cuota.** Si un agente se queda sin la cuota de su cuenta (la ventana de 5 h o la semanal de Claude Code, Codex o Antigravity), acaba con `failure: quota` y su fase no falla: espera a que se renueve y sigue. No hace falta `retry` y no gasta sus `maxAttempts`.
+
+```yaml
+agents:
+  impaciente:
+    provider: claude-code
+    onQuota: fail             # wait (por defecto) o fail; fallback llegará con el proveedor de reserva
+```
+
+- La fase espera a la ventana bloqueada que más tarde se renueva, más 30 s y hasta 60 s de dispersión (`SKYNET_QUOTA_MARGIN`, `SKYNET_QUOTA_JITTER`), con un intento nuevo `PENDING` y `stage.retry.scheduled` con `reason: quota`, su `provider`, su `window` y su `resetsAt`. Sin hora de renovación, espera 30 minutos, como mucho 2 veces. Como mucho 4 esperas por fase.
+- Al seguir, el agente **reanuda su sesión en el mismo worktree**, sin restaurar la foto. Si el proveedor no puede reanudar, empieza una sesión nueva en el mismo worktree con una nota de que hay trabajo a medias.
+- Una fase lista cuyo proveedor está sin cuota en todos sus runners no arranca: espera igual (`stage.quota.waiting`), sin gastar nada. Mientras espera, la ejecución sigue «En curso» y conserva su hueco en la cola del repositorio.
+- Si la renovación queda más allá de la espera máxima (6 h por defecto), la fase falla con `quota` como cualquier fallo.
+- En **Ajustes → Ejecución** se apaga (falla como antes), se cambia la espera máxima (6 h, 24 h o sin límite) y las esperas por fase, y se ven las fases en pausa (`GET/PUT /api/settings/quota`, `GET /api/quota/waits`).
+- En el progreso, la fase dice «Esperando la cuota de Claude Code · se renueva a las 18:05 (ventana de 5 h)» y ofrece **Reintentar ahora** (`POST /api/workflow-runs/{id}/stages/{key}/skip-quota-wait`), que la arranca ya sin mirar la cuota. En una ejecución lanzada desde una issue, Skynet lo comenta en ella.
 
 **Límites de tiempo.** `timeout` limita lo que puede durar cada intento de una fase, desde que queda lista (`READY`) hasta que termina, incluidas la espera a un runner y sus comprobaciones:
 

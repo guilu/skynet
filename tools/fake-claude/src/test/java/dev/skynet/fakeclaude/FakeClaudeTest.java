@@ -106,6 +106,30 @@ class FakeClaudeTest {
   }
 
   @Test
+  void withQuotaTheRunIsRejectedOnceAndLeavesItsWork(@TempDir Path dir) throws Exception {
+    Path marker = dir.resolve("sin-cuota");
+    Files.writeString(marker, "90\n");
+    Map<String, String> env =
+        Map.of("FAKE_CLAUDE_QUOTA", marker.toString(), "FAKE_CLAUDE_DELAY_MS", "0");
+    String[] args = {"-p", "x", "--output-format", "stream-json", "--session-id", SESSION};
+    long before = java.time.Instant.now().getEpochSecond();
+
+    Result first = run(env, dir, args);
+    assertThat(first.exitCode).isEqualTo(1);
+    assertThat(first.lines).hasSize(3);
+    JsonNode info = first.lines.get(1).path("rate_limit_info");
+    assertThat(info.path("status").asString()).isEqualTo("rejected");
+    assertThat(info.path("isUsingOverage").asBoolean(true)).isFalse();
+    long resetsAt = info.path("resetsAt").asLong();
+    assertThat(resetsAt).isBetween(before + 90, before + 92);
+    assertThat(dir.resolve("fake-claude-parcial.txt")).isRegularFile();
+    assertThat(marker).doesNotExist();
+
+    Result second = run(env, dir, args);
+    assertThat(second.exitCode).isZero();
+  }
+
+  @Test
   void withConfigDirStoresSessionsAndResumeNeedsThemInTheSameDirectory(@TempDir Path config)
       throws Exception {
     Map<String, String> env =

@@ -2,6 +2,7 @@ package dev.skynet.controlplane.workflow;
 
 import dev.skynet.controlplane.shared.ConflictException;
 import dev.skynet.protocol.StageStatus;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.data.annotation.Id;
@@ -34,6 +35,22 @@ public class StageRun {
    * Quién pidió este intento con «Reintentar fase» (W6-C); {@code null} si lo programó el motor.
    */
   private String retriedBy;
+
+  /**
+   * El proveedor cuya cuota espera la fase antes de empezar (CQ-A), o {@code null}: un intento tras
+   * un fallo {@code quota} o una fase lista cuyo proveedor ya está a cero. Empieza en {@link
+   * #notBefore}.
+   */
+  private String quotaProvider;
+
+  /** La ventana que espera ({@code five_hour} o {@code seven_day}), si se sabe (CQ-A). */
+  private String quotaWindow;
+
+  /** Cuándo se renueva esa ventana, si se sabe (CQ-A). */
+  private Instant quotaResetsAt;
+
+  /** Quién pidió «Reintentar ahora» (CQ-A): arranca sin mirar la cuota. */
+  private String quotaSkippedBy;
 
   @Version private Long version;
 
@@ -157,6 +174,55 @@ public class StageRun {
 
   public String getRetriedBy() {
     return retriedBy;
+  }
+
+  public String getQuotaProvider() {
+    return quotaProvider;
+  }
+
+  public String getQuotaWindow() {
+    return quotaWindow;
+  }
+
+  public Instant getQuotaResetsAt() {
+    return quotaResetsAt;
+  }
+
+  public String getQuotaSkippedBy() {
+    return quotaSkippedBy;
+  }
+
+  /** Si espera a la cuota: no ha empezado y tiene hora (CQ-A). */
+  boolean waitingForQuota(Instant now) {
+    return quotaProvider != null
+        && quotaSkippedBy == null
+        && (status == StageStatus.PENDING || status == StageStatus.READY)
+        && notBefore != null
+        && notBefore.isAfter(now);
+  }
+
+  /** «Reintentar ahora» (CQ-A): deja de esperar y arranca sin mirar la cuota. */
+  void skipQuotaWait(String actor, Instant now) {
+    if (deadline != null && notBefore != null && notBefore.isAfter(now)) {
+      deadline = deadline.minus(Duration.between(now, notBefore));
+    }
+    quotaSkippedBy = actor;
+    notBefore = now;
+  }
+
+  /**
+   * La fase espera a que se renueve la cuota de {@code provider} (CQ-A): no empieza antes de {@code
+   * notBefore}. Si tenía {@code timeout}, se corre lo mismo: la espera no cuenta.
+   */
+  void waitForQuota(
+      String provider, String window, Instant resetsAt, Instant notBefore, Instant now) {
+    if (deadline != null && notBefore.isAfter(now)) {
+      deadline = deadline.plus(Duration.between(now, notBefore));
+    }
+    this.quotaProvider = provider;
+    this.quotaWindow = window;
+    this.quotaResetsAt = resetsAt;
+    this.notBefore = notBefore;
   }
 
   /** Fija hasta cuándo puede durar el intento, al pasar a lista. */

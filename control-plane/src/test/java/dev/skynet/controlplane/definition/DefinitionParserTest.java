@@ -1943,12 +1943,76 @@ class DefinitionParserTest {
             "A `retry` le falta `maxAttempts`, los intentos en total, p. ej. `maxAttempts: 3`",
             "`stages.tests.retry.maxAttempts` debe estar entre 1 y 5",
             "Fallo `errror` desconocido; ¿quisiste decir `error`?. Admite: lost, start, error,"
-                + " timeout, budget, verification",
+                + " timeout, budget, verification, quota",
             "`5 minutos` no es una duración: usa segundos, minutos u horas, p. ej. `30s`, `2m`",
             "En una fase `parallel`, pon `retry` en cada hijo de `children`: se reintenta solo el"
                 + " hijo que falla",
             "`stages.review.children[0].retry.delay` no puede pasar de 1 h",
             "`retry` solo vale en fases `agent` y `command`; esta es `human-approval`");
+  }
+
+  @Test
+  void onQuotaSaysWhetherAnAgentWaitsForItsQuota() {
+    Parsed parsed =
+        parse(
+            """
+            id: cuota
+            agents:
+              paciente:
+                prompt: hola
+              prisa:
+                prompt: hola
+                onQuota: fail
+              explicito:
+                prompt: hola
+                onQuota: wait
+            stages:
+              - id: a
+                type: agent
+                agent: paciente
+              - id: b
+                type: agent
+                agent: prisa
+              - id: c
+                type: agent
+                agent: explicito
+            """);
+
+    assertThat(errors(parsed)).isEmpty();
+    WorkflowDefinition definition = parsed.definition();
+    assertThat(definition.agent("paciente").orElseThrow().waitsForQuota()).isTrue();
+    assertThat(definition.agent("prisa").orElseThrow().waitsForQuota()).isFalse();
+    assertThat(definition.agent("explicito").orElseThrow().waitsForQuota()).isTrue();
+  }
+
+  @Test
+  void onQuotaOnlyAcceptsWaitOrFail() {
+    Parsed parsed =
+        parse(
+            """
+            id: cuota
+            agents:
+              reserva:
+                prompt: hola
+                onQuota: fallback
+              raro:
+                prompt: hola
+                onQuota: luego
+            stages:
+              - id: a
+                type: agent
+                agent: reserva
+              - id: b
+                type: agent
+                agent: raro
+            """);
+
+    assertThat(messages(parsed, Severity.ERROR))
+        .containsExactlyInAnyOrder(
+            "`onQuota: fallback` todavía no existe: llega con el proveedor de reserva (CQ-B)."
+                + " Usa `wait` o `fail`",
+            "`onQuota` vale `wait` (esperar a que se renueve la cuota, lo de siempre) o `fail`"
+                + " (fallar en cuanto se acabe); no `luego`");
   }
 
   private static Parsed parse(String yaml) {

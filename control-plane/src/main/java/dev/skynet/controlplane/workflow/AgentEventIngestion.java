@@ -60,6 +60,7 @@ public class AgentEventIngestion {
   private final TimeSource time;
   private final JdbcClient jdbc;
   private final PullRequests pullRequests;
+  private final QuotaWaits quotaWaits;
 
   AgentEventIngestion(
       AgentRunRepository agentRuns,
@@ -75,7 +76,8 @@ public class AgentEventIngestion {
       QuotaAttributor attributor,
       TimeSource time,
       JdbcClient jdbc,
-      PullRequests pullRequests) {
+      PullRequests pullRequests,
+      QuotaWaits quotaWaits) {
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
     this.publisher = publisher;
@@ -90,6 +92,7 @@ public class AgentEventIngestion {
     this.time = time;
     this.jdbc = jdbc;
     this.pullRequests = pullRequests;
+    this.quotaWaits = quotaWaits;
   }
 
   @Transactional
@@ -228,6 +231,17 @@ public class AgentEventIngestion {
             previousCumulativeCost(agent),
             errors(p));
       }
+      case RATE_LIMIT -> {
+        // El proveedor rechazó el turno porque la cuenta se quedó sin cuota (CQ-A): si el agente
+        // termina mal, falla por `quota`.
+        if (Boolean.TRUE.equals(p.get("blocked"))) {
+          Long resetsAt = longValue(p.get("resetsAt"));
+          agent.recordQuotaLimit(
+              window(string(p, "window")),
+              resetsAt == null ? null : Instant.ofEpochSecond(resetsAt),
+              event.occurredAt());
+        }
+      }
       case GIT_PUSHED -> {
         if (agent.isPush() && string(p, "sha") != null) {
           pullRequests.pushed(agent, string(p, "sha"), now);
@@ -245,6 +259,14 @@ public class AgentEventIngestion {
                 string(p, "signal"),
                 string(p, "error"),
                 AgentFailure.fromId(string(p, "failure")).orElse(null));
+        if (outcome == AgentObservableStatus.FAILED && agent.getFailure() == AgentFailure.ERROR) {
+          // Un proveedor que no avisa (Antigravity) o un aviso perdido: si la última muestra de
+          // la cuota de su cuenta está a cero, el fallo es de cuota (CQ-A).
+          AgentRun failed = agent;
+          quotaWaits
+              .exhausted(failed)
+              .ifPresent(b -> failed.reclassifyAsQuota(b.window(), b.resetsAt(), now));
+        }
         agent = transitions.advanceAgent(agent, outcome, runId, "process-exited", now);
         // Con comprobaciones, la fase sigue «Verificando» hasta que pasan (W4-B).
         stageVerifications.afterAgent(agent, stage, now);
@@ -333,5 +355,14 @@ public class AgentEventIngestion {
         .optional()
         .map(ProviderInfo::isSimulated)
         .orElse(false);
+  }
+
+  private static Long longValue(Object value) {
+    return value instanceof Number n ? n.longValue() : null;
+  }
+
+  /** Solo las ventanas que conoce Skynet ({@code five_hour} y {@code seven_day}). */
+  private static String window(String window) {
+    return "five_hour".equals(window) || "seven_day".equals(window) ? window : null;
   }
 }

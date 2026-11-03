@@ -21,7 +21,12 @@ public enum AgentFailure {
   /** Superó el presupuesto o el número de turnos. */
   BUDGET,
   /** La salida estructurada o las comprobaciones de la fase no pasaron (W4). */
-  VERIFICATION;
+  VERIFICATION,
+  /**
+   * La cuenta del CLI se quedó sin cuota (la ventana de 5 h o la semanal, CQ-A): se espera a que se
+   * renueve en vez de fallar.
+   */
+  QUOTA;
 
   /** El nombre en el YAML y en el protocolo: {@code lost}, {@code start}… */
   public String id() {

@@ -43,6 +43,12 @@ import tools.jackson.databind.node.ObjectNode;
  *       código 1 sin emitir nada, como un fallo pasajero; si ya existe, se comporta como siempre.
  *       Para probar los reintentos (W6): conviene que esté fuera del worktree, porque el reintento
  *       lo restaura y borraría el fichero.
+ *   <li>{@code FAKE_CLAUDE_QUOTA}: ruta de un fichero testigo (CQ-A). Si existe, la invocación
+ *       arranca su sesión, deja {@code fake-claude-parcial.txt} en el directorio de trabajo (lo
+ *       hecho antes del corte), emite un {@code rate_limit_event} rechazado sin uso extra, con la
+ *       ventana de 5 h renovándose dentro de los segundos que diga el fichero (60 si está vacío), y
+ *       termina con error; además borra el testigo, así que la siguiente invocación trabaja como
+ *       siempre. Se activa sin reiniciar el runner: basta con crear el fichero.
  *   <li>{@code FAKE_MCP_CALLS} y {@code FAKE_MCP_LOG}: con {@code --mcp-config}, llamadas de guion
  *       al servidor de memoria {@code skynet_memoria} ({@link McpScript}).
  *   <li>{@code CLAUDE_CONFIG_DIR}: si está definida, guarda cada sesión en {@code
@@ -94,6 +100,10 @@ public final class FakeClaude {
     }
     String sessionId = inv.effectiveSessionId();
     Path sessionFile = sessionFile(env, cwd, sessionId);
+    String quota = env.get("FAKE_CLAUDE_QUOTA");
+    if (quota != null && !quota.isBlank() && Files.isRegularFile(cwd.resolve(quota))) {
+      return outOfQuota(cwd.resolve(quota), sessionId, sessionFile, cwd, out, err);
+    }
     if (inv.resume() != null && sessionFile != null) {
       Path resumed = sessionFile(env, cwd, inv.resume());
       if (!Files.isRegularFile(resumed)) {
@@ -162,6 +172,67 @@ public final class FakeClaude {
       return EXIT_KILLED;
     }
     return isError ? 1 : 0;
+  }
+
+  /** Segundos hasta que se renueva la ventana si el testigo no dice otra cosa. */
+  static final long DEFAULT_QUOTA_RESET_SECONDS = 60;
+
+  /**
+   * La invocación que se queda sin cuota (CQ-A): sesión, trabajo a medias y rechazo de la ventana
+   * de 5 h, con la forma que tendría en el CLI real.
+   */
+  static int outOfQuota(
+      Path marker, String sessionId, Path sessionFile, Path cwd, PrintStream out, PrintStream err)
+      throws IOException {
+    String text = Files.readString(marker).strip();
+    long seconds = text.isEmpty() ? DEFAULT_QUOTA_RESET_SECONDS : Long.parseLong(text);
+    Files.delete(marker);
+    long resetsAt = java.time.Instant.now().getEpochSecond() + seconds;
+    Files.writeString(
+        cwd.resolve("fake-claude-parcial.txt"),
+        "Lo que hizo fake-claude antes de quedarse sin cuota.\n");
+    List<String> lines =
+        List.of(
+            "{\"type\":\"system\",\"subtype\":\"init\",\"cwd\":"
+                + JSON.writeValueAsString(cwd.toString())
+                + ",\"session_id\":\""
+                + sessionId
+                + "\",\"model\":\"claude-sonnet-fake\",\"tools\":[]}",
+            "{\"type\":\"rate_limit_event\",\"rate_limit_info\":{\"status\":\"rejected\","
+                + "\"resetsAt\":"
+                + resetsAt
+                + ",\"rateLimitType\":\"five_hour\",\"utilization\":1.0,"
+                + "\"overageStatus\":\"rejected\",\"isUsingOverage\":false,"
+                + "\"unifiedWindows\":{\"five_hour\":{\"utilization\":1.0,\"resetsAt\":"
+                + resetsAt
+                + "},\"seven_day\":{\"utilization\":0.42,\"resetsAt\":"
+                + (resetsAt + 3 * 24 * 3600)
+                + "}}},\"session_id\":\""
+                + sessionId
+                + "\"}",
+            "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":true,"
+                + "\"num_turns\":1,\"result\":\"Claude AI usage limit reached|"
+                + resetsAt
+                + "\",\"session_id\":\""
+                + sessionId
+                + "\",\"total_cost_usd\":0,\"usage\":{\"input_tokens\":0,"
+                + "\"output_tokens\":0}}");
+    for (String line : lines) {
+      out.println(line);
+      if (sessionFile != null) {
+        Files.createDirectories(sessionFile.getParent());
+        Files.writeString(
+            sessionFile,
+            line + "\n",
+            StandardCharsets.UTF_8,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.APPEND);
+      }
+    }
+    out.flush();
+    err.println(
+        "fake-claude: sin cuota simulada (FAKE_CLAUDE_QUOTA), renueva en " + seconds + " s");
+    return 1;
   }
 
   static List<String> loadFixture(String fixture) throws IOException {

@@ -17,6 +17,9 @@ const STRUCTURAL = [
   'stage.start.failed',
   // Un reintento crea el intento siguiente de la fase.
   'stage.retry.scheduled',
+  // Espera a la cuota (CQ-A): la nota de la fase y «Reintentar ahora» salen del backend.
+  'stage.quota.waiting',
+  'stage.quota.skipped',
   // «Reintentar fase»: la ejecución vuelve a «En curso» con intentos nuevos.
   'run.resumed',
   // Límites de tiempo y cancelación: «Cancelando» y el fallo por tiempo solo los da el backend.

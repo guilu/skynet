@@ -246,6 +246,72 @@ class ClaudeStreamParserTest {
             });
   }
 
+  /**
+   * Escrito a mano con la forma de {@code allowed_warning} (grabada con 2.1.301) y lo que documenta
+   * cloudroom para el rechazo: sin verificar con una salida real (CQ-A).
+   */
+  @Test
+  void aRejectionWithoutOverageBlocksUntilTheLatestExhaustedWindowResets() throws IOException {
+    ClaudeStreamParser parser = new ClaudeStreamParser();
+    String line;
+    try (InputStream in =
+        ClaudeStreamParserTest.class.getResourceAsStream(
+            "/quota/claude-rate-limit-rejected.json")) {
+      line = new String(in.readAllBytes(), StandardCharsets.UTF_8).strip();
+    }
+
+    assertThat(parser.parse(line))
+        .filteredOn(e -> e.type() == RATE_LIMIT)
+        .singleElement()
+        .satisfies(
+            e ->
+                assertThat(e.payload())
+                    .containsEntry("status", "rejected")
+                    .containsEntry("blocked", true)
+                    .containsEntry("provider", "claude-code")
+                    .containsEntry("window", "five_hour")
+                    .containsEntry("resetsAt", 1792275000L));
+  }
+
+  @Test
+  void withBothWindowsExhaustedTheWeeklyOneDecides() {
+    ClaudeStreamParser parser = new ClaudeStreamParser();
+
+    assertThat(
+            parser.parse(
+                "{\"type\":\"rate_limit_event\",\"rate_limit_info\":{\"status\":\"rejected\","
+                    + "\"rateLimitType\":\"five_hour\",\"resetsAt\":1000,"
+                    + "\"unifiedWindows\":{\"five_hour\":{\"utilization\":1,\"resetsAt\":1000},"
+                    + "\"seven_day\":{\"utilization\":1,\"resetsAt\":9000}}}}"))
+        .filteredOn(e -> e.type() == RATE_LIMIT)
+        .singleElement()
+        .satisfies(
+            e ->
+                assertThat(e.payload())
+                    .containsEntry("window", "seven_day")
+                    .containsEntry("resetsAt", 9000L));
+  }
+
+  @Test
+  void onCreditsOrInAModelWindowItDoesNotBlock() {
+    ClaudeStreamParser parser = new ClaudeStreamParser();
+
+    // Con el uso extra activo, Claude sigue a crédito: no hay nada que esperar.
+    assertThat(
+            parser.parse(
+                "{\"type\":\"rate_limit_event\",\"rate_limit_info\":{\"status\":\"rejected\","
+                    + "\"rateLimitType\":\"five_hour\",\"overageStatus\":\"allowed\"}}"))
+        .singleElement()
+        .satisfies(e -> assertThat(e.payload()).doesNotContainKey("blocked"));
+    // La ventana propia de un modelo (p. ej. la semanal de Opus) no es la cuenta.
+    assertThat(
+            parser.parse(
+                "{\"type\":\"rate_limit_event\",\"rate_limit_info\":{\"status\":\"rejected\","
+                    + "\"rateLimitType\":\"seven_day_opus\",\"isUsingOverage\":false}}"))
+        .singleElement()
+        .satisfies(e -> assertThat(e.payload()).doesNotContainKey("blocked"));
+  }
+
   @Test
   void theUnifiedWindowsBecomeAQuotaEventOnlyWhenTheyChange() throws IOException {
     ClaudeStreamParser parser = new ClaudeStreamParser();

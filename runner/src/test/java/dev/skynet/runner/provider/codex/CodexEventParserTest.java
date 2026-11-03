@@ -107,6 +107,46 @@ class CodexEventParserTest {
   }
 
   @Test
+  void aUsageLimitFailureBlocksOnce() {
+    CodexEventParser parser = new CodexEventParser(null, false, ModelPrices.defaults());
+    String limit =
+        "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro) or try"
+            + " again in 2 hours 13 minutes.";
+
+    List<ParsedEvent> error = parser.parse("{\"type\":\"error\",\"message\":\"" + limit + "\"}");
+    List<ParsedEvent> failed =
+        parser.parse("{\"type\":\"turn.failed\",\"error\":{\"message\":\"" + limit + "\"}}");
+
+    assertThat(error)
+        .singleElement()
+        .satisfies(
+            e -> {
+              assertThat(e.type()).isEqualTo(AgentEventType.RATE_LIMIT);
+              assertThat(e.payload())
+                  .containsEntry("blocked", true)
+                  .containsEntry("provider", "codex");
+            });
+    // El turno fallido es su resultado; el límite ya se avisó.
+    assertThat(failed).extracting(ParsedEvent::type).containsExactly(AgentEventType.RESULT);
+  }
+
+  @Test
+  void anErrorThatIsNotTheUsageLimitStaysRaw() {
+    CodexEventParser parser = new CodexEventParser(null, false, ModelPrices.defaults());
+
+    assertThat(parser.parse("{\"type\":\"error\",\"message\":\"stream disconnected\"}"))
+        .extracting(ParsedEvent::type)
+        .containsExactly(AgentEventType.RAW);
+    // Un límite de crédito no se arregla esperando.
+    assertThat(
+            parser.parse(
+                "{\"type\":\"turn.failed\",\"error\":{\"message\":"
+                    + "\"Usage limit reached: insufficient_quota, add credits\"}}"))
+        .extracting(ParsedEvent::type)
+        .containsExactly(AgentEventType.RESULT);
+  }
+
+  @Test
   void withASchemaTheLastMessageIsTheStructuredOutput() {
     CodexEventParser parser = new CodexEventParser(null, true, ModelPrices.defaults());
     parser.parse(

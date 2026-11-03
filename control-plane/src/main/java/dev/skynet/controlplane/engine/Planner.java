@@ -29,6 +29,8 @@ import java.util.Map;
  *       hermanos y las demás fases.
  *   <li>Si un intento llega a su {@code timeout} (W6-B), se paran sus agentes y la fase falla por
  *       tiempo; mientras no llega, hay que volver a evaluar entonces.
+ *   <li>Una fase lista que espera a que se renueve la cuota de su proveedor (CQ-A) no arranca antes
+ *       de su hora.
  *   <li>Si todas terminan bien (u omitidas), la ejecución termina bien.
  * </ul>
  */
@@ -135,6 +137,12 @@ final class Planner {
     for (StageDefinition stage : definition.stages()) {
       StageState state = stages.get(stage.id());
       if (state != null && next.get(stage.id()) == StageStatus.READY && !state.hasAgent()) {
+        Instant notBefore = state.notBefore();
+        if (state.status() == StageStatus.READY && notBefore != null && notBefore.isAfter(now)) {
+          // Lista, pero su proveedor está sin cuota (CQ-A): arranca cuando se renueve.
+          wake = wake == null || notBefore.isBefore(wake) ? notBefore : wake;
+          continue;
+        }
         steps.add(new Start(stage.id()));
       }
     }

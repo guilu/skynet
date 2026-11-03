@@ -95,7 +95,8 @@
       "cancelling" : false,
       "retriedBy" : null,
       "children" : [ ],
-      "phase" : null
+      "phase" : null,
+      "quotaWait" : null
     } ]
   } ],
   "activeRunsTotal" : 1,

@@ -23,11 +23,14 @@ export function ProviderCard({
   windows,
   version,
   now,
+  waiting = 0,
 }: {
   provider: string
   windows: UsageWindow[]
   version: string | null
   now: number
+  /** Fases que esperan ahora a que se renueve su cuota (CQ-A). */
+  waiting?: number
 }) {
   if (windows.length === 0) return <EmptyCard provider={provider} version={version} />
   const name = windows[0].providerName
@@ -69,6 +72,13 @@ export function ProviderCard({
           </div>
         )
       })}
+      {waiting > 0 && (
+        <p className="prov-waiting small">
+          {waiting === 1
+            ? '1 fase esperando a que se renueve'
+            : `${waiting} fases esperando a que se renueve`}
+        </p>
+      )}
       <p className="prov-fresh">
         <Clock size={16} strokeWidth={2.5} aria-hidden="true" />
         {freshness(latest, now)}

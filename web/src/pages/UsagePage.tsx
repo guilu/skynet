@@ -51,6 +51,11 @@ export function UsagePage() {
     refetchInterval: 15_000,
   })
   const runnerList = useQuery({ queryKey: ['runners'], queryFn: () => api.runners() })
+  const quotaWaits = useQuery({
+    queryKey: ['quota', 'waits'],
+    queryFn: api.quotaWaits,
+    refetchInterval: 60_000,
+  })
   const runners = windows.data?.runners ?? []
   // El runner elegido o, si no, el primero con datos.
   const runner =
@@ -160,6 +165,7 @@ export function UsagePage() {
                 windows={own.filter((w) => w.provider === p)}
                 version={versions.find((v) => v.id === p)?.version ?? null}
                 now={now}
+                waiting={quotaWaits.data?.filter((w) => w.provider === p).length ?? 0}
               />
             ))}
           </div>

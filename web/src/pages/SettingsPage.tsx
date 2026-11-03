@@ -6,6 +6,7 @@ import { APPEARANCE_KEY, useAppearance } from '../appearance'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { CompanionGallery } from '../components/companion/CompanionGallery'
 import { GitHubSettings } from '../components/github/GitHubSettings'
+import { QuotaSettingsSection } from '../components/settings/QuotaSettings'
 import { IconSettings } from '../components/icons/IconSettings'
 import { DEFAULT_PACK } from '../components/icons/pack'
 import { Button } from '../components/ui/Button'
@@ -25,13 +26,14 @@ import {
   type Palette,
 } from '../lib/palette'
 
-type SettingsTab = 'colors' | 'icons' | 'companion' | 'github'
+type SettingsTab = 'colors' | 'icons' | 'companion' | 'github' | 'execution'
 
 const TABS: TabItem<SettingsTab>[] = [
   { id: 'colors', label: 'Colores', icon: 'palette' },
   { id: 'icons', label: 'Iconos', icon: 'icons' },
   { id: 'companion', label: 'Companion', icon: 'agent' },
   { id: 'github', label: 'GitHub', icon: 'repo' },
+  { id: 'execution', label: 'Ejecución', icon: 'retry' },
 ]
 
 /**
@@ -63,6 +65,8 @@ export function SettingsPage() {
       <TabPanel id="settings-panel" labelledBy={`settings-tab-${tab}`} className="tab-body">
         {tab === 'github' ? (
           <GitHubSettings />
+        ) : tab === 'execution' ? (
+          <QuotaSettingsSection />
         ) : tab === 'companion' ? (
           <CompanionGallery />
         ) : (

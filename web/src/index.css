@@ -4542,6 +4542,21 @@
     margin: 0;
   }
 
+  /* Ajustes → Ejecución y fases en pausa por la cuota (CQ-A) */
+  .prov-waiting {
+    margin: var(--space-2) 0 0;
+    color: var(--warn-text, var(--text-muted));
+  }
+
+  .quota-max-wait {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    border: 0;
+    padding: 0;
+    margin: 0;
+  }
+
   .triggers-subtitle {
     margin: var(--space-4) 0 var(--space-2);
     font-size: 1rem;

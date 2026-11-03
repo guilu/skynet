@@ -160,6 +160,12 @@ class RunController {
     return service.retryStage(id, stageKey, principal.getName());
   }
 
+  /** «Reintentar ahora» (CQ-A): la fase que espera a la cuota arranca ya. */
+  @PostMapping("/api/workflow-runs/{id}/stages/{stageKey}/skip-quota-wait")
+  RunView skipQuotaWait(@PathVariable UUID id, @PathVariable String stageKey, Principal principal) {
+    return service.skipQuotaWait(id, stageKey, principal.getName());
+  }
+
   @PostMapping("/api/workflow-runs/{id}/restore")
   ArchiveState restore(@PathVariable UUID id) {
     return service.restore(id);

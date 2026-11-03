@@ -8,6 +8,7 @@ export const COMPANION_EVENT_TYPES = [
   'run.resumed',
   'stage.status.changed',
   'stage.retry.scheduled',
+  'stage.quota.waiting',
   'stage.verification.*',
   'agent.status.changed',
   'agent.rate_limit',
@@ -144,8 +145,24 @@ export function noticeFor(
           body: '',
         }
       return null
+    case 'stage.retry.scheduled':
+    case 'stage.quota.waiting': {
+      // Pausada hasta que se renueve la cuota (CQ-A); un reintento normal no avisa.
+      if (event.type === 'stage.retry.scheduled' && p.reason !== 'quota') return null
+      const at = typeof p.notBefore === 'string' ? new Date(p.notBefore) : null
+      return {
+        ...base,
+        kind: 'limit',
+        title: `Pausada por la cuota de ${providerName(String(p.provider ?? ''))}`,
+        body: at
+          ? `${runKey} · sigue a las ${at.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
+          : runKey,
+      }
+    }
     case 'agent.rate_limit': {
       if (p.status === 'allowed' || p.status === 'allowed_warning') return null
+      // Sin cuota: avisa la fase al ponerse en pausa, con la hora a la que sigue.
+      if (p.blocked) return null
       const agent = run?.stages.flatMap((s) => s.agents).find((a) => a.id === event.aggregateId)
       const who = agent ? providerName(agent.provider) : 'Un agente'
       const resets = typeof p.resetsAt === 'number' ? p.resetsAt * 1000 : null

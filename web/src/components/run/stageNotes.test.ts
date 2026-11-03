@@ -6,6 +6,7 @@ import {
   isCorrecting,
   joinNames,
   latestAttempts,
+  quotaNote,
   retryScope,
   stageNote,
   timeLimitNote,
@@ -45,10 +46,39 @@ function stage(
     retriedBy: null,
     children: [],
     phase: null,
+    quotaWait: null,
   }
 }
 
 const run = (...stages: StageRun[]) => ({ stages }) as Run
+
+describe('quotaNote', () => {
+  const now = new Date('2026-11-02T13:00:00Z').getTime()
+  const waiting = (resetsAt: string | null, notBefore: string): StageRun => ({
+    ...stage('implement', 'PENDING'),
+    attempt: 2,
+    notBefore,
+    quotaWait: { provider: 'claude-code', window: 'five_hour', resetsAt },
+  })
+
+  it('dice de quién es la cuota, cuándo se renueva y qué ventana', () => {
+    const note = quotaNote(waiting('2026-11-02T14:04:00Z', '2026-11-02T14:04:45Z'), now)
+    expect(note).toMatch(
+      /^Esperando la cuota de Claude Code · se renueva a las \d\d:04 \(ventana de 5 h\)$/,
+    )
+  })
+
+  it('sin hora de renovación, dice cuándo vuelve a probar', () => {
+    expect(quotaNote(waiting(null, '2026-11-02T13:30:00Z'), now)).toMatch(
+      /^Esperando la cuota de Claude Code · vuelve a probar a las \d\d:30$/,
+    )
+  })
+
+  it('ya pasada la hora, o sin espera, no dice nada', () => {
+    expect(quotaNote(waiting('2026-11-02T12:00:00Z', '2026-11-02T12:00:30Z'), now)).toBeNull()
+    expect(quotaNote(stage('implement', 'PENDING'), now)).toBeNull()
+  })
+})
 
 describe('stageNote', () => {
   it('une nombres en castellano', () => {

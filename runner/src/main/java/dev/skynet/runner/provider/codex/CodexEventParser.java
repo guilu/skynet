@@ -14,6 +14,7 @@ import dev.skynet.runner.provider.EventJson.Payload;
 import dev.skynet.runner.provider.EventParser;
 import dev.skynet.runner.provider.ModelPrices;
 import dev.skynet.runner.provider.ParsedEvent;
+import dev.skynet.runner.provider.UsageLimits;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -41,6 +42,9 @@ public final class CodexEventParser implements EventParser {
   private String lastMessage;
   private int turns;
   private boolean sawResult;
+
+  /** Ya se ha avisado de que la cuenta se quedó sin cuota (CQ-A): una vez por invocación. */
+  private boolean limited;
 
   /**
    * @param model modelo que se pidió, o {@code null} para el predeterminado de Codex
@@ -78,7 +82,8 @@ public final class CodexEventParser implements EventParser {
       case "item.started", "item.updated" -> itemStarted(node.path("item"));
       case "item.completed" -> itemCompleted(node.path("item"));
       case "turn.completed" -> List.of(turnCompleted(node));
-      case "turn.failed" -> List.of(turnFailed(node));
+      case "turn.failed" -> turnFailed(node);
+      case "error" -> error(node);
       case null, default -> List.of(raw(node));
     };
   }
@@ -260,18 +265,37 @@ public final class CodexEventParser implements EventParser {
     return lastMessage == null ? null : value(object(lastMessage));
   }
 
-  private ParsedEvent turnFailed(JsonNode node) {
+  private List<ParsedEvent> turnFailed(JsonNode node) {
     sawResult = true;
     turns++;
     String message = text(node.path("error"), "message");
-    return event(
-        AgentEventType.RESULT,
-        payload()
-            .put("subtype", "error")
-            .put("isError", true)
-            .put("numTurns", (long) turns)
-            .put("sessionId", threadId)
-            .put("errors", message == null ? null : List.of(message)));
+    ParsedEvent result =
+        event(
+            AgentEventType.RESULT,
+            payload()
+                .put("subtype", "error")
+                .put("isError", true)
+                .put("numTurns", (long) turns)
+                .put("sessionId", threadId)
+                .put("errors", message == null ? null : List.of(message)));
+    if (UsageLimits.matches(message) && !limited) {
+      limited = true;
+      return List.of(UsageLimits.blocked("codex", message), result);
+    }
+    return List.of(result);
+  }
+
+  /**
+   * Un {@code error} suelto: si dice que la cuenta se quedó sin cuota, el {@code agent.rate_limit}
+   * bloqueante (CQ-A); si no, se conserva tal cual.
+   */
+  private List<ParsedEvent> error(JsonNode node) {
+    String message = text(node, "message");
+    if (UsageLimits.matches(message) && !limited) {
+      limited = true;
+      return List.of(UsageLimits.blocked("codex", message));
+    }
+    return List.of(raw(node));
   }
 
   private static Long longValue(JsonNode node, String field) {

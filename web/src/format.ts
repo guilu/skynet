@@ -106,9 +106,15 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
     case 'run.resumed':
       return `${p('actor')} reintentó la fase ${p('stageKey')} (intento ${p('attempt')})`
     case 'stage.retry.scheduled':
+      if (payload.reason === 'quota')
+        return `Fase ${p('stageKey')}: ${providerName(String(payload.provider ?? ''))} se quedó sin cuota; sigue cuando se renueve, en ${formatDuration(Number(payload.delaySeconds ?? 0) * 1000)}`
       return `Fase ${p('stageKey')}: se reintenta (intento ${p('attempt')}${
         Number(payload.attempt) <= Number(payload.maxAttempts) ? ` de ${p('maxAttempts')}` : ''
       }) en ${formatDuration(Number(payload.delaySeconds ?? 0) * 1000)}`
+    case 'stage.quota.waiting':
+      return `Fase ${p('stageKey')}: espera a que se renueve la cuota de ${providerName(String(payload.provider ?? ''))}`
+    case 'stage.quota.skipped':
+      return `${p('actor')} pidió reintentar ya la fase ${p('stageKey')} sin esperar a la cuota`
     case 'stage.timed.out':
       return `Fase ${p('stageKey')}: se acabó su tiempo (intento ${p('attempt')})`
     case 'workflow.cancel.requested':
@@ -152,7 +158,9 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
     case 'agent.vcs.changed':
       return `Git: ${p('kind')}${payload.branch ? ` (${p('branch')})` : ''}`
     case 'agent.rate_limit':
-      return `Límite de uso: ${p('status')}`
+      return payload.blocked
+        ? `Sin cuota: ${providerName(String(payload.provider ?? ''))} rechazó el turno`
+        : `Límite de uso: ${p('status')}`
     case 'agent.quota':
       return describeQuota(payload)
     case 'agent.result':

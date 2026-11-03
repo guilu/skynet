@@ -847,6 +847,36 @@ public class RunService {
     return run(workflowRunId);
   }
 
+  /**
+   * «Reintentar ahora» (CQ-A): una fase que espera a que se renueve la cuota arranca ya, sin mirar
+   * la cuota (si sigue sin ella, volverá a fallar y a esperar).
+   */
+  @Transactional
+  public RunView skipQuotaWait(UUID workflowRunId, String stageKey, String actor) {
+    lockRun(workflowRunId);
+    runEntity(workflowRunId);
+    Instant now = time.now();
+    StageRun stage =
+        stageRuns.findByWorkflowRunIdInOrderByCreatedAtAsc(List.of(workflowRunId)).stream()
+            .filter(s -> s.getStageKey().equals(stageKey))
+            .max(Comparator.comparing(StageRun::getAttempt))
+            .orElseThrow(() -> new NotFoundException("Fase", stageKey));
+    if (!stage.waitingForQuota(now)) {
+      throw new ConflictException("La fase " + stageKey + " no está esperando a la cuota");
+    }
+    Instant waited = stage.getNotBefore();
+    stage.skipQuotaWait(actor, now);
+    stage = stageRuns.save(stage);
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("stageKey", stageKey);
+    payload.put("attempt", stage.getAttempt());
+    payload.put("notBefore", waited);
+    payload.put("actor", actor);
+    append("stage_run", stage.getId(), "stage.quota.skipped", workflowRunId, payload, now);
+    publisher.publishEvent(new WorkflowRunChanged(workflowRunId));
+    return run(workflowRunId);
+  }
+
   /** Si «Reintentar fase» le da un intento nuevo: falló o se canceló. */
   private static boolean reopens(StageRun stage) {
     return stage.getStatus() == StageStatus.FAILED || stage.getStatus() == StageStatus.CANCELLED;

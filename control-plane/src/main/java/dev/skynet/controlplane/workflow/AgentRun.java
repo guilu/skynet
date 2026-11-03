@@ -105,6 +105,18 @@ public class AgentRun {
   /** Se ejecutó con un CLI simulado (fake-claude, fake-codex…), no con el real (AR-A). */
   private boolean simulated;
 
+  /**
+   * Cuándo rechazó el proveedor el turno porque la cuenta se quedó sin cuota (CQ-A): si el agente
+   * falla, falla por {@link AgentFailure#QUOTA}.
+   */
+  private Instant quotaLimitedAt;
+
+  /** La ventana sin cuota ({@code five_hour} o {@code seven_day}), si se sabe (CQ-A). */
+  private String quotaWindow;
+
+  /** Cuándo se renueva la ventana sin cuota, si se sabe (CQ-A). */
+  private Instant quotaResetsAt;
+
   @Version private Long version;
 
   @PersistenceCreator
@@ -445,6 +457,9 @@ public class AgentRun {
     if (runnerError != null) {
       error = runnerError;
       failure = runnerFailure != null ? runnerFailure : AgentFailure.ERROR;
+      if (failure == AgentFailure.ERROR && quotaLimitedAt != null) {
+        failure = AgentFailure.QUOTA;
+      }
       return AgentObservableStatus.FAILED;
     }
     if (isCommand()) {
@@ -470,7 +485,7 @@ public class AgentRun {
         resultSubtype != null
                 && (resultSubtype.contains("max_turns") || resultSubtype.contains("budget"))
             ? AgentFailure.BUDGET
-            : AgentFailure.ERROR;
+            : quotaLimitedAt != null ? AgentFailure.QUOTA : AgentFailure.ERROR;
     if (error == null) {
       error =
           resultIsError == null
@@ -622,6 +637,41 @@ public class AgentRun {
   /** Por qué falló, o {@code null} si no ha fallado. */
   public AgentFailure getFailure() {
     return failure;
+  }
+
+  public String getQuotaWindow() {
+    return quotaWindow;
+  }
+
+  public Instant getQuotaResetsAt() {
+    return quotaResetsAt;
+  }
+
+  /**
+   * El proveedor ha rechazado el turno porque la cuenta se quedó sin cuota (CQ-A): con la ventana y
+   * su renovación si las dice. Si el agente termina mal, falla por {@link AgentFailure#QUOTA}.
+   */
+  void recordQuotaLimit(String window, Instant resetsAt, Instant at) {
+    if (quotaLimitedAt == null) {
+      quotaLimitedAt = at;
+    }
+    if (window != null) {
+      quotaWindow = window;
+    }
+    if (resetsAt != null) {
+      quotaResetsAt = resetsAt;
+    }
+  }
+
+  /**
+   * Un agente que falló por un error genérico cuando su cuenta estaba sin cuota (lo dice la última
+   * muestra de CU): cuenta como {@link AgentFailure#QUOTA}, para los proveedores que no avisan.
+   */
+  void reclassifyAsQuota(String window, Instant resetsAt, Instant at) {
+    if (failure == AgentFailure.ERROR) {
+      recordQuotaLimit(window, resetsAt, at);
+      failure = AgentFailure.QUOTA;
+    }
   }
 
   public String getBaseSnapshot() {

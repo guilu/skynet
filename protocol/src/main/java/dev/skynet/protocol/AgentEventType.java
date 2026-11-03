@@ -26,7 +26,13 @@ public enum AgentEventType {
   PERMISSION_DENIED("agent.permission.denied"),
   /** El agente ha cambiado el estado de git (p. ej. un commit); pendiente de verificar con git. */
   VCS_CHANGED("agent.vcs.changed"),
-  /** La cuenta del proveedor está limitada. */
+  /**
+   * La cuenta del proveedor está limitada: {@code status}, {@code limitType} y {@code resetsAt}
+   * (epoch en segundos). Con {@code blocked} a {@code true} (CQ-A), el proveedor ha rechazado el
+   * turno porque la cuenta se quedó sin cuota y no sigue a crédito: el agente falla con {@code
+   * quota}; {@code window} dice qué ventana ({@code five_hour} o {@code seven_day}) si se sabe y
+   * {@code resetsAt}, cuándo se renueva la que más tarde lo hace.
+   */
   RATE_LIMIT("agent.rate_limit"),
   /**
    * Cuota de uso de la cuenta del proveedor vista durante la invocación: {@code provider} y {@code

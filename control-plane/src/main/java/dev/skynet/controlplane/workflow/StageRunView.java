@@ -37,6 +37,7 @@ import java.util.UUID;
  *     programó el motor
  * @param children los hijos de una fase {@code parallel} en el orden del YAML, para dibujarlos
  *     antes de que tengan agente (W7-B); vacío en las demás
+ * @param quotaWait la cuota que espera la fase antes de empezar (CQ-A), o {@code null}
  */
 public record StageRunView(
     UUID id,
@@ -64,7 +65,23 @@ public record StageRunView(
     boolean cancelling,
     String retriedBy,
     List<String> children,
-    String phase) {
+    String phase,
+    QuotaWaitView quotaWait) {
+
+  /**
+   * La cuota que espera una fase (CQ-A): de qué proveedor, qué ventana ({@code five_hour} o {@code
+   * seven_day}, o {@code null}) y cuándo se renueva ({@code null} si no se sabe). La fase sigue en
+   * {@code notBefore}.
+   */
+  public record QuotaWaitView(String provider, String window, Instant resetsAt) {
+
+    static QuotaWaitView of(StageRun stage) {
+      return stage.getQuotaProvider() == null
+          ? null
+          : new QuotaWaitView(
+              stage.getQuotaProvider(), stage.getQuotaWindow(), stage.getQuotaResetsAt());
+    }
+  }
 
   /**
    * El {@code retry} de una fase: intentos en total, qué fallos ({@code lost}, {@code error}…) y la
@@ -121,6 +138,7 @@ public record StageRunView(
         definition == null
             ? List.of()
             : definition.children().stream().map(StageDefinition.ChildDefinition::id).toList(),
-        definition == null ? null : definition.phase());
+        definition == null ? null : definition.phase(),
+        QuotaWaitView.of(s));
   }
 }
