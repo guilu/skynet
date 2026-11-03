@@ -38,7 +38,10 @@ export function Pill({
   const ilustrados = pack !== 'lucide' && hasOwnDrawing(pack, icon)
   if (face)
     return (
-      <span className={cn('pill', 'pill-skyny', tone !== 'neutral' && `pill-${tone}`, className)}>
+      <span
+        className={cn('pill', 'pill-skyny', tone !== 'neutral' && `pill-${tone}`, className)}
+        data-face={face}
+      >
         <span className="pill-face" aria-hidden="true">
           <Companion state={face} size={faceSize} still={!live} season={null} />
         </span>

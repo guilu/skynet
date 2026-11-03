@@ -1385,6 +1385,38 @@
     display: block;
   }
 
+  /* Boceto: variante A, la píldora toma el color de Skyny cuando no coinciden. */
+  :root[data-match='pill'] .pill-skyny[data-face='running'] {
+    --soft: color-mix(in srgb, var(--skyny-orange) 16%, var(--surface));
+    --ink: color-mix(in srgb, var(--skyny-orange) 62%, var(--fg));
+  }
+
+  :root[data-match='pill'] .pill-skyny:is([data-face='reviewing'], [data-face='calm']) {
+    --soft: var(--primary-soft);
+    --ink: var(--primary-ink);
+  }
+
+  :root[data-match='pill'] .pill-skyny[data-face='offline'] {
+    --soft: var(--idle-soft);
+    --ink: var(--idle-ink);
+  }
+
+  :root[data-match='pill'] .pill-skyny[data-face='waiting'] {
+    --soft: var(--warn-soft);
+    --ink: var(--warn-ink);
+  }
+
+  :root[data-match='pill'] .pill-skyny[data-face='error'] {
+    --soft: var(--bad-soft);
+    --ink: var(--bad-ink);
+  }
+
+  /* Boceto: variante B, Skyny toma el color de la píldora. */
+  :root[data-match='skyny'] .pill-skyny .companion {
+    --c-lo: var(--c);
+    --c-hi: color-mix(in srgb, var(--c) 40%, white);
+  }
+
   .pill-active .pill-icon {
     animation: var(--animate-pulse-ring);
   }
