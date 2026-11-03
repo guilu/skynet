@@ -55,8 +55,12 @@ final class TestIntegrity {
   /** Una forma de saltar tests, con cómo se nombra en el motivo. */
   private record Skip(Pattern pattern, String label) {}
 
-  private static final Pattern JVM_FILE =
-      Pattern.compile("(?:^|/)src/[\\w-]*[tT]est[\\w-]*/|(?:Test|Tests|IT|Spec)\\.(?:java|kt)$");
+  /** Un directorio de tests de Gradle o Maven: {@code src/test/}, {@code src/integrationTest/}… */
+  private static final Pattern JVM_TEST_DIR = Pattern.compile("(?:^|/)src/[\\w-]*[tT]est[\\w-]*/");
+
+  /** Un fichero que se llama como un test: {@code *Test.java}, {@code *IT.kt}… */
+  private static final Pattern JVM_TEST_NAME =
+      Pattern.compile("(?:Test|Tests|IT|Spec)\\.(?:java|kt)$");
 
   private static final Language JVM =
       new Language(
@@ -101,8 +105,7 @@ final class TestIntegrity {
               new Skip(Pattern.compile("@unittest\\.skip\\w*\\b"), "@unittest.skip"),
               new Skip(Pattern.compile("\\bpytest\\.skip\\s*\\("), "pytest.skip()")),
           Pattern.compile(
-              "^\\s*assert\\b|\\bself\\.assert\\w+\\s*\\(|\\bpytest\\.raises\\b",
-              Pattern.MULTILINE));
+              "(?<![\\w.])assert\\s|\\bself\\.assert\\w+\\s*\\(|\\bpytest\\.raises\\b"));
 
   private static final Language GO =
       new Language(
@@ -124,7 +127,8 @@ final class TestIntegrity {
 
   private static Optional<Language> language(String path) {
     String name = path.substring(path.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
-    if (JVM.file().matcher(path).find() && JVM_FILE.matcher(path).find()) {
+    if (JVM.file().matcher(path).find()
+        && (JVM_TEST_DIR.matcher(path).find() || JVM_TEST_NAME.matcher(path).find())) {
       return Optional.of(JVM);
     }
     if (JS.file().matcher(path).find()
