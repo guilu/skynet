@@ -48,7 +48,7 @@ Las piezas base están en `web/src/components/ui/`. Las de listas, en `component
 | Componente | Para qué | Notas |
 | --- | --- | --- |
 | `Button` | Acciones | Variantes `primary`, `secondary`, `success`, `danger`, `secondary-danger` y `link`; tamaño `sm`. Una sola acción principal por zona. |
-| `Pill` / `StatusBadge` | Estados | Color, icono y texto. `StatusBadge` traduce el estado de la API con `format.ts`. |
+| `Pill` / `StatusBadge` | Estados | Color, Skyny (o icono) y texto. `StatusBadge` traduce el estado de la API con `format.ts` y pone la expresión de Skyny de `statusFace` (`ui/statusIcons.ts`); si Skyny y el tono no casan (Ejecutando, Revisando, Sin conexión, En línea), la píldora toma el color de Skyny. Los estados que no son de trabajo (abierto, cerrado…) siguen con su icono. |
 | `TabList` / `TabPanel` | Pestañas | Patrón WAI-ARIA: flechas, Inicio y Fin. La pestaña elegida se guarda en la URL quien la usa. |
 | `Sheet` | Formularios y confirmaciones | Panel lateral sobre Radix Dialog: guarda el foco, se cierra con Escape o fuera y lo devuelve al botón. En el móvil sube desde abajo. |
 | `DataTable` y `ColumnsMenu` | Listas | Filas en bloques redondeados, columnas que se ocultan (se recuerdan) y estado vacío propio. |

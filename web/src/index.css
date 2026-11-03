@@ -1367,6 +1367,50 @@
     --ink: var(--live-ink);
   }
 
+  /* Boceto «Skyny en los bullets»: la píldora crece un poco y Skyny hace de bullet. */
+  .pill-skyny {
+    gap: 4px;
+    padding: 4px 14px 4px 6px;
+    font-size: 0.8125rem;
+  }
+
+  .pill-face {
+    display: grid;
+    place-items: center;
+    flex: none;
+    margin: -3px 0 -3px -2px;
+  }
+
+  .pill-face .companion {
+    display: block;
+  }
+
+  /* Cuando Skyny y el tono del estado no casan, la píldora toma el color de Skyny. */
+  .pill-skyny[data-face='running'] {
+    --soft: color-mix(in srgb, var(--skyny-orange) 16%, var(--surface));
+    --ink: color-mix(in srgb, var(--skyny-orange) 45%, var(--fg));
+  }
+
+  .pill-skyny:is([data-face='reviewing'], [data-face='calm']) {
+    --soft: var(--primary-soft);
+    --ink: var(--primary-ink);
+  }
+
+  .pill-skyny[data-face='offline'] {
+    --soft: var(--idle-soft);
+    --ink: var(--idle-ink);
+  }
+
+  .pill-skyny[data-face='waiting'] {
+    --soft: var(--warn-soft);
+    --ink: var(--warn-ink);
+  }
+
+  .pill-skyny[data-face='error'] {
+    --soft: var(--bad-soft);
+    --ink: var(--bad-ink);
+  }
+
   .pill-active .pill-icon {
     animation: var(--animate-pulse-ring);
   }

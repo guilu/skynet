@@ -288,7 +288,16 @@ export function RunHeader({
             icon="simulated"
             tone={statusTone(verification.status) === 'bad' ? 'bad' : 'ok'}
             label="Tests"
-            sub={<StatusBadge status={verification.status} />}
+            sub={
+              <StatusBadge
+                status={verification.status}
+                face={
+                  verification.status === 'RUNNING' || verification.status === 'QUEUED'
+                    ? 'reviewing'
+                    : undefined
+                }
+              />
+            }
           >
             {tests ? `${tests.total - tests.failed - tests.errors}/${tests.total}` : '—'}
           </Kpi>

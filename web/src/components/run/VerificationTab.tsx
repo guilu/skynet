@@ -101,8 +101,11 @@ export function VerificationTab({ agent, events }: { agent: AgentRun; events: St
               <li key={v.id}>
                 <details>
                   <summary>
-                    <StatusBadge status={v.status} /> {triggerLabel(v)} ·{' '}
-                    {formatDateTime(v.createdAt)}
+                    <StatusBadge
+                      status={v.status}
+                      face={v.status === 'RUNNING' ? 'reviewing' : undefined}
+                    />{' '}
+                    {triggerLabel(v)} · {formatDateTime(v.createdAt)}
                     {v.tests && ` · ${testsSummary(v)}`}
                   </summary>
                   <Verification verification={v} agentId={agent.id} />
