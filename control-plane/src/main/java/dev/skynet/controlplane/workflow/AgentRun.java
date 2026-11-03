@@ -38,6 +38,9 @@ public class AgentRun {
   /** Un juez de una fase {@code verification} (VA-B). */
   public static final String ROLE_JUDGE = "judge";
 
+  /** Un escéptico que intenta refutar un hallazgo del juez (VA-C). */
+  public static final String ROLE_SKEPTIC = "skeptic";
+
   @Id private final UUID id;
   private final UUID stageRunId;
   private final UUID parentAgentRunId;
@@ -132,7 +135,10 @@ public class AgentRun {
   /** Cuándo se renueva la cuota del proveedor al que sustituye, si se sabe (CQ-B). */
   private Instant fallbackUntil;
 
-  /** Qué hace en su fase: {@code null} para el agente de siempre, {@link #ROLE_JUDGE} (VA-B). */
+  /**
+   * Qué hace en su fase: {@code null} para el agente de siempre, {@link #ROLE_JUDGE} (VA-B) o
+   * {@link #ROLE_SKEPTIC} (VA-C).
+   */
   private String role;
 
   @Version private Long version;
@@ -675,6 +681,15 @@ public class AgentRun {
   /** La invocación es un juez (VA-B). */
   void asJudge() {
     this.role = ROLE_JUDGE;
+  }
+
+  public boolean isSkeptic() {
+    return ROLE_SKEPTIC.equals(role);
+  }
+
+  /** La invocación es un escéptico (VA-C). */
+  void asSkeptic() {
+    this.role = ROLE_SKEPTIC;
   }
 
   public String getBaseCommit() {

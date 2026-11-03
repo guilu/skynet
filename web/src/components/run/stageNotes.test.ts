@@ -326,6 +326,9 @@ describe('judgeNote', () => {
     findings: [],
     judgements: [],
     error: null,
+    refute: 0,
+    refuting: 0,
+    refuteNote: null,
     ...over,
   })
   const judged = (j: StageJudge, status: StageStatus = 'RUNNING') => ({
@@ -337,6 +340,9 @@ describe('judgeNote', () => {
   it('dice qué hace el juez en cada momento', () => {
     expect(judgeNote(judged(judge({ status: 'CHECKING' })))).toBe('Comprobando antes de juzgar')
     expect(judgeNote(judged(judge({ round: 2 })))).toBe('Juzgando: 1 juez (ronda 2)')
+    expect(judgeNote(judged(judge({ status: 'REFUTING', refute: 2, refuting: 3 })))).toBe(
+      'Refutando 3 hallazgos que bloquean',
+    )
     expect(judgeNote(judged(judge({ status: 'FIXING' })))).toBe(
       'implementar corrige lo que suspendió el juez (ronda 1 de 2)',
     )

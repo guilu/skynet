@@ -16,6 +16,9 @@ import java.util.List;
  * @param threshold media ponderada mínima, de 1 a 5
  * @param fix fase {@code agent} que corrige si suspende; {@code null} si no se corrige
  * @param maxRounds rondas de corrección como mucho
+ * @param refute escépticos por cada hallazgo {@code blocking} (VA-C); 0 sin verificación
+ *     adversarial
+ * @param refuteAgent el agente de los escépticos; {@code null} para el del primer juez
  */
 public record JudgeSpec(
     List<Judge> agents,
@@ -23,7 +26,9 @@ public record JudgeSpec(
     String rubricFile,
     BigDecimal threshold,
     String fix,
-    int maxRounds) {
+    int maxRounds,
+    int refute,
+    String refuteAgent) {
 
   /** Media ponderada mínima si no se dice otra. */
   public static final BigDecimal DEFAULT_THRESHOLD = new BigDecimal("3.5");
@@ -48,6 +53,26 @@ public record JudgeSpec(
           new Criterion("tests", "Los tests cubren el cambio y sus casos límite", 2, false),
           new Criterion("alcance", "No cambia nada que la tarea no pida", 1, false));
 
+  /** Escépticos por hallazgo como mucho. */
+  public static final int MAX_REFUTE = 5;
+
+  /** Hallazgos que se intentan refutar por ronda como mucho (VA-C). */
+  public static final int MAX_REFUTED_FINDINGS = 8;
+
+  /** Llamadas a agentes (jueces y escépticos) por fase como mucho, contando todas las rondas. */
+  public static final int MAX_AGENT_CALLS = 20;
+
+  /** Sin verificación adversarial (VA-B). */
+  public JudgeSpec(
+      List<Judge> agents,
+      List<Criterion> rubric,
+      String rubricFile,
+      BigDecimal threshold,
+      String fix,
+      int maxRounds) {
+    this(agents, rubric, rubricFile, threshold, fix, maxRounds, 0, null);
+  }
+
   public JudgeSpec {
     agents = List.copyOf(agents);
     rubric = rubric == null ? List.of() : List.copyOf(rubric);
@@ -60,6 +85,11 @@ public record JudgeSpec(
       return List.of();
     }
     return rubric.isEmpty() ? DEFAULT_RUBRIC : rubric;
+  }
+
+  /** El agente de los escépticos: {@code refuteAgent} o el del primer juez. */
+  public String skeptic() {
+    return refuteAgent != null ? refuteAgent : agents.isEmpty() ? null : agents.getFirst().agent();
   }
 
   /**

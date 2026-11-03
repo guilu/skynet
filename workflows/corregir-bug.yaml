@@ -1,6 +1,6 @@
 id: corregir-bug
 name: Corregir un bug
-description: Codex reproduce el fallo con un test que falla, Claude Code lo corrige con los tests en verde y Antigravity busca regresiones; si encuentra alguna, Claude Code la arregla.
+description: Codex reproduce el fallo con un test que falla, Claude Code lo corrige con los tests en verde y Antigravity lo juzga buscando regresiones; los escépticos descartan los falsos positivos y Claude Code arregla lo que bloquea de verdad.
 
 agents:
   reproductor:
@@ -31,22 +31,16 @@ agents:
       model: ${CODEX_FUERTE}
     permissionMode: acceptEdits
     prompt: Corrige el bug de {{workItem.key}} y confirma los cambios con un commit.
+  # El juez de `juzgar` (VA-B, VA-C): en solo lectura, con la rúbrica y sin ver lo que dijo el
+  # desarrollador. Su reserva nunca es Claude Code, que es quien corrige.
   vigia:
     provider: antigravity
     model: ${AGY_RAPIDO}
     fallback:
-      provider: claude-code
-      model: ${CLAUDE_RAPIDO}
-    permissionMode: plan
+      provider: codex
+      model: ${CODEX_RAPIDO}
     prompt: |
-      Revisa la corrección de {{workItem.key}} ({{workItem.title}}) respecto a la rama por defecto.
       Busca regresiones: otros sitios que usen lo que ha cambiado y casos que el test no cubre.
-      Pon hasBlockingFindings a true solo si la corrección rompe algo o no resuelve el bug.
-    output:
-      type: object
-      properties:
-        hasBlockingFindings: {type: boolean}
-        summary: {type: string}
 
 stages:
   - id: reproducir
@@ -68,30 +62,27 @@ stages:
 
       Si no hay test que lo reproduzca, escribe uno primero. Corrige la causa, no el síntoma, deja todos los tests en verde y confirma los cambios con un commit.
     checks: [tests, diff]
-  - id: revisar
-    type: agent
-    agent: vigia
+  # Antigravity juzga la corrección con la rúbrica. Cada hallazgo que bloquea pasa por dos
+  # escépticos que intentan refutarlo; lo que sobrevive lo arregla corregir en su sesión, y se
+  # vuelve a juzgar (como mucho 2 rondas).
+  - id: juzgar
+    type: verification
     dependsOn: [corregir]
     phase: review
-  - id: ajustar
-    type: agent
-    agent: desarrollador
-    dependsOn: [revisar]
-    phase: implement
-    condition: revisar.hasBlockingFindings
-    prompt: |
-      La revisión de la corrección de {{workItem.key}} ha encontrado esto:
-
-      {{stages.revisar.output.summary}}
-
-      Arréglalo, deja todos los tests en verde y confirma los cambios con un commit.
-    checks: [tests]
+    judge:
+      agents:
+        - {agent: vigia, lens: correctness}
+      rubric:
+        - {id: resuelve, text: "Corrige la causa del bug, no solo el síntoma", weight: 3, required: true}
+        - {id: reproduce, text: "Hay un test que fallaba con el bug y ahora pasa", weight: 2, required: true}
+        - {id: regresiones, text: "No rompe otros usos de lo que ha cambiado", weight: 2}
+      refute: 2
+    fix: corregir
   # Entrega por PR (EN): en un repositorio con la GitHub App sube la rama, abre la PR, espera la CI
   # (si falla, la corrige corregir), pide aprobar la fusión y fusiona. En uno local, se omiten.
   - id: pr
     type: github-pr
-    dependsOn: [revisar, "ajustar?"]
-    workspaceFrom: revisar
+    dependsOn: [juzgar]
     phase: deliver
     condition: repository.github
   - id: ci

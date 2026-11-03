@@ -155,6 +155,7 @@ class PurgeService {
     update("DELETE FROM github_merge WHERE workflow_run_id IN (:ids)", scope.runs());
     update("DELETE FROM github_ci_wait WHERE workflow_run_id IN (:ids)", scope.runs());
     // El juez de las fases verification (VA-B).
+    update("DELETE FROM stage_refutation WHERE workflow_run_id IN (:ids)", scope.runs());
     update("DELETE FROM stage_verdict WHERE workflow_run_id IN (:ids)", scope.runs());
     update("DELETE FROM stage_judge WHERE workflow_run_id IN (:ids)", scope.runs());
     update("DELETE FROM github_pull_request WHERE workflow_run_id IN (:ids)", scope.runs());

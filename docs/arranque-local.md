@@ -91,10 +91,10 @@ Los proyectos y los repositorios no se siembran.
 |---|---|---|
 | `adhoc` | Una tarea suelta con tu prompt | agente (el que elijas al lanzar) |
 | `conocer-repositorio` | El primer contacto con un proyecto | comandos de compilar y de tests (Codex) → mapa en `docs/skynet/mapa-<clave>.md`, con la clave del proyecto en minúsculas, p. ej. `mapa-demo.md` (Antigravity) |
-| `implementar-tarea` | Una tarea bien definida | explorar (Antigravity, solo lectura) → implementar con los tests en verde (Claude Code) → revisión de calidad (Codex) y de seguridad (Antigravity) a la vez → corregir si algo bloquea (Claude Code) |
-| `corregir-bug` | Un fallo que se puede reproducir | test que falla (Codex) → corrección con los tests en verde (Claude Code) → buscar regresiones (Antigravity) → ajustar si hay alguna (Claude Code) |
+| `implementar-tarea` | Una tarea bien definida | explorar (Antigravity, solo lectura) → implementar con los tests en verde (Claude Code) → juez de corrección (Codex) y de seguridad (Antigravity) a la vez, con escépticos para lo que bloquea → si suspende, implementar corrige y se vuelve a juzgar |
+| `corregir-bug` | Un fallo que se puede reproducir | test que falla (Codex) → corrección con los tests en verde (Claude Code) → juez que busca regresiones (Antigravity), con escépticos → si suspende, corregir lo arregla y se vuelve a juzgar |
 | `revisar-codigo` | Una auditoría sin cambios, con un `foco` opcional | arquitectura (Claude Code), tests (Codex) y seguridad (Antigravity) a la vez → un informe con los hallazgos por prioridad (Claude Code) |
-| `especificar-planificar-implementar` | Una funcionalidad que conviene pensar antes | especificación (Antigravity) → plan (Claude Code) → **tu aprobación** → implementar (Claude Code) → revisión (Codex) → corregir si algo bloquea (Claude Code) |
+| `especificar-planificar-implementar` | Una funcionalidad que conviene pensar antes | especificación (Antigravity) → plan (Claude Code) → **tu aprobación** → implementar (Claude Code) → juez contra la propuesta (Codex), con escépticos → si suspende, implementar corrige y se vuelve a juzgar |
 | `investigar-mejoras` | Decidir qué hacer después, con un `foco` opcional | lee la memoria del proyecto (bitácora, decisiones y hallazgos), comprueba en el código qué sigue abierto y propone mejoras por prioridad, sin cambiar nada (Claude Code, `memory: read`) |
 
 Las plantillas de la web siguen ahí para crear workflows nuevos: Dos fases, Revisión en paralelo, Revisión con Codex y Antigravity, Especificar-planificar-implementar y Desde cero.
@@ -146,9 +146,9 @@ Antigravity también ofrece modelos de Claude y GPT, con una cuota compartida en
 
 ### Reglas que siguen los workflows
 
-1. **Quien implementa no se revisa a sí mismo.** Claude Code implementa, y lo revisan Codex y Antigravity.
+1. **Quien implementa no se juzga a sí mismo.** Claude Code implementa, y lo juzgan Codex y Antigravity (VA-B), que no ven lo que dijo el desarrollador.
 2. **Lo que se puede comprobar, lo comprueba Skynet.** Las fases que cambian código llevan `checks: [tests, diff]`, y la de reproducir un bug devuelve si lo consiguió.
-3. **Los revisores van en solo lectura** (`permissionMode: plan`) y devuelven `hasBlockingFindings`. Solo se corrige si algo bloquea.
+3. **Los jueces van en solo lectura** y puntúan con una rúbrica. Cada hallazgo que bloquea pasa por dos escépticos que intentan refutarlo (VA-C), y solo se corrige lo que sobrevive. «Revisar código» sigue con sus tres revisores y su informe.
 4. **Cada proveedor gasta su propia cuota.** Repartir el trabajo entre los tres hace que una sola ventana de 5 horas pare menos la tarea.
 
 ### Fuentes

@@ -57,6 +57,8 @@ import tools.jackson.databind.node.ObjectNode;
  *   <li>{@code FAKE_CLAUDE_JUDGE}: ruta de un fichero testigo (VA-B). Con la salida estructurada de
  *       un juez de Skynet, aprueba si no existe y, si existe, suspende con un hallazgo que bloquea
  *       (el que diga el fichero) y lo borra ({@link FakeJudge}).
+ *   <li>{@code FAKE_CLAUDE_REFUTE}: ruta de otro testigo (VA-C). Con la salida de un escéptico,
+ *       refuta el hallazgo si el fichero existe y su texto está en el prompt (vacío, cualquiera).
  *   <li>{@code FAKE_MCP_CALLS} y {@code FAKE_MCP_LOG}: con {@code --mcp-config}, llamadas de guion
  *       al servidor de memoria {@code skynet_memoria} ({@link McpScript}).
  *   <li>{@code CLAUDE_CONFIG_DIR}: si está definida, guarda cada sesión en {@code
@@ -140,6 +142,15 @@ public final class FakeClaude {
             inv.jsonSchema(),
             inv.rest().isEmpty() ? "" : inv.rest().getLast(),
             cwd);
+    if (verdict == null) {
+      verdict =
+          FakeJudge.refutation(
+              env,
+              "FAKE_CLAUDE_REFUTE",
+              inv.jsonSchema(),
+              inv.rest().isEmpty() ? "" : inv.rest().getLast(),
+              cwd);
+    }
 
     for (String line : loadFixture(inv.fixture(env))) {
       if (line.isBlank()) {

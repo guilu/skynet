@@ -243,6 +243,14 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       })} / 5 · ${payload.passed ? 'aprobado' : 'suspenso'}, aprueba ${p('approvals')} de ${p(
         'judges',
       )}${Number(payload.blocking) > 0 ? ` · ${p('blocking')} bloquea` : ''}`
+    case 'stage.judge.refute.started':
+      return `${p('stageKey')}: ${
+        Number(payload.skeptics) === 1 ? '1 escéptico' : `${p('skeptics')} escépticos`
+      } por hallazgo intentan refutar ${
+        Number(payload.findings) === 1 ? '1 hallazgo' : `${p('findings')} hallazgos`
+      }${payload.note ? ` (${truncate(p('note'), 80)})` : ''}`
+    case 'stage.judge.refuted':
+      return `${p('stageKey')}: refutados ${p('refuted')} de ${p('findings')} hallazgos`
     case 'stage.judge.fix.started':
       return `${p('fixStageKey')} corrige lo que suspendió el juez (ronda ${p('round')} de ${p(
         'maxRounds',

@@ -1322,6 +1322,81 @@ class DefinitionParserTest {
   }
 
   @Test
+  void aJudgeCanRefuteItsBlockingFindings() {
+    Parsed parsed =
+        parse(
+            """
+            id: juez-refuta
+            agents:
+              juez:
+                provider: codex
+              esceptico:
+                provider: antigravity
+            stages:
+              - id: implementar
+                type: agent
+                prompt: Implementa
+              - id: juzgar
+                type: verification
+                dependsOn: [implementar]
+                judge:
+                  agents: [{agent: juez, lens: correctness}]
+                  refute: 3
+                  refuteAgent: esceptico
+                fix: implementar
+              - id: sin
+                type: verification
+                dependsOn: [implementar]
+                judge:
+                  agents: [{agent: juez, lens: correctness}]
+            """);
+    assertThat(messages(parsed, Severity.ERROR)).isEmpty();
+    assertThat(messages(parsed, Severity.WARNING)).isEmpty();
+    JudgeSpec judge = parsed.definition().stage("juzgar").orElseThrow().judge();
+    assertThat(judge.refute()).isEqualTo(3);
+    assertThat(judge.skeptic()).isEqualTo("esceptico");
+    JudgeSpec plain = parsed.definition().stage("sin").orElseThrow().judge();
+    assertThat(plain.refute()).isZero();
+    assertThat(plain.skeptic()).isEqualTo("juez");
+  }
+
+  @Test
+  void aWrongRefuteSaysWhy() {
+    Parsed parsed =
+        parse(
+            """
+            id: juez-refuta-mal
+            agents:
+              juez:
+                provider: codex
+            stages:
+              - id: implementar
+                type: agent
+                prompt: Implementa
+              - id: juzgar
+                type: verification
+                dependsOn: [implementar]
+                judge:
+                  agents: [{agent: juez, lens: correctness}]
+                  refute: 9
+                  refuteAgent: nadie
+              - id: otro
+                type: verification
+                dependsOn: [implementar]
+                judge:
+                  agents: [{agent: juez, lens: correctness}]
+                  refuteAgent: juez
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .contains(
+            "`stages.juzgar.judge.refute` debe estar entre 0 y 5",
+            "No hay ningún agente `nadie` en `agents`");
+    assertThat(messages(parsed, Severity.WARNING))
+        .contains(
+            "`refuteAgent` no se usa sin `refute`: pon cuántos escépticos, p. ej. `refute: 2`");
+  }
+
+  @Test
   void aConditionReadsOnlyTheDataOfTheJudge() {
     Parsed parsed =
         parse(

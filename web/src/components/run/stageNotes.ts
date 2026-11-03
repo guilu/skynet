@@ -243,6 +243,10 @@ export function judgeNote(stage: StageRun): string | null {
       const n = judge.judgements.length || 1
       return `Juzgando: ${n === 1 ? '1 juez' : `${n} jueces`}${round}`
     }
+    case 'REFUTING': {
+      const n = judge.refuting
+      return `Refutando ${n === 1 ? '1 hallazgo que bloquea' : `${n} hallazgos que bloquean`}${round}`
+    }
     case 'FIXING':
       return `${judge.fix} corrige lo que suspendió el juez (ronda ${judge.round} de ${judge.maxRounds})`
     case 'PASSED':

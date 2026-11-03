@@ -8,7 +8,8 @@ import java.util.UUID;
  * El juez de una fase {@code verification} (VA-B), para la web: en qué ronda va, la nota de la fase
  * y el veredicto de cada juez en la última ronda juzgada.
  *
- * @param status {@code CHECKING}, {@code JUDGING}, {@code FIXING}, {@code PASSED} o {@code FAILED}
+ * @param status {@code CHECKING}, {@code JUDGING}, {@code REFUTING}, {@code FIXING}, {@code PASSED}
+ *     o {@code FAILED}
  * @param round la ronda en curso, desde 1
  * @param shownRound la ronda de {@code judgements}: la anterior mientras se corrige
  * @param maxRounds rondas de corrección como mucho; 0 sin {@code fix}
@@ -21,6 +22,9 @@ import java.util.UUID;
  * @param findings los hallazgos de todos, los que bloquean primero
  * @param judgements el veredicto de cada juez
  * @param error por qué falló o suspendió la última ronda
+ * @param refute escépticos por hallazgo que bloquea (VA-C); 0 sin verificación adversarial
+ * @param refuting cuántos hallazgos se están intentando refutar ahora
+ * @param refuteNote el aviso si no se pudieron refutar todos (los topes), o {@code null}
  */
 public record JudgeView(
     String status,
@@ -35,7 +39,10 @@ public record JudgeView(
     Integer judges,
     List<Issue> findings,
     List<Judgement> judgements,
-    String error) {
+    String error,
+    int refute,
+    int refuting,
+    String refuteNote) {
 
   /**
    * El veredicto de un juez.
@@ -57,6 +64,16 @@ public record JudgeView(
   /** La nota de un criterio. */
   public record Score(String id, int score, String reason, int weight, boolean required) {}
 
-  /** Un hallazgo: {@code severity} es {@code blocking} o {@code minor}. */
-  public record Issue(String file, Integer line, String severity, String text, String judge) {}
+  /**
+   * Un hallazgo: {@code severity} es {@code blocking} o {@code minor}. {@code refuted} es si lo
+   * refutaron los escépticos (VA-C), o {@code null} si no se intentó; {@code refutation}, por qué.
+   */
+  public record Issue(
+      String file,
+      Integer line,
+      String severity,
+      String text,
+      String judge,
+      Boolean refuted,
+      String refutation) {}
 }

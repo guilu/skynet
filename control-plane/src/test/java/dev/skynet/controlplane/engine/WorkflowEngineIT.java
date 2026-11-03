@@ -1850,6 +1850,165 @@ class WorkflowEngineIT extends IntegrationTest {
                 + " corrección");
   }
 
+  @Test
+  void skepticsDiscardTheFindingsTheyRefuteBeforeAskingForAFix() {
+    String definitionId =
+        publish(
+            JUDGED
+                .replace("id: juzgada", "id: refutada")
+                .replace("      rubric:\n", "      refute: 2\n      rubric:\n"));
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    verified(runner, runner.claim().getFirst(), true);
+    complete(
+        runner,
+        runner.claim().getFirst(),
+        "/w/eng/juez",
+        verdict(
+            5,
+            5,
+            List.of(
+                Map.of(
+                    "file",
+                    "src/Calc.java",
+                    "line",
+                    12,
+                    "severity",
+                    "blocking",
+                    "text",
+                    "Divide entre cero sin comprobarlo"),
+                Map.of(
+                    "file",
+                    "src/Calc.java",
+                    "line",
+                    20,
+                    "severity",
+                    "blocking",
+                    "text",
+                    "Redondea mal los negativos"),
+                Map.of(
+                    "file",
+                    "README.md",
+                    "line",
+                    1,
+                    "severity",
+                    "minor",
+                    "text",
+                    "Falta un ejemplo"))));
+
+    // Dos escépticos por hallazgo que bloquea, en copias y en solo lectura; el menor no se refuta.
+    JsonNode refuting = stageOf(get("/api/workflow-runs/" + runId), "juzgar").path("judge");
+    assertThat(refuting.path("status").asString()).isEqualTo("REFUTING");
+    assertThat(refuting.path("refuting").asInt()).isEqualTo(2);
+    List<JsonNode> skeptics = new ArrayList<>();
+    await(
+        () -> {
+          skeptics.addAll(runner.claim());
+          return skeptics.size() >= 4;
+        });
+    assertThat(skeptics).hasSize(4);
+    for (int i = 0; i < 4; i++) {
+      JsonNode skeptic = skeptics.get(i);
+      JsonNode start = skeptic.path("start");
+      assertThat(start.path("permissionMode").asString()).isEqualTo("plan");
+      assertThat(start.path("workspace").path("copy").asBoolean()).isTrue();
+      assertThat(start.path("outputSchema").asString()).contains("\"refuted\"");
+      String prompt = taskPrompt(start);
+      assertThat(prompt).doesNotContain("rúbrica").doesNotContain("Falta un ejemplo");
+      boolean divide = prompt.contains("En `src/Calc.java:12`: Divide entre cero");
+      // El de dividir lo refutan los dos; el de redondear, solo uno: empate, sigue en pie.
+      boolean refutes = divide || i % 2 == 0;
+      complete(
+          runner,
+          skeptic,
+          "/w/eng/juez",
+          Map.of(
+              "refuted",
+              refutes,
+              "reason",
+              refutes ? "Ya se comprueba en la línea 10" : "Pasa con -0,5"));
+    }
+
+    JsonNode fix = runner.claim().getFirst();
+    assertThat(fix.path("type").asString()).isEqualTo("RESUME");
+    assertThat(taskPrompt(fix.path("start")))
+        .contains("- `src/Calc.java:20`: Redondea mal los negativos (juez)")
+        .doesNotContain("Divide entre cero");
+    JsonNode fixing = stageOf(get("/api/workflow-runs/" + runId), "juzgar").path("judge");
+    assertThat(fixing.path("status").asString()).isEqualTo("FIXING");
+    JsonNode findings = fixing.path("findings");
+    assertThat(findings.get(0).path("text").asString()).isEqualTo("Redondea mal los negativos");
+    assertThat(findings.get(0).path("refuted").asBoolean()).isFalse();
+    assertThat(findings.get(2).path("text").asString())
+        .isEqualTo("Divide entre cero sin comprobarlo");
+    assertThat(findings.get(2).path("refuted").asBoolean()).isTrue();
+    assertThat(findings.get(2).path("refutation").asString())
+        .isEqualTo("Ya se comprueba en la línea 10");
+    assertThat(
+            jdbc.sql("SELECT count(*) FROM stage_refutation WHERE workflow_run_id = ?::uuid")
+                .param(runId)
+                .query(Integer.class)
+                .single())
+        .isEqualTo(4);
+    assertThat(eventTypes(runId))
+        .containsSubsequence(
+            "stage.judge.started",
+            "stage.judge.refute.started",
+            "stage.judge.refuted",
+            "stage.judge.verdict",
+            "stage.judge.fix.started");
+  }
+
+  @Test
+  void whenSkepticsRefuteEveryBlockingFindingTheJudgePassesWithoutAFix() {
+    String definitionId =
+        publish(
+            JUDGED
+                .replace("id: juzgada", "id: refutada-del-todo")
+                .replace("      rubric:\n", "      refute: 1\n      rubric:\n"));
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    verified(runner, runner.claim().getFirst(), true);
+    complete(
+        runner,
+        runner.claim().getFirst(),
+        "/w/eng/juez",
+        verdict(
+            5,
+            5,
+            List.of(
+                Map.of(
+                    "file",
+                    "src/Calc.java",
+                    "line",
+                    12,
+                    "severity",
+                    "blocking",
+                    "text",
+                    "Divide entre cero sin comprobarlo"))));
+    complete(
+        runner,
+        runner.claim().getFirst(),
+        "/w/eng/juez",
+        Map.of("refuted", true, "reason", "Ya se comprueba"));
+
+    assertThat(stageStatuses(runId)).containsEntry("juzgar", "SUCCEEDED");
+    JsonNode judge = stageOf(get("/api/workflow-runs/" + runId), "juzgar").path("judge");
+    assertThat(judge.path("passed").asBoolean()).isTrue();
+    assertThat(judge.path("round").asInt()).isEqualTo(1);
+    // implement no ha vuelto a trabajar.
+    assertThat(
+            jdbc.sql(
+                    "SELECT count(*) FROM agent_run a JOIN stage_run s ON s.id = a.stage_run_id"
+                        + " WHERE s.workflow_run_id = ?::uuid AND s.stage_key = 'implement'")
+                .param(runId)
+                .query(Integer.class)
+                .single())
+        .isEqualTo(1);
+  }
+
   /** El veredicto de un juez con la rúbrica de {@link #JUDGED}. */
   private static Map<String, Object> verdict(
       int resuelve, int tests, List<Map<String, Object>> findings) {

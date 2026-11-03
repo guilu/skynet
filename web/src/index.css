@@ -3344,6 +3344,20 @@
     color: var(--bad-ink);
   }
 
+  /* Un hallazgo que refutaron los escépticos (VA-C): tachado y en gris. */
+  .stage-judge-findings .refuted,
+  .stage-judge-findings .refuted .stage-judge-severity {
+    color: var(--muted);
+  }
+
+  .stage-judge-findings .refuted del {
+    text-decoration-thickness: 1px;
+  }
+
+  .stage-judge-note {
+    margin: 0 0 var(--space-1);
+  }
+
   .stage-attempts {
     margin: 0 0 var(--space-2);
   }

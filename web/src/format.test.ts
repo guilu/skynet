@@ -45,6 +45,17 @@ describe('describeEvent', () => {
       }),
     ).toBe('pr abrió la PR #12 (skynet/ENG-1 → main)')
     expect(
+      describeEvent('stage.judge.refute.started', {
+        stageKey: 'juzgar',
+        round: 1,
+        findings: 3,
+        skeptics: 2,
+      }),
+    ).toBe('juzgar: 2 escépticos por hallazgo intentan refutar 3 hallazgos')
+    expect(
+      describeEvent('stage.judge.refuted', { stageKey: 'juzgar', refuted: 1, findings: 3 }),
+    ).toBe('juzgar: refutados 1 de 3 hallazgos')
+    expect(
       describeEvent('stage.github.ci.fix.started', {
         fixStageKey: 'implementar',
         round: 1,

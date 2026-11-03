@@ -41,6 +41,8 @@ import tools.jackson.databind.node.ObjectNode;
  *   <li>{@code FAKE_CODEX_JUDGE}: ruta de un fichero testigo (VA-B). Con la salida estructurada de
  *       un juez de Skynet, aprueba si no existe y, si existe, suspende con un hallazgo que bloquea
  *       y lo borra ({@link FakeJudge}).
+ *   <li>{@code FAKE_CODEX_REFUTE}: ruta de otro testigo (VA-C). Con la salida de un escéptico,
+ *       refuta el hallazgo si el fichero existe y su texto está en el prompt (vacío, cualquiera).
  *   <li>{@code CODEX_HOME}: si está definida, guarda cada sesión en {@code
  *       <dir>/sessions/<sesión>.jsonl}, y reanudar o bifurcar falla si no la encuentra. Sin ella no
  *       comprueba nada. Al final de la sesión añade un {@code token_count} con la cuota de la
@@ -128,6 +130,15 @@ public final class FakeCodex {
                 schemaOf(cwd.resolve(inv.outputSchema())),
                 inv.prompt(),
                 cwd);
+    if (verdict == null && inv.outputSchema() != null) {
+      verdict =
+          FakeJudge.refutation(
+              env,
+              "FAKE_CODEX_REFUTE",
+              schemaOf(cwd.resolve(inv.outputSchema())),
+              inv.prompt(),
+              cwd);
+    }
     String structured =
         inv.outputSchema() == null
             ? null
