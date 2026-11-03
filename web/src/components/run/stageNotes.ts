@@ -236,6 +236,21 @@ export function judgeNote(stage: StageRun): string | null {
   const judge = stage.judge
   if (!judge) return null
   const round = judge.round > 1 ? ` (ronda ${judge.round})` : ''
+  if (judge.guide) {
+    switch (judge.status) {
+      case 'CHECKING':
+        return stage.status === 'RUNNING' ? `Comprobando antes de la guía${round}` : null
+      case 'JUDGING':
+      case 'REFUTING':
+        return `Ejecutando la guía de pruebas${round}`
+      case 'FIXING':
+        return `${judge.fix} corrige lo que falla de la guía (ronda ${judge.round} de ${judge.maxRounds})`
+      case 'PASSED':
+        return judge.guide.note ?? 'Pasa la guía'
+      case 'FAILED':
+        return judge.error ? `No pasó: ${judge.error}` : judge.guide.note
+    }
+  }
   switch (judge.status) {
     case 'CHECKING':
       return stage.status === 'RUNNING' ? `Comprobando antes de juzgar${round}` : null

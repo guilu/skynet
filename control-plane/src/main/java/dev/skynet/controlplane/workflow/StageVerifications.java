@@ -75,8 +75,9 @@ class StageVerifications {
    */
   void afterAgent(AgentRun agent, StageRun stage, Instant now) {
     StageDefinition definition = definitionOf(stage);
-    if (agent.isJudge() || agent.isSkeptic()) {
-      // Un juez o un escéptico solo leen: no hay nada que verificar en su copia (VA-B, VA-C).
+    if (agent.isJudge() || agent.isSkeptic() || agent.isGuide()) {
+      // Un juez, un escéptico o quien ejecuta la guía trabajan en una copia que no llega al
+      // cambio: no hay nada que verificar en ella (VA-B, VA-C, VA-D).
       finish(stage, definition, now);
       return;
     }
@@ -284,7 +285,13 @@ class StageVerifications {
           round.stage().getId(),
           "stage.judge.round.started",
           runId,
-          Map.of("stageKey", round.stage().getStageKey(), "round", state.round()),
+          Map.of(
+              "stageKey",
+              round.stage().getStageKey(),
+              "round",
+              state.round(),
+              "guide",
+              round.definition().judge().isGuide()),
           now);
       round(
           runId,

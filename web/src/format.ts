@@ -251,12 +251,24 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       }${payload.note ? ` (${truncate(p('note'), 80)})` : ''}`
     case 'stage.judge.refuted':
       return `${p('stageKey')}: refutados ${p('refuted')} de ${p('findings')} hallazgos`
+    // La guía de pruebas como fase (VA-D).
+    case 'stage.guide.started':
+      return `${p('stageKey')}: ${p('agent')} ejecuta la guía de pruebas${
+        Number(payload.round) > 1 ? ` (ronda ${p('round')})` : ''
+      }`
+    case 'stage.guide.verdict':
+      return `${p('stageKey')}: ${payload.passed ? 'pasa' : 'no pasa'} la guía · ${truncate(
+        p('note'),
+        100,
+      )}`
     case 'stage.judge.fix.started':
-      return `${p('fixStageKey')} corrige lo que suspendió el juez (ronda ${p('round')} de ${p(
-        'maxRounds',
-      )})`
+      return `${p('fixStageKey')} corrige lo que ${
+        payload.guide ? 'falla de la guía' : 'suspendió el juez'
+      } (ronda ${p('round')} de ${p('maxRounds')})`
     case 'stage.judge.round.started':
-      return `${p('stageKey')} vuelve a comprobar y juzgar (ronda ${p('round')})`
+      return `${p('stageKey')} vuelve a ${
+        payload.guide ? 'ejecutar la guía' : 'comprobar y juzgar'
+      } (ronda ${p('round')})`
     case 'stage.judge.failed':
       return `${p('stageKey')}: ${truncate(p('error'), 120)}`
     case 'stage.github.ci.fix.started':

@@ -2009,6 +2009,153 @@ class WorkflowEngineIT extends IntegrationTest {
         .isEqualTo(1);
   }
 
+  /** La guía de pruebas como fase: falla un paso, se corrige y pasa en la ronda 2 (VA-D). */
+  static final String GUIDED =
+      """
+      id: guiada
+      version: 1
+      agents:
+        probador:
+          model: probador-modelo
+      stages:
+        - id: implement
+          type: agent
+          prompt: Implementa
+        - id: guia
+          type: verification
+          dependsOn: [implement]
+          guide:
+            path: "docs/tests/probar-*.md"
+            agent: probador
+            skip: ["## 4."]
+          fix: implement
+          maxRounds: 2
+      """;
+
+  @Test
+  void aGuideThatFailsAStepSendsItToTheFixStageAndRunsAgain() {
+    String definitionId = publish(GUIDED);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+
+    // Quien ejecuta la guía: en una copia, sin forzar solo lectura (tiene que ejecutar los pasos).
+    JsonNode guide = runner.claim().getFirst();
+    JsonNode start = guide.path("start");
+    assertThat(start.path("permissionMode").asString()).isNotEqualTo("plan");
+    assertThat(start.path("workspace").path("copy").asBoolean()).isTrue();
+    assertThat(start.path("outputSchema").asString()).contains("\"steps\"");
+    assertThat(start.path("model").asString()).isEqualTo("probador-modelo");
+    assertThat(taskPrompt(start))
+        .contains("`docs/tests/probar-*.md`")
+        .contains("`git diff --name-only abc1234`")
+        .contains("«## 4.»");
+    complete(
+        runner,
+        guide,
+        "/w/eng/guia",
+        guideRun(
+            List.of(
+                Map.of(
+                    "guide", "docs/tests/probar-calc.md",
+                    "section", "## 1. Tests",
+                    "step", "Pasan los tests",
+                    "status", "passed",
+                    "evidence", "3 passed"),
+                Map.of(
+                    "guide", "docs/tests/probar-calc.md",
+                    "section", "## 1. Tests",
+                    "step", "Divide entre cero",
+                    "status", "failed",
+                    "evidence", "ZeroDivisionError"))));
+
+    // Falla un paso: el agente de implement corrige con los pasos y sin tocar la guía.
+    JsonNode fix = runner.claim().getFirst();
+    assertThat(fix.path("type").asString()).isEqualTo("RESUME");
+    assertThat(taskPrompt(fix.path("start")))
+        .contains("La guía de pruebas de la fase `guia` no pasa.")
+        .contains("- ✗ Divide entre cero")
+        .contains("ZeroDivisionError")
+        .contains("No cambies la guía para que pase")
+        .contains("(ronda de corrección 1 de 2)");
+    JsonNode fixing = stageOf(get("/api/workflow-runs/" + runId), "guia").path("judge");
+    assertThat(fixing.path("status").asString()).isEqualTo("FIXING");
+    assertThat(fixing.path("guide").path("note").asString()).isEqualTo("1 de 2 pasos pasan");
+    assertThat(fixing.path("guide").path("steps").get(1).path("status").asString())
+        .isEqualTo("failed");
+    assertThat(fixing.path("error").asString())
+        .isEqualTo("No pasa la guía de pruebas: Falla 1 paso de la guía");
+    complete(runner, fix, "/w/eng/implement");
+
+    // La ronda 2 vuelve a ejecutar la guía entera.
+    JsonNode second = runner.claim().getFirst();
+    assertThat(taskPrompt(second.path("start"))).contains("Es la ronda 2");
+    complete(
+        runner,
+        second,
+        "/w/eng/guia",
+        guideRun(
+            List.of(
+                Map.of(
+                    "guide", "docs/tests/probar-calc.md",
+                    "section", "## 1. Tests",
+                    "step", "Divide entre cero",
+                    "status", "passed",
+                    "evidence", "ValueError"))));
+
+    assertThat(stageStatuses(runId)).containsEntry("guia", "SUCCEEDED");
+    JsonNode passed = stageOf(get("/api/workflow-runs/" + runId), "guia").path("judge");
+    assertThat(passed.path("status").asString()).isEqualTo("PASSED");
+    assertThat(passed.path("guide").path("note").asString()).isEqualTo("1 de 1 pasos pasan");
+    assertThat(passed.path("guide").path("guides").get(0).asString())
+        .isEqualTo("docs/tests/probar-calc.md");
+    assertThat(
+            jdbc.sql(
+                    "SELECT count(*) FROM agent_run a JOIN stage_run s ON s.id = a.stage_run_id"
+                        + " WHERE s.workflow_run_id = ?::uuid AND a.role = 'guide'")
+                .param(runId)
+                .query(Integer.class)
+                .single())
+        .isEqualTo(2);
+    assertThat(eventTypes(runId))
+        .containsSubsequence(
+            "stage.guide.started",
+            "stage.guide.verdict",
+            "stage.judge.fix.started",
+            "stage.judge.round.started",
+            "stage.guide.started",
+            "stage.guide.verdict");
+  }
+
+  @Test
+  void withoutAGuideInTheChangeTheStageFails() {
+    String definitionId = publish(GUIDED.replace("maxRounds: 2", "maxRounds: 1"));
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    complete(runner, runner.claim().getFirst(), "/w/eng/guia", guideRun(List.of()));
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    complete(runner, runner.claim().getFirst(), "/w/eng/guia", guideRun(List.of()));
+
+    assertThat(stageStatuses(runId)).containsEntry("guia", "FAILED");
+    JsonNode judge = stageOf(get("/api/workflow-runs/" + runId), "guia").path("judge");
+    assertThat(judge.path("error").asString())
+        .isEqualTo(
+            "No pasa la guía de pruebas: No hay guía de pruebas en el cambio tras 1 ronda de"
+                + " corrección");
+  }
+
+  /** Lo que devuelve quien ejecuta la guía: sin pasos, sin guía en el cambio. */
+  private static Map<String, Object> guideRun(List<Map<String, Object>> steps) {
+    return Map.of(
+        "guides",
+        steps.isEmpty() ? List.of() : List.of("docs/tests/probar-calc.md"),
+        "steps",
+        steps,
+        "summary",
+        "Resumen de la guía");
+  }
+
   /** El veredicto de un juez con la rúbrica de {@link #JUDGED}. */
   private static Map<String, Object> verdict(
       int resuelve, int tests, List<Map<String, Object>> findings) {

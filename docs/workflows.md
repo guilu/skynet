@@ -88,6 +88,7 @@ stages:
 - `pullRequest`: solo en las fases `type: github-pr`. Ver «Entrega por PR».
 - `required`, `ifNoChecks`, `fix` y `maxRounds`: solo en las fases `type: github-check` (`fix` y `maxRounds`, también en una `verification` con `judge`). Ver «Esperar la CI de la PR».
 - `judge`: solo en las fases `type: verification`. Ver «Juez con rúbrica (VA-B)» y «Verificación adversarial (VA-C)».
+- `guide`: solo en las fases `type: verification`, y no con `judge`. Ver «La guía de pruebas como fase (VA-D)».
 - `method` y `deleteBranch`: solo en las fases `type: github-merge`. Ver «Fusionar la PR».
 - `outputSchema`: solo en las fases `type: agent`. La salida estructurada que devuelve la fase, y manda sobre el `output` de su agente, así que un mismo agente sirve en fases con salidas distintas. Es un JSON Schema en línea, como `output`, o la ruta de un fichero del repositorio (`outputSchema: schemas/spec.json`). Ver «Salida de una fase en un fichero».
 
@@ -257,7 +258,7 @@ stages:
     checks: [tests, commit]
 ```
 
-- Necesitan `artifacts`, `checks` o un `judge` (ver abajo), y una dependencia con worktree (`agent`, `command` o `parallel`); no admiten `agent`, `prompt`, `command`, `children`, `outputSchema` ni `workspace: isolated-worktree`.
+- Necesitan `artifacts`, `checks`, un `judge` o una `guide` (ver abajo), y una dependencia con worktree (`agent`, `command` o `parallel`); no admiten `agent`, `prompt`, `command`, `children`, `outputSchema` ni `workspace: isolated-worktree`.
 - `diff`, `commit` y `scope` miden desde el commit con el que se creó el worktree.
 - En la ejecución, su única invocación tiene proveedor `verification`: no arranca ningún proceso, termina bien si pasan las comprobaciones y falla con los motivos si no. No se continúa ni se reintenta por separado.
 - La fase siguiente continúa el mismo worktree.
@@ -323,6 +324,36 @@ stages:
 - La fase dice «Refutando 3 hallazgos que bloquean» mientras tanto. Al abrirla, los hallazgos refutados salen **tachados** con el motivo («Refutado: ya se comprueba en la línea 10»), y los que no, con lo que dijo el escéptico. En la PR, igual: tachados y con el motivo. En el grafo, la caja dice «refuta ×2».
 - Eventos `stage.judge.refute.started` (cuántos hallazgos y escépticos, y el aviso si hubo recorte) y `stage.judge.refuted` (cuántos se descartaron); el de `stage.judge.verdict` dice cuántos se refutaron. Lo que dijo cada escéptico queda en `stage_refutation`, y en `<fase>.findings` cada hallazgo lleva `refuted` y `refutation`.
 - **Los workflows iniciales** lo usan: en «Implementar una tarea», «Corregir un bug» y «Especificar, planificar e implementar», la revisión (y su fase de corregir) es ahora una fase `juzgar` con jueces de otros proveedores que Claude Code, `refute: 2` y `fix` en la fase que implementa. `scripts/seed-workflows.sh --actualizar` publica las versiones nuevas; las tuyas no se tocan.
+
+**La guía de pruebas como fase** (VA-D). Con `guide`, un agente **ejecuta la guía de pruebas que trae el cambio**, paso a paso, y apunta qué pasa en cada uno con su evidencia. Si falla un paso y la fase tiene `fix`, el agente de esa fase corrige con los pasos que fallan, y la fase vuelve a ejecutar la guía entera:
+
+```yaml
+agents:
+  probador:
+    provider: codex
+stages:
+  - id: guia
+    type: verification
+    dependsOn: [implementar]
+    guide:
+      path: "docs/tests/probar-*.md"   # o una lista de globs
+      agent: probador
+      skip: ["## 4."]                  # opcional: secciones que no se ejecutan aquí
+      ifMissing: fail                  # o skip
+    fix: implementar
+    maxRounds: 2
+```
+
+- `guide.path` (obligatorio): dónde están las guías, un glob o una lista. Se ejecutan **las que cambia el diff** desde el commit con el que se creó el worktree (las nuevas también); las que no cambian, no. Si son varias, todas.
+- `guide.agent` (obligatorio): el agente que la ejecuta, en una **copia del worktree** y sin memoria. A diferencia de un juez, **no va en solo lectura**: tiene que ejecutar los pasos (tests, el servicio, `curl`…). Lo que haga en la copia no llega al cambio. Su `permissionMode` es el del agente o el del repositorio: con `plan` no podría ejecutar nada, y se avisa al publicar. No necesita `prompt`: Skynet escribe el suyo y, si el agente tiene uno, lo añade como «Indicaciones» (p. ej. cómo arrancar algo en esa máquina).
+- `guide.skip`: las secciones que no se ejecutan, por cómo empieza su título (p. ej. `## 4.` para la de GitHub). Sus pasos quedan como saltados.
+- `guide.ifMissing`: si el cambio no trae guía, la fase falla con «No hay guía de pruebas en el cambio» (`fail`, por defecto) o pasa (`skip`).
+- **Qué hace:** cada paso es `passed` (pasa lo que la guía dice que tiene que pasar), `failed`, `blocked` (no se puede hacer ahí: otra máquina, una cuenta, un servicio que no hay) o `skipped`. Se le pide que siga la guía tal cual, sin saltarse pasos ni cambiarla, y que **no arregle nada para que pase**. No recibe lo que dijo el autor del cambio.
+- **Cómo se decide:** la fase pasa si **no falla ningún paso**. Un paso `blocked` es un aviso, no un fallo. Un estado que no se entiende cuenta como fallido.
+- **Las rondas** son las del juez: `fix` y `maxRounds` igual. A la fase de `fix` le llegan los pasos con su evidencia y una indicación: «No cambies la guía para que pase: corrige el código». **Es solo una indicación**: la guía no queda protegida (las guías del cambio las escribe el propio autor). Si quieres impedirlo, pon la guía en `protected` cuando ya exista.
+- La fase dice «Ejecutando la guía de pruebas», «implementar corrige lo que falla de la guía (ronda 1 de 2)» o su nota, «3 de 3 pasos pasan · 1 saltado». Al abrirla se ven las guías ejecutadas y los pasos por sección, con su estado y su evidencia plegada. En el grafo, la caja dice «Guía de pruebas · probador». Con una fase `github-pr` detrás, la descripción de la PR lleva la nota en la tabla de evidencias y **los pasos con su evidencia** en un bloque plegado debajo.
+- Eventos `stage.guide.started` y `stage.guide.verdict` (pasos que pasan, fallan y no se pudieron, y la nota); las correcciones y las rondas, como el juez (`stage.judge.fix.started`, `stage.judge.round.started`, `stage.judge.failed`). El recorrido de cada ronda queda en `stage_verdict.guide`.
+- Una fase lleva `judge` o `guide`, no los dos: si quieres las dos cosas, ponlas en dos fases (`juzgar` y `guia` detrás).
 
 **Entrega por PR.** Una fase `type: github-pr` sube el worktree que hereda a GitHub y abre una PR con lo que ha hecho el workflow (EN-A). Necesita la GitHub App ([`github.md`](github.md)) instalada en el repositorio:
 

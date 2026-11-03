@@ -871,6 +871,28 @@ export interface JudgeSpec {
   refute: number
   /** El agente de los escépticos; null para el del primer juez. */
   refuteAgent: string | null
+  /** La guía de pruebas como fase (VA-D); null en un juez con rúbrica. */
+  guide: GuideSpec | null
+}
+
+/** El bloque `guide` de una fase `verification` (VA-D). */
+export interface GuideSpec {
+  /** Los globs de la guía, p. ej. `docs/tests/probar-*.md`. */
+  paths: string[]
+  agent: string
+  /** Las secciones que no se ejecutan, por cómo empieza su título. */
+  skip: string[]
+  /** Si sin guía en el cambio la fase pasa en vez de fallar. */
+  skipIfMissing: boolean
+}
+
+/** Un paso de la guía de pruebas, como lo cuenta quien la ejecuta (VA-D). */
+export interface GuideStep {
+  guide: string | null
+  section: string | null
+  step: string | null
+  status: 'passed' | 'failed' | 'blocked' | 'skipped'
+  evidence: string | null
 }
 
 /** Un hallazgo de un juez. */
@@ -927,6 +949,16 @@ export interface StageJudge {
   refuting: number
   /** El aviso si no se pudieron refutar todos por los topes. */
   refuteNote: string | null
+  /** La guía de pruebas de la fase (VA-D), con los pasos de la última ronda; null en un juez. */
+  guide: {
+    paths: string[]
+    /** Las guías que se ejecutaron; vacío sin guía en el cambio o antes de la primera ronda. */
+    guides: string[]
+    steps: GuideStep[]
+    summary: string | null
+    /** «2 de 3 pasos pasan · 1 no se pudo»; null antes de la primera ronda. */
+    note: string | null
+  } | null
 }
 
 /** Una comprobación de fase: `artifacts`, `tests`, `diff`, `commit`, `scope` o `command`. */

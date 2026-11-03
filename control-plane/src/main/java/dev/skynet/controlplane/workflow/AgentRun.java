@@ -41,6 +41,9 @@ public class AgentRun {
   /** Un escéptico que intenta refutar un hallazgo del juez (VA-C). */
   public static final String ROLE_SKEPTIC = "skeptic";
 
+  /** El agente que ejecuta la guía de pruebas de una fase {@code verification} (VA-D). */
+  public static final String ROLE_GUIDE = "guide";
+
   @Id private final UUID id;
   private final UUID stageRunId;
   private final UUID parentAgentRunId;
@@ -136,8 +139,8 @@ public class AgentRun {
   private Instant fallbackUntil;
 
   /**
-   * Qué hace en su fase: {@code null} para el agente de siempre, {@link #ROLE_JUDGE} (VA-B) o
-   * {@link #ROLE_SKEPTIC} (VA-C).
+   * Qué hace en su fase: {@code null} para el agente de siempre, {@link #ROLE_JUDGE} (VA-B), {@link
+   * #ROLE_SKEPTIC} (VA-C) o {@link #ROLE_GUIDE} (VA-D).
    */
   private String role;
 
@@ -690,6 +693,15 @@ public class AgentRun {
   /** La invocación es un escéptico (VA-C). */
   void asSkeptic() {
     this.role = ROLE_SKEPTIC;
+  }
+
+  public boolean isGuide() {
+    return ROLE_GUIDE.equals(role);
+  }
+
+  /** La invocación ejecuta una guía de pruebas (VA-D). */
+  void asGuide() {
+    this.role = ROLE_GUIDE;
   }
 
   public String getBaseCommit() {

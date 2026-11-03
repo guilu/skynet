@@ -30,4 +30,33 @@ class PullRequestBodyTest {
                 null, "DEMO-1", "Resta", null, List.of(), null, null, UUID.randomUUID(), null))
         .doesNotContain("Closes");
   }
+
+  @Test
+  void aStageWithDetailsGetsAFoldedBlockUnderTheTable() {
+    String body =
+        PullRequestBody.of(
+            null,
+            "DEMO-1",
+            "Resta",
+            null,
+            List.of(
+                new PullRequestBody.StageLine(
+                    "guia",
+                    "Guía de pruebas",
+                    "terminada bien",
+                    "Guía de pruebas: 2 de 2 pasos pasan",
+                    List.of(),
+                    "## 1. Tests\n\n- ✓ Pasan los tests\n"),
+                new PullRequestBody.StageLine("pr", null, "terminada bien", null, List.of())),
+            null,
+            null,
+            UUID.randomUUID(),
+            null);
+    assertThat(body)
+        .contains("| Guía de pruebas | terminada bien | Guía de pruebas: 2 de 2 pasos pasan |")
+        .contains(
+            "<details><summary>Guía de pruebas</summary>\n\n## 1. Tests\n\n- ✓ Pasan los"
+                + " tests\n\n</details>");
+    assertThat(body.split("<details>", -1)).hasSize(2);
+  }
 }

@@ -42,7 +42,24 @@ public record JudgeView(
     String error,
     int refute,
     int refuting,
-    String refuteNote) {
+    String refuteNote,
+    Guide guide) {
+
+  /**
+   * La guía de pruebas como fase (VA-D): qué guías se buscan, cuáles se ejecutaron y cada paso con
+   * su evidencia, de la última ronda que la recorrió; {@code null} en un juez con rúbrica.
+   *
+   * @param paths los globs de la guía
+   * @param guides las guías que se ejecutaron (vacío sin guía en el cambio)
+   * @param steps sus pasos, en orden; vacío hasta que termina la primera ronda
+   * @param summary el resumen de quien la ejecutó
+   * @param note «2 de 3 pasos pasan · 1 no se pudo», o {@code null} sin recorrido
+   */
+  public record Guide(
+      List<String> paths, List<String> guides, List<Step> steps, String summary, String note) {}
+
+  /** Un paso de la guía: {@code passed}, {@code failed}, {@code blocked} o {@code skipped}. */
+  public record Step(String guide, String section, String step, String status, String evidence) {}
 
   /**
    * El veredicto de un juez.

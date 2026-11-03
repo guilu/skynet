@@ -24,8 +24,19 @@ final class PullRequestBody {
    * Una fase anterior, con su resumen ({@code summary} de su salida) si lo tiene.
    *
    * @param checks las comprobaciones de su verificación, p. ej. {@code tests ✅}
+   * @param details el detalle en Markdown que va plegado debajo de la tabla (los pasos de la guía
+   *     de pruebas, VA-D), o {@code null}
    */
-  record StageLine(String key, String name, String status, String summary, List<String> checks) {}
+  record StageLine(
+      String key, String name, String status, String summary, List<String> checks, String details) {
+
+    StageLine(String key, String name, String status, String summary, List<String> checks) {
+      this(key, name, status, summary, checks, null);
+    }
+  }
+
+  /** El detalle de una fase cabe holgado; lo que sobra se corta. */
+  static final int MAX_DETAILS = 12_000;
 
   static String of(
       String intro,
@@ -65,6 +76,15 @@ final class PullRequestBody {
             .append(" | ")
             .append(cell(String.join(", ", stage.checks())))
             .append(" |\n");
+      }
+      for (StageLine stage : stages) {
+        if (stage.details() != null && !stage.details().isBlank()) {
+          body.append("\n<details><summary>")
+              .append(cell(stage.name() == null ? stage.key() : stage.name()))
+              .append("</summary>\n\n")
+              .append(cut(stage.details().strip(), MAX_DETAILS))
+              .append("\n\n</details>\n");
+        }
       }
     }
     if (costUsd != null) {
