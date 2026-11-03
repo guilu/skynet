@@ -3,9 +3,11 @@ package dev.skynet.controlplane.workflow;
 import dev.skynet.controlplane.definition.StageDefinition;
 import dev.skynet.controlplane.definition.StageType;
 import dev.skynet.controlplane.definition.WorkflowDefinitions;
+import dev.skynet.controlplane.project.ProjectService;
 import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.runner.AgentLimits;
+import dev.skynet.protocol.runner.VerificationCheck;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,6 +37,7 @@ class StageVerifications {
   private final Verifications verifications;
   private final VerificationService verificationService;
   private final RunTransitions transitions;
+  private final ProjectService projects;
 
   StageVerifications(
       AgentRunRepository agentRuns,
@@ -44,7 +47,8 @@ class StageVerifications {
       Workspaces workspaces,
       Verifications verifications,
       VerificationService verificationService,
-      RunTransitions transitions) {
+      RunTransitions transitions,
+      ProjectService projects) {
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
     this.workflowRuns = workflowRuns;
@@ -53,6 +57,12 @@ class StageVerifications {
     this.verifications = verifications;
     this.verificationService = verificationService;
     this.transitions = transitions;
+    this.projects = projects;
+  }
+
+  /** Lo que se comprueba en la fase con el repositorio de {@code agent} (VA-A). */
+  private List<VerificationCheck> checksOf(StageDefinition definition, AgentRun agent) {
+    return StageCheckList.of(definition, projects.getRepository(agent.getRepositoryId()));
   }
 
   /**
@@ -67,7 +77,7 @@ class StageVerifications {
       // Si otro hijo ya no pasó, la fase va a fallar: no hace falta comprobar este. Una fase ya
       // terminada solo tiene agentes nuevos si una puerta le pidió cambios (W5-B): se comprueban.
       if (definition != null
-          && definition.verified()
+          && !checksOf(definition, agent).isEmpty()
           && workspace != null
           && (stage.getStatus().isTerminal() || !verifications.stageFailed(stage.getId()))) {
         queue(agent, workspace, stage, definition, agent.getBaseCommit(), now);
@@ -175,7 +185,10 @@ class StageVerifications {
     }
     List<AgentRun> agents = agentRuns.findByStageRunIdInOrderByCreatedAtAsc(List.of(stage.getId()));
     boolean verifiedHere =
-        definition != null && definition.verified() && definition.type() != StageType.VERIFICATION;
+        definition != null
+            && definition.type() != StageType.VERIFICATION
+            && !agents.isEmpty()
+            && !checksOf(definition, agents.getFirst()).isEmpty();
     if (!verifiedHere
         || agents.isEmpty()
         || agents.stream().anyMatch(a -> !a.getStatus().isTerminal())) {
@@ -218,7 +231,10 @@ class StageVerifications {
       StageDefinition definition,
       String baseCommit,
       Instant now) {
-    UUID id = verificationService.queueStage(agent, workspace, stage, definition, baseCommit, now);
+    List<VerificationCheck> checks = checksOf(definition, agent);
+    UUID id =
+        verificationService.queueStage(
+            agent, workspace, stage, definition, checks, baseCommit, now);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("stageKey", stage.getStageKey());
     if (agent.getChildKey() != null) {
@@ -226,7 +242,7 @@ class StageVerifications {
     }
     payload.put("agentRunId", agent.getId());
     payload.put("verificationRunId", id);
-    payload.put("checks", definition.checks().stream().map(c -> c.name()).toList());
+    payload.put("checks", checks.stream().map(c -> c.name()).toList());
     transitions.append(
         "stage_run",
         stage.getId(),

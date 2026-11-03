@@ -335,6 +335,16 @@ function RepositoryCard({
         ) : (
           <p className="muted small">Sin comando: las invocaciones no se verifican.</p>
         )}
+        {(r.protectedPaths ?? []).length > 0 && (
+          <p className="small">
+            <span className="muted">Rutas protegidas: </span>
+            {r.protectedPaths.map((p) => (
+              <code key={p} className="tool-chip">
+                {p}
+              </code>
+            ))}
+          </p>
+        )}
       </section>
 
       <GitHubSection repository={r} />

@@ -20,6 +20,7 @@ const repository: Repository = {
   defaultBranch: 'main',
   validationCommand: null,
   testReportPaths: [],
+  protectedPaths: [],
   agentPolicy: {
     allowedTools: ['Read'],
     permissionMode: 'dontAsk',

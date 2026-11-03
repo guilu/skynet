@@ -1067,12 +1067,101 @@ class DefinitionParserTest {
             VerificationCheck.named("commit"),
             VerificationCheck.withPaths("scope", List.of("docs/**", "openspec/**")),
             VerificationCheck.command("npm run lint"),
-            VerificationCheck.named("tests"));
+            VerificationCheck.named("tests"),
+            VerificationCheck.named("tests-intact"));
     assertThat(spec.verified()).isTrue();
     assertThat(spec.runsTests()).isTrue();
     StageDefinition verify = parsed.definition().stage("verify").orElseThrow();
-    assertThat(verify.checks()).containsExactly(VerificationCheck.named("tests"));
+    assertThat(verify.checks())
+        .containsExactly(VerificationCheck.named("tests"), VerificationCheck.named("tests-intact"));
     assertThat(parsed.definition().stage("verify").orElseThrow().type().executable()).isTrue();
+  }
+
+  @Test
+  void protectedPathsAndTestsIntactBecomeChecks() {
+    Parsed parsed =
+        parse(
+            """
+            id: protegida
+            protected: [docs/tests/**]
+            agents:
+              revisor:
+                prompt: Revisa
+            stages:
+              - id: implementar
+                type: agent
+                prompt: Implementa
+                checks: [tests, diff]
+                protected: [".github/workflows/**", docs/tests/**]
+              - id: borrar
+                type: agent
+                prompt: Borra el módulo viejo y sus tests
+                dependsOn: [implementar]
+                checks: [tests]
+                allowTestRemoval: true
+              - id: revisar
+                type: parallel
+                dependsOn: [borrar]
+                children:
+                  - agent: revisor
+              - id: tests
+                type: command
+                dependsOn: [revisar]
+                command: make test
+                protected: [src/**]
+            """);
+    assertThat(messages(parsed, Severity.ERROR)).isEmpty();
+    assertThat(messages(parsed, Severity.WARNING))
+        .contains(
+            "`protected` solo vale en fases `agent` o `parallel`: las demás no tienen un agente"
+                + " que cambie el worktree");
+    WorkflowDefinition definition = parsed.definition();
+    assertThat(definition.stage("implementar").orElseThrow().checks())
+        .containsExactly(
+            VerificationCheck.named("tests"),
+            VerificationCheck.named("tests-intact"),
+            VerificationCheck.named("diff"),
+            VerificationCheck.withPaths(
+                "protected", List.of("docs/tests/**", ".github/workflows/**")));
+    assertThat(definition.stage("borrar").orElseThrow().checks())
+        .containsExactly(
+            VerificationCheck.named("tests"),
+            VerificationCheck.withPaths("protected", List.of("docs/tests/**")));
+    assertThat(definition.stage("revisar").orElseThrow().checks())
+        .containsExactly(VerificationCheck.withPaths("protected", List.of("docs/tests/**")));
+    assertThat(definition.stage("tests").orElseThrow().checks()).isEmpty();
+  }
+
+  @Test
+  void protectedInsideTheScopeAndContradictionsSayWhy() {
+    Parsed parsed =
+        parse(
+            """
+            id: protegida-mal
+            stages:
+              - id: a
+                type: agent
+                prompt: a
+                checks: [scope, tests-intact]
+                scope: ["docs/**"]
+                protected: [docs/tests/**, ../fuera]
+                allowTestRemoval: true
+              - id: b
+                type: agent
+                prompt: b
+                dependsOn: [a]
+                checks: [diff]
+                allowTestRemoval: true
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .containsExactly(
+            "`../fuera` tiene que ser una ruta dentro del repositorio, p. ej. `docs/**`",
+            "`allowTestRemoval: true` contradice el check `tests-intact`: quita uno de los dos");
+    assertThat(messages(parsed, Severity.WARNING))
+        .contains(
+            "`docs/tests/**` está en `scope` y en `protected`: gana `protected`, no se puede"
+                + " cambiar",
+            "`allowTestRemoval` no cambia nada sin el check `tests`");
   }
 
   @Test
@@ -1106,11 +1195,11 @@ class DefinitionParserTest {
         .containsExactly(
             "`../fuera.md` tiene que ser una ruta dentro del repositorio, p. ej. `docs/**`",
             "Check `test` desconocido; ¿quisiste decir `tests`?. Admite: tests, diff, commit,"
-                + " scope, command: <comando>",
+                + " scope, tests-intact, command: <comando>",
             "El check `scope` necesita la lista `scope` con los ficheros que se pueden cambiar,"
                 + " p. ej. `scope: [src/**, docs/**]`",
             "Un check con datos solo puede ser `command: <comando>`. Admite: tests, diff, commit,"
-                + " scope, command: <comando>",
+                + " scope, tests-intact, command: <comando>",
             "Los comandos no admiten variables `{{...}}`: un dato de entrada podría colar otro"
                 + " comando. Escríbelo tal cual",
             "`checks` debe ser una lista, p. ej. `checks: [tests, diff]`",

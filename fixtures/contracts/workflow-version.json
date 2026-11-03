@@ -133,6 +133,10 @@
         "command" : null,
         "paths" : [ ]
       }, {
+        "name" : "tests-intact",
+        "command" : null,
+        "paths" : [ ]
+      }, {
         "name" : "scope",
         "command" : null,
         "paths" : [ "src/**", "docs/**" ]

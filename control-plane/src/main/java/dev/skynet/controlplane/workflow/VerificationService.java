@@ -126,15 +126,16 @@ public class VerificationService {
 
   /**
    * La verificación de una fase con {@code artifacts} o {@code checks} en el worktree de {@code
-   * agent}: sus comprobaciones y, si una es {@code tests} o la fase tiene agente, el comando del
-   * repositorio (que solo cuenta para la fase con {@code tests}). Los cambios se miden desde {@code
-   * baseCommit}.
+   * agent}: sus comprobaciones ({@code checks}, con las rutas protegidas del repositorio) y, si una
+   * es {@code tests} o la fase tiene agente, el comando del repositorio (que solo cuenta para la
+   * fase con {@code tests}). Los cambios se miden desde {@code baseCommit}.
    */
   UUID queueStage(
       AgentRun agent,
       WorkspaceView workspace,
       StageRun stage,
       StageDefinition definition,
+      List<VerificationCheck> checks,
       String baseCommit,
       Instant now) {
     boolean runsCommand =
@@ -142,12 +143,7 @@ public class VerificationService {
             || (definition.type() != StageType.VERIFICATION && !agent.isCommand());
     String command = runsCommand ? commandOf(agent) : null;
     return queue(
-        agent,
-        workspace,
-        STAGE,
-        command,
-        new StageChecks(stage.getId(), definition.checks(), baseCommit),
-        now);
+        agent, workspace, STAGE, command, new StageChecks(stage.getId(), checks, baseCommit), now);
   }
 
   /** Las comprobaciones de la verificación de una fase. */
@@ -266,8 +262,17 @@ public class VerificationService {
                     string(m.get("target")),
                     Boolean.TRUE.equals(m.get("passed")),
                     string(m.get("reason")),
-                    omitted(m.get("omitted"))))
+                    omitted(m.get("omitted")),
+                    strings(m.get("warnings"))))
         .toList();
+  }
+
+  /** Los avisos de un check que pasa o no (p. ej. menos aserciones en {@code tests-intact}). */
+  private static List<String> strings(Object value) {
+    if (!(value instanceof List<?> list)) {
+      return List.of();
+    }
+    return list.stream().filter(java.util.Objects::nonNull).map(Object::toString).toList();
   }
 
   /** Los ficheros declarados que el runner no guardó, si los hay. */

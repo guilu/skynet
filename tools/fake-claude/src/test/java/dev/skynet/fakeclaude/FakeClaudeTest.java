@@ -130,6 +130,33 @@ class FakeClaudeTest {
   }
 
   @Test
+  void withCheatTheRunDeletesOrDisablesTheTestAndCommitsOnce(@TempDir Path dir) throws Exception {
+    git(dir, "init", "-q");
+    Files.createDirectories(dir.resolve("src/test/java"));
+    Files.writeString(
+        dir.resolve("src/test/java/ATest.java"), "class ATest {\n  @Test\n  void a() {}\n}\n");
+    Files.writeString(dir.resolve("src/test/java/BTest.java"), "class BTest {}\n");
+    git(dir, "add", "-A");
+    git(dir, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "base");
+    Path marker = dir.resolve("../trampa-" + System.nanoTime());
+    Map<String, String> env =
+        Map.of("FAKE_CLAUDE_CHEAT", marker.toString(), "FAKE_CLAUDE_DELAY_MS", "0");
+    String[] args = {"-p", "x", "--output-format", "stream-json", "--session-id", SESSION};
+
+    Files.writeString(marker, "disable src/test/java/ATest.java\n");
+    assertThat(run(env, dir, args).exitCode).isZero();
+    assertThat(Files.readString(dir.resolve("src/test/java/ATest.java")))
+        .contains("@org.junit.jupiter.api.Disabled\n  @Test");
+    assertThat(marker).doesNotExist();
+
+    Files.writeString(marker, "src/test/java/BTest.java");
+    assertThat(run(env, dir, args).exitCode).isZero();
+    assertThat(dir.resolve("src/test/java/BTest.java")).doesNotExist();
+    assertThat(git(dir, "log", "--format=%s"))
+        .startsWith("Quita el test que falla\nDesactiva el test que falla");
+  }
+
+  @Test
   void withConfigDirStoresSessionsAndResumeNeedsThemInTheSameDirectory(@TempDir Path config)
       throws Exception {
     Map<String, String> env =

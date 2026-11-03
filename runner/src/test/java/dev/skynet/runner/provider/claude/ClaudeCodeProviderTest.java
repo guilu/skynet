@@ -63,6 +63,38 @@ class ClaudeCodeProviderTest {
   }
 
   @Test
+  void protectedPathsBecomeEditDenyRules() {
+    UUID session = UUID.randomUUID();
+    StartAgent start =
+        new StartAgent(
+            UUID.randomUUID(),
+            "TKM-1",
+            "/repo",
+            "main",
+            session,
+            "Arregla add()",
+            List.of(),
+            "acceptEdits",
+            null,
+            AgentLimits.none(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of("docs/tests/**", ".github/workflows/**"));
+
+    List<String> command = new ClaudeCodeProvider("claude", List.of()).command(start);
+
+    assertThat(command)
+        .containsSubsequence(
+            "--disallowedTools", "Edit(docs/tests/**),Edit(.github/workflows/**)", "--");
+  }
+
+  @Test
   void aPromptThatLooksLikeAnOptionIsStillThePrompt() {
     // `claude -p --version` imprime la versión: el CLI lee el prompt como una opción.
     StartAgent start =

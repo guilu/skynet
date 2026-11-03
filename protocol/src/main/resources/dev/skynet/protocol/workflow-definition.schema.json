@@ -31,6 +31,12 @@
       "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,63}$" },
       "additionalProperties": { "$ref": "#/$defs/agent" }
     },
+    "protected": {
+      "description": "Rutas protegidas (VA-A): globs del repositorio que ningún agente del workflow puede cambiar. Valen para todas sus fases agent y parallel y se suman a las del repositorio.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
     "stages": {
       "description": "Fases del workflow.",
       "type": "array",
@@ -204,12 +210,12 @@
           "items": { "type": "string", "minLength": 1 }
         },
         "checks": {
-          "description": "Lo que Skynet comprueba en el worktree cuando la fase termina: tests (el comando de validación del repositorio pasa), diff (hay cambios desde el inicio de la fase), commit (hay commits nuevos y nada sin confirmar), scope (los cambios están dentro de `scope`) o {command: <cmd>} (el comando termina con código 0). La fase sigue en curso mientras se comprueba y falla si algo no pasa.",
+          "description": "Lo que Skynet comprueba en el worktree cuando la fase termina: tests (el comando de validación del repositorio pasa), diff (hay cambios desde el inicio de la fase), commit (hay commits nuevos y nada sin confirmar), scope (los cambios están dentro de `scope`), tests-intact (el cambio no borra, quita ni salta tests; tests ya lo incluye) o {command: <cmd>} (el comando termina con código 0). La fase sigue en curso mientras se comprueba y falla si algo no pasa.",
           "type": "array",
           "minItems": 1,
           "items": {
             "oneOf": [
-              { "enum": ["tests", "diff", "commit", "scope"] },
+              { "enum": ["tests", "diff", "commit", "scope", "tests-intact"] },
               {
                 "type": "object",
                 "required": ["command"],
@@ -230,6 +236,16 @@
           "type": "array",
           "minItems": 1,
           "items": { "type": "string", "minLength": 1 }
+        },
+        "protected": {
+          "description": "Rutas protegidas de esta fase (VA-A), que se suman a las del workflow y las del repositorio. Las comprueba el check protected.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "allowTestRemoval": {
+          "description": "Con true, el check tests ya no incluye tests-intact: la fase puede borrar o saltar tests (p. ej. al quitar código junto con sus tests).",
+          "type": "boolean"
         },
         "action": {
           "description": "Solo en fases human-approval: lo que se pide aprobar, p. ej. «Aprobar el plan de {{workItem.key}}». Admite las variables de un prompt.",

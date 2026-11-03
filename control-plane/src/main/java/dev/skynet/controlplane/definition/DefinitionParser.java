@@ -54,7 +54,7 @@ public final class DefinitionParser {
   public static final int MAX_SOURCE = 256 * 1024;
 
   static final Set<String> ROOT_KEYS =
-      Set.of("id", "version", "name", "description", "inputs", "agents", "stages");
+      Set.of("id", "version", "name", "description", "inputs", "agents", "stages", "protected");
   static final Set<String> INPUT_KEYS = Set.of("type", "required", "default", "description");
   static final Set<String> AGENT_KEYS =
       Set.of(
@@ -88,6 +88,8 @@ public final class DefinitionParser {
           "artifacts",
           "checks",
           "scope",
+          "protected",
+          "allowTestRemoval",
           "action",
           "risk",
           "revise",
@@ -225,6 +227,9 @@ public final class DefinitionParser {
     private final List<Problem> problems = new ArrayList<>();
     private Span versionSpan;
 
+    /** Las rutas protegidas de todo el workflow ({@code protected} en la raíz, VA-A). */
+    private List<String> workflowProtected = List.of();
+
     Reader(String source, Expectations expect) {
       this.source = source;
       this.expect = expect;
@@ -278,6 +283,7 @@ public final class DefinitionParser {
       String description = text(fields.get("description"), "description");
       List<InputDefinition> inputs = inputs(fields.get("inputs"));
       List<AgentDefinition> agents = agents(fields.get("agents"));
+      workflowProtected = globs(fields.get("protected"), "protected", "protected");
       Entry stagesEntry = fields.get("stages");
       if (stagesEntry == null) {
         error(root, "stages", "Falta `stages`: la lista de fases del workflow");
@@ -1171,7 +1177,7 @@ public final class DefinitionParser {
     private List<VerificationCheck> verification(
         Map<String, Entry> fields, StageType type, Node node, String path) {
       List<String> used =
-          List.of("artifacts", "checks", "scope").stream()
+          List.of("artifacts", "checks", "scope", "allowTestRemoval").stream()
               .filter(k -> fields.get(k) != null)
               .toList();
       if (!used.isEmpty() && !VERIFIABLE.contains(type)) {
@@ -1246,7 +1252,103 @@ public final class DefinitionParser {
             "A esta fase le falta qué comprobar: `artifacts` (ficheros que tienen que existir) o"
                 + " `checks`, p. ej. `checks: [tests, diff]`");
       }
+      testsIntact(fields, checks, path);
+      protectedPaths(fields, type, checks, scope, path);
       return checks;
+    }
+
+    /**
+     * {@code tests} incluye {@code tests-intact} justo detrás (VA-A), salvo con {@code
+     * allowTestRemoval: true}: una fase en verde porque el agente borró o saltó tests no pasa.
+     */
+    private void testsIntact(
+        Map<String, Entry> fields, List<VerificationCheck> checks, String path) {
+      Entry allowEntry = fields.get("allowTestRemoval");
+      boolean allow = Boolean.TRUE.equals(bool(allowEntry, path + ".allowTestRemoval"));
+      boolean explicit =
+          checks.stream().anyMatch(c -> c.name().equals(VerificationCheck.TESTS_INTACT));
+      if (allow && explicit) {
+        error(
+            allowEntry.key(),
+            path + ".allowTestRemoval",
+            "`allowTestRemoval: true` contradice el check `tests-intact`: quita uno de los dos");
+        return;
+      }
+      int tests = -1;
+      for (int i = 0; i < checks.size(); i++) {
+        if (checks.get(i).name().equals(VerificationCheck.TESTS)) {
+          tests = i;
+        }
+      }
+      if (tests < 0) {
+        if (allowEntry != null && allow) {
+          warning(
+              allowEntry.key(),
+              path + ".allowTestRemoval",
+              "`allowTestRemoval` no cambia nada sin el check `tests`");
+        }
+        return;
+      }
+      if (!allow && !explicit) {
+        checks.add(tests + 1, VerificationCheck.named(VerificationCheck.TESTS_INTACT));
+      }
+    }
+
+    /** Fases cuyo agente puede cambiar el worktree: las que llevan el check {@code protected}. */
+    private static final Set<StageType> PROTECTABLE = Set.of(StageType.AGENT, StageType.PARALLEL);
+
+    /**
+     * Las rutas protegidas del workflow y de la fase (VA-A), como check {@code protected} al final
+     * de una fase {@code agent} o {@code parallel}. Las del repositorio se suman al ejecutar.
+     */
+    private void protectedPaths(
+        Map<String, Entry> fields,
+        StageType type,
+        List<VerificationCheck> checks,
+        List<String> scope,
+        String path) {
+      Entry entry = fields.get("protected");
+      List<String> own = globs(entry, path + ".protected", "protected");
+      if (entry != null && !PROTECTABLE.contains(type)) {
+        warning(
+            entry.key(),
+            path + ".protected",
+            "`protected` solo vale en fases `agent` o `parallel`: las demás no tienen un agente que"
+                + " cambie el worktree");
+        return;
+      }
+      if (!PROTECTABLE.contains(type)) {
+        return;
+      }
+      List<String> all = new ArrayList<>(workflowProtected);
+      own.stream().filter(g -> !all.contains(g)).forEach(all::add);
+      if (all.isEmpty()) {
+        return;
+      }
+      for (String glob : all) {
+        if (scope.stream().anyMatch(s -> overlaps(s, glob))) {
+          warning(
+              entry != null ? entry.key() : null,
+              path + ".protected",
+              "`"
+                  + glob
+                  + "` está en `scope` y en `protected`: gana `protected`, no se puede cambiar");
+        }
+      }
+      checks.add(VerificationCheck.withPaths(VerificationCheck.PROTECTED, all));
+    }
+
+    /** Si un fichero de {@code glob} podría caer también en {@code scope}. */
+    private static boolean overlaps(String scope, String glob) {
+      String sample = glob.replace("**", "x/x").replace("*", "x").replace("?", "x");
+      try {
+        return java.nio.file.FileSystems.getDefault()
+                .getPathMatcher("glob:" + scope)
+                .matches(java.nio.file.Path.of(sample))
+            || scope.equals(glob);
+      } catch (RuntimeException e) {
+        return scope.equals(glob);
+      }
     }
 
     /** Un elemento de {@code checks}: un nombre del catálogo o {@code command: <comando>}. */

@@ -1,6 +1,7 @@
 package dev.skynet.controlplane.workflow;
 
 import dev.skynet.controlplane.definition.StageDefinition;
+import dev.skynet.controlplane.definition.WorkflowDefinitions;
 import dev.skynet.controlplane.memory.MemoryAgents;
 import dev.skynet.controlplane.project.AgentDefaults;
 import dev.skynet.controlplane.project.CodeRepository;
@@ -11,6 +12,7 @@ import dev.skynet.protocol.runner.AgentLimits;
 import dev.skynet.protocol.runner.StartAgent;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.springframework.context.ApplicationEventPublisher;
@@ -33,6 +35,7 @@ class AgentQueue {
   private final AgentDefaults defaults;
   private final ApplicationEventPublisher publisher;
   private final MemoryAgents memoryAgents;
+  private final WorkflowDefinitions definitions;
 
   AgentQueue(
       AgentRunRepository agentRuns,
@@ -40,13 +43,15 @@ class AgentQueue {
       RunTransitions transitions,
       AgentDefaults defaults,
       ApplicationEventPublisher publisher,
-      MemoryAgents memoryAgents) {
+      MemoryAgents memoryAgents,
+      WorkflowDefinitions definitions) {
     this.agentRuns = agentRuns;
     this.prompts = prompts;
     this.transitions = transitions;
     this.defaults = defaults;
     this.publisher = publisher;
     this.memoryAgents = memoryAgents;
+    this.definitions = definitions;
   }
 
   AgentRun queue(
@@ -164,6 +169,14 @@ class AgentQueue {
       }
     }
     String sent = invocation.prompt();
+    List<String> protectedPaths = noAgent ? List.of() : protectedPaths(run, stage, repository);
+    if (!protectedPaths.isEmpty()) {
+      spawned.put("protectedPaths", protectedPaths);
+      if (invocation.resume() == null) {
+        // Una continuación ya lo tiene en su conversación.
+        sent = protectedNote(protectedPaths) + "\n\n" + sent;
+      }
+    }
     if (memory != null) {
       Map<String, Object> memoryPayload = new LinkedHashMap<>();
       memoryPayload.put("mode", memory);
@@ -178,7 +191,7 @@ class AgentQueue {
                 AgentProviderKind.byId(agent.getProvider())
                     .map(k -> k.supports(Capability.MEMORY_TOOLS))
                     .orElse(false));
-        sent = block.text() + "\n\n" + invocation.prompt();
+        sent = block.text() + "\n\n" + sent;
         memoryPayload.put(
             "context",
             block.observations().stream()
@@ -224,9 +237,32 @@ class AgentQueue {
                 outputSchema,
                 agent.isCommand() ? null : agent.getProvider(),
                 memory == null ? null : memory.toLowerCase(Locale.ROOT),
-                invocation.push()),
+                invocation.push(),
+                protectedPaths),
             invocation.runnerId()));
     return agent;
+  }
+
+  /** Las rutas protegidas de la fase y del repositorio (VA-A). */
+  private List<String> protectedPaths(WorkflowRun run, StageRun stage, CodeRepository repository) {
+    StageDefinition definition =
+        definitions
+            .published(run.getDefinitionId())
+            .definition()
+            .stage(stage.getStageKey())
+            .orElse(null);
+    return StageCheckList.protectedPaths(definition, repository);
+  }
+
+  /**
+   * Lo que se le dice al agente antes de su prompt. Claude Code además no puede editarlas; en los
+   * demás proveedores, lo que las cambie lo detecta el check {@code protected}.
+   */
+  static String protectedNote(List<String> paths) {
+    return "Rutas protegidas: no cambies, borres ni muevas nada en "
+        + String.join(", ", paths.stream().map(p -> "`" + p + "`").toList())
+        + ". Si la tarea parece pedirlo, dilo en tu respuesta en lugar de hacerlo: Skynet rechaza"
+        + " cualquier cambio en ellas.";
   }
 
   /**

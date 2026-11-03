@@ -41,13 +41,15 @@
     "omitted" : [ {
       "path" : "docs/plano.pdf",
       "reason" : "Supera el máximo de 10 MB por fichero"
-    } ]
+    } ],
+    "warnings" : [ ]
   }, {
     "name" : "diff",
     "target" : null,
     "passed" : true,
     "reason" : null,
-    "omitted" : [ ]
+    "omitted" : [ ],
+    "warnings" : [ ]
   } ],
   "live" : false
 } ]

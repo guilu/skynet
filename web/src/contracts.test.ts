@@ -488,6 +488,7 @@ const CHECK_RESULT: Keys<CheckResult> = {
   passed: true,
   reason: true,
   omitted: true,
+  warnings: true,
 }
 const TEST_TOTALS: Keys<TestTotals> = { total: true, failed: true, errors: true, skipped: true }
 
@@ -853,7 +854,13 @@ describe('contratos con el backend', () => {
     model.stages.forEach((s) => expectShape(s, STAGE_DEFINITION))
     expect(model.stages.map((s) => s.type)).toEqual(['agent', 'agent', 'verification'])
     const checks = model.stages[2].checks
-    expect(checks.map((c) => c.name)).toEqual(['artifacts', 'tests', 'scope', 'command'])
+    expect(checks.map((c) => c.name)).toEqual([
+      'artifacts',
+      'tests',
+      'tests-intact',
+      'scope',
+      'command',
+    ])
     checks.forEach((c) => expectShape(c, VERIFICATION_CHECK))
   })
 
