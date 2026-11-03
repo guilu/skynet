@@ -54,11 +54,34 @@ final class JudgeVerdicts {
    * @param severity {@link #BLOCKING} o {@link #MINOR}
    * @param text qué pasa y por qué
    * @param judge el juez que lo encontró
+   * @param refuted si los escépticos lo refutaron (VA-C); {@code null} si no se intentó
+   * @param refutation por qué: lo que dijo el primer escéptico que lo refutó (o que no)
    */
-  record Finding(String file, Integer line, String severity, String text, String judge) {
+  record Finding(
+      String file,
+      Integer line,
+      String severity,
+      String text,
+      String judge,
+      Boolean refuted,
+      String refutation) {
 
+    Finding(String file, Integer line, String severity, String text, String judge) {
+      this(file, line, severity, text, judge, null, null);
+    }
+
+    /** Si bloquea: es {@code blocking} y no lo han refutado. */
     boolean blocking() {
-      return BLOCKING.equals(severity);
+      return BLOCKING.equals(severity) && !Boolean.TRUE.equals(refuted);
+    }
+
+    /** Si lo han refutado y se descarta. */
+    boolean discarded() {
+      return Boolean.TRUE.equals(refuted);
+    }
+
+    Finding withRefutation(boolean refuted, String refutation) {
+      return new Finding(file, line, severity, text, judge, refuted, refutation);
     }
 
     /** {@code fichero:línea}, {@code fichero} o {@code null}. */
@@ -99,7 +122,7 @@ final class JudgeVerdicts {
    * @param passed si pasa
    * @param approvals cuántos jueces aprueban
    * @param judges cuántos juzgaron
-   * @param findings los hallazgos de todos, los que bloquean primero
+   * @param findings los hallazgos de todos: los que bloquean, los menores y los refutados
    * @param criteria la nota media de cada criterio entre los jueces
    */
   record Aggregate(
@@ -248,7 +271,12 @@ final class JudgeVerdicts {
     int approvals = (int) verdicts.stream().filter(Verdict::passed).count();
     List<Finding> findings = new ArrayList<>();
     verdicts.forEach(v -> v.findings().stream().filter(Finding::blocking).forEach(findings::add));
-    verdicts.forEach(v -> v.findings().stream().filter(f -> !f.blocking()).forEach(findings::add));
+    verdicts.forEach(
+        v ->
+            v.findings().stream()
+                .filter(f -> !f.blocking() && !f.discarded())
+                .forEach(findings::add));
+    verdicts.forEach(v -> v.findings().stream().filter(Finding::discarded).forEach(findings::add));
     boolean blocked = findings.stream().anyMatch(Finding::blocking);
     BigDecimal score =
         verdicts.isEmpty()
@@ -285,12 +313,121 @@ final class JudgeVerdicts {
         + aggregate.judges();
   }
 
+  // ---- Verificación adversarial (VA-C) --------------------------------------------------------
+
+  /**
+   * Un hallazgo que van a intentar refutar los escépticos.
+   *
+   * @param verdict el juez que lo encontró, por su orden en la ronda
+   * @param index su orden entre los hallazgos de ese juez
+   * @param finding el hallazgo
+   */
+  record Target(int verdict, int index, Finding finding) {}
+
+  /**
+   * Qué hallazgos se refutan en la ronda: los que bloquean, en el orden de los jueces, como mucho
+   * {@link JudgeSpec#MAX_REFUTED_FINDINGS} y los que quepan en {@code budget} llamadas con {@code
+   * refute} escépticos cada uno.
+   */
+  static List<Target> targets(List<Verdict> verdicts, int refute, int budget) {
+    List<Target> all = blockingTargets(verdicts);
+    int fit = refute <= 0 ? 0 : Math.max(0, budget) / refute;
+    return all.subList(0, Math.min(all.size(), Math.min(JudgeSpec.MAX_REFUTED_FINDINGS, fit)));
+  }
+
+  /** Todos los hallazgos que bloquean de la ronda, en el orden de los jueces. */
+  static List<Target> blockingTargets(List<Verdict> verdicts) {
+    List<Target> all = new ArrayList<>();
+    for (int v = 0; v < verdicts.size(); v++) {
+      List<Finding> findings = verdicts.get(v).findings();
+      for (int i = 0; i < findings.size(); i++) {
+        if (findings.get(i).blocking()) {
+          all.add(new Target(v, i, findings.get(i)));
+        }
+      }
+    }
+    return all;
+  }
+
+  /**
+   * El aviso si no se refutan todos los hallazgos que bloquean (nada de recortes en silencio), o
+   * {@code null} si se refutan todos.
+   */
+  static String trimmed(int refuted, int blocking, boolean budgetSpent) {
+    if (refuted >= blocking) {
+      return null;
+    }
+    return "Se han intentado refutar "
+        + refuted
+        + " de "
+        + blocking
+        + " hallazgos que bloquean"
+        + (budgetSpent
+            ? " (no quedan llamadas: como mucho " + JudgeSpec.MAX_AGENT_CALLS + " por fase)"
+            : " (como mucho " + JudgeSpec.MAX_REFUTED_FINDINGS + " por ronda)")
+        + "; los demás cuentan sin refutar";
+  }
+
+  /**
+   * Lo que dijo un escéptico de un hallazgo.
+   *
+   * @param refuted si lo refuta
+   * @param reason por qué
+   */
+  record Refutation(boolean refuted, String reason) {}
+
+  /**
+   * Si la mayoría de los escépticos lo refuta, el hallazgo se descarta. Un escéptico que no terminó
+   * bien no lo refuta.
+   */
+  static Finding decide(Finding finding, List<Refutation> refutations, int skeptics) {
+    long yes = refutations.stream().filter(Refutation::refuted).count();
+    boolean refuted = skeptics > 0 && yes * 2 > skeptics;
+    String reason =
+        refutations.stream()
+            .filter(r -> r.refuted() == refuted && r.reason() != null && !r.reason().isBlank())
+            .map(Refutation::reason)
+            .findFirst()
+            .orElse(null);
+    return finding.withRefutation(refuted, reason);
+  }
+
+  /** El veredicto del juez con sus hallazgos ya pasados por los escépticos. */
+  static Verdict refuted(Verdict verdict, Map<Integer, Finding> decided, JudgeSpec spec) {
+    List<Finding> findings = new ArrayList<>(verdict.findings());
+    decided.forEach(findings::set);
+    return judged(
+        verdict.judge(), verdict.lens(), verdict.criteria(), findings, verdict.summary(), spec);
+  }
+
+  /** La salida estructurada de un escéptico. */
+  static String refutationSchema() {
+    Map<String, Object> properties = new LinkedHashMap<>();
+    properties.put("refuted", Map.of("type", "boolean"));
+    properties.put("reason", Map.of("type", "string"));
+    Map<String, Object> schema = new LinkedHashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("required", List.of("refuted", "reason"));
+    schema.put("properties", properties);
+    return JsonMapper.shared().writeValueAsString(schema);
+  }
+
+  /** Lo que dijo un escéptico, o {@code null} si su salida no sirve. */
+  static Refutation refutation(JsonNode output) {
+    if (output == null || !output.isObject() || !output.path("refuted").isBoolean()) {
+      return null;
+    }
+    return new Refutation(output.path("refuted").asBoolean(), text(output.path("reason")));
+  }
+
   /** Lo que se le dice a la fase de {@code fix}: por qué suspendió y qué encontraron. */
   static String report(List<Verdict> verdicts, Aggregate aggregate) {
     StringBuilder out = new StringBuilder();
     out.append("Nota: ").append(note(aggregate)).append(".\n");
     List<Finding> blocking = aggregate.findings().stream().filter(Finding::blocking).toList();
-    List<Finding> minor = aggregate.findings().stream().filter(f -> !f.blocking()).toList();
+    List<Finding> minor =
+        aggregate.findings().stream().filter(f -> !f.blocking() && !f.discarded()).toList();
     if (!blocking.isEmpty()) {
       out.append("\n## Lo que hay que arreglar\n\n");
       blocking.forEach(f -> out.append(findingLine(f)).append('\n'));

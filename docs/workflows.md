@@ -87,7 +87,7 @@ stages:
 - `action`, `risk` y `revise`: solo en las fases `type: human-approval`. Ver «Puertas de aprobación».
 - `pullRequest`: solo en las fases `type: github-pr`. Ver «Entrega por PR».
 - `required`, `ifNoChecks`, `fix` y `maxRounds`: solo en las fases `type: github-check` (`fix` y `maxRounds`, también en una `verification` con `judge`). Ver «Esperar la CI de la PR».
-- `judge`: solo en las fases `type: verification`. Ver «Juez con rúbrica (VA-B)».
+- `judge`: solo en las fases `type: verification`. Ver «Juez con rúbrica (VA-B)» y «Verificación adversarial (VA-C)».
 - `method` y `deleteBranch`: solo en las fases `type: github-merge`. Ver «Fusionar la PR».
 - `outputSchema`: solo en las fases `type: agent`. La salida estructurada que devuelve la fase, y manda sobre el `output` de su agente, así que un mismo agente sirve en fases con salidas distintas. Es un JSON Schema en línea, como `output`, o la ruta de un fichero del repositorio (`outputSchema: schemas/spec.json`). Ver «Salida de una fase en un fichero».
 
@@ -302,6 +302,27 @@ stages:
 - **Al publicar se avisa** si un juez usa el mismo proveedor y modelo que el agente que juzga («es menos independiente»), si la reserva de un juez (CQ-B) es el proveedor del autor (y entonces, sin cuota, el juez espera en vez de cambiar a ella) y si hay varios jueces sin lente («dan más con lentes distintas»).
 - Cada ronda deja `stage.judge.started`, `stage.judge.verdict` (nota, aprobados, hallazgos que bloquean), `stage.judge.fix.started` y `stage.judge.round.started`; si falla, `stage.judge.failed` con el motivo. El veredicto de cada juez en cada ronda queda en `stage_verdict`, y el estado del juez de la fase en `stage_judge`.
 - **En la web:** la fase dice «Juzgando: 2 jueces», «implementar corrige lo que suspendió el juez (ronda 1 de 2)» o su nota, «3,8 / 5 · aprobado por 2 de 2». Al abrirla se ve la nota de cada criterio por juez (con su justificación), los hallazgos con su fichero y el resumen de cada juez. En el grafo, la caja de la fase dice cuántos jueces, el umbral y quién corrige. Con una fase `github-pr` detrás, la descripción de la PR lleva la nota y los hallazgos.
+
+**Verificación adversarial** (VA-C). Con `refute: N` en el `judge`, cada hallazgo que **bloquea** pasa por N escépticos que intentan refutarlo antes de decidir la ronda. Lo que mayoría refuta se descarta: no suspende la fase ni se manda corregir. Es más barato refutar un falso positivo que hacer una ronda de corrección para nada:
+
+```yaml
+    judge:
+      agents:
+        - {agent: calidad, lens: correctness}
+        - {agent: seguridad, lens: security}
+      refute: 2                     # dos escépticos por hallazgo que bloquea
+      refuteAgent: esceptico        # opcional: por defecto, el agente del primer juez
+    fix: implementar
+```
+
+- `refute`: de 0 (por defecto, sin refutar) a 5. `refuteAgent`: un agente de `agents`; sin él, el del primer juez. Con `refuteAgent` y sin `refute`, se avisa al publicar.
+- Cada escéptico trabaja en una copia del worktree, **en solo lectura** y sin memoria, como un juez. Solo ve la tarea, el hallazgo (fichero, línea y texto) y de dónde mirar el cambio; ni la nota del juez ni lo que dijo el autor. Devuelve si lo refuta y por qué, y se le pide que no lo refute si duda.
+- Un hallazgo se descarta si lo refuta **más de la mitad** de sus escépticos: con 2, los dos; un empate no lo descarta. Un escéptico que no termina bien no lo refuta. Los `minor` no se refutan: no bloquean.
+- **Topes:** como mucho **8 hallazgos por ronda** (los primeros, en el orden de los jueces) y **20 llamadas a agentes por fase**, jueces y escépticos de todas las rondas. Si no caben todos, los demás cuentan sin refutar y la fase lo dice: «Se han intentado refutar 8 de 11 hallazgos que bloquean (como mucho 8 por ronda); los demás cuentan sin refutar». Nada de recortes en silencio.
+- Con los descartados, cada juez vuelve a decidir (sin ellos puede aprobar) y la fase también. A la fase de `fix` solo le llega lo que sobrevive.
+- La fase dice «Refutando 3 hallazgos que bloquean» mientras tanto. Al abrirla, los hallazgos refutados salen **tachados** con el motivo («Refutado: ya se comprueba en la línea 10»), y los que no, con lo que dijo el escéptico. En la PR, igual: tachados y con el motivo. En el grafo, la caja dice «refuta ×2».
+- Eventos `stage.judge.refute.started` (cuántos hallazgos y escépticos, y el aviso si hubo recorte) y `stage.judge.refuted` (cuántos se descartaron); el de `stage.judge.verdict` dice cuántos se refutaron. Lo que dijo cada escéptico queda en `stage_refutation`, y en `<fase>.findings` cada hallazgo lleva `refuted` y `refutation`.
+- **Los workflows iniciales** lo usan: en «Implementar una tarea», «Corregir un bug» y «Especificar, planificar e implementar», la revisión (y su fase de corregir) es ahora una fase `juzgar` con jueces de otros proveedores que Claude Code, `refute: 2` y `fix` en la fase que implementa. `scripts/seed-workflows.sh --actualizar` publica las versiones nuevas; las tuyas no se tocan.
 
 **Entrega por PR.** Una fase `type: github-pr` sube el worktree que hereda a GitHub y abre una PR con lo que ha hecho el workflow (EN-A). Necesita la GitHub App ([`github.md`](github.md)) instalada en el repositorio:
 

@@ -75,8 +75,8 @@ class StageVerifications {
    */
   void afterAgent(AgentRun agent, StageRun stage, Instant now) {
     StageDefinition definition = definitionOf(stage);
-    if (agent.isJudge()) {
-      // Un juez solo lee: no hay nada que verificar en su copia (VA-B).
+    if (agent.isJudge() || agent.isSkeptic()) {
+      // Un juez o un escéptico solo leen: no hay nada que verificar en su copia (VA-B, VA-C).
       finish(stage, definition, now);
       return;
     }

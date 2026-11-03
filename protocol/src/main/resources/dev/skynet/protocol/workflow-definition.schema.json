@@ -99,6 +99,17 @@
           "type": "number",
           "minimum": 1,
           "maximum": 5
+        },
+        "refute": {
+          "description": "Verificación adversarial (VA-C): cuántos escépticos de solo lectura intentan refutar cada hallazgo que bloquea. Si la mayoría lo refuta, se descarta. Como mucho 8 hallazgos por ronda y 20 llamadas a agentes por fase. 0 (por defecto), sin refutar.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "refuteAgent": {
+          "description": "El agente de `agents` que hace de escéptico. Por defecto, el del primer juez.",
+          "type": "string",
+          "minLength": 1
         }
       }
     },

@@ -90,7 +90,7 @@ public abstract class IntegrationTest {
     for (int attempt = 1; ; attempt++) {
       try {
         jdbc.sql(
-                "TRUNCATE trigger_launch, trigger_rule, github_merge, github_ci_wait, stage_verdict, stage_judge, github_pull_request, github_webhook_delivery, github_installation_repository, github_installation, memory_token, memory_access, memory_observation_revision, memory_observation, app_setting, quota_snapshot, agent_run_quota, quota_interval, event, approval_decision, approval_request, runner_command, artifact, verification_run, prompt, agent_run, workspace, runner_provider, runner, stage_run, workflow_job, workflow_run, work_item, repository,"
+                "TRUNCATE trigger_launch, trigger_rule, github_merge, github_ci_wait, stage_refutation, stage_verdict, stage_judge, github_pull_request, github_webhook_delivery, github_installation_repository, github_installation, memory_token, memory_access, memory_observation_revision, memory_observation, app_setting, quota_snapshot, agent_run_quota, quota_interval, event, approval_decision, approval_request, runner_command, artifact, verification_run, prompt, agent_run, workspace, runner_provider, runner, stage_run, workflow_job, workflow_run, work_item, repository,"
                     + " project")
             .update();
         break;

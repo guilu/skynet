@@ -85,4 +85,21 @@ class JudgePromptTest {
         .contains("## Indicaciones\n\nSé breve")
         .doesNotContain("## Tu lente");
   }
+
+  @Test
+  void aSkepticOnlySeesTheFindingAndTheChange() {
+    String prompt =
+        JudgePrompt.refutation(
+            CONTEXT,
+            new JudgeVerdicts.Finding(
+                "src/Calc.java", 12, "blocking", "Divide entre cero sin comprobarlo", "juez"));
+
+    assertThat(prompt)
+        .contains("CAL-7 - Dividir entre cero")
+        .contains("En `src/Calc.java:12`: Divide entre cero sin comprobarlo")
+        .contains("`git diff abc1234`")
+        .contains("Si dudas")
+        .doesNotContain("rúbrica")
+        .doesNotContain("tests-intact");
+  }
 }

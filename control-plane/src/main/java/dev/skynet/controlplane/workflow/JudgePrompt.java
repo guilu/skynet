@@ -65,6 +65,41 @@ final class JudgePrompt {
 
   private JudgePrompt() {}
 
+  /**
+   * El prompt de un escéptico (VA-C): solo el hallazgo, de dónde sale el cambio y el worktree. Ni
+   * la nota del juez ni lo que dijo el autor: tiene que mirarlo él.
+   */
+  static String refutation(Context context, JudgeVerdicts.Finding finding) {
+    StringBuilder out = new StringBuilder();
+    out.append(
+        "Eres un escéptico: un revisor ha encontrado un problema que, según él, impide fusionar el"
+            + " cambio. Tu trabajo es intentar demostrar que no es un problema real en este código."
+            + " Trabajas en una copia del worktree en solo lectura: no cambies nada.\n");
+    out.append("\n## La tarea\n\n");
+    out.append(context.workItemKey()).append(" - ").append(context.title()).append('\n');
+    out.append("\n## El hallazgo\n\n");
+    if (finding.location() != null) {
+      out.append("En `").append(finding.location()).append("`: ");
+    }
+    out.append(finding.text()).append('\n');
+    out.append("\n## El cambio\n\n");
+    if (context.baseCommit() != null) {
+      out.append("Míralo con `git diff ")
+          .append(context.baseCommit())
+          .append("` (y `git status` para lo que no está confirmado). ");
+    } else {
+      out.append("Míralo con `git diff` y `git log`. ");
+    }
+    out.append("Lee el código que haga falta, los tests incluidos.\n");
+    out.append(
+        "\n## Qué contestar\n\nRefútalo (`refuted: true`) solo si puedes demostrar con el código"
+            + " que no pasa: el caso ya está tratado, no se puede dar, el fichero no es el que dice o"
+            + " el hallazgo pide algo que la tarea no pide. Si dudas, o si es verdad aunque sea en"
+            + " parte, no lo refutes (`refuted: false`). En `reason`, en una o dos frases, lo que"
+            + " has comprobado (con el fichero y la línea si los sabes).");
+    return out.toString();
+  }
+
   static String build(Context context, JudgeSpec spec, JudgeSpec.Judge judge) {
     StringBuilder out = new StringBuilder();
     out.append(

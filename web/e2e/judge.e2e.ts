@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs'
+import { rmSync, writeFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { login, postApi, publishWorkflowViaApi, workItemViaApi } from './helpers.ts'
 
@@ -88,4 +88,66 @@ test('un juez que suspende manda corregir y aprueba en la segunda ronda', async 
   await expect(panel).toContainText('aprobado · aprueba 1 de 1')
   await expect(panel).toContainText('ronda 2')
   await expect(panel.getByRole('table')).toContainText('resuelve')
+})
+
+test('los escépticos refutan el hallazgo y el juez aprueba sin corregir', async ({ page }) => {
+  test.setTimeout(240_000)
+  writeFileSync(`${out}/juez-suspende`, '!calc.py:2 add() no trata los negativos')
+  writeFileSync(`${out}/esceptico-refuta`, 'no trata los negativos')
+
+  await page.goto('/')
+  await login(page)
+  await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible()
+  const key = `refuta-${Date.now().toString(36)}`
+  const definitionId = await publishWorkflowViaApi(
+    page,
+    [
+      `id: ${key}`,
+      'agents:',
+      '  juez:',
+      '    provider: codex',
+      'stages:',
+      '  - id: implement',
+      '    type: agent',
+      '    prompt: Arregla add()',
+      '  - id: juzgar',
+      '    type: verification',
+      '    dependsOn: [implement]',
+      '    judge:',
+      '      agents: [{agent: juez, lens: correctness}]',
+      '      refute: 1',
+      '    fix: implement',
+      '',
+    ].join('\n'),
+  )
+  const { workItemId, repositoryId } = await workItemViaApi(page)
+  const { id: runId } = await postApi(page, `/api/work-items/${workItemId}/runs`, {
+    repositoryId,
+    definitionId,
+  })
+
+  try {
+    await expect
+      .poll(async () => (await run(page, runId)).status, { timeout: 180_000, intervals: [1_000] })
+      .toBe('SUCCEEDED')
+  } finally {
+    rmSync(`${out}/esceptico-refuta`, { force: true })
+  }
+  const stages = (await run(page, runId)).stages
+  // Nadie corrigió: el único hallazgo era un falso positivo.
+  expect(stages.find((s) => s.stageKey === 'implement')!.agents.map((a) => a.kind)).toEqual([
+    'START',
+  ])
+  const judge = stages.find((s) => s.stageKey === 'juzgar')!.judge!
+  expect([judge.status, judge.round, judge.passed]).toEqual(['PASSED', 1, true])
+
+  await page.goto(`/runs/${runId}`)
+  const progress = page.getByRole('navigation', { name: 'Fases y agentes' })
+  await progress.getByRole('button', { name: /^2\. juzgar/ }).click()
+  const panel = page.getByRole('region', { name: 'Juez de la fase' })
+  await expect(panel).toContainText('1 escéptico por hallazgo que bloquea')
+  const findings = panel.getByRole('list', { name: 'Hallazgos del juez' })
+  await expect(findings).toContainText('Refutado')
+  await expect(findings.locator('del')).toContainText('add() no trata los negativos')
+  await expect(findings).toContainText('Refutado: Ya se comprueba antes (fake).')
 })

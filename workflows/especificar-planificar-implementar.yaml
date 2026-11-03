@@ -1,6 +1,6 @@
 id: especificar-planificar-implementar
 name: Especificar, planificar e implementar
-description: Antigravity especifica en openspec/proposal.md, Claude Code planifica, tú apruebas el plan, Claude Code implementa con los tests en verde y Codex revisa; si encuentra algo que bloquee, Claude Code lo corrige.
+description: Antigravity especifica en openspec/proposal.md, Claude Code planifica, tú apruebas el plan, Claude Code implementa con los tests en verde y Codex lo juzga contra la propuesta aprobada; los escépticos descartan los falsos positivos y Claude Code corrige lo que bloquea de verdad.
 
 agents:
   analista:
@@ -31,21 +31,16 @@ agents:
       model: ${CODEX_FUERTE}
     permissionMode: acceptEdits
     prompt: Implementa {{workItem.key}} siguiendo openspec/tasks.md y confirma los cambios con un commit.
+  # El juez de `juzgar` (VA-B, VA-C): en solo lectura, con la rúbrica y sin ver lo que dijo el
+  # desarrollador. Su reserva nunca es Claude Code, que es quien implementa.
   revisor:
     provider: codex
     model: ${CODEX_FUERTE}
     fallback:
-      provider: claude-code
-      model: ${CLAUDE_FUERTE}
-    permissionMode: plan
+      provider: antigravity
+      model: ${AGY_FUERTE}
     prompt: |
-      Revisa la implementación de {{workItem.key}} ({{workItem.title}}) contra openspec/proposal.md y openspec/tasks.md: que haga lo que dice, con tests, y sin romper nada.
-      Pon hasBlockingFindings a true solo si hay algo que impida fusionarlo, y explica cada hallazgo con su fichero y línea.
-    output:
-      type: object
-      properties:
-        hasBlockingFindings: {type: boolean}
-        summary: {type: string}
+      Compáralo con openspec/proposal.md y openspec/tasks.md: que haga lo que dicen, con tests, y sin romper nada.
 
 stages:
   - id: spec
@@ -87,30 +82,28 @@ stages:
     dependsOn: [aprobar-plan]
     phase: implement
     checks: [tests, diff]
-  - id: revisar
-    type: agent
-    agent: revisor
+  # Codex juzga la implementación con la rúbrica, que incluye respetar la propuesta aprobada. Cada
+  # hallazgo que bloquea pasa por dos escépticos; lo que sobrevive lo corrige implementar en su
+  # sesión, y se vuelve a juzgar (como mucho 2 rondas).
+  - id: juzgar
+    type: verification
     dependsOn: [implementar]
     phase: review
-  - id: corregir
-    type: agent
-    agent: desarrollador
-    dependsOn: [revisar]
-    phase: implement
-    condition: revisar.hasBlockingFindings
-    prompt: |
-      Corrige lo que bloquea en {{workItem.key}} según la revisión de Codex:
-
-      {{stages.revisar.output.summary}}
-
-      Vuelve a pasar los tests y confirma los cambios con un commit.
-    checks: [tests, diff]
+    judge:
+      agents:
+        - {agent: revisor, lens: completeness}
+      rubric:
+        - {id: propuesta, text: "Respeta la propuesta aprobada (openspec/proposal.md) y su plan", weight: 3, required: true}
+        - {id: resuelve, text: "Resuelve la tarea tal y como se pidió", weight: 2, required: true}
+        - {id: tests, text: "Los tests cubren el cambio y sus casos límite", weight: 2}
+        - {id: alcance, text: "No cambia nada que la propuesta deje fuera", weight: 1}
+      refute: 2
+    fix: implementar
   # Entrega por PR (EN): en un repositorio con la GitHub App sube la rama, abre la PR, espera la CI
   # (si falla, la corrige implementar), pide aprobar la fusión y fusiona. En uno local, se omiten.
   - id: pr
     type: github-pr
-    dependsOn: [revisar, "corregir?"]
-    workspaceFrom: revisar
+    dependsOn: [juzgar]
     phase: deliver
     condition: repository.github
   - id: ci

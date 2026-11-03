@@ -50,12 +50,51 @@ class FakeJudgeTest {
   }
 
   @Test
+  void withABangOnlyTheFindingFails(@TempDir Path dir) throws Exception {
+    Files.writeString(dir.resolve("suspende"), "!calc.py:2 add() no trata los negativos");
+
+    JsonNode failed = verdict(dir, PROMPT);
+
+    assertThat(failed.path("criteria").get(0).path("score").asInt()).isEqualTo(5);
+    assertThat(failed.path("findings").get(0).path("text").asString())
+        .isEqualTo("add() no trata los negativos");
+  }
+
+  @Test
   void itOnlyAnswersAJudge(@TempDir Path dir) throws Exception {
     Map<String, String> env = Map.of("FAKE_CLAUDE_JUDGE", dir.resolve("suspende").toString());
 
     assertThat(FakeJudge.verdict(env, "FAKE_CLAUDE_JUDGE", "{\"properties\":{}}", PROMPT, dir))
         .isNull();
     assertThat(FakeJudge.verdict(Map.of(), "FAKE_CLAUDE_JUDGE", SCHEMA, PROMPT, dir)).isNull();
+  }
+
+  @Test
+  void aSkepticRefutesOnlyTheFindingsTheMarkerNames(@TempDir Path dir) throws Exception {
+    String schema = "{\"properties\":{\"refuted\":{},\"reason\":{}}}";
+    Path marker = dir.resolve("refuta");
+    Map<String, String> env = Map.of("FAKE_CLAUDE_REFUTE", marker.toString());
+    String prompt = "## El hallazgo\n\nEn `calc.py:2`: add() no trata los negativos\n";
+
+    JsonNode without =
+        JsonMapper.shared()
+            .readTree(FakeJudge.refutation(env, "FAKE_CLAUDE_REFUTE", schema, prompt, dir));
+    Files.writeString(marker, "no trata los negativos");
+    JsonNode named =
+        JsonMapper.shared()
+            .readTree(FakeJudge.refutation(env, "FAKE_CLAUDE_REFUTE", schema, prompt, dir));
+    JsonNode other =
+        JsonMapper.shared()
+            .readTree(
+                FakeJudge.refutation(env, "FAKE_CLAUDE_REFUTE", schema, "Otro hallazgo", dir));
+
+    assertThat(without.path("refuted").asBoolean()).isFalse();
+    assertThat(named.path("refuted").asBoolean()).isTrue();
+    assertThat(other.path("refuted").asBoolean()).isFalse();
+    assertThat(marker).exists();
+    // Ni a un juez ni sin el testigo configurado.
+    assertThat(FakeJudge.refutation(env, "FAKE_CLAUDE_REFUTE", SCHEMA, prompt, dir)).isNull();
+    assertThat(FakeJudge.refutation(Map.of(), "FAKE_CLAUDE_REFUTE", schema, prompt, dir)).isNull();
   }
 
   @Test

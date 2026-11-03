@@ -5,8 +5,7 @@ Con la GitHub App conectada ([`github.md`](github.md)), un workflow entrega su t
 ```yaml
   - id: pr                     # EN-A: sube la rama y abre la PR
     type: github-pr
-    dependsOn: [revisar, "corregir?"]
-    workspaceFrom: revisar
+    dependsOn: [juzgar]
     condition: repository.github
   - id: ci                     # EN-B: espera la CI y, si falla, la corrige
     type: github-check

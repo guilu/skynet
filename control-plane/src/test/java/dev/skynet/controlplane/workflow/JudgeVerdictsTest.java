@@ -194,6 +194,102 @@ class JudgeVerdictsTest {
   }
 
   @Test
+  void aFindingTheMajorityOfSkepticsRefutesIsDiscardedAndTheJudgePasses() {
+    Verdict blocked =
+        JudgeVerdicts.verdict(
+            "juez",
+            null,
+            SPEC,
+            output(
+                Map.of("resuelve", 5, "tests", 5, "alcance", 5),
+                List.of(finding("src/Calc.java", 12, "blocking", "Divide entre cero"))));
+    List<JudgeVerdicts.Target> targets = JudgeVerdicts.targets(List.of(blocked), 2, 20);
+    assertThat(targets).hasSize(1);
+
+    JudgeVerdicts.Finding refuted =
+        JudgeVerdicts.decide(
+            targets.getFirst().finding(),
+            List.of(
+                new JudgeVerdicts.Refutation(true, "Ya se comprueba en la línea 10"),
+                new JudgeVerdicts.Refutation(true, "No puede ser cero")),
+            2);
+    Verdict after = JudgeVerdicts.refuted(blocked, Map.of(0, refuted), SPEC);
+    Aggregate aggregate = JudgeVerdicts.aggregate(List.of(after));
+
+    assertThat(refuted.discarded()).isTrue();
+    assertThat(refuted.refutation()).isEqualTo("Ya se comprueba en la línea 10");
+    assertThat(after.passed()).isTrue();
+    assertThat(aggregate.passed()).isTrue();
+    assertThat(aggregate.findings()).containsExactly(refuted);
+    assertThat(JudgeVerdicts.report(List.of(after), aggregate)).doesNotContain("Divide entre cero");
+  }
+
+  @Test
+  void aTieOrAFailedSkepticDoesNotRefute() {
+    JudgeVerdicts.Finding finding =
+        new JudgeVerdicts.Finding("src/Calc.java", 12, "blocking", "Divide entre cero", "juez");
+
+    JudgeVerdicts.Finding tie =
+        JudgeVerdicts.decide(
+            finding,
+            List.of(
+                new JudgeVerdicts.Refutation(true, "No pasa"),
+                new JudgeVerdicts.Refutation(false, "Sí pasa con b = 0")),
+            2);
+    JudgeVerdicts.Finding failed =
+        JudgeVerdicts.decide(
+            finding,
+            List.of(
+                new JudgeVerdicts.Refutation(true, "No pasa"),
+                new JudgeVerdicts.Refutation(false, null),
+                new JudgeVerdicts.Refutation(false, null)),
+            3);
+
+    assertThat(tie.discarded()).isFalse();
+    assertThat(tie.blocking()).isTrue();
+    assertThat(tie.refutation()).isEqualTo("Sí pasa con b = 0");
+    assertThat(failed.blocking()).isTrue();
+  }
+
+  @Test
+  void atMostEightFindingsAreRefutedAndTheRestIsSaid() {
+    List<Map<String, Object>> many = new java.util.ArrayList<>();
+    for (int i = 1; i <= 11; i++) {
+      many.add(finding("src/F" + i + ".java", i, "blocking", "Problema " + i));
+    }
+    many.add(finding("README.md", null, "minor", "Falta un ejemplo"));
+    Verdict verdict =
+        JudgeVerdicts.verdict(
+            "juez", null, SPEC, output(Map.of("resuelve", 5, "tests", 5, "alcance", 5), many));
+
+    List<JudgeVerdicts.Target> capped = JudgeVerdicts.targets(List.of(verdict), 2, 20);
+    List<JudgeVerdicts.Target> budget = JudgeVerdicts.targets(List.of(verdict), 2, 5);
+
+    assertThat(JudgeVerdicts.blockingTargets(List.of(verdict))).hasSize(11);
+    assertThat(capped).hasSize(JudgeSpec.MAX_REFUTED_FINDINGS);
+    assertThat(capped.getLast().finding().text()).isEqualTo("Problema 8");
+    assertThat(budget).hasSize(2);
+    assertThat(JudgeVerdicts.trimmed(8, 11, false))
+        .isEqualTo(
+            "Se han intentado refutar 8 de 11 hallazgos que bloquean (como mucho 8 por ronda);"
+                + " los demás cuentan sin refutar");
+    assertThat(JudgeVerdicts.trimmed(2, 11, true))
+        .contains("no quedan llamadas: como mucho 20 por fase");
+    assertThat(JudgeVerdicts.trimmed(3, 3, false)).isNull();
+  }
+
+  @Test
+  void aSkepticAnswerNeedsRefuted() {
+    assertThat(JudgeVerdicts.refutation(JsonMapper.shared().readTree("{\"reason\": \"x\"}")))
+        .isNull();
+    assertThat(
+            JudgeVerdicts.refutation(
+                JsonMapper.shared().readTree("{\"refuted\": true, \"reason\": \" Ya está \"}")))
+        .isEqualTo(new JudgeVerdicts.Refutation(true, "Ya está"));
+    assertThat(JudgeVerdicts.refutationSchema()).contains("\"required\":[\"refuted\",\"reason\"]");
+  }
+
+  @Test
   void theOutputSchemaAsksForCriteriaFindingsAndSummary() {
     JsonNode inline = JsonMapper.shared().readTree(JudgeVerdicts.outputSchema(false));
     JsonNode file = JsonMapper.shared().readTree(JudgeVerdicts.outputSchema(true));

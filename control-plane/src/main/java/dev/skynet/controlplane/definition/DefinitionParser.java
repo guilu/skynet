@@ -121,7 +121,8 @@ public final class DefinitionParser {
   static final List<String> MERGE_KEYS = List.of("method", "deleteBranch");
 
   /** Las claves del bloque {@code judge} de una fase {@code verification} (VA-B). */
-  static final Set<String> JUDGE_KEYS = Set.of("agents", "rubric", "rubricFile", "threshold");
+  static final Set<String> JUDGE_KEYS =
+      Set.of("agents", "rubric", "rubricFile", "threshold", "refute", "refuteAgent");
 
   /** Las claves de un juez de {@code judge.agents} escrito como objeto. */
   static final Set<String> JUDGE_AGENT_KEYS = Set.of("agent", "lens");
@@ -2121,13 +2122,23 @@ public final class DefinitionParser {
             path + ".maxRounds",
             "`maxRounds` son las rondas de corrección: sin `fix` no hay ninguna");
       }
+      Integer refute = integer(judge.get("refute"), at + ".refute", 0, JudgeSpec.MAX_REFUTE);
+      String refuteAgent = text(judge.get("refuteAgent"), at + ".refuteAgent");
+      if (refuteAgent != null && (refute == null || refute == 0)) {
+        warning(
+            judge.get("refuteAgent").key(),
+            at + ".refuteAgent",
+            "`refuteAgent` no se usa sin `refute`: pon cuántos escépticos, p. ej. `refute: 2`");
+      }
       return new JudgeSpec(
           agents,
           rubric,
           rubricFile,
           threshold,
           fix,
-          maxRounds == null ? JudgeSpec.DEFAULT_MAX_ROUNDS : maxRounds);
+          maxRounds == null ? JudgeSpec.DEFAULT_MAX_ROUNDS : maxRounds,
+          refute == null ? 0 : refute,
+          refuteAgent);
     }
 
     /** Los jueces de {@code judge.agents}: un nombre de agente o {@code {agent, lens}}. */
@@ -2454,6 +2465,9 @@ public final class DefinitionParser {
           }
           if (stage.judge() != null) {
             stage.judge().agents().forEach(j -> usedAgents.add(j.agent()));
+            if (stage.judge().refuteAgent() != null) {
+              usedAgents.add(stage.judge().refuteAgent());
+            }
             checkJudge(at, byId, agentsByName);
           }
           checkWorkspace(at, byId);
@@ -2790,6 +2804,15 @@ public final class DefinitionParser {
                 + " jueces sin lente mirando lo mismo: dan más con lentes distintas, p. ej."
                 + " `{agent: juez-calidad, lens: correctness}` y `{agent: juez-seguridad, lens:"
                 + " security}`");
+      }
+      if (judge.refuteAgent() != null && !agentsByName.containsKey(judge.refuteAgent())) {
+        error(
+            judgeEntry.key(),
+            path + ".refuteAgent",
+            "No hay ningún agente `"
+                + judge.refuteAgent()
+                + "` en `agents`"
+                + suggestion(judge.refuteAgent(), agentsByName.keySet()));
       }
       Entry fixEntry = at.fields().get("fix");
       String fix = judge.fix();

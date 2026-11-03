@@ -4,7 +4,8 @@ import { formatScore, LENS_LABEL } from './stageNotes'
 
 /**
  * El juez de una fase `verification` (VA-B): la nota de la fase, la de cada criterio por juez y lo
- * que encontraron, con su fichero. Mientras se corrige, el veredicto de la ronda anterior.
+ * que encontraron, con su fichero. Mientras se corrige, el veredicto de la ronda anterior. Los
+ * hallazgos que refutaron los escépticos salen tachados, con el motivo (VA-C).
  */
 export function StageJudge({ judge }: { judge: Judge }) {
   const done = judge.judgements.filter((j) => j.status === 'DONE')
@@ -27,8 +28,11 @@ export function StageJudge({ judge }: { judge: Judge }) {
           {' · '}umbral {formatScore(judge.threshold)}
           {judge.shownRound > 1 && ` · ronda ${judge.shownRound}`}
           {judge.fix && ` · corrige ${judge.fix} (hasta ${judge.maxRounds} rondas)`}
+          {judge.refute > 0 &&
+            ` · ${judge.refute === 1 ? '1 escéptico' : `${judge.refute} escépticos`} por hallazgo que bloquea`}
         </span>
       </p>
+      {judge.refuteNote && <p className="stage-judge-note">⚠ {judge.refuteNote}</p>}
       {done.length > 0 && criteria.length > 0 && (
         <div className="table-scroll">
           <table className="stage-judge-table">
@@ -91,12 +95,27 @@ export function StageJudge({ judge }: { judge: Judge }) {
       {judge.findings.length > 0 && (
         <ul className="stage-judge-findings" aria-label="Hallazgos del juez">
           {judge.findings.map((f, i) => (
-            <li key={i} className={f.severity}>
+            <li key={i} className={cn(f.severity, f.refuted && 'refuted')}>
               <span className="stage-judge-severity">
-                {f.severity === 'blocking' ? 'Bloquea' : 'Menor'}
+                {f.refuted ? 'Refutado' : f.severity === 'blocking' ? 'Bloquea' : 'Menor'}
               </span>{' '}
-              {location(f) && <code>{location(f)}</code>} {f.text}{' '}
+              {f.refuted ? (
+                <del>
+                  {location(f) && <code>{location(f)}</code>} {f.text}
+                </del>
+              ) : (
+                <>
+                  {location(f) && <code>{location(f)}</code>} {f.text}
+                </>
+              )}{' '}
               <span className="muted">({f.judge})</span>
+              {f.refutation && (
+                <span className="muted stage-judge-reason">
+                  {' '}
+                  {f.refuted ? 'Refutado: ' : 'No se pudo refutar: '}
+                  {f.refutation}
+                </span>
+              )}
             </li>
           ))}
         </ul>

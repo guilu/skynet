@@ -48,8 +48,9 @@ export function stageDetail(stage: StageDefinition): string {
       if (!stage.judge) return checks
       const n = stage.judge.agents.length
       const judges = `${n === 1 ? '1 juez' : `${n} jueces`} · umbral ${stage.judge.threshold.toLocaleString('es-ES')}`
+      const refute = stage.judge.refute ? ` · refuta ×${stage.judge.refute}` : ''
       const fix = stage.judge.fix ? ` · corrige ${stage.judge.fix}` : ''
-      return [checks, judges + fix].filter(Boolean).join(' · ')
+      return [checks, judges + refute + fix].filter(Boolean).join(' · ')
     }
     case 'human-approval':
       return stage.approval ? `Aprobar: ${stage.approval.action}` : 'Aprobación'

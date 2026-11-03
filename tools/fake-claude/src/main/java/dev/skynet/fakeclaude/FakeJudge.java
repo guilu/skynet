@@ -21,11 +21,17 @@ import tools.jackson.databind.json.JsonMapper;
  *   <li>Sin el testigo, aprueba: un 5 en cada criterio del prompt y ningún hallazgo.
  *   <li>Con el testigo, suspende con un 2 en cada criterio y un hallazgo que bloquea, y borra el
  *       testigo, así que la ronda siguiente aprueba. El testigo puede decir el hallazgo: {@code
- *       <fichero>[:<línea>] <texto>}; vacío, uno genérico.
+ *       <fichero>[:<línea>] <texto>}; vacío, uno genérico. Con {@code !} delante, las notas son un
+ *       5 y solo bloquea el hallazgo (para probar los escépticos).
  * </ul>
  *
  * <p>Se activa sin reiniciar el runner: basta con crear el fichero. Con varios jueces a la vez,
  * suspende el primero que lo lea.
+ *
+ * <p>Los escépticos (VA-C), con {@code FAKE_CLAUDE_REFUTE} y {@code FAKE_CODEX_REFUTE}, otro
+ * testigo: solo si se pide la salida de un escéptico (tiene {@code refuted}). Sin el testigo, no
+ * refutan; con él, refutan los hallazgos cuyo prompt contiene el texto del testigo (vacío, todos).
+ * No lo borran: todos los escépticos de una ronda contestan lo mismo.
  */
 final class FakeJudge {
 
@@ -56,20 +62,25 @@ final class FakeJudge {
     if (fail) {
       Files.delete(file);
     }
+    // Con «!» delante, las notas son buenas y solo bloquea el hallazgo (para los escépticos).
+    boolean onlyFinding = scripted.startsWith("!");
+    if (onlyFinding) {
+      scripted = scripted.substring(1).strip();
+    }
     boolean fromFile = schema.contains("\"weight\"");
     List<Map<String, Object>> criteria = new ArrayList<>();
     Matcher m = CRITERION.matcher(prompt == null ? "" : prompt);
     while (m.find()) {
-      criteria.add(criterion(m.group(1), fail, fromFile));
+      criteria.add(criterion(m.group(1), fail && !onlyFinding, fromFile));
     }
     if (criteria.isEmpty()) {
-      criteria.add(criterion("resuelve", fail, fromFile));
+      criteria.add(criterion("resuelve", fail && !onlyFinding, fromFile));
     }
     List<Map<String, Object>> findings = new ArrayList<>();
     if (fail) {
       Map<String, Object> finding = new LinkedHashMap<>();
       Matcher f = FINDING.matcher(scripted);
-      if (!scripted.isEmpty() && f.matches() && f.group(1).contains("/")) {
+      if (!scripted.isEmpty() && f.matches() && (f.group(1).contains("/") || f.group(2) != null)) {
         finding.put("file", f.group(1));
         finding.put("line", f.group(2) == null ? null : Integer.parseInt(f.group(2)));
         finding.put("severity", "blocking");
@@ -91,6 +102,37 @@ final class FakeJudge {
         fail
             ? "No está terminado: hay un problema que bloquea (fake)."
             : "Cumple la rúbrica (fake).");
+    return JsonMapper.shared().writeValueAsString(out);
+  }
+
+  /**
+   * La respuesta de un escéptico en JSON, o {@code null} si no hay testigo configurado o no es un
+   * escéptico.
+   */
+  static String refutation(
+      Map<String, String> env, String variable, String schema, String prompt, Path cwd)
+      throws IOException {
+    String marker = env.get(variable);
+    if (marker == null
+        || marker.isBlank()
+        || schema == null
+        || !schema.contains("\"refuted\"")
+        || schema.contains("\"criteria\"")) {
+      return null;
+    }
+    Path file = cwd.resolve(marker);
+    boolean refute = false;
+    if (Files.isRegularFile(file)) {
+      String match = Files.readString(file, StandardCharsets.UTF_8).strip();
+      refute = match.isEmpty() || (prompt != null && prompt.contains(match));
+    }
+    Map<String, Object> out = new LinkedHashMap<>();
+    out.put("refuted", refute);
+    out.put(
+        "reason",
+        refute
+            ? "Ya se comprueba antes (fake)."
+            : "El problema es real: no lo he podido refutar (fake).");
     return JsonMapper.shared().writeValueAsString(out);
   }
 

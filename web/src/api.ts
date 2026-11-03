@@ -867,6 +867,10 @@ export interface JudgeSpec {
   threshold: number
   fix: string | null
   maxRounds: number
+  /** Escépticos por hallazgo que bloquea (VA-C); 0 sin verificación adversarial. */
+  refute: number
+  /** El agente de los escépticos; null para el del primer juez. */
+  refuteAgent: string | null
 }
 
 /** Un hallazgo de un juez. */
@@ -876,11 +880,15 @@ export interface JudgeFinding {
   severity: 'blocking' | 'minor'
   text: string
   judge: string
+  /** Si lo refutaron los escépticos (VA-C); null o ausente si no se intentó. */
+  refuted?: boolean | null
+  /** Por qué lo refutaron (o no). */
+  refutation?: string | null
 }
 
 /** El juez de una fase en una ejecución: en qué ronda va y el veredicto de la última ronda. */
 export interface StageJudge {
-  status: 'CHECKING' | 'JUDGING' | 'FIXING' | 'PASSED' | 'FAILED'
+  status: 'CHECKING' | 'JUDGING' | 'REFUTING' | 'FIXING' | 'PASSED' | 'FAILED'
   round: number
   /** La ronda de `judgements`: la anterior mientras se corrige. */
   shownRound: number
@@ -913,6 +921,12 @@ export interface StageJudge {
     error: string | null
   }[]
   error: string | null
+  /** Escépticos por hallazgo que bloquea; 0 sin verificación adversarial. */
+  refute: number
+  /** Cuántos hallazgos se están intentando refutar ahora. */
+  refuting: number
+  /** El aviso si no se pudieron refutar todos por los topes. */
+  refuteNote: string | null
 }
 
 /** Una comprobación de fase: `artifacts`, `tests`, `diff`, `commit`, `scope` o `command`. */
