@@ -125,7 +125,9 @@ Las fases de un trabajo, con su nombre en la web (`components/work/phase.ts`): T
 
 **La página del proyecto** (FS-D) es su centro de operaciones. Arriba van cinco cifras: trabajos abiertos, ejecuciones en curso, PRs, aprobaciones pendientes y coste a 30 días. Debajo, las pestañas Resumen, Trabajos, Ejecuciones, Cambios, Workflows, Memoria y Configuración (`?tab=repos` sigue abriendo Configuración). El Resumen pone a la izquierda los repositorios y el tablero de trabajos por fase, y a la derecha lo que necesita intervención, los cambios recientes y el coste por trabajo (`components/project/ProjectSummary.tsx`).
 
-En el móvil, los proyectos de Inicio van en un carrusel, los chips de fase se deslizan, la tabla de repositorios pierde la columna de PRs y la actividad se queda en tres. En el proyecto, las cifras se deslizan, las pestañas quedan fijas arriba y el tablero se pliega por fase.
+**La página del trabajo** (FS-E) separa las tres palabras con tres tarjetas: Qué (la descripción), Cómo (el workflow y su versión) e Intentos. Debajo van el intento actual con sus fases, todos los intentos numerados, el resultado (la PR) y lo que ha costado. La ejecución se presenta como «Intento N de <clave>» y sus migas cuelgan del trabajo (`components/work/attempts.ts`). «Revisar la aprobación» abre una hoja con las mismas decisiones que la página de la aprobación (`components/approval/ApprovalSheet.tsx`).
+
+En el móvil, los proyectos de Inicio van en un carrusel, los chips de fase se deslizan, la tabla de repositorios pierde la columna de PRs y la actividad se queda en tres. En el proyecto, las cifras se deslizan, las pestañas quedan fijas arriba y el tablero se pliega por fase. En el trabajo, la acción principal queda fija abajo, sobre la barra inferior.
 
 ## 8. Capturas
 

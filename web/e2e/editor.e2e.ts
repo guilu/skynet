@@ -31,8 +31,8 @@ async function axeInBothThemes(page: Page, what: string) {
 /** Lanza la última versión publicada desde el trabajo y espera a que termine. Devuelve su id. */
 async function launchAndFinish(page: Page, workItemId: string, key: string): Promise<string> {
   await page.goto(`/work-items/${workItemId}`)
-  await page.getByRole('button', { name: 'Lanzar workflow' }).click()
-  const sheet = page.getByRole('dialog', { name: 'Lanzar workflow' })
+  await page.getByRole('button', { name: 'Nuevo intento' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Nuevo intento' })
   await sheet.getByLabel('Workflow').selectOption(key)
   await sheet.getByLabel('Tema').fill('la suma')
   await sheet.getByRole('button', { name: 'Lanzar', exact: true }).click()

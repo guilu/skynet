@@ -30,6 +30,7 @@ import type { IconName } from '../icons/registry'
 import { headlineShare, sharesByProvider, sharesLine } from '../usage/quotaFormat'
 import { AgentActions } from './AgentActions'
 import { headlineAgent } from './headlineAgent'
+import { useAttempt } from '../work/attempts'
 
 /**
  * Cabecera de una ejecución (ADR-0001 §3.5): estado, clave y título; workflow, runner, proveedor,
@@ -50,6 +51,7 @@ export function RunHeader({
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const headline = headlineAgent(run)
+  const attempt = useAttempt(run)
   const running = run.finishedAt == null
   const now = useNow(running)
   // Primero lo del agente elegido; si no lo tiene (una fase `command` no tiene modelo), lo del
@@ -115,6 +117,7 @@ export function RunHeader({
         <HeroBadge tone={tone} icon={statusIcon(run.status, tone)} />
         <div className="hero-body">
           <div className="hero-top">
+            {attempt && <span className="run-attempt">Intento {attempt.number} de</span>}
             {run.workItemKey && (
               <Link className="run-key" to={`/work-items/${run.workItemId}`}>
                 {run.workItemKey}

@@ -1095,6 +1095,15 @@
       display: none;
     }
 
+    .crumbs[data-back] {
+      display: flex;
+      overflow: hidden;
+    }
+
+    .crumbs-back svg {
+      flex: none;
+    }
+
     .crumbs-back {
       display: inline-flex;
       align-items: center;
@@ -8885,6 +8894,289 @@
 
     .repo-overview-facts {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  /* ---------- Trabajo con intentos (FS-E) ---------- */
+  .work-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin: var(--space-2) 0 0;
+  }
+
+  .work-what {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+    margin: var(--space-6) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .work-what > li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-3);
+    align-items: start;
+    margin: 0;
+    padding: 18px 20px;
+  }
+
+  .work-what > li > svg {
+    box-sizing: content-box;
+    padding: 9px;
+    border-radius: 12px;
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+
+  .work-what h2 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+  }
+
+  .work-what p {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .work-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+    gap: var(--space-6);
+    align-items: start;
+  }
+
+  .work-main > .card:first-child,
+  .work-side {
+    margin-top: var(--space-6);
+  }
+
+  .work-side {
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .work-main .section-head {
+    margin-top: 14px;
+  }
+
+  .stage-flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 28px;
+    margin: 0 0 6px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .stage-step {
+    position: relative;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .stage-step + .stage-step::before {
+    content: '→';
+    position: absolute;
+    top: 50%;
+    left: -21px;
+    transform: translateY(-50%);
+    color: var(--muted);
+  }
+
+  .stage-step.tone-ok {
+    border-color: transparent;
+    background: var(--ok-soft);
+    color: var(--ok-ink);
+  }
+
+  .stage-step.tone-bad {
+    border-color: transparent;
+    background: var(--bad-soft);
+    color: var(--bad-ink);
+  }
+
+  .stage-step.tone-warn {
+    border-color: transparent;
+    background: var(--warn-soft);
+    color: var(--warn-ink);
+  }
+
+  .stage-step.tone-active {
+    border-color: transparent;
+    background: var(--live-soft);
+    color: var(--live-ink);
+  }
+
+  .attempt-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .attempt-row {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr) auto;
+    gap: var(--space-3);
+    align-items: center;
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .attempt-n .row-link {
+    font-weight: 600;
+  }
+
+  .attempt-n small {
+    display: block;
+  }
+
+  .attempt-body {
+    display: grid;
+    justify-items: start;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .attempt-figures {
+    display: flex;
+    gap: var(--space-4);
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .work-cost-total {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 600;
+  }
+
+  .work-cost-facts {
+    display: grid;
+    gap: 8px;
+    margin: var(--space-4) 0 var(--space-2);
+  }
+
+  .work-cost-facts div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .work-cost-facts dt {
+    color: var(--muted);
+  }
+
+  .work-cost-facts dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .run-attempt {
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .approval-sheet-cost {
+    display: grid;
+    gap: 6px;
+    padding: 12px 14px;
+    border-radius: var(--r-md);
+    background: var(--surface-2);
+  }
+
+  .approval-sheet-cost div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .approval-sheet-cost dt {
+    color: var(--muted);
+  }
+
+  .approval-sheet-cost dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .work-actionbar {
+    display: none;
+  }
+
+  @media (max-width: 1100px) {
+    .work-what,
+    .work-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .work-side {
+      margin-top: 0;
+    }
+  }
+
+  /* Móvil: la acción principal fija abajo, al alcance del pulgar, sobre la barra inferior. */
+  @media (max-width: 720px) {
+    .work-what {
+      gap: var(--space-2);
+    }
+
+    .work-what > li {
+      padding: 12px 14px;
+    }
+
+    .attempt-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .attempt-body {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+
+    .stage-flow {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+    }
+
+    .stage-step + .stage-step::before {
+      content: none;
+    }
+
+    .work-actionbar {
+      position: fixed;
+      right: 0;
+      bottom: calc(var(--mobile-nav-h, 72px) + env(safe-area-inset-bottom));
+      left: 0;
+      z-index: 20;
+      display: flex;
+      gap: var(--space-2);
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .work-actionbar .btn:first-child {
+      flex: 1;
+      justify-content: center;
+    }
+
+    .work-layout {
+      padding-bottom: 72px;
+    }
+
+    .work-head .page-actions > .btn {
+      display: none;
     }
   }
 }
