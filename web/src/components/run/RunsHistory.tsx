@@ -2,25 +2,25 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { CirclePlay } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { api, type RunStatus } from '../api'
-import { ArchivedToggle, BulkRunActions } from '../components/archive/Archive'
-import { ErrorMessage } from '../components/ErrorMessage'
-import { ColumnsMenu, EmptyState } from '../components/list/DataTable'
-import { useHiddenColumns } from '../components/list/columns'
-import { Pager } from '../components/list/Pager'
+import { api, type RunStatus } from '../../api'
+import { ArchivedToggle, BulkRunActions } from '../archive/Archive'
+import { ErrorMessage } from '../ErrorMessage'
+import { ColumnsMenu, EmptyState } from '../list/DataTable'
+import { useHiddenColumns } from '../list/columns'
+import { Pager } from '../list/Pager'
 import {
   FilterChips,
   ListToolbar,
   RemovableChip,
   SearchField,
   type ChipOption,
-} from '../components/list/Toolbar'
-import { RunsTable } from '../components/RunsTable'
-import { runColumns } from '../components/runColumns'
-import { Button } from '../components/ui/Button'
-import { formatDateTime } from '../format'
-import { useNow } from '../useNow'
-import { TableSkeleton } from '../components/ui/Skeleton'
+} from '../list/Toolbar'
+import { RunsTable } from '../RunsTable'
+import { runColumns } from '../runColumns'
+import { Button } from '../ui/Button'
+import { formatDateTime } from '../../format'
+import { useNow } from '../../useNow'
+import { TableSkeleton } from '../ui/Skeleton'
 
 const PAGE_SIZE = 25
 
@@ -34,11 +34,11 @@ const STATUSES: (ChipOption & { value: RunStatus })[] = [
 ]
 
 /**
- * Todas las ejecuciones: búsqueda por clave o título del trabajo, estados, proyecto, fecha de
+ * Historial (la pestaña de En curso, FS-F) con todas las ejecuciones: búsqueda por clave o título del trabajo, estados, proyecto, fecha de
  * creación, archivadas y página, todo en la URL para poder enlazarlo. Las filas se pueden
  * seleccionar para archivarlas, restaurarlas o eliminarlas de una vez.
  */
-export function RunsPage() {
+export function RunsHistory() {
   const [params, setParams] = useSearchParams()
   const status = params.getAll('status') as RunStatus[]
   const since = params.get('since') ?? undefined
@@ -95,13 +95,13 @@ export function RunsPage() {
     if (text) p.set('q', text)
     if (next.archived ?? archived) p.set('archived', 'true')
     if (next.page) p.set('page', String(next.page))
+    p.set('view', 'history')
     setParams(p)
   }
   const filtered = status.length > 0 || !!since || !!projectId || !!q || archived
 
   return (
     <>
-      <h1>Ejecuciones</h1>
       <ListToolbar>
         <SearchField
           label="Buscar ejecuciones"

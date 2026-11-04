@@ -9179,4 +9179,301 @@
       display: none;
     }
   }
+
+  /* FS-F · Fábrica › En curso: ejecuciones agrupadas por proyecto › repositorio. */
+  .live-group {
+    margin: var(--space-4) 0 0;
+    padding: var(--space-4);
+  }
+
+  .live-group-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+
+  .live-group-cost {
+    margin-left: auto;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .live-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .live-list > li + li {
+    border-top: 1px solid var(--border);
+  }
+
+  .live-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 340px) 160px;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 10px 0;
+  }
+
+  .live-row-work {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .live-row-work .row-link {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .live-row-progress {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .live-row-figures {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    color: var(--muted);
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .stage-bar {
+    display: flex;
+    flex: none;
+    gap: 3px;
+    width: 160px;
+  }
+
+  .stage-bar i {
+    flex: 1;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--idle-soft);
+  }
+
+  .stage-bar .seg-ok {
+    background: var(--ok);
+  }
+
+  .stage-bar .seg-bad {
+    background: var(--bad);
+  }
+
+  .stage-bar .seg-warn {
+    background: var(--warn);
+  }
+
+  .stage-bar .seg-active {
+    background: var(--live);
+  }
+
+  .factory-two {
+    margin-top: var(--space-4);
+  }
+
+  /* FS-F · Administración. */
+  .kpi-idle {
+    --ks: var(--idle-soft);
+    --ki: var(--muted);
+  }
+
+  .admin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: var(--space-3);
+    margin: var(--space-4) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .admin-card {
+    display: flex;
+    gap: var(--space-3);
+    margin: 0;
+    padding: var(--space-4);
+  }
+
+  .admin-card > div {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .admin-card .kpi-icon {
+    flex: none;
+    width: 44px;
+    height: 44px;
+  }
+
+  .admin-card h2 {
+    margin: 0;
+    font-size: 1.0625rem;
+  }
+
+  .admin-card h2 .row-link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  .admin-card {
+    position: relative;
+  }
+
+  .admin-card > div > p {
+    margin: 2px 0 var(--space-2);
+  }
+
+  .admin-card-body {
+    color: var(--text-2, var(--muted));
+    font-size: 0.9375rem;
+  }
+
+  .admin-quota {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .admin-quota li {
+    display: grid;
+    gap: 4px;
+    font-size: 0.875rem;
+  }
+
+  .admin-quota-bar {
+    display: block;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--idle-soft);
+    overflow: hidden;
+  }
+
+  .admin-quota-bar i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--ok);
+  }
+
+  .admin-quota-bar i.tone-warn {
+    background: var(--warn);
+  }
+
+  .admin-quota-bar i.tone-bad {
+    background: var(--bad);
+  }
+
+  /* FS-F · Mantenimiento y Proveedores. */
+  .maint-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: var(--space-3);
+    margin: var(--space-4) 0;
+  }
+
+  .maint-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .maint-list li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 8px 0;
+  }
+
+  .maint-list li + li {
+    border-top: 1px solid var(--border);
+  }
+
+  .maint-list li > span {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .provider-installs {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  @media (max-width: 720px) {
+    .live-group {
+      padding: var(--space-3);
+    }
+
+    .live-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        'work figures'
+        'progress progress';
+      gap: 6px var(--space-2);
+    }
+
+    .live-row-work {
+      grid-area: work;
+    }
+
+    .live-row-progress {
+      grid-area: progress;
+    }
+
+    .live-row-figures {
+      grid-area: figures;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0;
+    }
+
+    .stage-bar {
+      flex: 1;
+      width: auto;
+    }
+
+    .live-group-cost {
+      width: 100%;
+      margin-left: 0;
+    }
+
+    .admin-grid {
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .admin-card {
+      border: 0;
+      border-radius: 0;
+      padding: var(--space-3);
+    }
+
+    .admin-grid > .admin-card + .admin-card {
+      border-top: 1px solid var(--border);
+    }
+  }
+
+  .nav-area-more {
+    float: right;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-transform: none;
+  }
 }

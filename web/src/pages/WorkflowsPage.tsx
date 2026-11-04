@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Plus, Workflow } from 'lucide-react'
+import { useMemo } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api, type WorkflowSummary } from '../api'
 import { ArchiveMenu, ArchivedToggle } from '../components/archive/Archive'
@@ -14,7 +15,8 @@ import { formatDateTime } from '../format'
 /** Workflow implícito de la Fase 1, que no se archiva. */
 export const ADHOC = 'adhoc'
 
-const COLUMNS: Column<WorkflowSummary>[] = [
+/** Columnas de la tabla; «Trabajos» cuenta los pendientes que usan cada workflow (FS-F). */
+const columns = (inUse: Map<string, number>): Column<WorkflowSummary>[] => [
   {
     id: 'workflow',
     header: 'Workflow',
@@ -26,6 +28,18 @@ const COLUMNS: Column<WorkflowSummary>[] = [
     ),
   },
   { id: 'description', header: 'Descripción', cell: (w) => w.description ?? '—' },
+  {
+    id: 'work',
+    header: 'Trabajos',
+    cell: (w) => {
+      const n = inUse.get(w.key) ?? 0
+      return n > 0 ? (
+        `${n} ${n === 1 ? 'pendiente' : 'pendientes'}`
+      ) : (
+        <span className="muted">—</span>
+      )
+    },
+  },
   {
     id: 'published',
     header: 'Publicada',
@@ -79,6 +93,16 @@ export function WorkflowsPage() {
     queryKey: archived ? ['workflows', 'archived'] : ['workflows'],
     queryFn: () => api.workflows(archived ? 'true' : undefined),
   })
+  const pending = useQuery({
+    queryKey: ['work-items', 'pending'],
+    queryFn: () => api.pendingWorkItems(),
+  })
+  const inUse = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const w of pending.data ?? [])
+      if (w.workflowKey) counts.set(w.workflowKey, (counts.get(w.workflowKey) ?? 0) + 1)
+    return counts
+  }, [pending.data])
   const setFilters = (next: { q?: string; archived?: boolean }) => {
     const p = new URLSearchParams()
     const text = next.q ?? q
@@ -118,7 +142,7 @@ export function WorkflowsPage() {
       {workflows.data && (
         <DataTable
           label="Workflows"
-          columns={COLUMNS}
+          columns={columns(inUse)}
           rows={workflows.data.filter((w) => !q || matches(w, q))}
           rowKey={(w) => w.id}
           empty={

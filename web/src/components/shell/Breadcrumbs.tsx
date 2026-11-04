@@ -75,6 +75,7 @@ export function Breadcrumbs() {
       { label: 'Workflows', to: '/workflows' },
       { label: workflowKey === 'new' ? 'Nuevo' : workflowKey },
     ]
+  else if (pathname === '/admin') crumbs = [{ label: 'Administración' }]
   else {
     const section = sectionOf(pathname)
     area = section?.area
@@ -93,7 +94,7 @@ export function Breadcrumbs() {
       <ol>
         {area && (
           <li className="crumbs-area">
-            <span>{area}</span>
+            {area === 'Administración' ? <Link to="/admin">{area}</Link> : <span>{area}</span>}
             <Icon name="chevron-right" className="crumbs-sep" size={16} strokeWidth={3} />
           </li>
         )}

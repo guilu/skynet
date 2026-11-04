@@ -101,7 +101,12 @@ test('las páginas principales pasan axe', async ({ page }) => {
 
   const pages: [string, string][] = [
     ['/', 'Buen'],
-    ['/runs', 'Ejecuciones'],
+    ['/runs', 'En curso'],
+    ['/runs?view=history', 'En curso'],
+    ['/results', 'Resultados'],
+    ['/admin', 'Administración'],
+    ['/providers', 'Proveedores'],
+    ['/maintenance', 'Mantenimiento'],
     ['/projects', 'Proyectos'],
     ['/runners', 'Runners'],
     ['/activity', 'Actividad'],
@@ -180,7 +185,12 @@ test('en tema oscuro las páginas también pasan axe', async ({ page }) => {
 
   for (const [path, name] of [
     ['/', 'Buen'],
-    ['/runs', 'Ejecuciones'],
+    ['/runs', 'En curso'],
+    ['/runs?view=history', 'En curso'],
+    ['/results', 'Resultados'],
+    ['/admin', 'Administración'],
+    ['/providers', 'Proveedores'],
+    ['/maintenance', 'Mantenimiento'],
     ['/projects', 'Proyectos'],
     ['/runners', 'Runners'],
     ['/activity', 'Actividad'],

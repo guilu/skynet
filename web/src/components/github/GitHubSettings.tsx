@@ -308,7 +308,7 @@ function RepositoriesSection({ status }: { status: GitHubStatus }) {
   )
 }
 
-function DeliveriesSection() {
+export function DeliveriesSection() {
   const deliveries = useQuery({
     queryKey: DELIVERIES_KEY,
     queryFn: () => api.gitHubDeliveries(50),

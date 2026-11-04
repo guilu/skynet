@@ -36,18 +36,21 @@ export const NAV_AREAS: NavArea[] = [
     id: 'factory',
     label: 'Fábrica',
     items: [
-      { to: '/runs', label: 'Ejecuciones', icon: 'runs' },
+      { to: '/runs', label: 'En curso', icon: 'runs' },
       { to: '/workflows', label: 'Workflows', icon: 'workflows' },
       { to: '/approvals', label: 'Aprobaciones', icon: 'approvals', pendingApprovals: true },
+      { to: '/results', label: 'Resultados', icon: 'branch' },
     ],
   },
   {
     id: 'admin',
     label: 'Administración',
     items: [
+      { to: '/providers', label: 'Proveedores', icon: 'provider' },
       { to: '/runners', label: 'Runners', icon: 'runners' },
       { to: '/usage', label: 'Consumo', icon: 'usage' },
       { to: '/settings', label: 'Ajustes', icon: 'settings' },
+      { to: '/maintenance', label: 'Mantenimiento', icon: 'tool' },
     ],
   },
 ]

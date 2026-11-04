@@ -118,7 +118,7 @@ describe('Archivar y eliminar', () => {
       [`POST /api/workflow-runs/${run.id}/archive`]: { archivedAt: '2026-10-09T08:00:00Z' },
       'POST /api/workflow-runs/r2/archive': { archivedAt: '2026-10-09T08:00:00Z' },
     })
-    renderAt('/runs', <App />)
+    renderAt('/runs?view=history', <App />)
 
     fireEvent.click(await screen.findByRole('checkbox', { name: /^Seleccionar TKM-1/ }))
     fireEvent.click(screen.getByRole('checkbox', { name: /^Seleccionar TKM-2/ }))
