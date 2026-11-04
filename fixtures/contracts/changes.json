@@ -1,0 +1,19 @@
+[ {
+  "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a12",
+  "number" : 44,
+  "url" : "https://github.com/guilu/demo-repo/pull/44",
+  "title" : "Informe de frecuencias por capítulo",
+  "status" : "OPEN",
+  "branch" : "skynet/DEMO-6",
+  "repositoryId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a03",
+  "repositoryName" : "demo-repo",
+  "projectId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a01",
+  "projectKey" : "DEMO",
+  "projectName" : "Analizador de texto",
+  "workItemId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a02",
+  "workItemKey" : "DEMO-6",
+  "workItemTitle" : "Informe de frecuencias por capítulo",
+  "workflowRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04",
+  "createdAt" : "2026-10-05T09:10:00Z",
+  "updatedAt" : "2026-10-05T09:20:00Z"
+} ]

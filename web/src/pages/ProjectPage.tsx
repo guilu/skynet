@@ -245,6 +245,7 @@ export function ProjectPage() {
       >
         <NewWorkItemForm
           projectId={projectId}
+          repositories={showArchived ? [] : (repos.data ?? [])}
           onDone={() => {
             closeSheet()
             selectTab('work')
@@ -476,14 +477,33 @@ function GitHubSection({ repository: r }: { repository: Repository }) {
   )
 }
 
-function NewWorkItemForm({ projectId, onDone }: { projectId: string; onDone: () => void }) {
+/**
+ * Crear un trabajo. Con varios repositorios se elige en cuál se trabaja (FS-B); con uno solo, el
+ * servidor lo pone él, y sin elegir se quedará con el del primer lanzamiento.
+ */
+function NewWorkItemForm({
+  projectId,
+  repositories,
+  onDone,
+}: {
+  projectId: string
+  repositories: Repository[]
+  onDone: () => void
+}) {
   const queryClient = useQueryClient()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [type, setType] = useState<WorkItemType>('FEATURE')
+  const [repositoryId, setRepositoryId] = useState('')
+  const active = repositories.filter((r) => r.archivedAt == null)
   const create = useMutation({
     mutationFn: () =>
-      api.createWorkItem(projectId, { title, description: description || undefined, type }),
+      api.createWorkItem(projectId, {
+        title,
+        description: description || undefined,
+        type,
+        repositoryId: repositoryId || undefined,
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['work-items', projectId] })
       onDone()
@@ -510,6 +530,19 @@ function NewWorkItemForm({ projectId, onDone }: { projectId: string; onDone: () 
           ))}
         </select>
       </label>
+      {active.length > 1 && (
+        <label>
+          Repositorio
+          <select value={repositoryId} onChange={(e) => setRepositoryId(e.target.value)}>
+            <option value="">Lo decido al lanzarlo</option>
+            {active.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label>
         Descripción
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />

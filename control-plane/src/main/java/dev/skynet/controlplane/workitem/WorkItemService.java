@@ -2,6 +2,7 @@ package dev.skynet.controlplane.workitem;
 
 import dev.skynet.controlplane.event.EventDraft;
 import dev.skynet.controlplane.event.EventStore;
+import dev.skynet.controlplane.project.CodeRepository;
 import dev.skynet.controlplane.project.Project;
 import dev.skynet.controlplane.project.ProjectService;
 import dev.skynet.controlplane.shared.ArchiveState;
@@ -41,17 +42,35 @@ public class WorkItemService {
     this.jdbc = jdbc;
   }
 
+  /**
+   * Crea un trabajo. Su repositorio (FS-B) es el indicado, que debe ser del proyecto y no estar
+   * archivado; sin él, el único repositorio activo del proyecto, si solo hay uno.
+   */
   @Transactional
   public WorkItem create(
-      UUID projectId, String title, String description, WorkItemType type, String externalRef) {
+      UUID projectId,
+      String title,
+      String description,
+      WorkItemType type,
+      String externalRef,
+      UUID repositoryId) {
     Project project = projects.get(projectId);
     projects.requireActive(project);
+    UUID repository = repositoryFor(projectId, repositoryId);
     int number = projects.nextWorkItemNumber(projectId);
     Instant now = time.now();
     WorkItem item =
         workItems.save(
             WorkItem.create(
-                projectId, project.getKey(), number, title, description, type, externalRef, now));
+                projectId,
+                project.getKey(),
+                number,
+                title,
+                description,
+                type,
+                externalRef,
+                repository,
+                now));
     events.append(
         EventDraft.of(
             "work_item",
@@ -62,6 +81,30 @@ public class WorkItemService {
                 "projectId", projectId, "key", item.getKey(), "title", title, "type", type.name()),
             now));
     return item;
+  }
+
+  private UUID repositoryFor(UUID projectId, UUID repositoryId) {
+    if (repositoryId != null) {
+      CodeRepository repository = projects.getRepository(repositoryId);
+      if (!repository.getProjectId().equals(projectId)) {
+        throw new NotFoundException("Repositorio", repositoryId);
+      }
+      projects.requireActive(repository);
+      return repositoryId;
+    }
+    List<CodeRepository> active = projects.repositories(projectId, Archived.EXCLUDE);
+    return active.size() == 1 ? active.getFirst().getId() : null;
+  }
+
+  /**
+   * Al lanzar una ejecución en un repositorio, el trabajo sin repositorio se queda con ese (FS-B).
+   * Si ya tenía uno, no cambia.
+   */
+  @Transactional
+  public void adoptRepository(UUID workItemId, UUID repositoryId) {
+    jdbc.sql("UPDATE work_item SET repository_id = ? WHERE id = ? AND repository_id IS NULL")
+        .params(repositoryId, workItemId)
+        .update();
   }
 
   @Transactional(readOnly = true)

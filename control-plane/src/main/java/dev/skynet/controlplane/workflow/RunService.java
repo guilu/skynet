@@ -226,6 +226,7 @@ public class RunService {
             launchAgent.model(),
             run.getId())
         .update();
+    workItems.adoptRepository(workItem.getId(), repository.getId());
     Map<String, Object> started = new LinkedHashMap<>();
     started.put("workItemId", workItem.getId());
     started.put("definition", definition.key());

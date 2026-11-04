@@ -25,19 +25,22 @@ type Value = string | boolean
 
 /**
  * Lanzamiento de un workflow publicado sobre un trabajo: el workflow (por defecto `adhoc`), sus
- * datos de entrada, el repositorio y los límites, con lo que se le permitirá a cada fase.
+ * datos de entrada, el repositorio (de entrada, el del trabajo) y los límites, con lo que se le permitirá a cada fase.
  */
 export function LaunchForm({
   workItemId,
   repositories,
+  defaultRepositoryId,
 }: {
   workItemId: string
   repositories: Repository[]
+  /** El repositorio del trabajo (FS-B), elegido de entrada. */
+  defaultRepositoryId?: string | null
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [workflowKey, setWorkflowKey] = useState(ADHOC)
-  const [repositoryId, setRepositoryId] = useState('')
+  const [repositoryId, setRepositoryId] = useState(defaultRepositoryId ?? '')
   // Por versión y nombre: cambiar de workflow no arrastra lo escrito en otro.
   const [values, setValues] = useState<Record<string, Value>>({})
   const [maxTurns, setMaxTurns] = useState('')

@@ -13,6 +13,8 @@ const workItem: WorkItem = {
   type: 'BUG',
   externalRef: null,
   status: 'OPEN',
+  repositoryId: null,
+  phase: 'TODO',
   createdAt: '2026-10-08T10:00:00Z',
   archivedAt: null,
 }

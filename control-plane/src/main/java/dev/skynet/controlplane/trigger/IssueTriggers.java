@@ -424,7 +424,8 @@ class IssueTriggers implements IssueHandler {
                                 : launch.title(),
                             target.description(),
                             target.rule().workItemType(),
-                            externalRef)
+                            externalRef,
+                            repository.getId())
                         .getId());
     String key = workItems.get(workItemId).getKey();
     Optional<UUID> active = activeRun(workItemId);
