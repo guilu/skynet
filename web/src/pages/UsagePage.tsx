@@ -4,6 +4,7 @@ import { lazy, Suspense, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { api, type AgentUsage, type QuotaWindowKind, type RunUsage, type UsageWindow } from '../api'
 import { AttentionList } from '../components/AttentionList'
+import { DashboardMetrics, PeriodSelector } from '../components/DashboardMetrics'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { EmptyState } from '../components/list/DataTable'
 import { StatusBadge } from '../components/StatusBadge'
@@ -32,7 +33,8 @@ const ORDER = ['claude-code', 'codex', 'antigravity']
 const order = (p: string) => (ORDER.includes(p) ? ORDER.indexOf(p) : ORDER.length)
 
 /**
- * Uso de los CLIs (hito CU): las ventanas de 5 h y semanal de cada CLI del runner, con lo gastado
+ * Consumo (antes Uso de los CLIs, hito CU; FS-C le suma las métricas globales que estaban en el
+ * Dashboard: ejecuciones por estado, duración, tokens y coste del periodo, con su gráfico): las ventanas de 5 h y semanal de cada CLI del runner, con lo gastado
  * por Skynet y por fuera; la evolución de la ventana actual; y lo que cuesta cada agente y las
  * ejecuciones que más han gastado.
  */
@@ -88,7 +90,7 @@ export function UsagePage() {
     <div className="usage">
       <div className="usage-head">
         <div>
-          <h1>Uso de los CLIs</h1>
+          <h1>Consumo</h1>
           {windows.data && <p className="muted">{summaryLine(own, now)}</p>}
         </div>
         {windows.data && own.length > 0 && (
@@ -101,6 +103,7 @@ export function UsagePage() {
           />
         )}
         <div className="usage-actions">
+          <PeriodSelector />
           {runners.length > 1 ? (
             <label className="usage-runner">
               <Server size={16} strokeWidth={2.5} aria-hidden="true" />
@@ -141,6 +144,7 @@ export function UsagePage() {
       )}
       <ErrorMessage error={windows.error ?? refresh.error} />
       <AttentionList alerts={alerts} className="usage-section" />
+      <DashboardMetrics />
 
       <section className="usage-section" aria-labelledby="windows-title">
         <div className="section-head">
@@ -298,7 +302,7 @@ function Evolution({
 
 /** Lo que cuesta cada agente y las ejecuciones que más han gastado, en el periodo elegido. */
 function Costs({ runnerId }: { runnerId: string | undefined }) {
-  const [period, choose] = usePeriod()
+  const [period] = usePeriod()
   const agents = useQuery({
     queryKey: ['usage', 'agents', period, runnerId],
     queryFn: () => api.usageAgents(period, runnerId),
@@ -311,18 +315,7 @@ function Costs({ runnerId }: { runnerId: string | undefined }) {
     <section className="usage-section" aria-labelledby="costs-title">
       <div className="section-head">
         <h2 id="costs-title">Qué cuesta cada agente</h2>
-        <div className="segmented" role="group" aria-label="Periodo">
-          {PERIODS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              aria-pressed={p.id === period}
-              onClick={() => choose(p.id)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <span className="muted small">{PERIODS.find((p) => p.id === period)?.label}</span>
       </div>
       <div className="usage-two">
         <div className="card">

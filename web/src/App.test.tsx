@@ -4,7 +4,10 @@ import agentRunDetail from '../../fixtures/contracts/agent-run-detail.json'
 import conversation from '../../fixtures/contracts/conversation.json'
 import dashboardMetrics from '../../fixtures/contracts/dashboard-metrics.json'
 import dashboardSummary from '../../fixtures/contracts/dashboard-summary.json'
+import changes from '../../fixtures/contracts/changes.json'
+import projectOverview from '../../fixtures/contracts/project-overview.json'
 import runPage from '../../fixtures/contracts/run-page.json'
+import workSummaries from '../../fixtures/contracts/work-item-summaries.json'
 import runView from '../../fixtures/contracts/run-view.json'
 import providers from '../../fixtures/contracts/providers.json'
 import runners from '../../fixtures/contracts/runners.json'
@@ -34,6 +37,14 @@ class FakeEventSource {
 // Las vistas de ejemplo son las mismas que valida ContractIT en el backend.
 const runningRun = runPage.items[0]
 const agentId = runningRun.stages[0].agents[0].id
+const project = {
+  id: projectOverview.projectId,
+  key: 'DEMO',
+  name: 'Analizador de texto',
+  description: null,
+  createdAt: '2026-10-05T09:00:00Z',
+  archivedAt: null,
+}
 
 function stubApi(routes: Record<string, unknown>) {
   const fetch = vi.fn(
@@ -183,57 +194,91 @@ describe('App', () => {
     )
   })
 
-  it('el dashboard saluda y lista lo que necesita atención, enlazado', async () => {
+  it('Inicio saluda y lista lo que necesita intervención, con su contexto', async () => {
+    const stuck = {
+      ...workSummaries[0],
+      id: 'w-stuck',
+      key: 'WEB-7',
+      title: 'Pago con Bizum',
+      phase: 'STUCK',
+      attempts: 2,
+      costUsd: 1.92,
+    }
     stubApi({
       '/api/dashboard': dashboardSummary,
       '/api/runners': runners,
       '/api/workflow-runs?size=5': runPage,
+      '/api/projects': [project],
+      [`/api/projects/${project.id}/overview`]: projectOverview,
+      '/api/work-items': [...workSummaries, stuck],
+      '/api/results': changes,
     })
     renderAt('/', <App />)
     expect(await screen.findByRole('heading', { level: 1, name: /^Buen.*, admin$/ })).toBeVisible()
-    const attention = await screen.findByRole('region', { name: 'Necesita tu atención (4)' })
-    const stuck = dashboardSummary.unresponsiveAgents[0]
+    const attention = await screen.findByRole('region', { name: 'Necesita tu intervención (5)' })
+    // El trabajo atascado, con su proyecto, repositorio y lo gastado sin resultado.
+    expect(
+      within(attention).getByRole('link', {
+        name: /WEB-7 · Pago con Bizum: el último intento falló.*Analizador de texto › demo-repo · 2 intentos · 1,92 US\$ gastados sin resultado.*Ver intentos/,
+      }),
+    ).toHaveAttribute('href', '/work-items/w-stuck')
+    const agent = dashboardSummary.unresponsiveAgents[0]
     expect(within(attention).getByRole('link', { name: /TKM-1/ })).toHaveAttribute(
       'href',
-      `/runs/${stuck.workflowRunId}?agent=${stuck.agentRunId}`,
+      `/runs/${agent.workflowRunId}?agent=${agent.agentRunId}`,
     )
     expect(within(attention).getByRole('link', { name: /Runner «runner-02»/ })).toHaveAttribute(
       'href',
       '/runners',
     )
-    // Agentes de un proveedor que no tiene ningún runner en línea.
     expect(
       within(attention).getByRole('link', {
         name: /Antigravity CLI.*2 agentes esperan: ningún runner en línea tiene Antigravity CLI/,
       }),
     ).toHaveAttribute('href', '/runners')
-    // Una cuota por encima de su ritmo lleva a la página Uso.
     expect(
-      within(attention).getByRole('link', {
-        name: /Claude Code al 78 % de la semana.*Va por delante del ritmo \(55 %\).*Por encima del ritmo/,
-      }),
+      within(attention).getByRole('link', { name: /Claude Code al 78 % de la semana/ }),
     ).toHaveAttribute('href', '/usage')
     expect(
-      await screen.findByText('1 agente trabajando y 4 cosas que necesitan tu atención.'),
+      await screen.findByText(
+        /^1 agente trabaja en 1 proyecto · 5 cosas necesitan tu intervención/,
+      ),
     ).toBeInTheDocument()
-    // Las últimas ejecuciones, como en la lista, con el enlace a todas.
-    const recent = screen.getByRole('region', { name: 'Ejecuciones recientes' })
-    expect(await within(recent).findByRole('link', { name: /TKM-1/ })).toBeVisible()
-    expect(within(recent).getByRole('link', { name: 'Ver todas' })).toHaveAttribute('href', '/runs')
-    expect(screen.getByRole('link', { name: /Lanzar agente/ })).toHaveAttribute('href', '/projects')
-    // Los runners, en tarjetas con su estado.
-    const runnersSection = screen.getByRole('region', { name: 'Runners' })
+    // El proyecto, con sus repositorios y lo que espera revisión.
+    const card = await screen.findByRole('article', { name: 'Analizador de texto' })
     expect(
-      within(runnersSection).getByRole('link', {
-        name: /runner-01.*En línea.*Claude Code 2\.1\.288 · Codex/,
-      }),
+      within(card).getByRole('row', { name: /demo-repo main 2 en marcha 1 abierta 14,10 US\$/ }),
     ).toBeVisible()
     expect(
-      within(runnersSection).getByRole('link', { name: /runner-02.*Desconectado/ }),
+      within(card).getByText('2 intentos en marcha · 1 PR por revisar · 18,30 US$ en 30 días'),
     ).toBeVisible()
+    // Los pendientes, primero lo que te necesita.
+    const pending = screen.getByRole('region', { name: 'Trabajos pendientes' })
+    const rows = within(pending).getAllByRole('listitem')
+    expect(rows[0]).toHaveTextContent(/DEMO-4.*Te necesita.*3 intentos · 2,14 US\$/)
+    expect(rows[1]).toHaveTextContent(/WEB-7.*Atascado/)
+    expect(within(pending).getByRole('link', { name: /Ver los 2/ })).toHaveAttribute(
+      'href',
+      '/work',
+    )
+    fireEvent.click(within(pending).getByRole('button', { name: 'Atascado (1)' }))
+    expect(within(pending).getAllByRole('listitem')).toHaveLength(1)
+    // La actividad, contada como resultados.
+    const activity = screen.getByRole('region', { name: 'Actividad reciente' })
+    expect(
+      await within(activity).findByRole('link', { name: 'DEMO-6 abrió la PR #44 en demo-repo' }),
+    ).toHaveAttribute('href', `/work-items/${changes[0].workItemId}`)
+    expect(screen.getByRole('link', { name: 'Administración › Consumo' })).toHaveAttribute(
+      'href',
+      '/usage',
+    )
+    // «Nuevo trabajo» pide el proyecto.
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo trabajo' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Nuevo trabajo' })
+    expect(within(sheet).getByRole('combobox', { name: 'Proyecto' })).toHaveValue(project.id)
   })
 
-  it('el dashboard sin avisos no muestra la sección de atención', async () => {
+  it('Inicio sin avisos no muestra la sección de intervención', async () => {
     stubApi({
       '/api/dashboard': {
         activeRuns: [],
@@ -246,22 +291,55 @@ describe('App', () => {
         generatedAt: '2026-10-05T09:10:00Z',
       },
       '/api/runners': [],
+      '/api/projects': [],
+      '/api/work-items': [],
     })
     renderAt('/', <App />)
-    expect(await screen.findByText('0 agentes trabajando. Todo en orden.')).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: /Necesita tu atención/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: /Ejecuciones activas/ })).not.toBeInTheDocument()
-    expect(screen.getByText('Aún no hay runners registrados.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Ningún agente trabajando · nada necesita tu intervención'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: /Necesita tu intervención/ }),
+    ).not.toBeInTheDocument()
+    expect(await screen.findByText(/Aún no hay proyectos/)).toBeInTheDocument()
+    expect(
+      screen.getByText('Nada pendiente: todos los trabajos están entregados.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Nuevo trabajo' })).toHaveAttribute('href', '/projects')
   })
 
-  it('las métricas del periodo enlazan a la lista filtrada y cambian de periodo', async () => {
+  it('Trabajos filtra por fase y proyecto desde la URL', async () => {
+    const fetch = stubApi({
+      '/api/projects': [project],
+      [`/api/work-items?phase=STUCK&projectId=${project.id}`]: [],
+      '/api/work-items?phase=DONE': workSummaries,
+    })
+    renderAt(`/work?phase=STUCK&project=${project.id}`, <App />)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Trabajos' })).toBeVisible()
+    expect(await screen.findByText('Ningún trabajo con estos filtros.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Atascado' })).toHaveAttribute('aria-pressed', 'true')
+    const nav = screen.getByRole('navigation', { name: 'Navegación principal' })
+    expect(within(nav).getByRole('link', { name: 'Trabajos' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    fireEvent.change(screen.getByRole('combobox', { name: 'Proyecto' }), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Entregado' }))
+    expect(await screen.findByRole('link', { name: /DEMO-4/ })).toHaveAttribute(
+      'href',
+      `/work-items/${workSummaries[0].id}`,
+    )
+    expect(fetch).toHaveBeenCalledWith('/api/work-items?phase=DONE', expect.anything())
+  })
+
+  it('Consumo lleva las métricas del periodo, enlazadas a la lista filtrada', async () => {
     const tz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)
     const fetch = stubApi({
       '/api/dashboard': dashboardSummary,
       [`/api/dashboard/metrics?period=7d&tz=${tz}`]: { ...dashboardMetrics, bucket: 'day' },
       [`/api/dashboard/metrics?period=24h&tz=${tz}`]: dashboardMetrics,
     })
-    renderAt('/', <App />)
+    renderAt('/usage', <App />)
     const metrics = await screen.findByRole('region', { name: 'Resumen (últimos 7 días)' })
     await within(metrics).findByText('Fallidas', { selector: 'dt' })
     expect(

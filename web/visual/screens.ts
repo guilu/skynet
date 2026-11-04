@@ -49,7 +49,7 @@ export const PREPARERS: Record<string, Preparer> = {
     await page.goto('/')
     await expect(page.getByRole('button', { name: 'Entrar' })).toBeVisible()
   },
-  dashboard: (page) => goto(page, '/', /Necesita tu atención/),
+  dashboard: (page) => goto(page, '/', /Necesita tu intervención/),
   usage: (page) => goto(page, '/usage'),
   activity: (page) => goto(page, '/activity'),
   runners: (page) => goto(page, '/runners', 'runner-demo'),
@@ -125,18 +125,18 @@ export const PREPARERS: Record<string, Preparer> = {
   'settings-icons': (page) => goto(page, '/settings?tab=icons'),
   'settings-companion': (page) => goto(page, '/settings?tab=companion'),
   'command-palette': async (page) => {
-    await goto(page, '/', /Necesita tu atención/)
+    await goto(page, '/', /Necesita tu intervención/)
     await page.getByRole('button', { name: 'Buscar o ejecutar una orden' }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
   },
   'theme-menu': async (page) => {
-    await goto(page, '/', /Necesita tu atención/)
+    await goto(page, '/', /Necesita tu intervención/)
     await page.getByRole('button', { name: /^Tema:/ }).click()
     await expect(page.getByRole('menu')).toBeVisible()
     await mouseAway(page)
   },
   'companion-menu': async (page) => {
-    await goto(page, '/', /Necesita tu atención/)
+    await goto(page, '/', /Necesita tu intervención/)
     await page.locator('.companion-btn').click()
     await expect(page.getByRole('menu')).toBeVisible()
     await mouseAway(page)

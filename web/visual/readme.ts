@@ -92,7 +92,7 @@ export function galleryReadme(inv: Inventory): string {
     '',
     '- **Proyecto: resumen**: el proyecto no tiene esa pestaña; la cabecera y la pestaña Trabajos hacen de resumen (`project-work`).',
     '- **Ejecución: conversación**: es la vista por defecto del panel central y sale en `run-completed`.',
-    '- **Dashboard con actividad** y **con «Necesita tu atención»**: los dos estados caben en la misma captura (`dashboard`).',
+    '- **Inicio con actividad** y **con «Necesita tu intervención»**: los dos estados caben en la misma captura (`dashboard`).',
     '',
     '## Regenerar',
     '',

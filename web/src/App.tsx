@@ -7,7 +7,8 @@ import { ActivityPage } from './pages/ActivityPage'
 import { AgentRedirectPage } from './pages/AgentRedirectPage'
 import { ApprovalPage } from './pages/ApprovalPage'
 import { ApprovalsPage } from './pages/ApprovalsPage'
-import { DashboardPage } from './pages/DashboardPage'
+import { HomePage } from './pages/HomePage'
+import { WorkPage } from './pages/WorkPage'
 import { ProjectPage } from './pages/ProjectPage'
 import { ProjectsPage } from './pages/ProjectsPage'
 import { RunnersPage } from './pages/RunnersPage'
@@ -31,7 +32,8 @@ export default function App() {
       <AuthGate>
         <AppShell>
           <Routes>
-            <Route path="/" element={<DashboardPage />} />
+            <Route path="/" element={<HomePage />} />
+            <Route path="/work" element={<WorkPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/projects/:projectId" element={<ProjectPage />} />
             <Route path="/work-items/:workItemId" element={<WorkItemPage />} />
