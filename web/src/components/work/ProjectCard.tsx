@@ -42,7 +42,7 @@ export function ProjectCard({ project }: { project: Project }) {
       {overview.isPending && <Skeleton className="proj-card-skeleton" />}
       {o && o.repositories.length === 0 && (
         <p className="muted small proj-card-empty">
-          Sin repositorios. <Link to={`/projects/${project.id}?tab=repos`}>Registra uno</Link> para
+          Sin repositorios. <Link to={`/projects/${project.id}?tab=config`}>Registra uno</Link> para
           lanzar trabajos.
         </p>
       )}

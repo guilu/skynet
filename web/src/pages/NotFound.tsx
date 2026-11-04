@@ -9,7 +9,7 @@ export function NotFound() {
       <EmptyState companion="thinking" title="Aquí no hay nada.">
         <p>
           Puede que el enlace esté mal copiado o que lo que buscabas ya no exista.{' '}
-          <Link to="/">Volver al dashboard</Link>
+          <Link to="/">Volver al Inicio</Link>
         </p>
       </EmptyState>
     </>

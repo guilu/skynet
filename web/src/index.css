@@ -8581,4 +8581,310 @@
       justify-self: start;
     }
   }
+
+  /* ---------- Proyecto como centro de operaciones (FS-D) ---------- */
+  .proj-kpis {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    margin-top: var(--space-6);
+  }
+
+  .proj-kpis .kpi dt {
+    grid-area: label;
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
+  .proj-kpis .kpi dd a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .proj-kpis .kpi dd a:hover {
+    color: var(--primary-ink);
+    text-decoration: underline;
+  }
+
+  .project-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+    gap: var(--space-6);
+    align-items: start;
+  }
+
+  .project-summary-main .section-head {
+    margin-top: var(--space-4);
+  }
+
+  .project-summary-side {
+    display: grid;
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+  }
+
+  .side-card {
+    margin-top: 0;
+  }
+
+  .side-card h2 {
+    margin: 16px 0 var(--space-3);
+  }
+
+  .side-card .section-head {
+    margin-top: 0;
+  }
+
+  .side-list,
+  .cost-bars,
+  .repo-overview,
+  .phase-col ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .side-list > li {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: var(--space-3);
+    align-items: start;
+    padding: 10px 0;
+  }
+
+  .side-list > li + li,
+  .cost-bars > li + li {
+    border-top: 1px solid var(--border);
+  }
+
+  .side-list small {
+    display: block;
+    color: var(--muted);
+  }
+
+  .side-icon {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    background: var(--idle-soft);
+    color: var(--idle-ink);
+  }
+
+  .side-icon.tone-warn {
+    background: var(--warn-soft);
+    color: var(--warn-ink);
+  }
+
+  .side-icon.tone-bad {
+    background: var(--bad-soft);
+    color: var(--bad-ink);
+  }
+
+  .side-icon.tone-ok {
+    background: var(--ok-soft);
+    color: var(--ok-ink);
+  }
+
+  .side-icon.tone-review {
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+
+  .cost-bars > li {
+    display: grid;
+    gap: 8px;
+    padding: 10px 0;
+  }
+
+  .cost-bars-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .cost-bars-value {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .cost-bar {
+    display: block;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--idle-soft);
+    overflow: hidden;
+  }
+
+  .cost-bar i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--primary);
+  }
+
+  .repo-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: var(--space-3);
+  }
+
+  .repo-overview-card {
+    margin: 0;
+    padding: 14px 18px;
+  }
+
+  .repo-overview-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .repo-overview-facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    gap: var(--space-2);
+    margin: var(--space-3) 0 0;
+  }
+
+  .repo-overview-facts div {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+
+  .repo-overview-facts dt {
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
+  .repo-overview-facts dd {
+    margin: 0;
+    white-space: nowrap;
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .phase-board {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-3);
+    align-items: start;
+  }
+
+  .phase-col {
+    padding: 10px;
+    border-radius: var(--r-lg);
+    background: var(--surface-2);
+  }
+
+  .phase-col summary {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 6px 10px;
+    font-weight: 600;
+    list-style: none;
+    cursor: pointer;
+  }
+
+  .phase-col summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .phase-col-count {
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .phase-col-empty {
+    margin: 0;
+    padding: 0 6px 6px;
+  }
+
+  .phase-col ul {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .work-card {
+    display: grid;
+    gap: 8px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--surface);
+  }
+
+  .work-card small {
+    font-size: 0.8125rem;
+  }
+
+  @media (max-width: 1200px) {
+    .project-summary {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .phase-board {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  /* Móvil: cifras deslizables, pestañas fijas y tablero en secciones plegables. */
+  @media (max-width: 720px) {
+    .proj-kpis {
+      display: flex;
+      overflow-x: auto;
+      margin-inline: -16px;
+      padding: 0 16px 4px;
+      scrollbar-width: none;
+    }
+
+    .proj-kpis .kpi {
+      flex: 0 0 auto;
+      grid-template-areas:
+        'value'
+        'label';
+      grid-template-columns: auto;
+      min-width: 0;
+      padding: 10px 14px;
+    }
+
+    .proj-kpis .kpi-icon {
+      display: none;
+    }
+
+    .project-tabs {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      margin-inline: -16px;
+      padding: 4px 16px;
+      background: var(--bg);
+    }
+
+    .phase-board {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .phase-col summary::after {
+      content: '›';
+      margin-left: var(--space-2);
+      color: var(--muted);
+      transition: transform 120ms;
+    }
+
+    .phase-col[open] summary::after {
+      transform: rotate(90deg);
+    }
+
+    .phase-col summary .phase-col-count {
+      margin-left: auto;
+    }
+
+    .repo-overview-facts {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
 }

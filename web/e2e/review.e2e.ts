@@ -136,7 +136,9 @@ test('las páginas principales pasan axe', async ({ page }) => {
     .click()
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await expectAccessible(page, 'proyecto')
-  await page.getByRole('tab', { name: /Repositorios/ }).click()
+  // FS-D: el proyecto abre por el Resumen; los repositorios están en Configuración.
+  await expect(page.getByRole('tab', { name: /^Resumen/, selected: true })).toBeVisible()
+  await page.goto(`${page.url().split('?')[0]}?tab=config`)
   await expect(page.getByRole('button', { name: /^Editar política de / }).first()).toBeVisible()
   await expectAccessible(page, 'repositorios del proyecto')
   await page
