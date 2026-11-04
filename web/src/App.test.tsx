@@ -162,25 +162,21 @@ describe('App', () => {
     stubApi({ '/api/runners': runners, '/api/runners?archived=all': runners })
     renderAt('/runners', <App />)
     const nav = await screen.findByRole('navigation', { name: 'Navegación principal' })
-    for (const name of [
-      'Dashboard',
-      'Proyectos',
-      'Workflows',
-      'Ejecuciones',
-      'Runners',
-      'Uso',
-      'Actividad',
-    ]) {
-      expect(within(nav).getByRole('link', { name })).toBeInTheDocument()
+    for (const [area, links] of [
+      ['Espacio de trabajo', ['Inicio', 'Proyectos', 'Actividad']],
+      ['Fábrica', ['Ejecuciones', 'Workflows', 'Aprobaciones']],
+      ['Administración', ['Runners', 'Consumo', 'Ajustes']],
+    ] as const) {
+      const group = within(nav).getByRole('group', { name: area })
+      for (const name of links) {
+        expect(within(group).getByRole('link', { name })).toBeInTheDocument()
+      }
     }
     expect(within(nav).getByRole('link', { name: 'Runners' })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    expect(screen.getByRole('link', { name: 'Skynet: ir al Dashboard' })).toHaveAttribute(
-      'href',
-      '/',
-    )
+    expect(screen.getByRole('link', { name: 'Skynet: ir al Inicio' })).toHaveAttribute('href', '/')
     expect(screen.getByRole('link', { name: 'Saltar al contenido' })).toHaveAttribute(
       'href',
       '#main',
@@ -789,6 +785,40 @@ describe('App', () => {
       '/projects/p1',
     )
     expect(within(crumbs).getByText('TKM-7')).toHaveAttribute('aria-current', 'page')
+    expect(within(crumbs).getByText('Espacio de trabajo')).toBeInTheDocument()
+    // En el móvil solo se ve «‹ padre».
+    expect(within(crumbs).getByRole('link', { name: 'Volver a TokenMeter' })).toHaveAttribute(
+      'href',
+      '/projects/p1',
+    )
+  })
+
+  it('las migas de una sección empiezan por su área', async () => {
+    stubApi({ '/api/runners': runners, '/api/runners?archived=all': runners })
+    renderAt('/runners', <App />)
+    const crumbs = await screen.findByRole('navigation', { name: 'Migas' })
+    expect(within(crumbs).getByText('Administración')).toBeInTheDocument()
+    expect(within(crumbs).getByText('Runners')).toHaveAttribute('aria-current', 'page')
+    expect(within(crumbs).queryByRole('link', { name: /^Volver a/ })).toBeNull()
+  })
+
+  it('el móvil lleva Inicio, Proyectos, Fábrica, Aprobar y Más, con todo agrupado en Más', async () => {
+    stubApi({ '/api/runners': runners, '/api/runners?archived=all': runners })
+    renderAt('/runners', <App />)
+    const mobile = await screen.findByRole('navigation', { name: 'Navegación móvil' })
+    expect(within(mobile).getByRole('link', { name: 'Fábrica' })).toHaveAttribute('href', '/runs')
+    expect(within(mobile).getByRole('link', { name: 'Aprobar' })).toHaveAttribute(
+      'href',
+      '/approvals',
+    )
+    fireEvent.click(within(mobile).getByRole('button', { name: 'Más' }))
+    const all = await screen.findByRole('navigation', { name: 'Todas las secciones' })
+    const admin = within(all).getByRole('group', { name: 'Administración' })
+    expect(within(admin).getByRole('link', { name: 'Runners' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(all).getByRole('link', { name: 'Consumo' })).toHaveAttribute('href', '/usage')
   })
 
   it('⌘K busca un trabajo por su clave y lo abre', async () => {

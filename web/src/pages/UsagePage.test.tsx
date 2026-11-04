@@ -49,7 +49,7 @@ describe('página Uso', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Uso de los CLIs' })).toBeVisible()
     expect(
       within(screen.getByRole('navigation', { name: 'Navegación principal' })).getByRole('link', {
-        name: 'Uso',
+        name: 'Consumo',
       }),
     ).toHaveAttribute('aria-current', 'page')
     // La ventana más gastada del runner, también la de agy desde que lanza agentes (AR-B).

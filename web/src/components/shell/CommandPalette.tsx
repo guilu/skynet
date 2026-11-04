@@ -7,7 +7,7 @@ import { api } from '../../api'
 import { formatDateTime } from '../../format'
 import type { ThemeChoice } from '../../theme'
 import { StatusBadge } from '../StatusBadge'
-import { NAV, THEMES } from './nav'
+import { NAV_AREAS, THEMES } from './nav'
 import { Icon } from '../icons/Icon'
 
 /**
@@ -67,14 +67,20 @@ export function CommandPalette({
               <Command.Empty className="palette-empty">
                 Nada coincide con la búsqueda.
               </Command.Empty>
-              <Command.Group heading="Ir a">
-                {NAV.map((n) => (
-                  <Command.Item key={n.to} value={`ir a ${n.label}`} onSelect={() => go(n.to)}>
-                    <Icon name={n.icon} size={20} strokeWidth={2.25} />
-                    {n.label}
-                  </Command.Item>
-                ))}
-              </Command.Group>
+              {NAV_AREAS.map((area) => (
+                <Command.Group key={area.id} heading={`Ir a · ${area.label}`}>
+                  {area.items.map((n) => (
+                    <Command.Item
+                      key={n.to}
+                      value={`ir a ${n.label} ${area.label}`}
+                      onSelect={() => go(n.to)}
+                    >
+                      <Icon name={n.icon} size={20} strokeWidth={2.25} />
+                      {n.label}
+                    </Command.Item>
+                  ))}
+                </Command.Group>
+              ))}
               {!!projects.data?.length && (
                 <Command.Group heading="Proyectos">
                   {projects.data.map((p) => (
