@@ -123,7 +123,9 @@ Tres palabras que la interfaz no mezcla:
 
 Las fases de un trabajo, con su nombre en la web (`components/work/phase.ts`): Te necesita, Atascado, En marcha, PR en revisión, Por empezar y Entregado. **Trabajos** (`/work`) los lista todos con filtro por fase, proyecto y repositorio en la URL. Las métricas globales del antiguo Dashboard (ejecuciones por estado, duración, tokens, coste y el gráfico) están en **Consumo**, y los runners en **Runners**.
 
-En el móvil, los proyectos de Inicio van en un carrusel, los chips de fase se deslizan, la tabla de repositorios pierde la columna de PRs y la actividad se queda en tres.
+**La página del proyecto** (FS-D) es su centro de operaciones. Arriba van cinco cifras: trabajos abiertos, ejecuciones en curso, PRs, aprobaciones pendientes y coste a 30 días. Debajo, las pestañas Resumen, Trabajos, Ejecuciones, Cambios, Workflows, Memoria y Configuración (`?tab=repos` sigue abriendo Configuración). El Resumen pone a la izquierda los repositorios y el tablero de trabajos por fase, y a la derecha lo que necesita intervención, los cambios recientes y el coste por trabajo (`components/project/ProjectSummary.tsx`).
+
+En el móvil, los proyectos de Inicio van en un carrusel, los chips de fase se deslizan, la tabla de repositorios pierde la columna de PRs y la actividad se queda en tres. En el proyecto, las cifras se deslizan, las pestañas quedan fijas arriba y el tablero se pliega por fase.
 
 ## 8. Capturas
 

@@ -44,7 +44,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     await repoSheet.getByLabel('Comando de verificación (opcional)').fill('sh check.sh')
     await repoSheet.getByRole('button', { name: 'Registrar repositorio' }).click()
     await expect(repoSheet).toBeHidden()
-    await expect(page.getByRole('tab', { name: /Repositorios/ })).toHaveAttribute(
+    await expect(page.getByRole('tab', { name: /^Configuración/ })).toHaveAttribute(
       'aria-selected',
       'true',
     )

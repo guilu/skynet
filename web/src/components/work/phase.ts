@@ -1,4 +1,4 @@
-import type { WorkItemSummary, WorkPhase } from '../../api'
+import type { ChangeView, WorkItemSummary, WorkPhase } from '../../api'
 import type { StatusTone } from '../../format'
 
 /**
@@ -35,4 +35,11 @@ export function attemptsLine(w: Pick<WorkItemSummary, 'attempts' | 'costUsd'>): 
   if (w.attempts === 0) return 'sin empezar'
   const n = `${w.attempts} ${w.attempts === 1 ? 'intento' : 'intentos'}`
   return w.costUsd == null ? n : `${n} · ${formatUsd(w.costUsd)}`
+}
+
+/** Estado de una PR de la fábrica, en minúscula para ir dentro de una frase. */
+export const CHANGE_STATUS: Record<ChangeView['status'], string> = {
+  OPEN: 'abierta',
+  MERGED: 'fusionada',
+  CLOSED: 'cerrada sin fusionar',
 }

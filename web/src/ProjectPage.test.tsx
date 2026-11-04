@@ -1,5 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import changes from '../../fixtures/contracts/changes.json'
+import projectOverview from '../../fixtures/contracts/project-overview.json'
 import type { WorkItem } from './api'
 import App from './App'
 import { mockFetch, renderAt } from './test/render'
@@ -36,9 +38,9 @@ function stubApi(routes: Record<string, unknown>) {
 describe('Página del proyecto', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('enseña los trabajos y, en la otra pestaña, los repositorios', async () => {
+  it('enseña los trabajos y, en Configuración, los repositorios', async () => {
     stubApi({ '/api/projects/p1/work-items': [workItem] })
-    renderAt('/projects/p1', <App />)
+    renderAt('/projects/p1?tab=work', <App />)
 
     const table = await screen.findByRole('table', { name: 'Trabajos' })
     expect(within(table).getByRole('link', { name: 'TKM-1 Arreglar la suma' })).toHaveAttribute(
@@ -47,8 +49,52 @@ describe('Página del proyecto', () => {
     )
     expect(within(table).getByText('Bug')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('tab', { name: /Repositorios/ }))
-    expect(screen.getByRole('tab', { name: /Repositorios/ })).toHaveAttribute(
+    fireEvent.click(screen.getByRole('tab', { name: /Configuración/ }))
+    expect(screen.getByRole('tab', { name: /Configuración/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(await screen.findByText('Ningún repositorio registrado.')).toBeInTheDocument()
+  })
+
+  it('abre por el Resumen: cifras, repositorios, tablero por fase, cambios y coste', async () => {
+    stubApi({
+      '/api/projects/p1/work-items': [workItem],
+      '/api/projects/p1/overview': { ...projectOverview, projectId: 'p1' },
+      '/api/projects/p1/changes': changes,
+    })
+    renderAt('/projects/p1', <App />)
+    expect(await screen.findByRole('tab', { name: /Resumen/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    const kpis = await screen.findByLabelText('Cifras del proyecto')
+    expect(within(kpis).getByText('acumulado en 30 días').nextElementSibling).toHaveTextContent(
+      '18,30 US$',
+    )
+    expect(within(kpis).getByRole('link', { name: '1' })).toHaveAttribute(
+      'href',
+      '/projects/p1?tab=changes',
+    )
+    const repos = screen.getByRole('region', { name: 'Repositorios' })
+    expect(within(repos).getByText('demo-repo')).toBeVisible()
+    const board = screen.getByRole('region', { name: 'Trabajos' })
+    const needs = within(board).getByText('Te necesita').closest('details')!
+    expect(within(needs).getByRole('link', { name: /DEMO-4/ })).toHaveAttribute(
+      'href',
+      `/work-items/${projectOverview.workItems[0].id}`,
+    )
+    expect(needs).toHaveTextContent('PR #44 abierta · 3 intentos · 2,14 US$')
+    const recent = await screen.findByRole('region', { name: 'Cambios' })
+    expect(within(recent).getByRole('link', { name: /PR #44/ })).toBeVisible()
+    const cost = screen.getByRole('region', { name: 'Coste por trabajo' })
+    expect(cost).toHaveTextContent('2,14 US$')
+  })
+
+  it('el enlace antiguo ?tab=repos abre Configuración', async () => {
+    stubApi({ '/api/projects/p1/work-items': [] })
+    renderAt('/projects/p1?tab=repos', <App />)
+    expect(await screen.findByRole('tab', { name: /Configuración/ })).toHaveAttribute(
       'aria-selected',
       'true',
     )
@@ -112,6 +158,6 @@ describe('Carga y rutas desconocidas', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Página no encontrada' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Volver al dashboard' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: 'Volver al Inicio' })).toHaveAttribute('href', '/')
   })
 })

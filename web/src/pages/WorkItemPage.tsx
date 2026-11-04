@@ -174,7 +174,7 @@ export function WorkItemPage() {
         {repos.data?.length === 0 ? (
           <p className="muted">
             Registra antes un repositorio en el{' '}
-            <Link to={`/projects/${projectId}?tab=repos`}>proyecto</Link>.
+            <Link to={`/projects/${projectId}?tab=config`}>proyecto</Link>.
           </p>
         ) : (
           <LaunchForm

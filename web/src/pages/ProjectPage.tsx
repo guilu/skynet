@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import {
   FolderGit2,
   GitPullRequest,
@@ -9,8 +9,19 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
-import { api, WORK_ITEM_TYPES, type Repository, type WorkItem } from '../api'
+import { api, WORK_ITEM_TYPES, type ProjectOverview, type Repository, type WorkItem } from '../api'
 import { NewWorkItemForm } from '../components/work/NewWorkItemForm'
+import { usePendingApprovals } from '../components/approval/usePendingApprovals'
+import {
+  CostByWork,
+  PhaseBoard,
+  ProjectAttention,
+  ProjectKpis,
+  RecentChanges,
+  RepositoryCards,
+} from '../components/project/ProjectSummary'
+import { ProjectChanges, ProjectRuns, ProjectWorkflows } from '../components/project/ProjectTabs'
+import { useNow } from '../useNow'
 import { ArchivedBanner, ArchiveMenu, ArchivedToggle } from '../components/archive/Archive'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { AccessPill } from '../components/github/GitHubSettings'
@@ -34,9 +45,9 @@ import { CompanionPeek } from '../components/companion/CompanionPeek'
 import { useCompanion } from '../components/companion/context'
 import { groupExpression } from '../components/companion/peek'
 
-type ProjectTab = 'work' | 'repos' | 'memory'
+type ProjectTab = 'summary' | 'work' | 'runs' | 'changes' | 'workflows' | 'memory' | 'config'
 
-const TABS: ProjectTab[] = ['work', 'repos', 'memory']
+const TABS: ProjectTab[] = ['summary', 'work', 'runs', 'changes', 'workflows', 'memory', 'config']
 type SheetKind = 'work-item' | 'repository'
 
 const TYPE_LABEL = Object.fromEntries(WORK_ITEM_TYPES.map((t) => [t.value, t.label]))
@@ -79,7 +90,9 @@ const WORK_COLUMNS: Column<WorkItem>[] = [
 export function ProjectPage() {
   const { projectId = '' } = useParams()
   const [params, setParams] = useSearchParams()
-  const tab = TABS.find((t) => t === params.get('tab')) ?? 'work'
+  // `?tab=repos` era la pestaña Repositorios; ahora es Configuración (FS-D).
+  const asked = params.get('tab') === 'repos' ? 'config' : params.get('tab')
+  const tab = TABS.find((t) => t === asked) ?? 'summary'
   const entryId = tab === 'memory' ? params.get('entry') : null
   const showArchived = params.get('archived') === 'true'
   const navigate = useNavigate()
@@ -97,10 +110,15 @@ export function ProjectPage() {
     queryKey: ['repositories', projectId, filter],
     queryFn: () => api.repositories(projectId, filter),
   })
+  const overview = useQuery({
+    queryKey: ['project', projectId, 'overview'],
+    queryFn: () => api.projectOverview(projectId),
+    refetchInterval: 15_000,
+  })
   const setView = (next: { tab?: ProjectTab; archived?: boolean; entry?: string | null }) => {
     const p = new URLSearchParams()
     const nextTab = next.tab ?? tab
-    if (nextTab !== 'work') p.set('tab', nextTab)
+    if (nextTab !== 'summary') p.set('tab', nextTab)
     if (next.archived ?? showArchived) p.set('archived', 'true')
     const entry = next.entry === undefined ? entryId : next.entry
     if (nextTab === 'memory' && entry) p.set('entry', entry)
@@ -151,25 +169,42 @@ export function ProjectPage() {
         />
       )}
 
-      <TabList
-        label="Secciones del proyecto"
-        tabs={[
-          { id: 'work', label: 'Trabajos', icon: 'work-items', count: items.data?.length },
-          { id: 'repos', label: 'Repositorios', icon: 'repo', count: repos.data?.length },
-          { id: 'memory', label: 'Memoria', icon: 'memory' },
-        ]}
-        selected={tab}
-        onSelect={selectTab}
-        idPrefix="project-tab"
-        panelId="project-panel"
-      />
+      {overview.data && <ProjectKpis overview={overview.data} />}
+
+      <div className="project-tabs">
+        <TabList
+          label="Secciones del proyecto"
+          tabs={[
+            { id: 'summary', label: 'Resumen', icon: 'dashboard' },
+            { id: 'work', label: 'Trabajos', icon: 'work-items', count: items.data?.length },
+            { id: 'runs', label: 'Ejecuciones', icon: 'runs' },
+            { id: 'changes', label: 'Cambios', icon: 'branch' },
+            { id: 'workflows', label: 'Workflows', icon: 'workflows' },
+            { id: 'memory', label: 'Memoria', icon: 'memory' },
+            { id: 'config', label: 'Configuración', icon: 'settings', count: repos.data?.length },
+          ]}
+          selected={tab}
+          onSelect={selectTab}
+          idPrefix="project-tab"
+          panelId="project-panel"
+          overflowMenu
+        />
+      </div>
       <TabPanel id="project-panel" labelledBy={`project-tab-${tab}`} className="tab-body">
-        {tab !== 'memory' && (
+        {(tab === 'work' || tab === 'config') && (
           <ListToolbar>
             <ArchivedToggle on={showArchived} onChange={(on) => setView({ archived: on })} />
           </ListToolbar>
         )}
-        {tab === 'memory' ? (
+        {tab === 'summary' ? (
+          <SummaryTab projectId={projectId} overview={overview} />
+        ) : tab === 'runs' ? (
+          <ProjectRuns projectId={projectId} />
+        ) : tab === 'changes' ? (
+          <ProjectChanges projectId={projectId} />
+        ) : tab === 'workflows' ? (
+          <ProjectWorkflows projectId={projectId} />
+        ) : tab === 'memory' ? (
           <ProjectMemory
             projectId={projectId}
             repositories={repos.data ?? []}
@@ -262,7 +297,7 @@ export function ProjectPage() {
           projectId={projectId}
           onDone={() => {
             closeSheet()
-            selectTab('repos')
+            selectTab('config')
           }}
         />
       </Sheet>
@@ -474,6 +509,62 @@ function GitHubSection({ repository: r }: { repository: Repository }) {
         </p>
       )}
     </section>
+  )
+}
+
+/**
+ * Resumen del proyecto (FS-D): a la izquierda, sus repositorios y el tablero de trabajos por fase;
+ * a la derecha, lo que necesita intervención, los cambios recientes y el coste por trabajo.
+ */
+function SummaryTab({
+  projectId,
+  overview,
+}: {
+  projectId: string
+  overview: UseQueryResult<ProjectOverview>
+}) {
+  const now = useNow(true, 30_000)
+  const approvals = usePendingApprovals()
+  const changes = useQuery({
+    queryKey: ['project', projectId, 'changes'],
+    queryFn: () => api.projectChanges(projectId),
+    refetchInterval: 30_000,
+  })
+  const o = overview.data
+  const mine = (approvals.data ?? []).filter((a) => a.origin.project.id === projectId)
+  return (
+    <>
+      <ErrorMessage error={overview.error} />
+      {overview.isPending && <CardsSkeleton label="el resumen del proyecto" />}
+      {o && (
+        <div className="project-summary">
+          <div className="project-summary-main">
+            <section aria-labelledby="summary-repos-title">
+              <div className="section-head">
+                <h2 id="summary-repos-title">Repositorios</h2>
+                <span className="muted small">dónde trabajan los agentes</span>
+              </div>
+              <RepositoryCards repositories={o.repositories} />
+            </section>
+            <section aria-labelledby="summary-board-title">
+              <div className="section-head">
+                <h2 id="summary-board-title">Trabajos</h2>
+                <span className="muted small">
+                  por fase, con su repositorio, su workflow y lo que llevan gastado
+                </span>
+              </div>
+              <PhaseBoard items={o.workItems} />
+            </section>
+          </div>
+          <aside className="project-summary-side" aria-label="Lo último del proyecto">
+            <ProjectAttention approvals={mine} items={o.workItems} now={now} />
+            <ErrorMessage error={changes.error} />
+            {changes.data && <RecentChanges changes={changes.data} now={now} />}
+            <CostByWork items={o.workItems} />
+          </aside>
+        </div>
+      )}
+    </>
   )
 }
 
