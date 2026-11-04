@@ -31,6 +31,9 @@ import triggerRules from '../../fixtures/contracts/trigger-rules.json'
 import triggerLaunches from '../../fixtures/contracts/trigger-launches.json'
 import runQueue from '../../fixtures/contracts/run-queue.json'
 import runQueuePosition from '../../fixtures/contracts/run-queue-position.json'
+import projectOverview from '../../fixtures/contracts/project-overview.json'
+import workItemSummaries from '../../fixtures/contracts/work-item-summaries.json'
+import changes from '../../fixtures/contracts/changes.json'
 import type {
   TriggerSettings,
   TriggerRule,
@@ -96,6 +99,11 @@ import type {
   WorkflowSummary,
   WorkflowView,
   Workspace,
+  ChangeView,
+  ProjectOverview,
+  PullRequestRef,
+  RepositoryOverview,
+  WorkItemSummary,
 } from './api'
 
 // Record<keyof T, true> obliga a listar todas las claves de T y solo esas.
@@ -302,6 +310,73 @@ const STAGE_POLICY: Keys<StagePolicy> = {
   provider: true,
   unsupported: true,
 }
+const WORK_ITEM_SUMMARY: Keys<WorkItemSummary> = {
+  id: true,
+  projectId: true,
+  projectKey: true,
+  projectName: true,
+  key: true,
+  title: true,
+  type: true,
+  status: true,
+  repositoryId: true,
+  repositoryName: true,
+  phase: true,
+  attempts: true,
+  costUsd: true,
+  lastRunId: true,
+  lastRunStatus: true,
+  workflowKey: true,
+  pullRequest: true,
+  createdAt: true,
+  lastActivityAt: true,
+}
+
+const PULL_REQUEST_REF: Keys<PullRequestRef> = { number: true, url: true, status: true }
+
+const PROJECT_OVERVIEW: Keys<ProjectOverview> = {
+  projectId: true,
+  since: true,
+  openWorkItems: true,
+  activeRuns: true,
+  openPullRequests: true,
+  mergedPullRequests: true,
+  pendingApprovals: true,
+  costUsd: true,
+  repositories: true,
+  workItems: true,
+}
+
+const REPOSITORY_OVERVIEW: Keys<RepositoryOverview> = {
+  id: true,
+  name: true,
+  defaultBranch: true,
+  openWorkItems: true,
+  activeRuns: true,
+  openPullRequests: true,
+  costUsd: true,
+}
+
+const CHANGE: Keys<ChangeView> = {
+  id: true,
+  number: true,
+  url: true,
+  title: true,
+  status: true,
+  branch: true,
+  repositoryId: true,
+  repositoryName: true,
+  projectId: true,
+  projectKey: true,
+  projectName: true,
+  workItemId: true,
+  workItemKey: true,
+  workItemTitle: true,
+  workflowRunId: true,
+  createdAt: true,
+  updatedAt: true,
+}
+
 const RUN_PAGE: Keys<RunPage> = { items: true, page: true, size: true, total: true }
 const PROMPT: Keys<Prompt> = { id: true, role: true, content: true, sha256: true, createdAt: true }
 const AGENT_RUN_DETAIL: Keys<AgentRunDetail> = { agent: true, workflowRunId: true, prompts: true }
@@ -812,6 +887,19 @@ describe('contratos con el backend', () => {
     dashboardSummary.unresponsiveAgents.forEach((a) => expectShape(a, UNRESPONSIVE_AGENT))
     dashboardSummary.staleRunners.forEach((r) => expectShape(r, RUNNER))
     dashboardSummary.providerShortages.forEach((p) => expectShape(p, PROVIDER_SHORTAGE))
+  })
+
+  it('fábrica: proyecto, trabajos y cambios (FS-B)', () => {
+    const expectSummary = (w: WorkItemSummary) => {
+      expectShape(w, WORK_ITEM_SUMMARY)
+      if (w.pullRequest) expectShape(w.pullRequest, PULL_REQUEST_REF)
+    }
+    expectShape(projectOverview, PROJECT_OVERVIEW)
+    projectOverview.repositories.forEach((r) => expectShape(r, REPOSITORY_OVERVIEW))
+    ;(projectOverview.workItems as WorkItemSummary[]).forEach(expectSummary)
+    ;(workItemSummaries as WorkItemSummary[]).forEach(expectSummary)
+    expect((workItemSummaries as WorkItemSummary[])[0].pullRequest).not.toBeNull()
+    changes.forEach((c) => expectShape(c, CHANGE))
   })
 
   it('métricas del dashboard', () => {

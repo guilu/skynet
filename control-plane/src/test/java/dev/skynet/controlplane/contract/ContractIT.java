@@ -42,6 +42,10 @@ import dev.skynet.controlplane.workflow.UnresponsiveAgent;
 import dev.skynet.controlplane.workflow.VerificationResult;
 import dev.skynet.controlplane.workflow.WorkflowDefinitionView;
 import dev.skynet.controlplane.workflow.WorkspaceView;
+import dev.skynet.controlplane.workspace.ChangeView;
+import dev.skynet.controlplane.workspace.ProjectOverview;
+import dev.skynet.controlplane.workspace.WorkItemSummary;
+import dev.skynet.controlplane.workspace.WorkPhase;
 import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.AgentProviderKind.Capability;
 import dev.skynet.protocol.StageStatus;
@@ -110,7 +114,10 @@ class ContractIT extends IntegrationTest {
         Arguments.of("usage-agents", List.of(Samples.agentUsage())),
         Arguments.of("usage-runs", List.of(Samples.runUsage())),
         Arguments.of("github-status", Samples.gitHubStatus()),
-        Arguments.of("github-deliveries", Samples.gitHubDeliveries()));
+        Arguments.of("github-deliveries", Samples.gitHubDeliveries()),
+        Arguments.of("project-overview", Samples.projectOverview()),
+        Arguments.of("work-item-summaries", List.of(Samples.workItemSummary())),
+        Arguments.of("changes", List.of(Samples.change())));
   }
 
   @ParameterizedTest(name = "{0}")
@@ -740,6 +747,68 @@ class ContractIT extends IntegrationTest {
           List.of(
               new QuotaShare("claude-code", "default", "five_hour", 0.02, "measured"),
               new QuotaShare("claude-code", "default", "seven_day", 0.004, "measured")));
+    }
+
+    /** Un trabajo esperando la aprobación de su plan en su tercer intento (FS-B). */
+    static WorkItemSummary workItemSummary() {
+      return new WorkItemSummary(
+          WORK_ITEM,
+          PROJECT,
+          "DEMO",
+          "Analizador de texto",
+          "DEMO-4",
+          "Separar el lector del contador",
+          "REFACTOR",
+          "OPEN",
+          REPOSITORY,
+          "demo-repo",
+          WorkPhase.WAITING,
+          3,
+          new BigDecimal("2.14"),
+          RUN,
+          "RUNNING",
+          "feature-con-plan",
+          new WorkItemSummary.PullRequestRef(
+              44, "https://github.com/guilu/demo-repo/pull/44", "OPEN"),
+          T0,
+          at(3600));
+    }
+
+    static ProjectOverview projectOverview() {
+      return new ProjectOverview(
+          PROJECT,
+          T0.minusSeconds(30L * 24 * 3600),
+          4,
+          2,
+          1,
+          3,
+          1,
+          new BigDecimal("18.30"),
+          List.of(
+              new ProjectOverview.RepositoryOverview(
+                  REPOSITORY, "demo-repo", "main", 3, 2, 1, new BigDecimal("14.10"))),
+          List.of(workItemSummary()));
+    }
+
+    static ChangeView change() {
+      return new ChangeView(
+          CHANGES,
+          44,
+          "https://github.com/guilu/demo-repo/pull/44",
+          "Informe de frecuencias por capítulo",
+          "OPEN",
+          "skynet/DEMO-6",
+          REPOSITORY,
+          "demo-repo",
+          PROJECT,
+          "DEMO",
+          "Analizador de texto",
+          WORK_ITEM,
+          "DEMO-6",
+          "Informe de frecuencias por capítulo",
+          RUN,
+          at(600),
+          at(1200));
     }
 
     static DashboardSummary dashboard() {

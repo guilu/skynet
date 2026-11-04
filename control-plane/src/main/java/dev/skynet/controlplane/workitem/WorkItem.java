@@ -20,6 +20,10 @@ public class WorkItem {
   private WorkItemType type;
   private String externalRef;
   private WorkItemStatus status;
+
+  /** Repositorio en el que se trabaja (FS-B); null si aún no se sabe. */
+  private UUID repositoryId;
+
   private final Instant createdAt;
 
   /** Lo escribe solo el archivado (UPDATE directo); el resto de guardados no lo toca. */
@@ -38,6 +42,7 @@ public class WorkItem {
       WorkItemType type,
       String externalRef,
       WorkItemStatus status,
+      UUID repositoryId,
       Instant createdAt,
       Long version) {
     this.id = id;
@@ -49,6 +54,7 @@ public class WorkItem {
     this.type = type;
     this.externalRef = externalRef;
     this.status = status;
+    this.repositoryId = repositoryId;
     this.createdAt = createdAt;
     this.version = version;
   }
@@ -61,6 +67,7 @@ public class WorkItem {
       String description,
       WorkItemType type,
       String externalRef,
+      UUID repositoryId,
       Instant now) {
     return new WorkItem(
         UUID.randomUUID(),
@@ -72,6 +79,7 @@ public class WorkItem {
         type,
         externalRef,
         WorkItemStatus.OPEN,
+        repositoryId,
         now,
         null);
   }
@@ -119,6 +127,10 @@ public class WorkItem {
     }
     status = WorkItemStatus.CLOSED;
     return true;
+  }
+
+  public UUID getRepositoryId() {
+    return repositoryId;
   }
 
   public Instant getCreatedAt() {

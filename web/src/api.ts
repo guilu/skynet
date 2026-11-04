@@ -77,9 +77,97 @@ export interface WorkItem {
   type: WorkItemType
   externalRef: string | null
   status: 'OPEN' | 'CLOSED'
+  /** Repositorio en el que se trabaja (FS-B); null si aún no se sabe. */
+  repositoryId: string | null
+  /** Fase derivada de sus intentos, aprobaciones y PRs; null si está archivado. */
+  phase: WorkPhase | null
   createdAt: string
   /** Cuándo se archivó; null si no lo está. */
   archivedAt: string | null
+}
+
+/**
+ * Fase de un trabajo (FS-B), calculada al leer: sin empezar, en marcha, esperándote, atascado
+ * (falló el último intento), PR en revisión o entregado.
+ */
+export type WorkPhase = 'TODO' | 'RUNNING' | 'WAITING' | 'STUCK' | 'REVIEW' | 'DONE'
+
+/** Un trabajo visto desde la fábrica: fase, intentos, coste total, último intento y PR. */
+export interface WorkItemSummary {
+  id: string
+  projectId: string
+  projectKey: string
+  projectName: string
+  key: string
+  title: string
+  type: WorkItemType
+  status: 'OPEN' | 'CLOSED'
+  repositoryId: string | null
+  repositoryName: string | null
+  phase: WorkPhase
+  /** Ejecuciones no archivadas del trabajo. */
+  attempts: number
+  /** Suma de todos sus intentos; null si ningún agente informó del coste. */
+  costUsd: number | null
+  lastRunId: string | null
+  lastRunStatus: RunStatus | null
+  workflowKey: string | null
+  /** La PR abierta o, si no hay, la última fusionada. */
+  pullRequest: PullRequestRef | null
+  createdAt: string
+  lastActivityAt: string
+}
+
+export interface PullRequestRef {
+  number: number | null
+  url: string | null
+  status: 'OPEN' | 'MERGED'
+}
+
+/** Centro de operaciones de un proyecto (GET /api/projects/{id}/overview). */
+export interface ProjectOverview {
+  projectId: string
+  /** Desde cuándo cuentan los costes (30 días). */
+  since: string
+  openWorkItems: number
+  activeRuns: number
+  openPullRequests: number
+  mergedPullRequests: number
+  pendingApprovals: number
+  costUsd: number | null
+  repositories: RepositoryOverview[]
+  workItems: WorkItemSummary[]
+}
+
+export interface RepositoryOverview {
+  id: string
+  name: string
+  defaultBranch: string
+  openWorkItems: number
+  activeRuns: number
+  openPullRequests: number
+  costUsd: number | null
+}
+
+/** Una PR producida por la fábrica, con su trabajo y su intento. */
+export interface ChangeView {
+  id: string
+  number: number | null
+  url: string | null
+  title: string
+  status: 'OPEN' | 'MERGED' | 'CLOSED'
+  branch: string
+  repositoryId: string
+  repositoryName: string
+  projectId: string
+  projectKey: string
+  projectName: string
+  workItemId: string
+  workItemKey: string
+  workItemTitle: string
+  workflowRunId: string
+  createdAt: string
+  updatedAt: string
 }
 
 export type AgentStatus =
@@ -1695,8 +1783,20 @@ export const api = {
   workItem: (id: string) => request<WorkItem>('GET', `/api/work-items/${id}`),
   createWorkItem: (
     projectId: string,
-    body: { title: string; description?: string; type: WorkItemType },
+    body: { title: string; description?: string; type: WorkItemType; repositoryId?: string },
   ) => request<WorkItem>('POST', `/api/projects/${projectId}/work-items`, body),
+  workItemSummary: (id: string) => request<WorkItemSummary>('GET', `/api/work-items/${id}/summary`),
+  /** Trabajos de todos los proyectos en esas fases; sin fases, los no terminados. */
+  pendingWorkItems: (query: { phase?: WorkPhase[]; projectId?: string } = {}) => {
+    const params = new URLSearchParams()
+    query.phase?.forEach((p) => params.append('phase', p))
+    if (query.projectId) params.set('projectId', query.projectId)
+    const qs = params.toString()
+    return request<WorkItemSummary[]>('GET', `/api/work-items${qs ? `?${qs}` : ''}`)
+  },
+  projectOverview: (id: string) => request<ProjectOverview>('GET', `/api/projects/${id}/overview`),
+  projectChanges: (id: string) => request<ChangeView[]>('GET', `/api/projects/${id}/changes`),
+  results: () => request<ChangeView[]>('GET', '/api/results'),
   runs: (workItemId: string, archived?: ArchivedFilter) =>
     request<Run[]>('GET', `/api/work-items/${workItemId}/runs${archivedQuery(archived)}`),
   run: (id: string) => request<Run>('GET', `/api/workflow-runs/${id}`),

@@ -187,7 +187,8 @@ class TriggerSchedules {
                     + rule.workflowKey()
                     + ". Cada disparo es una ejecución nueva.",
                 rule.workItemType(),
-                "skynet:schedule:" + rule.id())
+                "skynet:schedule:" + rule.id(),
+                repository.getId())
             .getId();
     jdbc.sql("UPDATE trigger_rule SET work_item_id = ? WHERE id = ?")
         .params(created, rule.id())

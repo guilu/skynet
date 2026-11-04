@@ -177,7 +177,11 @@ export function WorkItemPage() {
             <Link to={`/projects/${projectId}?tab=repos`}>proyecto</Link>.
           </p>
         ) : (
-          <LaunchForm workItemId={workItemId} repositories={repos.data ?? []} />
+          <LaunchForm
+            workItemId={workItemId}
+            repositories={repos.data ?? []}
+            defaultRepositoryId={item.data?.repositoryId}
+          />
         )}
       </Sheet>
     </>
