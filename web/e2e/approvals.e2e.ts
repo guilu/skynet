@@ -113,7 +113,7 @@ test(
       await expectAccessible(page, 'puerta en el progreso')
 
       await page.goto('/')
-      const attention = page.getByRole('region', { name: /Necesita tu atención/ })
+      const attention = page.getByRole('region', { name: /Necesita tu intervención/ })
       await expect(
         attention.getByRole('link', { name: new RegExp(first.action.replace(/[()]/g, '\\$&')) }),
       ).toBeVisible()

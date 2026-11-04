@@ -113,7 +113,7 @@ test('la página Uso reparte la cuota de Codex y avisa al pasar del 90 %', async
     const window = (await codexWindow(page, 'five_hour'))!
     expect(window.skynet).toBeGreaterThanOrEqual(0.03 - 1e-9)
     await page.goto('/usage')
-    await expect(page.getByRole('heading', { level: 1, name: 'Uso de los CLIs' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: 'Consumo' })).toBeVisible()
     const card = page.getByRole('region', { name: 'Codex' })
     await expect(card.getByText('Casi agotada')).toBeVisible()
     const meter = card.getByRole('meter', { name: 'Codex, ventana de 5 h' })
@@ -151,9 +151,9 @@ test('la página Uso reparte la cuota de Codex y avisa al pasar del 90 %', async
     await expect(inspector.getByText('3 % (medido)')).toBeVisible()
   })
 
-  await test.step('el dashboard avisa y lleva a la página Uso', async () => {
+  await test.step('Inicio avisa y lleva a Consumo', async () => {
     await page.goto('/')
-    const attention = page.getByRole('region', { name: /Necesita tu atención/ })
+    const attention = page.getByRole('region', { name: /Necesita tu intervención/ })
     const warning = attention.getByRole('link', { name: /Codex al 91 % de la ventana de 5 h/ })
     await expect(warning).toHaveAttribute('href', '/usage')
   })

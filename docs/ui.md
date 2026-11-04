@@ -102,7 +102,7 @@ La navegación agrupa las secciones en tres áreas, cada una con su pregunta:
 
 | Área | Pregunta | Secciones |
 | --- | --- | --- |
-| Espacio de trabajo | ¿Sobre qué software estoy trabajando? | Inicio, Proyectos, Actividad |
+| Espacio de trabajo | ¿Sobre qué software estoy trabajando? | Inicio, Proyectos, Trabajos, Actividad |
 | Fábrica | ¿Qué hacen los agentes y qué necesita intervención? | Ejecuciones, Workflows, Aprobaciones |
 | Administración | ¿Con qué medios y a qué coste? | Runners, Consumo, Ajustes |
 
@@ -113,6 +113,17 @@ Tres palabras que la interfaz no mezcla:
 - **Trabajo**: lo que quieres conseguir («Separar el lector del contador»).
 - **Workflow**: el procedimiento para conseguirlo (plan → aprobación → implementación → verificación → PR).
 - **Ejecución**: cada intento real de aplicar un workflow a un trabajo.
+
+**Inicio** (FS-C, `pages/HomePage.tsx`) es la vista operativa del espacio de trabajo, no un panel de métricas:
+
+- la cabecera dice cuántos agentes trabajan y en cuántos proyectos, cuántas cosas necesitan tu intervención y lo gastado en la semana, y el botón principal es «Nuevo trabajo» (pide el proyecto);
+- «Necesita tu intervención» lleva cada aviso con su contexto («Analizador de texto › demo-repo · intento 3») y añade los trabajos atascados, con lo gastado sin resultado; las aprobaciones y los atascos llevan su acción como botón;
+- «Tus proyectos» pone una tarjeta por proyecto con sus repositorios como filas (en marcha, PRs abiertas y coste a 30 días), una raya por trabajo abierto del color de su fase y un pie con lo que espera revisión;
+- «Trabajos pendientes» (con chips de fase) y «Actividad reciente», contada como resultados («DEMO-3 entregado: PR #42 fusionada en demo-repo»).
+
+Las fases de un trabajo, con su nombre en la web (`components/work/phase.ts`): Te necesita, Atascado, En marcha, PR en revisión, Por empezar y Entregado. **Trabajos** (`/work`) los lista todos con filtro por fase, proyecto y repositorio en la URL. Las métricas globales del antiguo Dashboard (ejecuciones por estado, duración, tokens, coste y el gráfico) están en **Consumo**, y los runners en **Runners**.
+
+En el móvil, los proyectos de Inicio van en un carrusel, los chips de fase se deslizan, la tabla de repositorios pierde la columna de PRs y la actividad se queda en tres.
 
 ## 8. Capturas
 

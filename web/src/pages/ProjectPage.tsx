@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
   FolderGit2,
   GitPullRequest,
@@ -7,9 +7,10 @@ import {
   ShieldCheck,
   SlidersHorizontal,
 } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
-import { api, WORK_ITEM_TYPES, type Repository, type WorkItem, type WorkItemType } from '../api'
+import { api, WORK_ITEM_TYPES, type Repository, type WorkItem } from '../api'
+import { NewWorkItemForm } from '../components/work/NewWorkItemForm'
 import { ArchivedBanner, ArchiveMenu, ArchivedToggle } from '../components/archive/Archive'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { AccessPill } from '../components/github/GitHubSettings'
@@ -245,7 +246,6 @@ export function ProjectPage() {
       >
         <NewWorkItemForm
           projectId={projectId}
-          repositories={showArchived ? [] : (repos.data ?? [])}
           onDone={() => {
             closeSheet()
             selectTab('work')
@@ -474,86 +474,6 @@ function GitHubSection({ repository: r }: { repository: Repository }) {
         </p>
       )}
     </section>
-  )
-}
-
-/**
- * Crear un trabajo. Con varios repositorios se elige en cuál se trabaja (FS-B); con uno solo, el
- * servidor lo pone él, y sin elegir se quedará con el del primer lanzamiento.
- */
-function NewWorkItemForm({
-  projectId,
-  repositories,
-  onDone,
-}: {
-  projectId: string
-  repositories: Repository[]
-  onDone: () => void
-}) {
-  const queryClient = useQueryClient()
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [type, setType] = useState<WorkItemType>('FEATURE')
-  const [repositoryId, setRepositoryId] = useState('')
-  const active = repositories.filter((r) => r.archivedAt == null)
-  const create = useMutation({
-    mutationFn: () =>
-      api.createWorkItem(projectId, {
-        title,
-        description: description || undefined,
-        type,
-        repositoryId: repositoryId || undefined,
-      }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['work-items', projectId] })
-      onDone()
-    },
-  })
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
-    create.mutate()
-  }
-
-  return (
-    <form className="form" onSubmit={submit}>
-      <label>
-        Título
-        <input value={title} onChange={(e) => setTitle(e.target.value)} required />
-      </label>
-      <label>
-        Tipo
-        <select value={type} onChange={(e) => setType(e.target.value as WorkItemType)}>
-          {WORK_ITEM_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      {active.length > 1 && (
-        <label>
-          Repositorio
-          <select value={repositoryId} onChange={(e) => setRepositoryId(e.target.value)}>
-            <option value="">Lo decido al lanzarlo</option>
-            {active.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      <label>
-        Descripción
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
-      </label>
-      <div className="form-actions">
-        <Button type="submit" disabled={create.isPending}>
-          {create.isPending ? 'Creando…' : 'Crear trabajo'}
-        </Button>
-      </div>
-      <ErrorMessage error={create.error} />
-    </form>
   )
 }
 

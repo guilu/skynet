@@ -28,6 +28,7 @@ export const NAV_AREAS: NavArea[] = [
     items: [
       { to: '/', label: 'Inicio', icon: 'dashboard', end: true },
       { to: '/projects', label: 'Proyectos', icon: 'projects' },
+      { to: '/work', label: 'Trabajos', icon: 'work-items' },
       { to: '/activity', label: 'Actividad', icon: 'activity' },
     ],
   },
@@ -69,7 +70,9 @@ export const MOBILE_NAV: NavItem[] = [
 
 /** La sección (y su área) de una ruta. */
 export function sectionOf(pathname: string) {
-  return NAV.find((n) => (n.end ? pathname === n.to : pathname.startsWith(n.to)))
+  return NAV.find((n) =>
+    n.end ? pathname === n.to : pathname === n.to || pathname.startsWith(`${n.to}/`),
+  )
 }
 
 export const THEMES: { value: ThemeChoice; label: string; icon: IconName }[] = [

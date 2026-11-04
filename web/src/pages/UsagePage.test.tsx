@@ -46,7 +46,7 @@ describe('página Uso', () => {
   it('enseña cada CLI con sus medidores, lo de Skynet y lo de fuera', async () => {
     stubApi()
     renderAt('/usage', <App />)
-    expect(await screen.findByRole('heading', { level: 1, name: 'Uso de los CLIs' })).toBeVisible()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Consumo' })).toBeVisible()
     expect(
       within(screen.getByRole('navigation', { name: 'Navegación principal' })).getByRole('link', {
         name: 'Consumo',
