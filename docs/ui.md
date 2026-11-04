@@ -86,7 +86,7 @@ Las piezas base están en `web/src/components/ui/`. Las de listas, en `component
 ## 7. Responsive
 
 - Hasta 900 px, la ejecución pasa a pestañas (Pasos, Actividad, Detalle).
-- Hasta 720 px, la barra lateral pasa a una barra inferior con las cuatro secciones principales y un cajón «Más».
+- Hasta 720 px, la barra lateral pasa a una barra inferior con Inicio, Proyectos, Fábrica (las ejecuciones), Aprobar y «Más». «Más» abre una hoja con todas las secciones en baldosas, agrupadas por área. Las migas se reducen a «‹ padre» (por ejemplo, «‹ Proyectos»), o al nombre de la sección si no hay padre.
 - Hasta 640 px, el panel lateral sube desde abajo y las acciones de la cabecera ocupan el ancho.
 - Hasta 520 px, las cifras del dashboard y de la ejecución van de dos en dos.
 - En pantallas grandes, el contenido ocupa todo el ancho del navegador, sin máximo.
@@ -95,6 +95,24 @@ Las piezas base están en `web/src/components/ui/`. Las de listas, en `component
 | Dashboard | Ejecución |
 | --- | --- |
 | ![Dashboard en el móvil](ui/capturas/movil-dashboard.png) | ![Ejecución en el móvil](ui/capturas/movil-ejecucion.png) |
+
+## 7 bis. Áreas y vocabulario (hito FS)
+
+La navegación agrupa las secciones en tres áreas, cada una con su pregunta:
+
+| Área | Pregunta | Secciones |
+| --- | --- | --- |
+| Espacio de trabajo | ¿Sobre qué software estoy trabajando? | Inicio, Proyectos, Actividad |
+| Fábrica | ¿Qué hacen los agentes y qué necesita intervención? | Ejecuciones, Workflows, Aprobaciones |
+| Administración | ¿Con qué medios y a qué coste? | Runners, Consumo, Ajustes |
+
+La lista vive en `web/src/components/shell/nav.ts` (`NAV_AREAS`). De ahí salen la barra lateral (con el nombre de cada área encima de sus secciones; plegada, una raya), la hoja «Más» del móvil, los grupos «Ir a» de ⌘K y el área con la que empiezan las migas. Las rutas no cambian.
+
+Tres palabras que la interfaz no mezcla:
+
+- **Trabajo**: lo que quieres conseguir («Separar el lector del contador»).
+- **Workflow**: el procedimiento para conseguirlo (plan → aprobación → implementación → verificación → PR).
+- **Ejecución**: cada intento real de aplicar un workflow a un trabajo.
 
 ## 8. Capturas
 
@@ -141,7 +159,7 @@ El logo sale del estudio de imagen corporativa de octubre de 2026, variante «Pr
 **Desde SY-B (#183), el icono de la app es Skyny**, la mascota (sección 11), en lugar del isotipo. El isotipo queda en `brand.ts` y en el componente `Logo`, pero ya no sale en la interfaz.
 
 - **Un solo dibujo.** La geometría de Skyny (cuerpo, bandas, nodos y visor) está en `web/src/lib/brand.ts` y la comparten el componente `Companion` y `skynySvg`, que dibuja a Skyny quieto y sin efectos para los iconos.
-- **Marca de la barra lateral.** `BrandMark` es Skyny en Reposo (54 px, quieto, sin destellos ni suelo), sin baldosa. Sigue al acento, al tema y a los accesorios de temporada. Es enlace al Dashboard: se ilumina al pasar el ratón, se hunde al pulsar y tiene foco visible. Con la barra plegada solo queda Skyny.
+- **Marca de la barra lateral.** `BrandMark` es Skyny en Reposo (54 px, quieto, sin destellos ni suelo), sin baldosa. Sigue al acento, al tema y a los accesorios de temporada. Es enlace al Inicio: se ilumina al pasar el ratón, se hunde al pulsar y tiene foco visible. Con la barra plegada solo queda Skyny.
 - **Dónde aparece.** En la barra lateral y en el login, donde va Skyny grande con animación, y bajo el nombre va el lema «Agentes · Flujos · Ejecuciones».
 - **Nombre.** «Skynet» en Barlow 600, la tipografía de títulos.
 - **Favicon e iconos.** `public/favicon.svg` es `faviconSvg`: Skyny en reposo, sin fondo, con el azul por defecto, y un test lo comprueba. Con un acento propio, `appearance.ts` lo cambia por uno generado al vuelo con ese color.

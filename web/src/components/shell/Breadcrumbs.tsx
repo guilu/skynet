@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, matchPath, useLocation } from 'react-router'
 import { api } from '../../api'
-import { NAV } from './nav'
+import { sectionOf } from './nav'
 import { Icon } from '../icons/Icon'
 
 interface Crumb {
@@ -10,8 +10,9 @@ interface Crumb {
 }
 
 /**
- * Migas de la barra superior, sacadas de la ruta. Los nombres de proyecto, trabajo y ejecución
- * salen de las mismas consultas que usa la página, así que no cuestan peticiones de más.
+ * Migas de la barra superior, sacadas de la ruta y encabezadas por el área (FS-A). Los nombres de
+ * proyecto, trabajo y ejecución salen de las mismas consultas que usa la página, así que no
+ * cuestan peticiones de más. En el móvil solo se ve «‹ padre», o la sección si no hay padre.
  */
 export function Breadcrumbs() {
   const { pathname } = useLocation()
@@ -44,6 +45,9 @@ export function Breadcrumbs() {
     to,
   })
   let crumbs: Crumb[]
+  let area: string | undefined
+  if (projectId || workItemId) area = 'Espacio de trabajo'
+  else if (runId || approvalId || workflowKey) area = 'Fábrica'
   if (projectId) crumbs = [projects, projectCrumb()]
   else if (workItemId)
     crumbs = [
@@ -64,13 +68,27 @@ export function Breadcrumbs() {
       { label: workflowKey === 'new' ? 'Nuevo' : workflowKey },
     ]
   else {
-    const section = NAV.find((n) => (n.end ? pathname === n.to : pathname.startsWith(n.to)))
+    const section = sectionOf(pathname)
+    area = section?.area
     crumbs = [{ label: section?.label ?? 'Página no encontrada' }]
   }
+  const parent = crumbs.slice(0, -1).findLast((c) => c.to)
 
   return (
-    <nav className="crumbs" aria-label="Migas">
+    <nav className="crumbs" aria-label="Migas" data-back={parent ? true : undefined}>
+      {parent?.to && (
+        <Link to={parent.to} className="crumbs-back" aria-label={`Volver a ${parent.label}`}>
+          <Icon name="chevron-left" size={20} strokeWidth={2.5} />
+          {parent.label}
+        </Link>
+      )}
       <ol>
+        {area && (
+          <li className="crumbs-area">
+            <span>{area}</span>
+            <Icon name="chevron-right" className="crumbs-sep" size={16} strokeWidth={3} />
+          </li>
+        )}
         {crumbs.map((c, i) => {
           const last = i === crumbs.length - 1
           return (

@@ -6,35 +6,47 @@ import { api } from '../../api'
 import { HealthIndicator } from '../../HealthIndicator'
 import { PendingCount } from '../approval/PendingCount'
 import { BrandMark } from '../brand/Logo'
-import { NAV } from './nav'
+import { NAV_AREAS } from './nav'
 import { Icon } from '../icons/Icon'
 
 /**
- * Barra lateral del escritorio: marca, secciones y, al pie, el estado del control plane y de los
- * runners. Plegada solo enseña los iconos; el nombre sigue siendo el nombre accesible del enlace
+ * Barra lateral del escritorio: marca, secciones agrupadas por área (espacio de trabajo, fábrica y
+ * administración) y, al pie, el estado del control plane y de los runners. Plegada solo enseña los iconos; el nombre sigue siendo el nombre accesible del enlace
  * y aparece como pista al pasar o enfocar.
  */
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   return (
     <aside className="sidebar" data-collapsed={collapsed || undefined}>
-      <Link to="/" className="brand" aria-label="Skynet: ir al Dashboard">
+      <Link to="/" className="brand" aria-label="Skynet: ir al Inicio">
         <BrandMark />
         <span className="brand-name">Skynet</span>
       </Link>
       <nav className="sidenav" aria-label="Navegación principal">
-        <ul>
-          {NAV.map((item) => (
-            <li key={item.to}>
-              <Hint label={item.label} enabled={collapsed}>
-                <NavLink to={item.to} end={item.end}>
-                  <Icon name={item.icon} size={24} strokeWidth={1.9} />
-                  <span className="nav-label">{item.label}</span>
-                  {item.pendingApprovals && <PendingCount />}
-                </NavLink>
-              </Hint>
-            </li>
-          ))}
-        </ul>
+        {NAV_AREAS.map((area) => (
+          <div
+            key={area.id}
+            role="group"
+            className="nav-area"
+            aria-labelledby={`nav-area-${area.id}`}
+          >
+            <span id={`nav-area-${area.id}`} className="nav-area-label">
+              {area.label}
+            </span>
+            <ul>
+              {area.items.map((item) => (
+                <li key={item.to}>
+                  <Hint label={item.label} enabled={collapsed}>
+                    <NavLink to={item.to} end={item.end}>
+                      <Icon name={item.icon} size={24} strokeWidth={1.9} />
+                      <span className="nav-label">{item.label}</span>
+                      {item.pendingApprovals && <PendingCount />}
+                    </NavLink>
+                  </Hint>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </nav>
       <div className="sidebar-foot">
         <RunnerSummary />

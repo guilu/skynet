@@ -122,13 +122,13 @@ export const GROUPS: { id: IconGroup; label: string }[] = [
  */
 export const ICONS = {
   // Navegación
-  dashboard: { label: 'Dashboard', group: 'nav', lucide: House },
+  dashboard: { label: 'Inicio', group: 'nav', lucide: House },
   projects: { label: 'Proyectos', group: 'nav', lucide: Folder },
   workflows: { label: 'Workflows', group: 'nav', lucide: Workflow },
   runs: { label: 'Ejecuciones', group: 'nav', lucide: CirclePlay },
   approvals: { label: 'Aprobaciones', group: 'nav', lucide: Hand },
   runners: { label: 'Runners', group: 'nav', lucide: Server },
-  usage: { label: 'Uso', group: 'nav', lucide: Gauge },
+  usage: { label: 'Consumo', group: 'nav', lucide: Gauge },
   activity: { label: 'Actividad', group: 'nav', lucide: Activity },
   settings: { label: 'Ajustes', group: 'nav', lucide: Settings },
   // Barra y menús
