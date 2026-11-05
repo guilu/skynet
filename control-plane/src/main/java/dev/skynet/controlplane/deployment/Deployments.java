@@ -3,6 +3,7 @@ package dev.skynet.controlplane.deployment;
 import dev.skynet.controlplane.event.EventDraft;
 import dev.skynet.controlplane.event.EventStore;
 import dev.skynet.controlplane.project.ProjectService;
+import dev.skynet.controlplane.shared.ConflictException;
 import dev.skynet.controlplane.shared.InvalidRequestException;
 import dev.skynet.controlplane.shared.NotFoundException;
 import dev.skynet.controlplane.shared.PayloadRedactor;
@@ -123,7 +124,11 @@ public class Deployments {
       Instant statusAt,
       UUID supersededBy,
       Instant createdAt,
-      Instant updatedAt) {}
+      Instant updatedAt,
+      String healthDetail,
+      Instant healthCheckedAt,
+      int healthAttempts,
+      Instant stuckAt) {}
 
   /**
    * Un estado recibido; {@code applied} falso si llegó tarde o el despliegue ya estaba superado.
@@ -263,7 +268,10 @@ public class Deployments {
             : current.startedAt();
     jdbc.sql(
             "UPDATE deployment SET status = ?, status_at = ?, updated_at = ?, started_at = ?,"
-                + " finished_at = ?, error = ?, url = ? WHERE id = ?")
+                + " finished_at = ?, error = ?, url = ?, stuck_at = NULL,"
+                // Un estado nuevo empieza otra fase: la salud de la anterior ya no vale.
+                + " health = 'UNKNOWN', health_detail = NULL, health_next_at = NULL,"
+                + " health_attempts = 0 WHERE id = ?")
         .params(
             update.state().name(),
             at,
@@ -277,8 +285,64 @@ public class Deployments {
     events.append(EventDraft.of(AGGREGATE, deploymentId, "deployment.status", null, payload, now));
     if (update.state() == Status.SUCCEEDED) {
       supersede(get(deploymentId), now);
+      Deployment succeeded = get(deploymentId);
+      if (succeeded.status() == Status.SUCCEEDED) {
+        scheduleHealth(succeeded, false, now);
+      }
     }
     return get(deploymentId);
+  }
+
+  /**
+   * Vuelve a comprobar la salud de lo desplegado ahora, sin esperar el retraso inicial.
+   *
+   * @throws ConflictException si el despliegue no es el desplegado de su entorno o el entorno no
+   *     tiene comprobación
+   */
+  @Transactional
+  public Deployment recheck(UUID deploymentId) {
+    Deployment current = get(deploymentId);
+    lockEnvironment(current.repositoryId(), current.environment());
+    current = get(deploymentId);
+    if (current.status() != Status.SUCCEEDED) {
+      throw new ConflictException(
+          "Solo se comprueba lo desplegado: este despliegue está " + current.status());
+    }
+    if (!scheduleHealth(current, true, time.now())) {
+      throw new ConflictException(
+          "El entorno " + current.environment() + " no tiene una comprobación de salud activa");
+    }
+    return get(deploymentId);
+  }
+
+  /**
+   * Programa la comprobación de salud si el entorno la tiene activa (DL-C).
+   *
+   * @param immediately si empieza ya o tras el retraso inicial de la comprobación
+   * @return si se ha programado
+   */
+  private boolean scheduleHealth(Deployment deployment, boolean immediately, Instant now) {
+    Optional<Integer> delay =
+        jdbc.sql(
+                "SELECT initial_delay_seconds FROM deployment_health_check"
+                    + " WHERE repository_id = ? AND environment = ? AND enabled")
+            .params(deployment.repositoryId(), deployment.environment())
+            .query(Integer.class)
+            .optional();
+    if (delay.isEmpty()) {
+      return false;
+    }
+    Instant next = immediately ? now : now.plusSeconds(delay.get());
+    jdbc.sql(
+            "UPDATE deployment SET health = 'CHECKING', health_detail = NULL, health_attempts = 0,"
+                + " health_next_at = ?, updated_at = ? WHERE id = ?")
+        .params(Timestamp.from(next), Timestamp.from(now), deployment.id())
+        .update();
+    Map<String, Object> payload = describe(get(deployment.id()));
+    payload.put("health", Health.CHECKING.name());
+    events.append(
+        EventDraft.of(AGGREGATE, deployment.id(), "deployment.health", null, payload, now));
+    return true;
   }
 
   private static boolean applies(Deployment current, StatusUpdate update) {
@@ -333,7 +397,12 @@ public class Deployments {
   private void markSuperseded(List<UUID> ids, UUID by, Instant now) {
     for (UUID id : ids) {
       jdbc.sql(
-              "UPDATE deployment SET status = 'SUPERSEDED', superseded_by = ?, updated_at = ?"
+              "UPDATE deployment SET status = 'SUPERSEDED', superseded_by = ?, updated_at = ?,"
+                  // Lo que se comprobaba ya no está desplegado: la comprobación se abandona.
+                  + " health_next_at = NULL,"
+                  + " health_detail = CASE WHEN health = 'CHECKING'"
+                  + " THEN 'Sustituido antes de terminar la comprobación' ELSE health_detail END,"
+                  + " health = CASE WHEN health = 'CHECKING' THEN 'UNKNOWN' ELSE health END"
                   + " WHERE id = ?")
           .params(by, Timestamp.from(now), id)
           .update();
@@ -352,8 +421,47 @@ public class Deployments {
     repositoryIds.stream().sorted().forEach(id -> lockEnvironment(id, environment));
   }
 
+  /**
+   * Marca como atascados los despliegues sin estado final desde hace más de {@code after}.
+   *
+   * @return cuántos ha marcado
+   */
+  @Transactional
+  public int markStuck(java.time.Duration after) {
+    Instant now = time.now();
+    Timestamp limit = Timestamp.from(now.minus(after));
+    String due =
+        " WHERE status IN ('PENDING', 'IN_PROGRESS') AND stuck_at IS NULL"
+            + " AND coalesce(status_at, requested_at) < ?";
+    // Primero los entornos, en orden, y después las filas y los eventos: el mismo orden de
+    // bloqueos que record(), para no cruzarse con él.
+    jdbc
+        .sql("SELECT DISTINCT repository_id, environment FROM deployment" + due)
+        .param(limit)
+        .query((rs, n) -> rs.getObject(1, UUID.class) + ":" + rs.getString(2))
+        .list()
+        .stream()
+        .sorted()
+        .forEach(
+            key -> {
+              int colon = key.indexOf(':');
+              lockEnvironment(UUID.fromString(key.substring(0, colon)), key.substring(colon + 1));
+            });
+    List<UUID> stuck =
+        jdbc.sql("UPDATE deployment SET stuck_at = ?, updated_at = ?" + due + " RETURNING id")
+            .params(Timestamp.from(now), Timestamp.from(now), limit)
+            .query(UUID.class)
+            .list();
+    for (UUID id : stuck) {
+      Map<String, Object> payload = describe(get(id));
+      payload.put("stuckAfterMinutes", after.toMinutes());
+      events.append(EventDraft.of(AGGREGATE, id, "deployment.stuck", null, payload, now));
+    }
+    return stuck.size();
+  }
+
   /** Serializa los cambios de un entorno: dos despliegues del mismo destino no se cruzan. */
-  private void lockEnvironment(UUID repositoryId, String environment) {
+  void lockEnvironment(UUID repositoryId, String environment) {
     jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")
         .param("deployment:" + repositoryId + ":" + environment)
         .query(Object.class)
@@ -543,7 +651,7 @@ public class Deployments {
     return value.length() <= max ? value : value.substring(0, max);
   }
 
-  private static Map<String, Object> describe(Deployment d) {
+  static Map<String, Object> describe(Deployment d) {
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("repositoryId", d.repositoryId().toString());
     payload.put("environment", d.environment());
@@ -581,7 +689,11 @@ public class Deployments {
         instant(rs, "status_at"),
         rs.getObject("superseded_by", UUID.class),
         instant(rs, "created_at"),
-        instant(rs, "updated_at"));
+        instant(rs, "updated_at"),
+        rs.getString("health_detail"),
+        instant(rs, "health_checked_at"),
+        rs.getInt("health_attempts"),
+        instant(rs, "stuck_at"));
   }
 
   private static Instant instant(ResultSet rs, String column) throws SQLException {

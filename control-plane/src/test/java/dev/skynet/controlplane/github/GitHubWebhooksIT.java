@@ -407,6 +407,56 @@ class GitHubWebhooksIT extends IntegrationTest {
     return http.get().uri(uri).retrieve().body(JsonNode.class);
   }
 
+  @Test
+  void reconciliationRecoversDeploymentsThatNeverArrived() throws Exception {
+    UUID repository = repository("demo", "https://github.com/guilu/demo-repo");
+    // Sin la App instalada no se puede reconciliar.
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () ->
+                http.post()
+                    .uri("/api/repositories/" + repository + "/deployments/reconcile")
+                    .retrieve()
+                    .body(JsonNode.class))
+        .isInstanceOf(org.springframework.web.client.HttpClientErrorException.Conflict.class);
+
+    GITHUB.install(9, "guilu", "guilu/demo-repo");
+    signed("installation", "d-inst-dl", fixture("installation-created"));
+    awaitDelivery("d-inst-dl", "PROCESSED");
+    // Uno terminado y otro a medias, y ningún webhook.
+    GITHUB.deployment("guilu/demo-repo", 900001, DEPLOYED_SHA, "omarchy", "2026-11-05T18:00:00Z");
+    GITHUB.deploymentStatus(900001, 950001, "in_progress", "2026-11-05T18:00:05Z");
+    GITHUB.deploymentStatus(900001, 950002, "success", "2026-11-05T18:01:30Z");
+    GITHUB.deployment("guilu/demo-repo", 900002, "b".repeat(40), "omarchy", "2026-11-05T19:00:00Z");
+    GITHUB.deploymentStatus(900002, 950101, "in_progress", "2026-11-05T19:00:05Z");
+
+    JsonNode result =
+        http.post()
+            .uri("/api/repositories/" + repository + "/deployments/reconcile")
+            .retrieve()
+            .body(JsonNode.class);
+    assertThat(result.path("deployments").asInt()).isEqualTo(2);
+    assertThat(result.path("statuses").asInt()).isEqualTo(3);
+    JsonNode found =
+        http.get()
+            .uri("/api/repositories/" + repository + "/deployments")
+            .retrieve()
+            .body(JsonNode.class);
+    assertThat(found.findValuesAsString("externalId")).containsExactly("900002", "900001");
+    assertThat(found.findValuesAsString("status")).containsExactly("IN_PROGRESS", "SUCCEEDED");
+
+    // Otra vez: el terminado ya no pide sus estados y no cambia nada.
+    GITHUB.repoRequests.clear();
+    JsonNode again =
+        http.post()
+            .uri("/api/repositories/" + repository + "/deployments/reconcile")
+            .retrieve()
+            .body(JsonNode.class);
+    assertThat(again.path("changed").asInt()).isZero();
+    assertThat(GITHUB.repoRequests)
+        .noneMatch(r -> r.contains("/deployments/900001/statuses"))
+        .anyMatch(r -> r.contains("/deployments/900002/statuses"));
+  }
+
   private UUID repository(String name, String remoteUrl) {
     Map<String, Object> body = new HashMap<>();
     body.put("name", name);

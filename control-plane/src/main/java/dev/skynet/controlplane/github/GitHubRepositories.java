@@ -33,6 +33,9 @@ public class GitHubRepositories {
   static final Map<String, String> ISSUES_WRITE = Map.of("metadata", "read", "issues", "write");
 
   /** Leer la CI de un commit: check-runs y statuses. */
+  static final Map<String, String> DEPLOYMENTS_READ =
+      Map.of("metadata", "read", "deployments", "read");
+
   static final Map<String, String> CHECKS_READ =
       Map.of("metadata", "read", "checks", "read", "statuses", "read");
 
@@ -229,6 +232,43 @@ public class GitHubRepositories {
   }
 
   /** La CI del commit {@code sha}: sus check-runs (el último de cada nombre) y sus statuses. */
+  /**
+   * Los últimos despliegues del repositorio en GitHub Deployments (DL-C, reconciliación), como si
+   * hubieran llegado por webhook: uno por despliegue sin estado y, para los que {@code
+   * needsStatuses} pide, uno por cada estado, del más viejo al más nuevo.
+   */
+  public List<GitHubDeployment> recentDeployments(
+      Link link,
+      List<UUID> repositoryIds,
+      int limit,
+      java.util.function.LongPredicate needsStatuses) {
+    String token =
+        tokens.forRepository(link.installationId(), link.githubRepositoryId(), DEPLOYMENTS_READ);
+    java.time.Instant now = java.time.Instant.now();
+    List<GitHubDeployment> found = new java.util.ArrayList<>();
+    List<JsonNode> recent =
+        new java.util.ArrayList<>(api.deployments(token, link.fullName(), limit));
+    java.util.Collections.reverse(recent);
+    for (JsonNode deployment : recent) {
+      long id = deployment.path("id").asLong();
+      found.add(
+          GitHubDeployment.of(
+              "reconcile:" + id, link.fullName(), repositoryIds, deployment, null, now));
+      if (!needsStatuses.test(id)) {
+        continue;
+      }
+      List<JsonNode> statuses =
+          new java.util.ArrayList<>(api.deploymentStatuses(token, link.fullName(), id));
+      java.util.Collections.reverse(statuses);
+      for (JsonNode status : statuses) {
+        found.add(
+            GitHubDeployment.of(
+                "reconcile:" + id, link.fullName(), repositoryIds, deployment, status, now));
+      }
+    }
+    return found;
+  }
+
   public List<Check> checks(Link link, String sha) {
     String token =
         tokens.forRepository(link.installationId(), link.githubRepositoryId(), CHECKS_READ);

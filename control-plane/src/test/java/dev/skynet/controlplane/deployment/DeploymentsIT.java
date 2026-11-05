@@ -258,6 +258,213 @@ class DeploymentsIT extends IntegrationTest {
         .isInstanceOf(InvalidRequestException.class);
   }
 
+  // DL-C: comprobaciones de salud, atascados.
+
+  private com.sun.net.httpserver.HttpServer app;
+  private volatile int appStatus = 200;
+  private volatile String appBody = "{}";
+  private volatile long appDelayMs;
+
+  @org.junit.jupiter.api.AfterEach
+  void stopApp() {
+    if (app != null) {
+      app.stop(0);
+    }
+  }
+
+  /** Una aplicación de mentira en local que responde lo que diga el test. */
+  private String startApp() throws java.io.IOException {
+    app =
+        com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+    app.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
+    app.createContext(
+        "/",
+        exchange -> {
+          try {
+            Thread.sleep(appDelayMs);
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+          byte[] body = appBody.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+          exchange.sendResponseHeaders(appStatus, body.length);
+          exchange.getResponseBody().write(body);
+          exchange.close();
+        });
+    app.start();
+    return "http://127.0.0.1:" + app.getAddress().getPort() + "/actuator/info";
+  }
+
+  private JsonNode put(String uri, Object body) {
+    return http.put().uri(uri).body(body).retrieve().body(JsonNode.class);
+  }
+
+  private void healthCheck(String url, int attempts, int delay, boolean expectSha) {
+    put(
+        "/api/repositories/" + repositoryId + "/health-checks/omarchy",
+        Map.of(
+            "url", url,
+            "timeoutSeconds", 1,
+            "attempts", attempts,
+            "intervalSeconds", 1,
+            "initialDelaySeconds", delay,
+            "expectSha", expectSha));
+  }
+
+  private Deployments.Deployment awaitHealth(UUID id, Deployments.Health health) {
+    java.time.Instant deadline = java.time.Instant.now().plusSeconds(20);
+    while (java.time.Instant.now().isBefore(deadline)) {
+      Deployments.Deployment d = deployments.get(id);
+      if (d.health() == health) {
+        return d;
+      }
+      try {
+        Thread.sleep(100);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new AssertionError(e);
+      }
+    }
+    throw new AssertionError("La salud no llegó a " + health + ": " + deployments.get(id));
+  }
+
+  @Test
+  void aSuccessfulDeploymentIsCheckedAndHealthyWithEvidence() throws Exception {
+    appBody = "{\"git\":{\"commit\":{\"id\":\"1111111\"}}}";
+    healthCheck(startApp(), 3, 0, true);
+    Deployments.Deployment d = deploy("701", SHA_1, T0);
+    status(d.id(), "s1", Status.SUCCEEDED, T0.plusSeconds(10));
+
+    Deployments.Deployment healthy = awaitHealth(d.id(), Deployments.Health.HEALTHY);
+    assertThat(healthy.healthDetail()).startsWith("Intento 1: Responde 200 en");
+    assertThat(healthy.healthCheckedAt()).isNotNull();
+    JsonNode detail = get("/api/deployments/" + d.id());
+    assertThat(detail.path("probes")).hasSize(1);
+    assertThat(detail.path("probes").get(0).path("outcome").asString()).isEqualTo("OK");
+    assertThat(detail.path("probes").get(0).path("statusCode").asInt()).isEqualTo(200);
+    assertThat(eventTypes()).contains("deployment.health");
+    assertThat(
+            jdbc.sql(
+                    "SELECT payload ->> 'health' FROM event WHERE event_type = 'deployment.health'"
+                        + " AND sequence > ? ORDER BY sequence")
+                .param(baseline)
+                .query(String.class)
+                .list())
+        .containsExactly("CHECKING", "HEALTHY");
+  }
+
+  @Test
+  void aFailingAppIsUnhealthyAfterItsAttemptsAndAWrongShaToo() throws Exception {
+    appStatus = 503;
+    healthCheck(startApp(), 2, 0, false);
+    Deployments.Deployment d = deploy("702", SHA_1, T0);
+    status(d.id(), "s1", Status.SUCCEEDED, T0.plusSeconds(10));
+    Deployments.Deployment bad = awaitHealth(d.id(), Deployments.Health.UNHEALTHY);
+    assertThat(bad.healthDetail()).isEqualTo("Intento 2: Responde 503");
+    assertThat(bad.status()).isEqualTo(Status.SUCCEEDED);
+    assertThat(deployments.get(d.id()).healthAttempts()).isEqualTo(2);
+    assertThat(get("/api/deployments/" + d.id()).path("probes")).hasSize(2);
+
+    // Responde bien, pero con otra versión.
+    appStatus = 200;
+    appBody = "version 2222222";
+    healthCheck(urlOf(), 1, 0, true);
+    post("/api/deployments/" + d.id() + "/health-check", Map.of());
+    Deployments.Deployment mismatch = awaitHealth(d.id(), Deployments.Health.UNHEALTHY);
+    assertThat(mismatch.healthDetail()).contains("no con el SHA 1111111");
+  }
+
+  private String urlOf() {
+    return "http://127.0.0.1:" + app.getAddress().getPort() + "/actuator/info";
+  }
+
+  @Test
+  void anAppThatDoesNotAnswerTimesOut() throws Exception {
+    appDelayMs = 3000;
+    healthCheck(startApp(), 1, 0, false);
+    Deployments.Deployment d = deploy("703", SHA_1, T0);
+    status(d.id(), "s1", Status.SUCCEEDED, T0.plusSeconds(10));
+    Deployments.Deployment timedOut = awaitHealth(d.id(), Deployments.Health.TIMEOUT);
+    assertThat(timedOut.healthDetail()).isEqualTo("Intento 1: Sin respuesta en 1 s");
+  }
+
+  @Test
+  void aSupersededDeploymentStopsBeingCheckedAndTheNewOneIs() throws Exception {
+    healthCheck(startApp(), 3, 600, false);
+    Deployments.Deployment old = deploy("704", SHA_1, T0);
+    status(old.id(), "a", Status.SUCCEEDED, T0.plusSeconds(10));
+    assertThat(deployments.get(old.id()).health()).isEqualTo(Deployments.Health.CHECKING);
+
+    Deployments.Deployment newer = deploy("705", SHA_2, T0.plusSeconds(60));
+    status(newer.id(), "b", Status.SUCCEEDED, T0.plusSeconds(70));
+    Deployments.Deployment oldAfter = deployments.get(old.id());
+    assertThat(oldAfter.health()).isEqualTo(Deployments.Health.UNKNOWN);
+    assertThat(oldAfter.healthDetail()).isEqualTo("Sustituido antes de terminar la comprobación");
+    assertThat(deployments.get(newer.id()).health()).isEqualTo(Deployments.Health.CHECKING);
+    // Solo se comprueba lo desplegado.
+    assertThatThrownBy(() -> post("/api/deployments/" + old.id() + "/health-check", Map.of()))
+        .isInstanceOf(HttpClientErrorException.Conflict.class);
+    // «Comprobar ya» se salta el retraso inicial.
+    post("/api/deployments/" + newer.id() + "/health-check", Map.of());
+    awaitHealth(newer.id(), Deployments.Health.HEALTHY);
+  }
+
+  @Test
+  void withoutAHealthCheckNothingIsCheckedAndTheConfigIsValidated() throws Exception {
+    Deployments.Deployment d = deploy("706", SHA_1, T0);
+    status(d.id(), "s", Status.SUCCEEDED, T0.plusSeconds(10));
+    assertThat(deployments.get(d.id()).health()).isEqualTo(Deployments.Health.UNKNOWN);
+    assertThatThrownBy(() -> post("/api/deployments/" + d.id() + "/health-check", Map.of()))
+        .isInstanceOf(HttpClientErrorException.Conflict.class);
+
+    String base = "/api/repositories/" + repositoryId + "/health-checks/";
+    for (String bad :
+        List.of(
+            "ftp://demo.local/x", "http://user:pass@demo.local/", "http://demo.local/#x", "demo")) {
+      assertThatThrownBy(() -> put(base + "omarchy", Map.of("url", bad)))
+          .as(bad)
+          .isInstanceOf(HttpClientErrorException.BadRequest.class);
+    }
+    assertThatThrownBy(
+            () -> put(base + "omarchy", Map.of("url", "http://demo.local", "attempts", 0)))
+        .isInstanceOf(HttpClientErrorException.BadRequest.class);
+    assertThatThrownBy(() -> put(base + "mal entorno", Map.of("url", "http://demo.local")))
+        .isInstanceOf(HttpClientErrorException.BadRequest.class);
+
+    JsonNode saved = put(base + "omarchy", Map.of("url", "http://demo.local/health"));
+    assertThat(saved.path("timeoutSeconds").asInt()).isEqualTo(5);
+    assertThat(saved.path("attempts").asInt()).isEqualTo(6);
+    assertThat(saved.path("initialDelaySeconds").asInt()).isEqualTo(15);
+    assertThat(saved.path("enabled").asBoolean()).isTrue();
+    // Un cambio parcial conserva lo demás.
+    JsonNode changed = put(base + "omarchy", Map.of("attempts", 2));
+    assertThat(changed.path("url").asString()).isEqualTo("http://demo.local/health");
+    assertThat(changed.path("attempts").asInt()).isEqualTo(2);
+    assertThat(get("/api/repositories/" + repositoryId + "/health-checks")).hasSize(1);
+    http.delete().uri(base + "omarchy").retrieve().toBodilessEntity();
+    assertThatThrownBy(() -> http.delete().uri(base + "omarchy").retrieve().toBodilessEntity())
+        .isInstanceOf(HttpClientErrorException.NotFound.class);
+  }
+
+  @Test
+  void aDeploymentWithoutAnEndIsMarkedStuckUntilItsNextStatus() {
+    Deployments.Deployment d = deploy("801", SHA_1, T0);
+    status(d.id(), "s1", Status.IN_PROGRESS, T0.plusSeconds(5));
+    Deployments.Deployment fresh =
+        deployments.register(
+            new NewDeployment(
+                repositoryId, "otro", "802", SHA_2, null, null, null, null, Instant.now()));
+
+    assertThat(deployments.markStuck(java.time.Duration.ofMinutes(30))).isEqualTo(1);
+    assertThat(deployments.get(d.id()).stuckAt()).isNotNull();
+    assertThat(deployments.get(fresh.id()).stuckAt()).isNull();
+    // Ya marcado, no se vuelve a marcar.
+    assertThat(deployments.markStuck(java.time.Duration.ofMinutes(30))).isZero();
+    assertThat(eventTypes()).containsOnlyOnce("deployment.stuck");
+
+    status(d.id(), "s2", Status.SUCCEEDED, T0.plusSeconds(4000));
+    assertThat(deployments.get(d.id()).stuckAt()).isNull();
+  }
+
   private JsonNode get(String uri) {
     return http.get().uri(uri).retrieve().body(JsonNode.class);
   }
