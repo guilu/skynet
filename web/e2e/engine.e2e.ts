@@ -60,8 +60,8 @@ test('un workflow de tres fases termina igual aunque se reinicie el control plan
 
   await test.step('lanzar el workflow desde la web con sus datos', async () => {
     await page.goto(`/work-items/${workItemId}`)
-    await page.getByRole('button', { name: 'Lanzar workflow' }).click()
-    const sheet = page.getByRole('dialog', { name: 'Lanzar workflow' })
+    await page.getByRole('button', { name: 'Nuevo intento' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Nuevo intento' })
     await expect(sheet.getByLabel('Workflow')).toHaveValue('adhoc')
     await sheet.getByLabel('Workflow').selectOption(key)
     await sheet.getByLabel('Tema').fill('la suma')

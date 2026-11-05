@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, matchPath, useLocation } from 'react-router'
 import { api } from '../../api'
 import { sectionOf } from './nav'
+import { useAttempt } from '../work/attempts'
 import { Icon } from '../icons/Icon'
 
 interface Crumb {
@@ -12,7 +13,7 @@ interface Crumb {
 /**
  * Migas de la barra superior, sacadas de la ruta y encabezadas por el área (FS-A). Los nombres de
  * proyecto, trabajo y ejecución salen de las mismas consultas que usa la página, así que no
- * cuestan peticiones de más. En el móvil solo se ve «‹ padre», o la sección si no hay padre.
+ * cuestan peticiones de más. Una ejecución cuelga de su trabajo como «Intento N» (FS-E). En el móvil solo se ve «‹ padre», o la sección si no hay padre.
  */
 export function Breadcrumbs() {
   const { pathname } = useLocation()
@@ -27,17 +28,18 @@ export function Breadcrumbs() {
     queryFn: () => api.workItem(workItemId!),
     enabled: !!workItemId,
   })
-  const projectOf = projectId ?? item.data?.projectId
-  const project = useQuery({
-    queryKey: ['project', projectOf],
-    queryFn: () => api.project(projectOf!),
-    enabled: !!projectOf,
-  })
   const run = useQuery({
     queryKey: ['run', runId],
     queryFn: () => api.run(runId!),
     enabled: !!runId,
   })
+  const projectOf = projectId ?? item.data?.projectId ?? run.data?.projectId ?? undefined
+  const project = useQuery({
+    queryKey: ['project', projectOf],
+    queryFn: () => api.project(projectOf!),
+    enabled: !!projectOf,
+  })
+  const attempt = useAttempt(run.data)
 
   const projects: Crumb = { label: 'Proyectos', to: '/projects' }
   const projectCrumb = (to?: string): Crumb => ({
@@ -46,8 +48,8 @@ export function Breadcrumbs() {
   })
   let crumbs: Crumb[]
   let area: string | undefined
-  if (projectId || workItemId) area = 'Espacio de trabajo'
-  else if (runId || approvalId || workflowKey) area = 'Fábrica'
+  if (projectId || workItemId || runId) area = 'Espacio de trabajo'
+  else if (approvalId || workflowKey) area = 'Fábrica'
   if (projectId) crumbs = [projects, projectCrumb()]
   else if (workItemId)
     crumbs = [
@@ -56,9 +58,15 @@ export function Breadcrumbs() {
       { label: item.data?.key ?? 'Trabajo' },
     ]
   else if (runId)
+    // FS-E: una ejecución es un intento de un trabajo: Proyecto › Trabajo › Intento N.
     crumbs = [
-      { label: 'Ejecuciones', to: '/runs' },
-      { label: run.data?.workItemKey ?? 'Ejecución' },
+      projects,
+      projectCrumb(projectOf && `/projects/${projectOf}`),
+      {
+        label: run.data?.workItemKey ?? 'Trabajo',
+        to: run.data ? `/work-items/${run.data.workItemId}` : undefined,
+      },
+      { label: attempt ? `Intento ${attempt.number}` : 'Intento' },
     ]
   else if (approvalId)
     crumbs = [{ label: 'Aprobaciones', to: '/approvals' }, { label: 'Aprobación' }]

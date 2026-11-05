@@ -42,8 +42,8 @@ interface RunStage {
 
 async function launch(page: Page, workItemId: string, key: string): Promise<string> {
   await page.goto(`/work-items/${workItemId}`)
-  await page.getByRole('button', { name: 'Lanzar workflow' }).click()
-  const sheet = page.getByRole('dialog', { name: 'Lanzar workflow' })
+  await page.getByRole('button', { name: 'Nuevo intento' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Nuevo intento' })
   await sheet.getByLabel('Workflow').selectOption(key)
   const policies = sheet.getByRole('region', { name: 'Política de cada fase' })
   // Lo que Codex y Antigravity no admiten sale tachado.
@@ -180,8 +180,8 @@ test('un agente suelto con Antigravity y su modelo, lanzado desde la web', async
   const { workItemId } = await workItemViaApi(page)
 
   await page.goto(`/work-items/${workItemId}`)
-  await page.getByRole('button', { name: 'Lanzar workflow' }).click()
-  const sheet = page.getByRole('dialog', { name: 'Lanzar workflow' })
+  await page.getByRole('button', { name: 'Nuevo intento' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Nuevo intento' })
   await sheet.getByLabel('Prompt').fill('Revisa calc.py')
   await sheet.getByLabel('Proveedor').selectOption({ label: 'Antigravity CLI' })
   await expect(sheet.getByLabel('Modelo')).toHaveAttribute(

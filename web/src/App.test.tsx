@@ -593,7 +593,7 @@ describe('App', () => {
       '/api/providers': providers,
     })
     renderAt('/work-items/w1', <App />)
-    const open = await screen.findByRole('button', { name: 'Lanzar workflow' })
+    const open = await screen.findByRole('button', { name: 'Nuevo intento' })
     await waitFor(() => expect(open).toBeEnabled())
     fireEvent.click(open)
     fireEvent.change(await screen.findByLabelText('Prompt'), { target: { value: 'Haz X' } })
@@ -718,7 +718,7 @@ describe('App', () => {
       ],
     })
     renderAt('/work-items/w1', <App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Lanzar workflow' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Nuevo intento' }))
     // adhoc sale el primero y es el que se elige por defecto.
     const select = await screen.findByLabelText('Workflow')
     await waitFor(() => expect(select).toHaveValue('adhoc'))
