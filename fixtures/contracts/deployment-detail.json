@@ -1,0 +1,53 @@
+{
+  "deployment" : {
+    "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a41",
+    "repositoryId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a03",
+    "environment" : "omarchy",
+    "externalId" : "3141592653",
+    "commitSha" : "99179be71dd8ad0823c9f405fbfd2c3b8122ff5f",
+    "ref" : "claude/dl-c",
+    "pullRequestNumber" : 245,
+    "url" : "http://omarchy:8081",
+    "creator" : "hermes",
+    "status" : "SUCCEEDED",
+    "health" : "HEALTHY",
+    "error" : null,
+    "requestedAt" : "2026-11-05T18:00:00Z",
+    "startedAt" : "2026-11-05T18:00:05Z",
+    "finishedAt" : "2026-11-05T18:01:30Z",
+    "statusAt" : "2026-11-05T18:01:30Z",
+    "supersededBy" : null,
+    "createdAt" : "2026-11-05T18:00:00Z",
+    "updatedAt" : "2026-11-05T18:02:10Z",
+    "healthDetail" : "Intento 2: Responde 200",
+    "healthCheckedAt" : "2026-11-05T18:02:10Z",
+    "healthAttempts" : 2,
+    "stuckAt" : null
+  },
+  "statuses" : [ {
+    "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a43",
+    "externalId" : "2718281828",
+    "state" : "SUCCEEDED",
+    "description" : "docker compose up -d: OK",
+    "occurredAt" : "2026-11-05T18:01:30Z",
+    "applied" : true,
+    "receivedAt" : "2026-11-05T18:01:31Z"
+  } ],
+  "probes" : [ {
+    "attempt" : 1,
+    "url" : "http://omarchy:8081/actuator/health",
+    "outcome" : "BAD_STATUS",
+    "statusCode" : 503,
+    "latencyMs" : 40,
+    "detail" : "Responde 503",
+    "checkedAt" : "2026-11-05T18:01:45Z"
+  }, {
+    "attempt" : 2,
+    "url" : "http://omarchy:8081/actuator/health",
+    "outcome" : "OK",
+    "statusCode" : 200,
+    "latencyMs" : 35,
+    "detail" : "Responde 200",
+    "checkedAt" : "2026-11-05T18:02:10Z"
+  } ]
+}

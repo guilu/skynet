@@ -4843,6 +4843,111 @@
     font-size: 1rem;
   }
 
+  /* ---------- Despliegues (DL-E) ---------- */
+  .deploy-repos {
+    display: grid;
+    gap: 20px;
+  }
+
+  .deploy-repo {
+    margin-top: 0;
+    padding: 18px 20px;
+    display: grid;
+    gap: var(--space-3);
+    min-width: 0;
+  }
+
+  .deploy-repo .section-head {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .deploy-repo h2 {
+    margin: 0;
+  }
+
+  .deploy-repo p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .deploy-envs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+    gap: var(--space-3);
+  }
+
+  .deploy-env {
+    display: grid;
+    gap: var(--space-2);
+    align-content: start;
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    min-width: 0;
+  }
+
+  .deploy-env h3,
+  .deploy-subtitle {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .deploy-latest {
+    display: grid;
+    gap: 6px;
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border);
+  }
+
+  .deploy-pills {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .deploy-detail {
+    display: grid;
+    gap: var(--space-4);
+    min-width: 0;
+  }
+
+  .deploy-probes .pill {
+    justify-self: start;
+  }
+
+  .deploy-detail code {
+    word-break: break-all;
+  }
+
+  .deploy-detail h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .deploy-probes,
+  .deploy-statuses {
+    display: grid;
+    gap: var(--space-2);
+    margin: var(--space-2) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .deploy-probes li,
+  .deploy-statuses li {
+    display: grid;
+    gap: 4px;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow-wrap: anywhere;
+  }
+
   .trigger-list {
     display: grid;
     gap: var(--space-2);

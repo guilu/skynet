@@ -1,0 +1,13 @@
+[ {
+  "repositoryId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a03",
+  "environment" : "omarchy",
+  "url" : "http://omarchy:8081/actuator/health",
+  "timeoutSeconds" : 5,
+  "attempts" : 6,
+  "intervalSeconds" : 10,
+  "initialDelaySeconds" : 15,
+  "expectSha" : false,
+  "enabled" : true,
+  "createdAt" : "2026-11-05T18:00:00Z",
+  "updatedAt" : "2026-11-05T18:00:00Z"
+} ]

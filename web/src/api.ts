@@ -1545,6 +1545,116 @@ export interface RunQueuePosition {
 /** Qué enseña una lista respecto a lo archivado: lo vigente (por defecto), lo archivado o todo. */
 export type ArchivedFilter = 'false' | 'true' | 'all'
 
+/** Estado de un despliegue (DL): cómo terminó, aparte de si responde. */
+export type DeploymentStatus = 'PENDING' | 'IN_PROGRESS' | 'SUCCEEDED' | 'FAILED' | 'SUPERSEDED'
+
+/** Salud de lo desplegado (DL-C): la comprueba Skynet con la URL que configura el admin. */
+export type DeploymentHealth = 'UNKNOWN' | 'CHECKING' | 'HEALTHY' | 'UNHEALTHY' | 'TIMEOUT'
+
+/** Un despliegue de un repositorio en un entorno (DL-A). */
+export interface Deployment {
+  id: string
+  repositoryId: string
+  environment: string
+  /** El id de GitHub Deployments. */
+  externalId: string
+  commitSha: string
+  ref: string | null
+  pullRequestNumber: number | null
+  /** La URL que mandó el listener; solo se enseña, la salud usa la configurada. */
+  url: string | null
+  creator: string | null
+  status: DeploymentStatus
+  health: DeploymentHealth
+  error: string | null
+  requestedAt: string
+  startedAt: string | null
+  finishedAt: string | null
+  statusAt: string | null
+  /** El despliegue que lo sustituyó. */
+  supersededBy: string | null
+  createdAt: string
+  updatedAt: string
+  healthDetail: string | null
+  healthCheckedAt: string | null
+  healthAttempts: number
+  /** Cuándo se marcó atascado; null si no lo está. */
+  stuckAt: string | null
+}
+
+/** Un entorno: lo desplegado ahora y el último despliegue pedido. */
+export interface DeploymentEnvironment {
+  environment: string
+  deployed: Deployment | null
+  latest: Deployment | null
+}
+
+/** Un estado recibido; `applied` falso si llegó tarde o el despliegue ya estaba sustituido. */
+export interface DeploymentStatusRecord {
+  id: string
+  externalId: string
+  state: DeploymentStatus
+  description: string | null
+  occurredAt: string
+  applied: boolean
+  receivedAt: string
+}
+
+export type HealthProbeOutcome = 'OK' | 'BAD_STATUS' | 'SHA_MISMATCH' | 'TIMEOUT' | 'ERROR'
+
+/** Un intento de la comprobación de salud: la evidencia. */
+export interface HealthProbe {
+  attempt: number
+  url: string
+  outcome: HealthProbeOutcome
+  statusCode: number | null
+  latencyMs: number | null
+  detail: string | null
+  checkedAt: string
+}
+
+export interface DeploymentDetail {
+  deployment: Deployment
+  statuses: DeploymentStatusRecord[]
+  probes: HealthProbe[]
+}
+
+/** La comprobación de salud de un entorno (DL-C). */
+export interface HealthCheck {
+  repositoryId: string
+  environment: string
+  url: string
+  timeoutSeconds: number
+  attempts: number
+  intervalSeconds: number
+  initialDelaySeconds: number
+  expectSha: boolean
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type HealthCheckDraft = Partial<
+  Pick<
+    HealthCheck,
+    | 'url'
+    | 'timeoutSeconds'
+    | 'attempts'
+    | 'intervalSeconds'
+    | 'initialDelaySeconds'
+    | 'expectSha'
+    | 'enabled'
+  >
+>
+
+/** Lo que hizo una reconciliación con GitHub. */
+export interface DeploymentReconciled {
+  repositoryId: string
+  deployments: number
+  statuses: number
+  changed: number
+}
+
 /** Algo que se puede archivar, restaurar y eliminar. */
 export type ArchiveTarget =
   | { kind: 'project'; id: string }
@@ -1717,6 +1827,31 @@ export const api = {
     request<RunQueue>('PUT', `/api/repositories/${repositoryId}/run-queue`, { maxConcurrentRuns }),
   runQueuePosition: (runId: string) =>
     request<RunQueuePosition>('GET', `/api/workflow-runs/${runId}/queue`),
+  deployments: (repositoryId: string, limit = 20) =>
+    request<Deployment[]>('GET', `/api/repositories/${repositoryId}/deployments?limit=${limit}`),
+  deploymentEnvironments: (repositoryId: string) =>
+    request<DeploymentEnvironment[]>('GET', `/api/repositories/${repositoryId}/environments`),
+  deployment: (id: string) => request<DeploymentDetail>('GET', `/api/deployments/${id}`),
+  recheckDeployment: (id: string) =>
+    request<Deployment>('POST', `/api/deployments/${id}/health-check`),
+  reconcileDeployments: (repositoryId: string) =>
+    request<DeploymentReconciled>(
+      'POST',
+      `/api/repositories/${repositoryId}/deployments/reconcile`,
+    ),
+  healthChecks: (repositoryId: string) =>
+    request<HealthCheck[]>('GET', `/api/repositories/${repositoryId}/health-checks`),
+  saveHealthCheck: (repositoryId: string, environment: string, body: HealthCheckDraft) =>
+    request<HealthCheck>(
+      'PUT',
+      `/api/repositories/${repositoryId}/health-checks/${encodeURIComponent(environment)}`,
+      body,
+    ),
+  deleteHealthCheck: (repositoryId: string, environment: string) =>
+    request<void>(
+      'DELETE',
+      `/api/repositories/${repositoryId}/health-checks/${encodeURIComponent(environment)}`,
+    ),
   login: (username: string, password: string) =>
     request<Session>('POST', '/api/auth/login', { username, password }),
   logout: () => request<void>('POST', '/api/auth/logout'),

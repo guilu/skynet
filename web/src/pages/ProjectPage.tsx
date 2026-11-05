@@ -35,6 +35,8 @@ import {
   VerificationForm,
 } from '../components/project/RepositoryForms'
 import { RepositoryTriggers } from '../components/project/RepositoryTriggers'
+import { HealthCheckSection } from '../components/deployment/HealthCheckSection'
+import { ProjectDeployments } from '../components/deployment/ProjectDeployments'
 import { StatusBadge } from '../components/StatusBadge'
 import { Button } from '../components/ui/Button'
 import { Sheet } from '../components/ui/Sheet'
@@ -45,9 +47,19 @@ import { CompanionPeek } from '../components/companion/CompanionPeek'
 import { useCompanion } from '../components/companion/context'
 import { groupExpression } from '../components/companion/peek'
 
-type ProjectTab = 'summary' | 'work' | 'runs' | 'changes' | 'workflows' | 'memory' | 'config'
+type ProjectTab =
+  'summary' | 'work' | 'runs' | 'changes' | 'deployments' | 'workflows' | 'memory' | 'config'
 
-const TABS: ProjectTab[] = ['summary', 'work', 'runs', 'changes', 'workflows', 'memory', 'config']
+const TABS: ProjectTab[] = [
+  'summary',
+  'work',
+  'runs',
+  'changes',
+  'deployments',
+  'workflows',
+  'memory',
+  'config',
+]
 type SheetKind = 'work-item' | 'repository'
 
 const TYPE_LABEL = Object.fromEntries(WORK_ITEM_TYPES.map((t) => [t.value, t.label]))
@@ -179,6 +191,7 @@ export function ProjectPage() {
             { id: 'work', label: 'Trabajos', icon: 'work-items', count: items.data?.length },
             { id: 'runs', label: 'Ejecuciones', icon: 'runs' },
             { id: 'changes', label: 'Cambios', icon: 'branch' },
+            { id: 'deployments', label: 'Despliegues', icon: 'upload' },
             { id: 'workflows', label: 'Workflows', icon: 'workflows' },
             { id: 'memory', label: 'Memoria', icon: 'memory' },
             { id: 'config', label: 'Configuración', icon: 'settings', count: repos.data?.length },
@@ -202,6 +215,8 @@ export function ProjectPage() {
           <ProjectRuns projectId={projectId} />
         ) : tab === 'changes' ? (
           <ProjectChanges projectId={projectId} />
+        ) : tab === 'deployments' ? (
+          <ProjectDeployments repositories={repos.data} editable={editable} />
         ) : tab === 'workflows' ? (
           <ProjectWorkflows projectId={projectId} />
         ) : tab === 'memory' ? (
@@ -386,6 +401,8 @@ function RepositoryCard({
       <GitHubSection repository={r} />
 
       <RepositoryTriggers repository={r} editable={editable} />
+
+      <HealthCheckSection repository={r} editable={editable} />
 
       <section className="repo-section" aria-label={`Política de agentes de ${r.name}`}>
         <div className="repo-section-head">
