@@ -242,6 +242,171 @@ class GitHubWebhooksIT extends IntegrationTest {
     assertThat(GITHUB.redelivered).containsExactly(104L);
   }
 
+  // DL-B: los despliegues de GitHub Deployments. Van aquí, y no en su propia clase, para
+  // compartir el contexto de Spring (y sus conexiones a la base de datos) con el resto de webhooks.
+
+  private static final String DEPLOYED_SHA = "4f1c2a9e0b7d3c5e8f6a1b2c3d4e5f60718293a4";
+
+  @Test
+  void aDeploymentAndItsStatusesAreRecordedOnce() throws Exception {
+    UUID repository = repository("demo", "https://github.com/guilu/demo-repo");
+
+    assertThat(signed("deployment", "dl-1", fixture("deployment-created")).statusCode())
+        .isEqualTo(202);
+    awaitDelivery("dl-1", "PROCESSED");
+    JsonNode created = deployments(repository).get(0);
+    assertThat(created.path("externalId").asString()).isEqualTo("900001");
+    assertThat(created.path("environment").asString()).isEqualTo("omarchy");
+    assertThat(created.path("commitSha").asString()).isEqualTo(DEPLOYED_SHA);
+    assertThat(created.path("ref").asString()).isEqualTo("skynet/demo-7");
+    assertThat(created.path("pullRequestNumber").asInt()).isEqualTo(12);
+    assertThat(created.path("creator").asString()).isEqualTo("guilu");
+    assertThat(created.path("status").asString()).isEqualTo("PENDING");
+    assertThat(created.path("requestedAt").asString()).isEqualTo("2026-11-05T18:00:00Z");
+
+    signed("deployment_status", "dl-2", status(950001, "in_progress", "2026-11-05T18:00:05Z"));
+    signed("deployment_status", "dl-3", fixture("deployment_status-created"));
+    awaitDelivery("dl-3", "PROCESSED");
+    awaitDelivery("dl-2", "PROCESSED");
+    // GitHub repite la entrega con otro id: el estado ya está.
+    signed("deployment_status", "dl-3b", fixture("deployment_status-created"));
+    awaitDelivery("dl-3b", "PROCESSED");
+
+    JsonNode deployment = deployments(repository).get(0);
+    assertThat(deployments(repository)).hasSize(1);
+    assertThat(deployment.path("status").asString()).isEqualTo("SUCCEEDED");
+    assertThat(deployment.path("health").asString()).isEqualTo("UNKNOWN");
+    assertThat(deployment.path("url").asString()).isEqualTo("http://omarchy.local:8081");
+    assertThat(deployment.path("startedAt").asString()).isEqualTo("2026-11-05T18:00:05Z");
+    assertThat(deployment.path("finishedAt").asString()).isEqualTo("2026-11-05T18:01:30Z");
+    JsonNode detail = get("/api/deployments/" + deployment.path("id").asString());
+    assertThat(detail.path("statuses")).hasSize(2);
+
+    // El evento github.* del repositorio lleva el resumen.
+    JsonNode events =
+        http.get()
+            .uri(
+                "/api/events?aggregateId=" + repository + "&types=github.deployment_status.created")
+            .retrieve()
+            .body(JsonNode.class);
+    assertThat(events.findValuesAsString("state")).contains("in_progress", "success");
+    assertThat(events.get(0).path("payload").path("sha").asString()).isEqualTo(DEPLOYED_SHA);
+  }
+
+  @Test
+  void aStatusWithoutItsDeploymentAndOutOfOrderStillEndsRight() throws Exception {
+    UUID repository = repository("demo", "https://github.com/guilu/demo-repo");
+
+    // Llega antes el final que el «en curso», y nunca el deployment.
+    signed("deployment_status", "dl-a", fixture("deployment_status-created"));
+    awaitDelivery("dl-a", "PROCESSED");
+    signed("deployment_status", "dl-b", status(950001, "in_progress", "2026-11-05T18:00:05Z"));
+    awaitDelivery("dl-b", "PROCESSED");
+    signed("deployment", "dl-c", fixture("deployment-created"));
+    awaitDelivery("dl-c", "PROCESSED");
+
+    JsonNode deployment = deployments(repository).get(0);
+    assertThat(deployments(repository)).hasSize(1);
+    assertThat(deployment.path("status").asString()).isEqualTo("SUCCEEDED");
+    assertThat(deployment.path("pullRequestNumber").asInt()).isEqualTo(12);
+    JsonNode statuses =
+        get("/api/deployments/" + deployment.path("id").asString()).path("statuses");
+    assertThat(statuses.findValuesAsString("state")).containsExactly("IN_PROGRESS", "SUCCEEDED");
+    assertThat(statuses.get(0).path("applied").asBoolean()).isFalse();
+  }
+
+  @Test
+  void aFailureKeepsItsRedactedErrorAndInactiveIsIgnored() throws Exception {
+    UUID repository = repository("demo", "https://github.com/guilu/demo-repo");
+    byte[] failure =
+        new String(fixture("deployment_status-created"), StandardCharsets.UTF_8)
+            .replace("\"success\"", "\"error\"")
+            .replace(
+                "docker compose up -d: OK",
+                "pull falló con token=ghp_abcdefghijklmnopqrstuvwxyz0123456789")
+            .getBytes(StandardCharsets.UTF_8);
+    signed("deployment_status", "dl-f", failure);
+    awaitDelivery("dl-f", "PROCESSED");
+    signed("deployment_status", "dl-i", status(950009, "inactive", "2026-11-05T19:00:00Z"));
+    awaitDelivery("dl-i", "PROCESSED");
+
+    JsonNode deployment = deployments(repository).get(0);
+    assertThat(deployment.path("status").asString()).isEqualTo("FAILED");
+    assertThat(deployment.path("error").asString())
+        .startsWith("pull falló")
+        .doesNotContain("ghp_abcdef");
+    assertThat(get("/api/deployments/" + deployment.path("id").asString()).path("statuses"))
+        .hasSize(1);
+    String body =
+        jdbc.sql("SELECT payload::text FROM event WHERE event_type LIKE 'github.deployment%'")
+            .query(String.class)
+            .list()
+            .toString();
+    assertThat(body).doesNotContain("ghp_abcdef");
+  }
+
+  @Test
+  void aNewerDeploymentSupersedesTheOlderOne() throws Exception {
+    UUID repository = repository("demo", "https://github.com/guilu/demo-repo");
+    signed("deployment_status", "dl-old", fixture("deployment_status-created"));
+    awaitDelivery("dl-old", "PROCESSED");
+    String newer =
+        new String(fixture("deployment_status-created"), StandardCharsets.UTF_8)
+            .replace("900001", "900002")
+            .replace("950002", "950102")
+            .replace(DEPLOYED_SHA, "b".repeat(40))
+            .replace("2026-11-05T18:00:00Z", "2026-11-05T19:00:00Z")
+            .replace("2026-11-05T18:01:30Z", "2026-11-05T19:01:30Z");
+    signed("deployment_status", "dl-new", newer.getBytes(StandardCharsets.UTF_8));
+    awaitDelivery("dl-new", "PROCESSED");
+
+    JsonNode environments = get("/api/repositories/" + repository + "/environments");
+    assertThat(environments.get(0).path("deployed").path("commitSha").asString())
+        .isEqualTo("b".repeat(40));
+    assertThat(deployments(repository).findValuesAsString("status"))
+        .containsExactly("SUCCEEDED", "SUPERSEDED");
+  }
+
+  @Test
+  void aDeploymentOfAnUnknownRepositoryIsIgnoredAndABadSignatureRejected() throws Exception {
+    repository("otro", "https://github.com/guilu/otro");
+    byte[] body = fixture("deployment-created");
+    assertThat(send("deployment", "dl-bad", body, "sha256=" + "0".repeat(64)).statusCode())
+        .isEqualTo(401);
+    signed("deployment", "dl-unknown", body);
+    awaitDelivery("dl-unknown", "IGNORED");
+    assertThat(jdbc.sql("SELECT count(*) FROM deployment").query(Integer.class).single()).isZero();
+  }
+
+  @Test
+  void anEnvironmentNameIsMadeValid() throws Exception {
+    UUID repository = repository("demo", "https://github.com/guilu/demo-repo");
+    byte[] body =
+        new String(fixture("deployment-created"), StandardCharsets.UTF_8)
+            .replace("\"omarchy\"", "\"Omarchy (compartido)\"")
+            .getBytes(StandardCharsets.UTF_8);
+    signed("deployment", "dl-env", body);
+    awaitDelivery("dl-env", "PROCESSED");
+    assertThat(deployments(repository).get(0).path("environment").asString())
+        .isEqualTo("Omarchy-compartido-");
+  }
+
+  private byte[] status(long id, String state, String at) throws IOException {
+    return new String(fixture("deployment_status-created"), StandardCharsets.UTF_8)
+        .replace("950002", Long.toString(id))
+        .replace("\"success\"", "\"" + state + "\"")
+        .replace("\"created_at\": \"2026-11-05T18:01:30Z\"", "\"created_at\": \"" + at + "\"")
+        .getBytes(StandardCharsets.UTF_8);
+  }
+
+  private JsonNode deployments(UUID repository) {
+    return get("/api/repositories/" + repository + "/deployments");
+  }
+
+  private JsonNode get(String uri) {
+    return http.get().uri(uri).retrieve().body(JsonNode.class);
+  }
+
   private UUID repository(String name, String remoteUrl) {
     Map<String, Object> body = new HashMap<>();
     body.put("name", name);

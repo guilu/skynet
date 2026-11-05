@@ -5,7 +5,7 @@ Skynet lleva la cuenta de **qué versión de cada repositorio hay en cada entorn
 | PR | Qué añade |
 |---|---|
 | DL-A | el modelo, la migración `V45` y la API de lectura |
-| DL-B | los eventos `deployment` y `deployment_status` de GitHub Deployments, por el webhook de la App |
+| DL-B | los eventos `deployment` y `deployment_status` de GitHub Deployments, por el webhook de la App, y `scripts/notify-deployment.sh` para los listeners |
 | DL-C | las comprobaciones de salud, la reconciliación y los despliegues atascados |
 | DL-E | la interfaz por proyecto y repositorio |
 | DL-D | los disparadores de workflows por eventos de despliegue |
@@ -38,7 +38,55 @@ Un fallo de salud no revierte nada: se registra y se avisa.
 - **Serializado por destino.** Los cambios de un mismo repositorio y entorno se hacen de uno en uno (bloqueo de la transacción).
 - **La URL del despliegue solo se enseña.** La salud (DL-C) usa una URL que configura el admin, nunca la que llega en el evento.
 
-## 3. API
+## 3. Cómo llegan: GitHub Deployments (DL-B)
+
+Los listeners que despliegan avisan a **GitHub**, no a Skynet: crean un *deployment* y le van poniendo estados. GitHub manda los webhooks `deployment` y `deployment_status` a la App de Skynet, por el mismo canal firmado que el resto ([`github.md`](github.md)).
+- No hay un receptor ni un secreto nuevos.
+- Una entrega repetida se ignora.
+- Si Skynet no estaba (por ejemplo, porque se está desplegando a sí mismo), la red de seguridad de GH-B pide a GitHub las entregas que fallaron.
+- La PR muestra «Deployed to omarchy».
+
+**En la App** (Settings → Developer settings → GitHub Apps → la de Skynet):
+- añade el permiso **Deployments: lectura**;
+- marca los eventos **Deployment** y **Deployment status**;
+- acepta el cambio en la instalación.
+
+**En el listener**, con `scripts/notify-deployment.sh` y un `GITHUB_TOKEN` con **Deployments: lectura y escritura** en el repositorio. Puede ser un token fino del usuario; no es el de la App de Skynet.
+
+```bash
+id=$(scripts/notify-deployment.sh start guilu/skynet "$SHA" "$RAMA" "$PR")   # PR opcional
+scripts/notify-deployment.sh status guilu/skynet "$id" in_progress
+# … git checkout + docker compose up -d …
+scripts/notify-deployment.sh status guilu/skynet "$id" success "docker compose up -d: OK" http://omarchy:8081
+# o, si falla:
+scripts/notify-deployment.sh status guilu/skynet "$id" failure "docker compose pull falló"
+```
+
+- El entorno es `omarchy` por defecto (`DEPLOY_ENVIRONMENT`).
+- El script despliega el **SHA exacto** y no exige checks: eso ya lo decide Hermes.
+- Reintenta la red y los 5xx con espera creciente, y nunca imprime el token.
+- El aviso por Telegram y el despliegue en sí no cambian. Si GitHub no responde, el listener puede seguir desplegando: el aviso a Skynet no debe parar el despliegue.
+
+Cómo lo traduce Skynet:
+
+| GitHub | Skynet |
+|---|---|
+| `deployment.id` | `externalId` |
+| `deployment.sha`, `ref`, `environment`, `creator`, `created_at` | `commitSha`, `ref`, `environment`, `creator`, `requestedAt` |
+| `deployment.payload.pull_request` | `pullRequestNumber` |
+| estado `pending`, `queued` | `PENDING` |
+| estado `in_progress` | `IN_PROGRESS` |
+| estado `success` | `SUCCEEDED` |
+| estado `failure`, `error` | `FAILED`, con la descripción como `error` |
+| estado `inactive` | se ignora: lo pone GitHub a los anteriores, y eso ya es `SUPERSEDED` |
+| `deployment_status.environment_url` | `url`, si es http(s) y sin usuario |
+
+Más detalles:
+- Un `deployment_status` basta aunque el `deployment` no haya llegado.
+- Un entorno con caracteres que Skynet no admite se limpia: `Omarchy (compartido)` pasa a `Omarchy-compartido-`.
+- Cada entrega publica además el evento `github.deployment.created` o `github.deployment_status.created` en el repositorio, como el resto de webhooks.
+
+## 4. API
 
 Todas piden la sesión de admin.
 
@@ -50,6 +98,6 @@ Todas piden la sesión de admin.
 
 Un despliegue lleva `id`, `repositoryId`, `environment`, `externalId`, `commitSha`, `ref`, `pullRequestNumber`, `url`, `creator`, `status`, `health`, `error`, `requestedAt`, `startedAt`, `finishedAt`, `statusAt`, `supersededBy`, `createdAt` y `updatedAt`.
 
-## 4. Eventos
+## 5. Eventos
 
 Con aggregate `deployment`: `deployment.created`, `deployment.status` (con `state`, `previous` y `applied`) y `deployment.superseded` (con `supersededBy`). No llevan el texto del error.

@@ -28,6 +28,9 @@ jobs:
       # Qué E2E lanza cada PR (.github/workflows/e2e.yml).
       - name: Pruebas de scripts/ci/e2e-alcance.sh
         run: scripts/tests/e2e-alcance.test.sh
+      # El aviso de despliegues de los listeners (DL-B), contra un GitHub falso.
+      - name: Pruebas de scripts/notify-deployment.sh
+        run: scripts/tests/notify-deployment.test.sh
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

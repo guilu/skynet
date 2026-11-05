@@ -29,8 +29,9 @@ Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la 
    | Commit statuses | lectura | la CI que usa statuses (EN) |
    | Actions | lectura | leer los logs de la CI que falla (EN-B) |
    | Issues | lectura y escritura | lanzar desde una etiqueta y comentar en la issue (DS) |
+   | Deployments | lectura | ver los despliegues de los listeners (DL-B) |
 
-   Se piden ya los permisos de EN y DS para no tener que volver a aceptar la instalación más adelante. **Actions: lectura** llegó con EN-B: si la App ya estaba creada, añádelo en sus permisos y acepta el cambio en la instalación (Settings → Applications). Hasta entonces, la CI roja se corrige solo con las anotaciones. **Sin el permiso `Workflows`**: así ningún agente puede tocar `.github/workflows`.
+   Se piden ya los permisos de EN y DS para no tener que volver a aceptar la instalación más adelante. **Actions: lectura** llegó con EN-B: si la App ya estaba creada, añádelo en sus permisos y acepta el cambio en la instalación (Settings → Applications). Hasta entonces, la CI roja se corrige solo con las anotaciones. **Deployments: lectura** y los eventos **Deployment** y **Deployment status** llegaron con DL-B; añádelos igual (ver [`despliegues.md`](despliegues.md) §3). **Sin el permiso `Workflows`**: así ningún agente puede tocar `.github/workflows`.
 4. **Eventos:**
    - Pull request
    - Pull request review
@@ -39,6 +40,8 @@ Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la 
    - Status
    - Issues
    - Issue comment
+   - Deployment
+   - Deployment status
 
    `installation` e `installation_repositories` llegan siempre.
 5. Instalable **solo en tu cuenta**. Crea la App y genera una **clave privada** (un `.pem`).

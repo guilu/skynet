@@ -81,6 +81,19 @@ final class WebhookSummary {
         put(summary, "commentUrl", comment.path("html_url"));
         text(summary, "commentBody", comment.path("body"), redact);
       }
+      case "deployment", "deployment_status" -> {
+        JsonNode deployment = payload.path("deployment");
+        put(summary, "deploymentId", deployment.path("id"));
+        put(summary, "sha", deployment.path("sha"));
+        put(summary, "ref", deployment.path("ref"));
+        put(summary, "environment", deployment.path("environment"));
+        put(summary, "creator", deployment.path("creator").path("login"));
+        JsonNode status = payload.path("deployment_status");
+        put(summary, "statusId", status.path("id"));
+        put(summary, "state", status.path("state"));
+        put(summary, "environmentUrl", status.path("environment_url"));
+        text(summary, "description", status.path("description"), redact);
+      }
       default -> {
         // Los demás eventos solo llevan lo común.
       }
