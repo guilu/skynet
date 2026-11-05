@@ -93,9 +93,16 @@ public class Deployments {
    * @param externalId su id en el origen; la clave de idempotencia
    * @param state {@code PENDING}, {@code IN_PROGRESS}, {@code SUCCEEDED} o {@code FAILED}
    * @param description el texto del origen; en un fallo, el error. Pasa por el redactor.
+   * @param url dónde queda la aplicación según este estado, o {@code null}; si no es una URL
+   *     http(s) sin credenciales, se descarta. Solo se enseña.
    */
   public record StatusUpdate(
-      String externalId, Status state, String description, Instant occurredAt) {}
+      String externalId, Status state, String description, Instant occurredAt, String url) {
+
+    public StatusUpdate(String externalId, Status state, String description, Instant occurredAt) {
+      this(externalId, state, description, occurredAt, null);
+    }
+  }
 
   public record Deployment(
       UUID id,
@@ -256,7 +263,7 @@ public class Deployments {
             : current.startedAt();
     jdbc.sql(
             "UPDATE deployment SET status = ?, status_at = ?, updated_at = ?, started_at = ?,"
-                + " finished_at = ?, error = ? WHERE id = ?")
+                + " finished_at = ?, error = ?, url = ? WHERE id = ?")
         .params(
             update.state().name(),
             at,
@@ -264,6 +271,7 @@ public class Deployments {
             started == null ? null : Timestamp.from(started),
             update.state().finished() ? at : null,
             update.state() == Status.FAILED ? update.description() : null,
+            update.url() == null ? current.url() : update.url(),
             deploymentId)
         .update();
     events.append(EventDraft.of(AGGREGATE, deploymentId, "deployment.status", null, payload, now));
@@ -333,6 +341,15 @@ public class Deployments {
       payload.put("supersededBy", by.toString());
       events.append(EventDraft.of(AGGREGATE, id, "deployment.superseded", null, payload, now));
     }
+  }
+
+  /**
+   * Bloquea a la vez el entorno en varios repositorios, antes de registrar ningún evento: así el
+   * bloqueo del entorno se toma siempre antes que el de la secuencia de eventos.
+   */
+  @Transactional
+  void lockEnvironments(java.util.Collection<UUID> repositoryIds, String environment) {
+    repositoryIds.stream().sorted().forEach(id -> lockEnvironment(id, environment));
   }
 
   /** Serializa los cambios de un entorno: dos despliegues del mismo destino no se cruzan. */
@@ -476,7 +493,16 @@ public class Deployments {
         limited(required(u.externalId(), "externalId"), 200, "externalId"),
         u.state(),
         description == null || description.isEmpty() ? null : truncate(description, MAX_TEXT),
-        u.occurredAt() == null ? time.now() : u.occurredAt());
+        u.occurredAt() == null ? time.now() : u.occurredAt(),
+        lenientUrl(u.url()));
+  }
+
+  private static String lenientUrl(String value) {
+    try {
+      return url(value);
+    } catch (InvalidRequestException e) {
+      return null;
+    }
   }
 
   /** Solo http(s) y sin credenciales: la URL se enseña como enlace. */

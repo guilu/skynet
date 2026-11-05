@@ -44,6 +44,7 @@ class WebhookProcessor {
   private final TimeSource time;
   private final ApplicationEventPublisher publisher;
   private final List<IssueHandler> issueHandlers;
+  private final List<DeploymentHandler> deploymentHandlers;
 
   WebhookProcessor(
       WebhookQueue queue,
@@ -54,7 +55,8 @@ class WebhookProcessor {
       TransactionTemplate transactions,
       TimeSource time,
       ApplicationEventPublisher publisher,
-      List<IssueHandler> issueHandlers) {
+      List<IssueHandler> issueHandlers,
+      List<DeploymentHandler> deploymentHandlers) {
     this.queue = queue;
     this.installations = installations;
     this.events = events;
@@ -64,6 +66,7 @@ class WebhookProcessor {
     this.time = time;
     this.publisher = publisher;
     this.issueHandlers = List.copyOf(issueHandlers);
+    this.deploymentHandlers = List.copyOf(deploymentHandlers);
   }
 
   @Scheduled(fixedDelayString = "${skynet.github.webhooks.poll-interval:1s}")
@@ -154,6 +157,12 @@ class WebhookProcessor {
       return handled
           ? Outcome.processed(0)
           : Outcome.ignored("Ningún repositorio de Skynet es " + name.asString());
+    }
+    // Antes de registrar los eventos github.*: quien atiende el despliegue bloquea su entorno, y
+    // ese bloqueo se toma siempre antes que el de la secuencia de eventos.
+    GitHubDeployment deployment = deployment(delivery, payload, name.asString(), repositories);
+    if (deployment != null) {
+      deploymentHandlers.forEach(handler -> handler.handle(deployment));
     }
     String type =
         "github." + delivery.event() + (delivery.action() == null ? "" : "." + delivery.action());
@@ -292,6 +301,72 @@ class WebhookProcessor {
       handled |= handler.handleComment(comment);
     }
     return handled;
+  }
+
+  /**
+   * El despliegue de un webhook {@code deployment.created} o {@code deployment_status.created}
+   * (DL-B), o {@code null} si la entrega no es de un despliegue.
+   */
+  static GitHubDeployment deployment(
+      Claimed delivery, JsonNode payload, String fullName, List<UUID> repositories) {
+    if (!"created".equals(delivery.action())
+        || !("deployment".equals(delivery.event())
+            || "deployment_status".equals(delivery.event()))) {
+      return null;
+    }
+    JsonNode d = payload.path("deployment");
+    if (!d.path("id").isIntegralNumber() || !d.path("sha").isString()) {
+      throw new IllegalArgumentException("La entrega no trae el id o el SHA del despliegue");
+    }
+    GitHubDeployment.Status status = null;
+    if ("deployment_status".equals(delivery.event())) {
+      JsonNode s = payload.path("deployment_status");
+      if (!s.path("id").isIntegralNumber() || !s.path("state").isString()) {
+        throw new IllegalArgumentException("La entrega no trae el id o el estado del despliegue");
+      }
+      status =
+          new GitHubDeployment.Status(
+              s.path("id").asLong(),
+              s.path("state").asString(),
+              s.path("description").asString(null),
+              s.path("environment_url").asString(null),
+              instant(s.path("created_at"), delivery.receivedAt()));
+    }
+    return new GitHubDeployment(
+        delivery.deliveryId(),
+        fullName,
+        repositories,
+        d.path("id").asLong(),
+        d.path("sha").asString(),
+        d.path("ref").asString(null),
+        d.path("environment").asString(null),
+        pullRequest(d.path("payload")),
+        d.path("creator").path("login").asString(null),
+        instant(d.path("created_at"), delivery.receivedAt()),
+        status);
+  }
+
+  /** {@code payload.pull_request} del despliegue; GitHub lo guarda como objeto o como texto. */
+  private static Integer pullRequest(JsonNode payload) {
+    JsonNode number = payload.path("pull_request");
+    if (number.isIntegralNumber() && number.asLong() > 0 && number.asLong() <= Integer.MAX_VALUE) {
+      return number.asInt();
+    }
+    if (number.isString() && number.asString().matches("[1-9][0-9]{0,8}")) {
+      return Integer.valueOf(number.asString());
+    }
+    return null;
+  }
+
+  private static Instant instant(JsonNode value, Instant fallback) {
+    if (!value.isString()) {
+      return fallback;
+    }
+    try {
+      return Instant.parse(value.asString());
+    } catch (java.time.format.DateTimeParseException e) {
+      return fallback;
+    }
   }
 
   /** El commit cuya CI cambia con esta entrega, o {@code null} si no es de CI. */
