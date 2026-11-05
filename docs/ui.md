@@ -103,8 +103,8 @@ La navegación agrupa las secciones en tres áreas, cada una con su pregunta:
 | Área | Pregunta | Secciones |
 | --- | --- | --- |
 | Espacio de trabajo | ¿Sobre qué software estoy trabajando? | Inicio, Proyectos, Trabajos, Actividad |
-| Fábrica | ¿Qué hacen los agentes y qué necesita intervención? | Ejecuciones, Workflows, Aprobaciones |
-| Administración | ¿Con qué medios y a qué coste? | Runners, Consumo, Ajustes |
+| Fábrica | ¿Qué hacen los agentes y qué necesita intervención? | En curso, Workflows, Aprobaciones, Resultados |
+| Administración | ¿Con qué medios y a qué coste? | Proveedores, Runners, Consumo, Ajustes, Mantenimiento |
 
 La lista vive en `web/src/components/shell/nav.ts` (`NAV_AREAS`). De ahí salen la barra lateral (con el nombre de cada área encima de sus secciones; plegada, una raya), la hoja «Más» del móvil, los grupos «Ir a» de ⌘K y el área con la que empiezan las migas. Las rutas no cambian.
 
@@ -127,7 +127,19 @@ Las fases de un trabajo, con su nombre en la web (`components/work/phase.ts`): T
 
 **La página del trabajo** (FS-E) separa las tres palabras con tres tarjetas: Qué (la descripción), Cómo (el workflow y su versión) e Intentos. Debajo van el intento actual con sus fases, todos los intentos numerados, el resultado (la PR) y lo que ha costado. La ejecución se presenta como «Intento N de <clave>» y sus migas cuelgan del trabajo (`components/work/attempts.ts`). «Revisar la aprobación» abre una hoja con las mismas decisiones que la página de la aprobación (`components/approval/ApprovalSheet.tsx`).
 
-En el móvil, los proyectos de Inicio van en un carrusel, los chips de fase se deslizan, la tabla de repositorios pierde la columna de PRs y la actividad se queda en tres. En el proyecto, las cifras se deslizan, las pestañas quedan fijas arriba y el tablero se pliega por fase. En el trabajo, la acción principal queda fija abajo, sobre la barra inferior.
+**La Fábrica** (FS-F):
+
+- **En curso** (`/runs`, `pages/FactoryPage.tsx`) agrupa las ejecuciones activas y en cola por proyecto › repositorio. Cada fila lleva una barra con una raya por fase, coloreada por su estado, la fase actual, la duración y el coste. Debajo van los resultados de hoy y lo que terminó sin resultado en 24 h.
+- La pestaña **Historial** (`?view=history`) es la lista completa de antes, con sus filtros. Un enlace antiguo con filtros (`/runs?status=FAILED`) abre el Historial.
+- **Resultados** (`/results`) lista las PRs de todos los proyectos con su trabajo, su intento y su estado.
+- **Workflows** cuenta los trabajos pendientes que usa cada uno.
+
+**La Administración** (FS-F) tiene portada (`/admin`, enlazada desde el área de las migas y desde «Más» en el móvil), con una tarjeta por sección y las ventanas de cuota más gastadas.
+
+- **Proveedores** (`/providers`) cruza los CLIs con los runners que los tienen, con su versión y si son simulados. También lleva «Continuar tras la cuota», la misma sección que en Ajustes › Ejecución.
+- **Mantenimiento** (`/maintenance`) junta lo archivado (proyectos, workflows y runners olvidados) para restaurarlo o eliminarlo, y las últimas entregas del webhook de GitHub.
+
+En el móvil, los proyectos de Inicio van en un carrusel, los chips de fase se deslizan, la tabla de repositorios pierde la columna de PRs y la actividad se queda en tres. En el proyecto, las cifras se deslizan, las pestañas quedan fijas arriba y el tablero se pliega por fase. En el trabajo, la acción principal queda fija abajo, sobre la barra inferior. En En curso, cada ejecución ocupa dos líneas: arriba, el trabajo con su tiempo y su coste, y debajo, la barra de fases a todo lo ancho. La portada de Administración es una lista.
 
 ## 8. Capturas
 

@@ -174,9 +174,9 @@ describe('App', () => {
     renderAt('/runners', <App />)
     const nav = await screen.findByRole('navigation', { name: 'Navegación principal' })
     for (const [area, links] of [
-      ['Espacio de trabajo', ['Inicio', 'Proyectos', 'Actividad']],
-      ['Fábrica', ['Ejecuciones', 'Workflows', 'Aprobaciones']],
-      ['Administración', ['Runners', 'Consumo', 'Ajustes']],
+      ['Espacio de trabajo', ['Inicio', 'Proyectos', 'Trabajos', 'Actividad']],
+      ['Fábrica', ['En curso', 'Workflows', 'Aprobaciones', 'Resultados']],
+      ['Administración', ['Proveedores', 'Runners', 'Consumo', 'Ajustes', 'Mantenimiento']],
     ] as const) {
       const group = within(nav).getByRole('group', { name: area })
       for (const name of links) {
@@ -423,7 +423,7 @@ describe('App', () => {
       '/api/workflow-runs?status=RUNNING&page=0&size=25': runPage,
       '/api/workflow-runs?status=RUNNING&q=TKM&page=0&size=25': runPage,
     })
-    renderAt('/runs', <App />)
+    renderAt('/runs?view=history', <App />)
     await screen.findByRole('link', { name: /TKM-1/ })
     fireEvent.click(screen.getByRole('button', { name: 'En curso' }))
     await waitFor(() =>
@@ -443,7 +443,7 @@ describe('App', () => {
 
   it('la lista de ejecuciones oculta columnas y lo recuerda', async () => {
     stubApi({ '/api/workflow-runs?page=0&size=25': runPage })
-    const { unmount } = renderAt('/runs', <App />)
+    const { unmount } = renderAt('/runs?view=history', <App />)
     const table = await screen.findByRole('table', { name: 'Ejecuciones' })
     expect(within(table).getByRole('columnheader', { name: 'Coste' })).toBeInTheDocument()
     fireEvent.keyDown(screen.getByRole('button', { name: 'Columnas' }), { key: 'Enter' })
@@ -452,14 +452,14 @@ describe('App', () => {
       expect(within(table).queryByRole('columnheader', { name: 'Coste' })).toBeNull(),
     )
     unmount()
-    renderAt('/runs', <App />)
+    renderAt('/runs?view=history', <App />)
     const again = await screen.findByRole('table', { name: 'Ejecuciones' })
     expect(within(again).queryByRole('columnheader', { name: 'Coste' })).toBeNull()
   })
 
   it('la lista de ejecuciones muestra trabajo, estado, agente y herramienta', async () => {
     stubApi({ '/api/workflow-runs?page=0&size=25': runPage })
-    renderAt('/runs', <App />)
+    renderAt('/runs?view=history', <App />)
     const row = (await screen.findByRole('link', { name: /TKM-1/ })).closest('tr')!
     expect(within(row).getByText('En curso')).toBeInTheDocument()
     expect(within(row).getByText('Ejecutando')).toBeInTheDocument()

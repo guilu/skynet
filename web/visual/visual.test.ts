@@ -294,12 +294,12 @@ describe('cierre de la galería', () => {
     )
     try {
       await rm(join(g.galleryDir, 'desktop/light/02-dashboard.png'))
-      await writeFile(join(g.galleryDir, 'mobile/dark/40-not-found.png'), fakePng(390, 900))
+      await writeFile(join(g.galleryDir, 'mobile/dark/46-not-found.png'), fakePng(390, 900))
       const { problems } = await finish(g)
       expect(problems).toEqual(
         expect.arrayContaining([
           'falta desktop/light/02-dashboard.png',
-          'mobile/dark/40-not-found.png mide 390 × 900',
+          'mobile/dark/46-not-found.png mide 390 × 900',
           'mobile-dark/usage: tema light',
         ]),
       )
@@ -491,7 +491,7 @@ describe('composiciones para redes', () => {
     )
     expect(html).toContain('.phone img { display: block; width: 100%; height: auto; }')
     expect(html).toContain('Agentes &lt;b&gt;&amp;&lt;/b&gt; más')
-    expect(html).toContain('Dashboard')
+    expect(html).toContain('Inicio')
   })
 
   it('el cierre falla si una composición falta, mide mal, sobra o su titular es privado', async () => {

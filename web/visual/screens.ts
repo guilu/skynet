@@ -53,6 +53,10 @@ export const PREPARERS: Record<string, Preparer> = {
   usage: (page) => goto(page, '/usage'),
   activity: (page) => goto(page, '/activity'),
   runners: (page) => goto(page, '/runners', 'runner-demo'),
+  work: (page) => goto(page, '/work'),
+  admin: (page) => goto(page, '/admin', 'Mantenimiento'),
+  providers: (page) => goto(page, '/providers', 'Continuar tras la cuota'),
+  maintenance: (page) => goto(page, '/maintenance', 'Proyectos archivados'),
   projects: (page) => goto(page, '/projects', 'Analizador de texto'),
   'project-work': (page, { fx }) => goto(page, `/projects/${fx.projectId}`, 'Contar palabras'),
   'project-repos': (page, { fx }) =>
@@ -74,14 +78,22 @@ export const PREPARERS: Record<string, Preparer> = {
   'workflow-editor': (page, { fx }) =>
     goto(page, `/workflows/${fx.workflowKey}?version=${fx.draftVersionId}&view=graph`),
   'workflow-new': (page) => goto(page, '/workflows/new'),
-  'launch-workflow': async (page, { fx }) => {
+  'launch-workflow': async (page, { fx, viewport }) => {
     await goto(page, `/work-items/${fx.workItemId}`, 'La suma de totales')
-    await page.getByRole('button', { name: 'Lanzar workflow' }).click()
-    const sheet = page.getByRole('dialog', { name: 'Lanzar workflow' })
+    // En el móvil, el botón de la cabecera se oculta y el intento se lanza desde la barra fija.
+    await page
+      .getByRole('button', {
+        name: viewport === 'mobile' ? 'Lanzar otro intento' : 'Nuevo intento',
+      })
+      .first()
+      .click()
+    const sheet = page.getByRole('dialog', { name: 'Nuevo intento' })
     await sheet.getByLabel('Workflow').selectOption(fx.workflowKey)
     await expect(sheet.getByRole('region', { name: 'Política de cada fase' })).toBeVisible()
   },
-  runs: (page) => goto(page, '/runs', 'La suma de totales'),
+  runs: (page) => goto(page, '/runs', 'Resultados de hoy'),
+  'runs-history': (page) => goto(page, '/runs?view=history', 'La suma de totales'),
+  results: (page) => goto(page, '/results'),
   'run-completed': (page, ctx) => run(page, ctx, ctx.fx.runs.completed),
   'run-waterfall': (page, ctx) => run(page, ctx, ctx.fx.runs.completed, { view: 'waterfall' }),
   'run-events': (page, ctx) => run(page, ctx, ctx.fx.runs.completed, { view: 'events' }),

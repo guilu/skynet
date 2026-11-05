@@ -113,7 +113,7 @@ describe('Ajustes > Iconos', () => {
     const lucide = await screen.findByRole('radio', { name: /Lucide/ })
     expect(lucide).toBeChecked()
     const nav = screen.getByRole('navigation', { name: 'Navegación principal' })
-    expect(within(nav).getByRole('link', { name: 'Ejecuciones' }).querySelector('svg')).toHaveClass(
+    expect(within(nav).getByRole('link', { name: 'En curso' }).querySelector('svg')).toHaveClass(
       'lucide',
     )
     // Cada vista previa se pinta con su paquete, aunque no sea el elegido.
@@ -128,7 +128,7 @@ describe('Ajustes > Iconos', () => {
     expect(JSON.parse(put[1]!.body as string)).toEqual({ icons: 'ilustrados' })
     await waitFor(() =>
       expect(
-        within(nav).getByRole('link', { name: 'Ejecuciones' }).querySelector('svg'),
+        within(nav).getByRole('link', { name: 'En curso' }).querySelector('svg'),
       ).toHaveAttribute('data-icon', 'runs'),
     )
     expect(localStorage.getItem('skynet.icons')).toBe('ilustrados')

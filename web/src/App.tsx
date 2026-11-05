@@ -13,7 +13,11 @@ import { ProjectPage } from './pages/ProjectPage'
 import { ProjectsPage } from './pages/ProjectsPage'
 import { RunnersPage } from './pages/RunnersPage'
 import { UsagePage } from './pages/UsagePage'
-import { RunsPage } from './pages/RunsPage'
+import { FactoryPage } from './pages/FactoryPage'
+import { ResultsPage } from './pages/ResultsPage'
+import { ProvidersPage } from './pages/ProvidersPage'
+import { MaintenancePage } from './pages/MaintenancePage'
+import { AdminPage } from './pages/AdminPage'
 import { WorkflowsPage } from './pages/WorkflowsPage'
 import { NewWorkflowPage } from './pages/NewWorkflowPage'
 import { WorkflowPage } from './pages/WorkflowPage'
@@ -40,7 +44,8 @@ export default function App() {
             <Route path="/workflows" element={<WorkflowsPage />} />
             <Route path="/workflows/new" element={<NewWorkflowPage />} />
             <Route path="/workflows/:key" element={<WorkflowPage />} />
-            <Route path="/runs" element={<RunsPage />} />
+            <Route path="/runs" element={<FactoryPage />} />
+            <Route path="/results" element={<ResultsPage />} />
             <Route
               path="/runs/:runId"
               element={
@@ -52,10 +57,13 @@ export default function App() {
             <Route path="/agent-runs/:agentId" element={<AgentRedirectPage />} />
             <Route path="/approvals" element={<ApprovalsPage />} />
             <Route path="/approvals/:approvalId" element={<ApprovalPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/providers" element={<ProvidersPage />} />
             <Route path="/runners" element={<RunnersPage />} />
             <Route path="/usage" element={<UsagePage />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AppShell>

@@ -46,6 +46,11 @@ export function MobileNav() {
             <nav className="area-tiles" aria-label="Todas las secciones">
               {NAV_AREAS.map((area) => (
                 <div key={area.id} role="group" aria-labelledby={`more-area-${area.id}`}>
+                  {area.id === 'admin' && (
+                    <NavLink to="/admin" onClick={close} className="nav-area-more">
+                      Resumen
+                    </NavLink>
+                  )}
                   <span id={`more-area-${area.id}`} className="nav-area-label">
                     {area.label}
                   </span>
