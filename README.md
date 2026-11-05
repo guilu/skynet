@@ -13,6 +13,7 @@ La definición funcional y técnica inicial se encuentra en:
 - [`docs/github.md`](docs/github.md): conectar Skynet con una GitHub App propia (permisos, variables, el túnel para los webhooks y la seguridad).
 - [`docs/entrega-por-pr.md`](docs/entrega-por-pr.md): la entrega por PR, de la rama a la fusión.
 - [`docs/disparadores.md`](docs/disparadores.md): lanzar workflows desde GitHub con una etiqueta en una issue o a una hora (cron), corregir, cancelar o ver el estado con comentarios `/skynet`, y la cola de ejecuciones de cada repositorio.
+- [`docs/despliegues.md`](docs/despliegues.md): qué versión de cada repositorio hay en cada entorno, con el estado del despliegue y su salud por separado (hito DL, en curso).
 - [`docs/arranque-local.md`](docs/arranque-local.md): empezar de cero en local y los workflows iniciales, con qué proveedor y modelo hace cada fase.
 
 ## Arquitectura prevista
