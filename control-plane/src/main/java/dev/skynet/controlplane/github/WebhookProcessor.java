@@ -314,59 +314,13 @@ class WebhookProcessor {
             || "deployment_status".equals(delivery.event()))) {
       return null;
     }
-    JsonNode d = payload.path("deployment");
-    if (!d.path("id").isIntegralNumber() || !d.path("sha").isString()) {
-      throw new IllegalArgumentException("La entrega no trae el id o el SHA del despliegue");
-    }
-    GitHubDeployment.Status status = null;
-    if ("deployment_status".equals(delivery.event())) {
-      JsonNode s = payload.path("deployment_status");
-      if (!s.path("id").isIntegralNumber() || !s.path("state").isString()) {
-        throw new IllegalArgumentException("La entrega no trae el id o el estado del despliegue");
-      }
-      status =
-          new GitHubDeployment.Status(
-              s.path("id").asLong(),
-              s.path("state").asString(),
-              s.path("description").asString(null),
-              s.path("environment_url").asString(null),
-              instant(s.path("created_at"), delivery.receivedAt()));
-    }
-    return new GitHubDeployment(
+    return GitHubDeployment.of(
         delivery.deliveryId(),
         fullName,
         repositories,
-        d.path("id").asLong(),
-        d.path("sha").asString(),
-        d.path("ref").asString(null),
-        d.path("environment").asString(null),
-        pullRequest(d.path("payload")),
-        d.path("creator").path("login").asString(null),
-        instant(d.path("created_at"), delivery.receivedAt()),
-        status);
-  }
-
-  /** {@code payload.pull_request} del despliegue; GitHub lo guarda como objeto o como texto. */
-  private static Integer pullRequest(JsonNode payload) {
-    JsonNode number = payload.path("pull_request");
-    if (number.isIntegralNumber() && number.asLong() > 0 && number.asLong() <= Integer.MAX_VALUE) {
-      return number.asInt();
-    }
-    if (number.isString() && number.asString().matches("[1-9][0-9]{0,8}")) {
-      return Integer.valueOf(number.asString());
-    }
-    return null;
-  }
-
-  private static Instant instant(JsonNode value, Instant fallback) {
-    if (!value.isString()) {
-      return fallback;
-    }
-    try {
-      return Instant.parse(value.asString());
-    } catch (java.time.format.DateTimeParseException e) {
-      return fallback;
-    }
+        payload.path("deployment"),
+        "deployment_status".equals(delivery.event()) ? payload.path("deployment_status") : null,
+        delivery.receivedAt());
   }
 
   /** El commit cuya CI cambia con esta entrega, o {@code null} si no es de CI. */

@@ -24,7 +24,7 @@ Cada despliegue tiene un **estado** y una **salud**.
 
 | Salud | Qué significa |
 |---|---|
-| `UNKNOWN` | nadie la ha comprobado (todo, hasta DL-C) |
+| `UNKNOWN` | nadie la ha comprobado: el entorno no tiene comprobación, o el despliegue no terminó bien o fue sustituido antes de acabar |
 | `CHECKING` | comprobándose |
 | `HEALTHY` / `UNHEALTHY` / `TIMEOUT` | el resultado de la comprobación |
 
@@ -86,7 +86,53 @@ Más detalles:
 - Un entorno con caracteres que Skynet no admite se limpia: `Omarchy (compartido)` pasa a `Omarchy-compartido-`.
 - Cada entrega publica además el evento `github.deployment.created` o `github.deployment_status.created` en el repositorio, como el resto de webhooks.
 
-## 4. API
+## 4. Salud, atascados y reconciliación (DL-C)
+
+### Comprobación de salud
+
+Cada entorno de un repositorio puede tener una **comprobación**. La configura el admin y nunca sale de un evento, así que nadie de fuera puede hacer que Skynet llame a otra dirección:
+
+```bash
+curl -s -u admin:<contraseña> -H 'Content-Type: application/json' \
+  -X PUT http://localhost:8080/api/repositories/<id>/health-checks/omarchy \
+  -d '{"url": "http://omarchy:8081/actuator/health"}'
+```
+
+| Campo | Por defecto | Qué es |
+|---|---|---|
+| `url` | (obligatorio) | http(s), sin usuario ni fragmento; Skynet hace un `GET` sin seguir redirecciones |
+| `timeoutSeconds` | 5 | plazo de cada intento (1 a 60) |
+| `attempts` | 6 | intentos antes de darla por mala (1 a 30) |
+| `intervalSeconds` | 10 | espera entre intentos (1 a 600) |
+| `initialDelaySeconds` | 15 | espera tras terminar el despliegue, para que arranque (0 a 600) |
+| `expectSha` | `false` | si la respuesta tiene que contener el SHA desplegado (sus 7 primeros caracteres bastan), p. ej. `/actuator/info` |
+| `enabled` | `true` | si está activa |
+
+Cómo funciona:
+- Cuando un despliegue pasa a `SUCCEEDED` en un entorno con comprobación activa, su salud pasa a `CHECKING`.
+- Un intento es bueno si la URL responde 2xx y, con `expectSha`, si el cuerpo trae el SHA.
+- Al primer intento bueno, `HEALTHY`. Si se agotan los intentos, `UNHEALTHY`, o `TIMEOUT` si el último no respondió a tiempo.
+- `healthDetail` resume el último intento («Intento 2: Responde 503»).
+- Cada intento queda como evidencia en `probes`, con resultado, código, latencia y hora.
+- Si el despliegue queda sustituido mientras se comprueba, la comprobación se abandona: no se atribuye a un SHA que ya no está.
+- Un estado nuevo del despliegue deja la salud en `UNKNOWN`.
+- `POST /api/deployments/{id}/health-check` vuelve a comprobar ya, sin el retraso inicial. Solo vale con lo desplegado (`SUCCEEDED`) y si el entorno tiene comprobación; si no, 409.
+- Las comprobaciones viven en la base de datos: si Skynet se reinicia a mitad (por ejemplo, al desplegarse a sí mismo), las retoma al volver.
+- **No se revierte nada.** Una salud mala se registra y se publica como evento `deployment.health`.
+
+### Atascados
+
+- Un despliegue `PENDING` o `IN_PROGRESS` sin estado nuevo en 30 minutos (`SKYNET_DEPLOYMENTS_STUCK_AFTER`) se marca con `stuckAt` y el evento `deployment.stuck`.
+- El estado no cambia: puede terminar todavía, y su siguiente estado borra la marca.
+
+### Reconciliación
+
+- Cada 10 minutos (`SKYNET_DEPLOYMENTS_RECONCILE_INTERVAL`), Skynet pide a GitHub los últimos 20 despliegues de cada repositorio con actividad en la última semana o con comprobación de salud. Aplica lo que falte, como si hubiera llegado por webhook.
+- Solo pide los estados de los despliegues que no conoce o que aún no han terminado.
+- Recupera los eventos perdidos, por ejemplo los de un despliegue de Skynet sobre sí mismo.
+- `POST /api/repositories/{id}/deployments/reconcile` lo hace ya y devuelve `deployments`, `statuses` y `changed`. Necesita la App instalada en el repositorio (si no, 409) y su permiso **Deployments: lectura**.
+
+## 5. API
 
 Todas piden la sesión de admin.
 
@@ -94,10 +140,22 @@ Todas piden la sesión de admin.
 |---|---|
 | `GET /api/repositories/{id}/deployments?environment=&sha=&limit=50` | los despliegues, del más reciente al más viejo; `sha` admite un prefijo de 7 a 40 caracteres; `limit` hasta 200 |
 | `GET /api/repositories/{id}/environments` | cada entorno: `deployed` (lo desplegado ahora, o `null`) y `latest` (el último pedido) |
-| `GET /api/deployments/{id}` | `deployment` y `statuses`, cada estado recibido con `applied` |
+| `GET /api/deployments/{id}` | `deployment`, `statuses` (cada estado recibido con `applied`) y `probes` (los intentos de comprobación) |
+| `POST /api/deployments/{id}/health-check` | vuelve a comprobar ya la salud (202) |
+| `GET /api/repositories/{id}/health-checks` | las comprobaciones de los entornos |
+| `PUT /api/repositories/{id}/health-checks/{entorno}` | crea o cambia una; lo que no se manda se conserva |
+| `DELETE /api/repositories/{id}/health-checks/{entorno}` | la quita (204) |
+| `POST /api/repositories/{id}/deployments/reconcile` | reconcilia ya con GitHub |
 
-Un despliegue lleva `id`, `repositoryId`, `environment`, `externalId`, `commitSha`, `ref`, `pullRequestNumber`, `url`, `creator`, `status`, `health`, `error`, `requestedAt`, `startedAt`, `finishedAt`, `statusAt`, `supersededBy`, `createdAt` y `updatedAt`.
+Un despliegue lleva `id`, `repositoryId`, `environment`, `externalId`, `commitSha`, `ref`, `pullRequestNumber`, `url`, `creator`, `status`, `health`, `error`, `requestedAt`, `startedAt`, `finishedAt`, `statusAt`, `supersededBy`, `createdAt`, `updatedAt`, `healthDetail`, `healthCheckedAt`, `healthAttempts` y `stuckAt`.
 
-## 5. Eventos
+## 6. Eventos
 
-Con aggregate `deployment`: `deployment.created`, `deployment.status` (con `state`, `previous` y `applied`) y `deployment.superseded` (con `supersededBy`). No llevan el texto del error.
+Con aggregate `deployment`:
+- `deployment.created`;
+- `deployment.status`, con `state`, `previous` y `applied`;
+- `deployment.superseded`, con `supersededBy`;
+- `deployment.health`, con `health` (`CHECKING` al empezar y el resultado al acabar), `attempts` y `detail`;
+- `deployment.stuck`, con `stuckAfterMinutes`.
+
+No llevan el texto del error.

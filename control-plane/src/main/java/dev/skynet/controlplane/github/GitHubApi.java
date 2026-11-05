@@ -187,6 +187,31 @@ class GitHubApi {
     return all;
   }
 
+  /** {@code GET /repos/{owner}/{repo}/deployments}: los últimos, del más nuevo al más viejo. */
+  List<JsonNode> deployments(String token, String fullName, int limit) {
+    List<JsonNode> all = new ArrayList<>();
+    send("GET", "/repos/" + fullName + "/deployments?per_page=" + limit, token, null)
+        .forEach(all::add);
+    return all;
+  }
+
+  /** {@code GET /repos/{owner}/{repo}/deployments/{id}/statuses}: del más nuevo al más viejo. */
+  List<JsonNode> deploymentStatuses(String token, String fullName, long deploymentId) {
+    List<JsonNode> all = new ArrayList<>();
+    send(
+            "GET",
+            "/repos/"
+                + fullName
+                + "/deployments/"
+                + deploymentId
+                + "/statuses?per_page="
+                + PAGE_SIZE,
+            token,
+            null)
+        .forEach(all::add);
+    return all;
+  }
+
   /** {@code GET /repos/{owner}/{repo}/check-runs/{id}/annotations}: las primeras 50. */
   List<JsonNode> annotations(String token, String fullName, long checkRunId) {
     List<JsonNode> all = new ArrayList<>();

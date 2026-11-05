@@ -131,6 +131,55 @@ public final class FakeGitHub implements AutoCloseable {
     logDownloadAuthorized = false;
     issueLabels.clear();
     reactions.clear();
+    deployments.clear();
+    deploymentStatuses.clear();
+  }
+
+  /**
+   * Los despliegues de cada repositorio ({@code owner/nombre}), del más nuevo al más viejo (DL-C).
+   */
+  final Map<String, List<Map<String, Object>>> deployments = new ConcurrentHashMap<>();
+
+  /** Los estados de cada despliegue, por id, del más nuevo al más viejo (DL-C). */
+  final Map<Long, List<Map<String, Object>>> deploymentStatuses = new ConcurrentHashMap<>();
+
+  /** Añade un despliegue al principio, como lo devuelve GitHub. */
+  void deployment(String fullName, long id, String sha, String environment, String createdAt) {
+    Map<String, Object> d = new java.util.LinkedHashMap<>();
+    d.put("id", id);
+    d.put("sha", sha);
+    d.put("ref", "main");
+    d.put("environment", environment);
+    d.put("payload", Map.of());
+    d.put("creator", Map.of("login", "guilu"));
+    d.put("created_at", createdAt);
+    deployments.computeIfAbsent(fullName, k -> new CopyOnWriteArrayList<>()).add(0, d);
+  }
+
+  /** Añade un estado al principio de los del despliegue. */
+  void deploymentStatus(long deploymentId, long id, String state, String createdAt) {
+    deploymentStatuses
+        .computeIfAbsent(deploymentId, k -> new CopyOnWriteArrayList<>())
+        .add(0, Map.of("id", id, "state", state, "created_at", createdAt));
+  }
+
+  private static final Pattern DEPLOYMENTS_PATH =
+      Pattern.compile("/repos/([^/]+/[^/]+)/deployments(?:/(\\d+)/statuses)?");
+
+  /** Los despliegues y sus estados (DL-C). Si no es una de esas rutas, false. */
+  private boolean deployments(HttpExchange exchange, String method, String path)
+      throws IOException {
+    Matcher m = DEPLOYMENTS_PATH.matcher(path);
+    if (!m.matches() || !method.equals("GET")) {
+      return false;
+    }
+    repoRequests.add(method + " " + path);
+    if (m.group(2) == null) {
+      send(exchange, 200, deployments.getOrDefault(m.group(1), List.of()));
+    } else {
+      send(exchange, 200, deploymentStatuses.getOrDefault(Long.parseLong(m.group(2)), List.of()));
+    }
+    return true;
   }
 
   /** Los check-runs de cada commit, por SHA (EN-B). */
@@ -341,7 +390,10 @@ public final class FakeGitHub implements AutoCloseable {
   private void repos(HttpExchange exchange, String method, String path, String bearer)
       throws IOException {
     Long installation = issuedTokens.get(bearer);
-    if (installation != null && (issues(exchange, method, path) || ci(exchange, method, path))) {
+    if (installation != null
+        && (issues(exchange, method, path)
+            || ci(exchange, method, path)
+            || deployments(exchange, method, path))) {
       return;
     }
     Matcher m = REPO_PATH.matcher(path);

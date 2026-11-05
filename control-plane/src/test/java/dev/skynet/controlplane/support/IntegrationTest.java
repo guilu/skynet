@@ -48,6 +48,11 @@ public abstract class IntegrationTest {
     // Esperar a la cuota (CQ-A) sin margen ni dispersión: los tests ponen la renovación cerca.
     registry.add("skynet.quota.margin", () -> "0s");
     registry.add("skynet.quota.jitter", () -> "0s");
+    // Los despliegues (DL-C): los atascados y la reconciliación se prueban llamándolos, y las
+    // comprobaciones de salud, cada poco.
+    registry.add("skynet.deployments.stuck-interval", () -> "1h");
+    registry.add("skynet.deployments.reconcile-initial-delay", () -> "1h");
+    registry.add("skynet.deployments.health-poll-interval", () -> "200ms");
   }
 
   protected static final String RUNNER_REGISTRATION_TOKEN = "test-registration-token";
@@ -90,7 +95,7 @@ public abstract class IntegrationTest {
     for (int attempt = 1; ; attempt++) {
       try {
         jdbc.sql(
-                "TRUNCATE deployment_status, deployment, trigger_launch, trigger_rule, github_merge, github_ci_wait, stage_refutation, stage_verdict, stage_judge, github_pull_request, github_webhook_delivery, github_installation_repository, github_installation, memory_token, memory_access, memory_observation_revision, memory_observation, app_setting, quota_snapshot, agent_run_quota, quota_interval, event, approval_decision, approval_request, runner_command, artifact, verification_run, prompt, agent_run, workspace, runner_provider, runner, stage_run, workflow_job, workflow_run, work_item, repository,"
+                "TRUNCATE deployment_health_probe, deployment_health_check, deployment_status, deployment, trigger_launch, trigger_rule, github_merge, github_ci_wait, stage_refutation, stage_verdict, stage_judge, github_pull_request, github_webhook_delivery, github_installation_repository, github_installation, memory_token, memory_access, memory_observation_revision, memory_observation, app_setting, quota_snapshot, agent_run_quota, quota_interval, event, approval_decision, approval_request, runner_command, artifact, verification_run, prompt, agent_run, workspace, runner_provider, runner, stage_run, workflow_job, workflow_run, work_item, repository,"
                     + " project")
             .update();
         break;
