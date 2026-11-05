@@ -78,9 +78,15 @@ export const PREPARERS: Record<string, Preparer> = {
   'workflow-editor': (page, { fx }) =>
     goto(page, `/workflows/${fx.workflowKey}?version=${fx.draftVersionId}&view=graph`),
   'workflow-new': (page) => goto(page, '/workflows/new'),
-  'launch-workflow': async (page, { fx }) => {
+  'launch-workflow': async (page, { fx, viewport }) => {
     await goto(page, `/work-items/${fx.workItemId}`, 'La suma de totales')
-    await page.getByRole('button', { name: 'Nuevo intento' }).first().click()
+    // En el móvil, el botón de la cabecera se oculta y el intento se lanza desde la barra fija.
+    await page
+      .getByRole('button', {
+        name: viewport === 'mobile' ? 'Lanzar otro intento' : 'Nuevo intento',
+      })
+      .first()
+      .click()
     const sheet = page.getByRole('dialog', { name: 'Nuevo intento' })
     await sheet.getByLabel('Workflow').selectOption(fx.workflowKey)
     await expect(sheet.getByRole('region', { name: 'Política de cada fase' })).toBeVisible()
