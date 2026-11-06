@@ -12,6 +12,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -153,7 +154,9 @@ public class Deployments {
   static final String AGGREGATE = "deployment";
   static final int MAX_LIMIT = 200;
 
-  private static final Pattern ENVIRONMENT = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
+  /** Un nombre de entorno válido: el de los eventos, ya limpio, o el que pone el admin. */
+  public static final Pattern ENVIRONMENT = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
+
   private static final Pattern SHA = Pattern.compile("[0-9a-f]{40}");
   private static final Pattern SHA_PREFIX = Pattern.compile("[0-9a-f]{7,40}");
   private static final int MAX_TEXT = 2000;
@@ -483,6 +486,30 @@ public class Deployments {
         .params(repositoryId, externalId)
         .query(Deployments::map)
         .optional();
+  }
+
+  /**
+   * Lo desplegado ahora en el entorno ({@code SUCCEEDED}, no sustituido) cuya comprobación de salud
+   * terminó con alguno de {@code results} desde {@code since}, del más viejo al más nuevo. Lo usan
+   * los disparadores por despliegue (DL-D).
+   */
+  @Transactional(readOnly = true)
+  public List<Deployment> checkedSince(
+      UUID repositoryId, String environment, Collection<Health> results, Instant since) {
+    if (results.isEmpty()) {
+      return List.of();
+    }
+    return jdbc.sql(
+            "SELECT * FROM deployment WHERE repository_id = :repository"
+                + " AND environment = :environment AND status = 'SUCCEEDED'"
+                + " AND health IN (:results) AND health_checked_at >= :since"
+                + " ORDER BY health_checked_at LIMIT 20")
+        .param("repository", repositoryId)
+        .param("environment", environment)
+        .param("results", results.stream().map(Health::name).toList())
+        .param("since", Timestamp.from(since))
+        .query(Deployments::map)
+        .list();
   }
 
   /** Los despliegues de un repositorio, del más reciente al más viejo. */

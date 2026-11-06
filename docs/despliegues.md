@@ -1,6 +1,6 @@
 # Despliegues
 
-Skynet lleva la cuenta de **qué versión de cada repositorio hay en cada entorno** (hito DL). No despliega nada: lo hacen los listeners de Hermes en Omarchy con Git y Docker Compose. Skynet observa lo que pasa, comprueba si lo desplegado está sano (DL-C) y lo enseña en la web (DL-E).
+Skynet lleva la cuenta de **qué versión de cada repositorio hay en cada entorno** (hito DL). No despliega nada: lo hacen los listeners de Hermes en Omarchy con Git y Docker Compose. Skynet observa lo que pasa, comprueba si lo desplegado está sano (DL-C), lo enseña en la web (DL-E) y puede lanzar un workflow al quedar sano o al fallar la salud (DL-D, [`disparadores.md`](disparadores.md) §13).
 
 | PR | Qué añade |
 |---|---|

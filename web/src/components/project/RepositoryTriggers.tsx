@@ -171,7 +171,7 @@ function TriggersSection({
         open={adding}
         onOpenChange={(open) => !open && setAdding(false)}
         title={`Nuevo disparador en ${r.name}`}
-        description="Qué workflow se puede lanzar desde fuera de la web: con una etiqueta o un comentario en GitHub, o a una hora."
+        description="Qué workflow se puede lanzar desde fuera de la web: con una etiqueta o un comentario en GitHub, a una hora o al desplegar."
       >
         <NewTriggerForm repositoryId={r.id} onDone={() => setAdding(false)} />
       </Sheet>
@@ -189,7 +189,10 @@ function TriggerItem({ rule: t, editable }: { rule: TriggerRule; editable: boole
   const remove = useMutation({ mutationFn: () => api.deleteTrigger(t.id), onSuccess: refresh })
   const fire = useMutation({ mutationFn: () => api.fireTrigger(t.id), onSuccess: refresh })
   const s = t.schedule
-  const outcome = s?.lastOutcome ? OUTCOME[s.lastOutcome] : null
+  const w = t.deployment
+  // Lo último que hizo, sea programado o por despliegue.
+  const last = s ?? w
+  const outcome = last?.lastOutcome ? OUTCOME[last.lastOutcome] : null
   return (
     <li className="trigger-item">
       <div className="trigger-main">
@@ -199,6 +202,12 @@ function TriggerItem({ rule: t, editable }: { rule: TriggerRule; editable: boole
               <code>{t.label}</code> o <code>/skynet {t.workflowKey}</code> lanzan{' '}
               <strong>{t.workflowKey}</strong>
             </>
+          ) : w ? (
+            <>
+              {w.health === 'HEALTHY' ? 'Al quedar sano' : 'Al fallar la salud'} lo desplegado en{' '}
+              <code>{w.environment}</code> lanza <strong>{t.workflowKey}</strong> en «
+              {w.workItemTitle}»
+            </>
           ) : (
             <>
               <code>{s?.cron}</code> <span className="muted">({s?.timeZone})</span> lanza{' '}
@@ -207,21 +216,23 @@ function TriggerItem({ rule: t, editable }: { rule: TriggerRule; editable: boole
           )}{' '}
           {!t.enabled && <Pill tone="neutral">Desactivado</Pill>}
         </p>
-        {s && (
+        {last && (
           <p className="muted small">
-            {t.enabled && s.nextFireAt
-              ? `Próxima: ${formatDateTime(s.nextFireAt)}`
-              : 'Sin próxima hora'}
-            {s.lastFiredAt && outcome && (
+            {s
+              ? t.enabled && s.nextFireAt
+                ? `Próxima: ${formatDateTime(s.nextFireAt)}`
+                : 'Sin próxima hora'
+              : 'Una vez por despliegue; nunca por un SHA ya sustituido'}
+            {last.lastFiredAt && outcome && (
               <>
                 {' · '}
-                Última: {formatDateTime(s.lastFiredAt)},{' '}
+                Última: {formatDateTime(last.lastFiredAt)},{' '}
                 <Pill tone={outcome.tone}>{outcome.label}</Pill>
-                {s.lastReason && <> {s.lastReason}</>}
-                {s.lastRunId && (
+                {last.lastReason && <> {last.lastReason}</>}
+                {last.lastRunId && (
                   <>
                     {' '}
-                    (<Link to={`/runs/${s.lastRunId}`}>ver</Link>)
+                    (<Link to={`/runs/${last.lastRunId}`}>ver</Link>)
                   </>
                 )}
               </>
@@ -276,13 +287,25 @@ function NewTriggerForm({ repositoryId, onDone }: { repositoryId: string; onDone
   const [label, setLabel] = useState('')
   const [cron, setCron] = useState('0 0 9 * * MON')
   const [title, setTitle] = useState('')
+  const [environment, setEnvironment] = useState('omarchy')
+  const [health, setHealth] = useState<'HEALTHY' | 'UNHEALTHY'>('HEALTHY')
+  const [enabled, setEnabled] = useState(false)
   const create = useMutation({
     mutationFn: () =>
       api.createTrigger(
         repositoryId,
         kind === 'ISSUE'
           ? { kind, workflowKey, label: label.trim() || undefined }
-          : { kind, workflowKey, cron, workItemTitle: title.trim() || undefined },
+          : kind === 'SCHEDULE'
+            ? { kind, workflowKey, cron, workItemTitle: title.trim() || undefined }
+            : {
+                kind,
+                workflowKey,
+                environment: environment.trim(),
+                health,
+                enabled,
+                workItemTitle: title.trim() || undefined,
+              },
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: triggersKey(repositoryId) })
@@ -316,6 +339,15 @@ function NewTriggerForm({ repositoryId, onDone }: { repositoryId: string; onDone
           />{' '}
           A una hora (cron), siempre sobre el mismo trabajo
         </label>
+        <label>
+          <input
+            type="radio"
+            name="trigger-kind"
+            checked={kind === 'DEPLOYMENT'}
+            onChange={() => setKind('DEPLOYMENT')}
+          />{' '}
+          Al desplegar: cuando lo desplegado queda sano o falla la salud
+        </label>
       </fieldset>
       <label>
         Workflow
@@ -340,6 +372,44 @@ function NewTriggerForm({ repositoryId, onDone }: { repositoryId: string; onDone
             Empieza por skynet:. Lanzan quienes están autorizados en Ajustes → GitHub.
           </span>
         </label>
+      ) : kind === 'DEPLOYMENT' ? (
+        <>
+          <label>
+            Entorno
+            <input value={environment} onChange={(e) => setEnvironment(e.target.value)} required />
+            <span className="hint">El que manda el listener (por defecto, omarchy).</span>
+          </label>
+          <label>
+            Cuándo
+            <select
+              value={health}
+              onChange={(e) => setHealth(e.target.value as 'HEALTHY' | 'UNHEALTHY')}
+            >
+              <option value="HEALTHY">Al quedar sano</option>
+              <option value="UNHEALTHY">Al fallar la salud (no sano o sin respuesta)</option>
+            </select>
+            <span className="hint">
+              Necesita una comprobación de salud en ese entorno (Salud de los despliegues). Lanza
+              una vez por despliegue y nunca por un SHA ya sustituido.
+            </span>
+          </label>
+          <label>
+            Título del trabajo (opcional)
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={`${workflowKey || '<workflow>'} (al desplegar en ${environment || '<entorno>'})`}
+            />
+          </label>
+          <label className="switch">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+            />
+            <span>Activarlo ya (si no, se crea apagado)</span>
+          </label>
+        </>
       ) : (
         <>
           <label>

@@ -1,6 +1,6 @@
 # Siguiente hito DL — Deployment Lifecycle
 
-Estado: plan revisado y **aprobado por Diego el 2026-11-05**. Milestones 91 (DL-A) a 95 (DL-E); issues #237 a #241. Implementación en curso: DL-A, DL-B y DL-C fusionadas; DL-E en revisión.
+Estado: plan revisado y **aprobado por Diego el 2026-11-05**. Milestones 91 (DL-A) a 95 (DL-E); issues #237 a #241. Implementación en curso: DL-A, DL-B, DL-C y DL-E fusionadas; DL-D en revisión.
 
 ## Contexto
 Hermes configuró listeners de GitHub en Omarchy. Omarchy recibe webhooks y despliega con Git y Docker Compose sobre un entorno compartido, y Hermes avisa por Telegram.

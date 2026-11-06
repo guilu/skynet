@@ -1439,7 +1439,7 @@ export interface TriggerSettings {
   updatedAt: string | null
 }
 
-export type TriggerKind = 'ISSUE' | 'SCHEDULE'
+export type TriggerKind = 'ISSUE' | 'SCHEDULE' | 'DEPLOYMENT'
 
 /** Lo propio de un disparador programado. */
 export interface TriggerSchedule {
@@ -1456,7 +1456,21 @@ export interface TriggerSchedule {
   lastRunId: string | null
 }
 
-/** Un disparador de un repositorio: con una etiqueta o comentario de GitHub, o programado. */
+/** Lo propio de un disparador por despliegue (DL-D). */
+export interface TriggerDeployWatch {
+  /** El entorno que vigila. */
+  environment: string
+  /** Al quedar sano o al fallar la salud (no sano o sin respuesta). */
+  health: 'HEALTHY' | 'UNHEALTHY'
+  workItemTitle: string
+  workItemId: string | null
+  lastFiredAt: string | null
+  lastOutcome: 'LAUNCHED' | 'SKIPPED' | 'REJECTED' | null
+  lastReason: string | null
+  lastRunId: string | null
+}
+
+/** Un disparador de un repositorio: de GitHub, programado o por despliegue. */
 export interface TriggerRule {
   id: string
   repositoryId: string
@@ -1474,6 +1488,7 @@ export interface TriggerRule {
   createdAt: string
   updatedAt: string
   schedule: TriggerSchedule | null
+  deployment: TriggerDeployWatch | null
 }
 
 /** Para crear o cambiar un disparador; lo que no llegue toma su valor por defecto. */
@@ -1485,6 +1500,8 @@ export interface TriggerDraft {
   cron?: string
   timeZone?: string
   workItemTitle?: string
+  environment?: string
+  health?: TriggerDeployWatch['health']
   inputs?: Record<string, unknown>
 }
 

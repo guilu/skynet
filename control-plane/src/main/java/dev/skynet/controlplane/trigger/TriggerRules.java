@@ -1,5 +1,6 @@
 package dev.skynet.controlplane.trigger;
 
+import dev.skynet.controlplane.deployment.Deployments;
 import dev.skynet.controlplane.project.ProjectService;
 import dev.skynet.controlplane.shared.ConflictException;
 import dev.skynet.controlplane.shared.InvalidRequestException;
@@ -31,7 +32,9 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Las reglas de los disparadores de cada repositorio: qué se puede lanzar desde fuera y con qué.
  * Una regla {@code ISSUE} lanza con una etiqueta o un comentario de GitHub (DS-A, DS-B); una {@code
- * SCHEDULE}, con una expresión cron, siempre sobre el mismo trabajo (DS-C).
+ * SCHEDULE}, con una expresión cron, siempre sobre el mismo trabajo (DS-C); una {@code DEPLOYMENT},
+ * cuando lo desplegado en un entorno queda sano o falla la salud, también sobre un mismo trabajo
+ * (DL-D).
  */
 @Service
 class TriggerRules {
@@ -57,7 +60,15 @@ class TriggerRules {
 
   enum Kind {
     ISSUE,
-    SCHEDULE
+    SCHEDULE,
+    DEPLOYMENT
+  }
+
+  /** Cuándo dispara una regla {@code DEPLOYMENT}: al quedar sano o al fallar la salud. */
+  enum DeployHealth {
+    HEALTHY,
+    /** No sano o sin respuesta ({@code UNHEALTHY} o {@code TIMEOUT}). */
+    UNHEALTHY
   }
 
   /** Una regla, tal como la guarda y la enseña la API. */
@@ -73,7 +84,8 @@ class TriggerRules {
       boolean enabled,
       Instant createdAt,
       Instant updatedAt,
-      Schedule schedule) {}
+      Schedule schedule,
+      DeployWatch deployment) {}
 
   /**
    * Lo propio de una regla {@code SCHEDULE}; {@code null} en las demás.
@@ -94,6 +106,23 @@ class TriggerRules {
       String lastReason,
       UUID lastRunId) {}
 
+  /**
+   * Lo propio de una regla {@code DEPLOYMENT}; {@code null} en las demás.
+   *
+   * @param environment el entorno que vigila, con el nombre que manda el listener
+   * @param health si dispara al quedar sano o al fallar la salud
+   * @param lastOutcome {@code LAUNCHED}, {@code SKIPPED} o {@code REJECTED}
+   */
+  record DeployWatch(
+      String environment,
+      DeployHealth health,
+      String workItemTitle,
+      UUID workItemId,
+      Instant lastFiredAt,
+      String lastOutcome,
+      String lastReason,
+      UUID lastRunId) {}
+
   /** Lo que llega para crear o cambiar una regla; lo que llegue vacío toma su valor por defecto. */
   record Draft(
       Kind kind,
@@ -105,7 +134,9 @@ class TriggerRules {
       Boolean enabled,
       String cron,
       String timeZone,
-      String workItemTitle) {}
+      String workItemTitle,
+      String environment,
+      DeployHealth health) {}
 
   private static final TypeReference<LinkedHashMap<String, Object>> INPUTS =
       new TypeReference<>() {};
@@ -177,11 +208,13 @@ class TriggerRules {
     Instant now = time.now();
     try {
       Schedule schedule = rule.schedule();
+      DeployWatch watch = rule.deployment();
       jdbc.sql(
               "INSERT INTO trigger_rule (id, repository_id, kind, workflow_key, label,"
                   + " work_item_type, inputs, input_policy, enabled, cron, time_zone,"
-                  + " work_item_title, next_fire_at, created_at, updated_at)"
-                  + " VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?, ?, ?, ?, ?)")
+                  + " work_item_title, environment, deploy_health, next_fire_at, created_at,"
+                  + " updated_at)"
+                  + " VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
           .params(
               rule.id(),
               repositoryId,
@@ -194,7 +227,9 @@ class TriggerRules {
               rule.enabled(),
               schedule == null ? null : schedule.cron(),
               schedule == null ? null : schedule.timeZone(),
-              schedule == null ? null : schedule.workItemTitle(),
+              workItemTitle(rule),
+              watch == null ? null : watch.environment(),
+              watch == null ? null : watch.health().name(),
               nextFire(rule, now),
               Timestamp.from(now),
               Timestamp.from(now))
@@ -211,12 +246,13 @@ class TriggerRules {
     Rule rule = normalized(id, current.repositoryId(), draft, current);
     try {
       Schedule schedule = rule.schedule();
+      DeployWatch watch = rule.deployment();
       Instant now = time.now();
       jdbc.sql(
               "UPDATE trigger_rule SET workflow_key = ?, label = ?, work_item_type = ?,"
                   + " inputs = ?::jsonb, input_policy = ?::jsonb, enabled = ?, cron = ?,"
-                  + " time_zone = ?, work_item_title = ?, next_fire_at = ?, updated_at = ?"
-                  + " WHERE id = ?")
+                  + " time_zone = ?, work_item_title = ?, environment = ?, deploy_health = ?,"
+                  + " next_fire_at = ?, updated_at = ? WHERE id = ?")
           .params(
               rule.workflowKey(),
               rule.label(),
@@ -226,7 +262,9 @@ class TriggerRules {
               rule.enabled(),
               schedule == null ? null : schedule.cron(),
               schedule == null ? null : schedule.timeZone(),
-              schedule == null ? null : schedule.workItemTitle(),
+              workItemTitle(rule),
+              watch == null ? null : watch.environment(),
+              watch == null ? null : watch.health().name(),
               nextFire(rule, now),
               Timestamp.from(now),
               id)
@@ -272,8 +310,11 @@ class TriggerRules {
       throw new InvalidRequestException("Falta el workflow (su id, p. ej. implementar-tarea)");
     }
     String label = kind == Kind.ISSUE ? label(draft, current, workflowKey) : null;
-    if (kind == Kind.SCHEDULE && draft.label() != null && !draft.label().isBlank()) {
-      throw new InvalidRequestException("Un disparador programado no lleva etiqueta");
+    if (kind != Kind.ISSUE && draft.label() != null && !draft.label().isBlank()) {
+      throw new InvalidRequestException(
+          kind == Kind.SCHEDULE
+              ? "Un disparador programado no lleva etiqueta"
+              : "Un disparador por despliegue no lleva etiqueta");
     }
     WorkItemType type =
         draft.workItemType() != null
@@ -286,9 +327,10 @@ class TriggerRules {
             ? draft.inputPolicy()
             : current == null ? Map.of() : current.inputPolicy();
     InputPolicy.validate(policy);
-    if (kind == Kind.SCHEDULE && !policy.isEmpty()) {
+    if (kind != Kind.ISSUE && !policy.isEmpty()) {
       throw new InvalidRequestException(
-          "Un disparador programado no recibe datos de fuera: pon los suyos en `inputs`");
+          (kind == Kind.SCHEDULE ? "Un disparador programado" : "Un disparador por despliegue")
+              + " no recibe datos de fuera: pon los suyos en `inputs`");
     }
     for (String fixed : inputs.keySet()) {
       if (policy.containsKey(fixed)) {
@@ -296,9 +338,13 @@ class TriggerRules {
             "El dato `" + fixed + "` es fijo: no puede estar también entre los que da la issue");
       }
     }
+    // Uno por despliegue nace apagado: lanzar agentes al desplegar es una decisión explícita.
     boolean enabled =
-        draft.enabled() != null ? draft.enabled() : current == null || current.enabled();
+        draft.enabled() != null
+            ? draft.enabled()
+            : current == null ? kind != Kind.DEPLOYMENT : current.enabled();
     Schedule schedule = kind == Kind.SCHEDULE ? schedule(draft, current, workflowKey) : null;
+    DeployWatch watch = kind == Kind.DEPLOYMENT ? watch(draft, current, workflowKey) : null;
     return new Rule(
         id,
         repositoryId,
@@ -311,7 +357,55 @@ class TriggerRules {
         enabled,
         null,
         null,
-        schedule);
+        schedule,
+        watch);
+  }
+
+  private static DeployWatch watch(Draft draft, Rule current, String workflowKey) {
+    DeployWatch old = current == null ? null : current.deployment();
+    String environment =
+        draft.environment() != null && !draft.environment().isBlank()
+            ? draft.environment().strip()
+            : old == null ? null : old.environment();
+    if (environment == null) {
+      throw new InvalidRequestException(
+          "Falta `environment`: el entorno que vigila (p. ej. omarchy)");
+    }
+    if (!Deployments.ENVIRONMENT.matcher(environment).matches()) {
+      throw new InvalidRequestException(
+          "El entorno solo admite letras, números y . _ - (hasta 64): " + environment);
+    }
+    DeployHealth health =
+        draft.health() != null ? draft.health() : old == null ? null : old.health();
+    if (health == null) {
+      throw new InvalidRequestException(
+          "Falta `health`: HEALTHY (al quedar sano) o UNHEALTHY (al fallar la salud)");
+    }
+    String title =
+        draft.workItemTitle() != null && !draft.workItemTitle().isBlank()
+            ? draft.workItemTitle().strip()
+            : old == null
+                ? workflowKey + " (al desplegar en " + environment + ")"
+                : old.workItemTitle();
+    if (title.length() > 200) {
+      throw new InvalidRequestException("El título del trabajo pasa de 200 caracteres");
+    }
+    return new DeployWatch(
+        environment,
+        health,
+        title,
+        old == null ? null : old.workItemId(),
+        old == null ? null : old.lastFiredAt(),
+        old == null ? null : old.lastOutcome(),
+        old == null ? null : old.lastReason(),
+        old == null ? null : old.lastRunId());
+  }
+
+  private static String workItemTitle(Rule rule) {
+    if (rule.schedule() != null) {
+      return rule.schedule().workItemTitle();
+    }
+    return rule.deployment() == null ? null : rule.deployment().workItemTitle();
   }
 
   private static String label(Draft draft, Rule current, String workflowKey) {
@@ -416,6 +510,17 @@ class TriggerRules {
                 rs.getString("work_item_title"),
                 rs.getObject("work_item_id", UUID.class),
                 instant(rs.getTimestamp("next_fire_at")),
+                instant(rs.getTimestamp("last_fired_at")),
+                rs.getString("last_outcome"),
+                rs.getString("last_reason"),
+                rs.getObject("last_run_id", UUID.class))
+            : null,
+        Kind.valueOf(rs.getString("kind")) == Kind.DEPLOYMENT
+            ? new DeployWatch(
+                rs.getString("environment"),
+                DeployHealth.valueOf(rs.getString("deploy_health")),
+                rs.getString("work_item_title"),
+                rs.getObject("work_item_id", UUID.class),
                 instant(rs.getTimestamp("last_fired_at")),
                 rs.getString("last_outcome"),
                 rs.getString("last_reason"),

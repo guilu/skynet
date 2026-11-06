@@ -19,6 +19,7 @@ class TriggerContractIT extends IntegrationTest {
   static final UUID RUN = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04");
   static final UUID LABEL_RULE = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a20");
   static final UUID SCHEDULE_RULE = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a21");
+  static final UUID DEPLOYMENT_RULE = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a45");
   static final UUID LAUNCH = UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a22");
   static final Instant T0 = Instant.parse("2026-10-05T09:00:00Z");
 
@@ -48,6 +49,7 @@ class TriggerContractIT extends IntegrationTest {
             true,
             T0,
             T0,
+            null,
             null);
     TriggerRules.Rule schedule =
         new TriggerRules.Rule(
@@ -71,8 +73,32 @@ class TriggerContractIT extends IntegrationTest {
                 T0,
                 "LAUNCHED",
                 null,
+                RUN),
+            null);
+    TriggerRules.Rule deployment =
+        new TriggerRules.Rule(
+            DEPLOYMENT_RULE,
+            REPOSITORY,
+            TriggerRules.Kind.DEPLOYMENT,
+            "humo",
+            null,
+            WorkItemType.FEATURE,
+            Map.of(),
+            Map.of(),
+            false,
+            T0,
+            T0,
+            null,
+            new TriggerRules.DeployWatch(
+                "omarchy",
+                TriggerRules.DeployHealth.HEALTHY,
+                "humo (al desplegar en omarchy)",
+                WORK_ITEM,
+                T0,
+                "SKIPPED",
+                "La ejecución anterior sigue en marcha",
                 RUN));
-    ContractFixture.check(json, "trigger-rules", List.of(label, schedule));
+    ContractFixture.check(json, "trigger-rules", List.of(label, schedule, deployment));
   }
 
   @Test
