@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
-import { Folder } from 'lucide-react'
+import { Folder, HardDrive } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { api, type Project } from '../api'
 import { ArchiveMenu, ArchivedToggle } from '../components/archive/Archive'
@@ -115,38 +115,59 @@ export function ProjectsPage() {
                         : 'Aún no hay proyectos.'
                   }
                 >
-                  {!q && !archived && <p>Crea el primero con el formulario «Nuevo proyecto».</p>}
+                  {!q && !archived && (
+                    <p>
+                      Impórtalo desde un repositorio clonado o créalo con el formulario «Nuevo
+                      proyecto».
+                    </p>
+                  )}
                 </EmptyState>
               }
             />
           )}
         </section>
-        <section className="card" aria-labelledby="new-project">
-          <h2 id="new-project">Nuevo proyecto</h2>
-          <form className="form" onSubmit={submit}>
-            <label>
-              Clave
-              <input
-                value={key}
-                onChange={(e) => setKey(e.target.value.toUpperCase())}
-                placeholder="TKM"
-                required
-              />
-            </label>
-            <label>
-              Nombre
-              <input value={name} onChange={(e) => setName(e.target.value)} required />
-            </label>
-            <label>
-              Descripción
-              <input value={description} onChange={(e) => setDescription(e.target.value)} />
-            </label>
-            <Button type="submit" disabled={create.isPending}>
-              Crear proyecto
-            </Button>
-            <ErrorMessage error={create.error} />
-          </form>
-        </section>
+        <div className="projects-aside">
+          <section className="card import-choice" aria-labelledby="import-project">
+            <span className="import-choice-icon" aria-hidden="true">
+              <HardDrive size={22} strokeWidth={2.25} />
+            </span>
+            <div>
+              <h2 id="import-project">Importar desde un repositorio</h2>
+              <p className="muted">
+                Elige uno de los repositorios clonados en el runner y Skynet rellena el resto.
+              </p>
+              <Link to="/projects/import" className="btn btn-sm">
+                Importar proyecto
+              </Link>
+            </div>
+          </section>
+          <section className="card" aria-labelledby="new-project">
+            <h2 id="new-project">Nuevo proyecto</h2>
+            <form className="form" onSubmit={submit}>
+              <label>
+                Clave
+                <input
+                  value={key}
+                  onChange={(e) => setKey(e.target.value.toUpperCase())}
+                  placeholder="TKM"
+                  required
+                />
+              </label>
+              <label>
+                Nombre
+                <input value={name} onChange={(e) => setName(e.target.value)} required />
+              </label>
+              <label>
+                Descripción
+                <input value={description} onChange={(e) => setDescription(e.target.value)} />
+              </label>
+              <Button type="submit" disabled={create.isPending}>
+                Crear proyecto
+              </Button>
+              <ErrorMessage error={create.error} />
+            </form>
+          </section>
+        </div>
       </div>
     </>
   )

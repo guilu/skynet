@@ -1318,6 +1318,79 @@ export interface AgentMemory {
   }[]
 }
 
+/** Un repositorio git que un runner encontró en sus carpetas raíz (IP-A). */
+export interface DiscoveredRepository {
+  path: string
+  /** Nombre de la carpeta. */
+  name: string
+  projectName: string
+  /** `package.json`, `settings.gradle.kts`, `pom.xml`, `pyproject.toml`, `Cargo.toml`, `go.mod` o `directory`. */
+  projectNameSource: string
+  description: string | null
+  /** El manifiesto o el README del que sale la descripción. */
+  descriptionSource: string | null
+  /** Sin credenciales. */
+  remoteUrl: string | null
+  defaultBranch: string
+  defaultBranchSource: 'origin/HEAD' | 'current' | 'default'
+  tool: string | null
+  validationCommand: string | null
+  testReportPaths: string[]
+  protectedPaths: string[]
+  lastCommit: string | null
+  lastCommitSubject: string | null
+  lastCommitAt: string | null
+  dirty: boolean
+  agentInstructions: boolean
+}
+
+/** Lo que GitHub dice del remoto de una entrada del catálogo (IP-B). */
+export interface CatalogGitHub {
+  fullName: string
+  covered: boolean
+  description: string | null
+  htmlUrl: string
+}
+
+export interface CatalogEntry {
+  repository: DiscoveredRepository
+  /** El proyecto en el que ya está registrada esa ruta. */
+  registered: {
+    projectId: string
+    projectKey: string
+    projectName: string
+    repositoryId: string
+  } | null
+  github: CatalogGitHub | null
+}
+
+/** El catálogo de repositorios de un runner. */
+export interface RunnerCatalog {
+  runnerId: string
+  runnerName: string
+  lastHeartbeatAt: string | null
+  scannedAt: string
+  receivedAt: string
+  roots: string[]
+  truncated: boolean
+  repositories: CatalogEntry[]
+}
+
+export interface ImportProjectRequest {
+  key: string
+  name: string
+  description?: string
+  repository: {
+    name: string
+    localPath: string
+    remoteUrl?: string
+    defaultBranch?: string
+    validationCommand?: string
+    testReportPaths?: string[]
+    protectedPaths?: string[]
+  }
+}
+
 export interface LaunchRequest {
   repositoryId: string
   /** Versión publicada que se lanza; sin ella, la última de `adhoc`. */
@@ -1878,6 +1951,17 @@ export const api = {
   project: (id: string) => request<Project>('GET', `/api/projects/${id}`),
   createProject: (body: { key: string; name: string; description?: string }) =>
     request<Project>('POST', '/api/projects', body),
+  /** Proyecto y repositorio a la vez, desde una entrada del catálogo (IP-B). */
+  importProject: (body: ImportProjectRequest) =>
+    request<{ project: Project; repository: Repository }>('POST', '/api/projects/import', body),
+  keySuggestion: (name: string) =>
+    request<{ key: string }>(
+      'GET',
+      `/api/projects/key-suggestion?name=${encodeURIComponent(name)}`,
+    ),
+  repositoryCatalog: () => request<RunnerCatalog[]>('GET', '/api/repository-catalog'),
+  /** «Volver a buscar»: los runners buscan en su siguiente latido. */
+  refreshRepositoryCatalog: () => request<void>('POST', '/api/repository-catalog/refresh'),
   repositories: (projectId: string, archived?: ArchivedFilter) =>
     request<Repository[]>(
       'GET',

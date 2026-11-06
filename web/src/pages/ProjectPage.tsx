@@ -8,7 +8,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api, WORK_ITEM_TYPES, type ProjectOverview, type Repository, type WorkItem } from '../api'
 import { NewWorkItemForm } from '../components/work/NewWorkItemForm'
 import { usePendingApprovals } from '../components/approval/usePendingApprovals'
@@ -43,7 +43,9 @@ import { Sheet } from '../components/ui/Sheet'
 import { TabList, TabPanel } from '../components/ui/Tabs'
 import { formatDateTime } from '../format'
 import { CardsSkeleton, TableSkeleton } from '../components/ui/Skeleton'
+import { Companion } from '../components/companion/Companion'
 import { CompanionPeek } from '../components/companion/CompanionPeek'
+import type { ImportedState } from '../components/project/importWizard'
 import { useCompanion } from '../components/companion/context'
 import { groupExpression } from '../components/companion/peek'
 
@@ -140,10 +142,12 @@ export function ProjectPage() {
   const archivedAt = project.data?.archivedAt ?? null
   const editable = !!project.data && archivedAt == null
   const closeSheet = () => setSheet(null)
+  const imported = (useLocation().state as ImportedState | null) ?? null
 
   return (
     <>
       <ErrorMessage error={project.error} />
+      {imported?.importedFrom && <ImportedNotice state={imported} />}
       <div className="page-head">
         <div className="page-title">
           <h1>{project.data ? `${project.data.key} · ${project.data.name}` : 'Proyecto'}</h1>
@@ -601,5 +605,28 @@ function ProjectPeek({ projectId }: { projectId: string }) {
       size={80}
       className="page-peek"
     />
+  )
+}
+
+/** Aviso al llegar desde el asistente «Importar proyecto» (IP-C). */
+function ImportedNotice({ state }: { state: ImportedState }) {
+  return (
+    <div className="import-done" role="status">
+      <Companion state="success" size={36} />
+      <p>
+        Proyecto importado desde <code>{state.importedFrom}</code>.
+        {state.learn === 'launched' && state.learnRunId && (
+          <>
+            {' '}
+            «Conocer el repositorio» está en marcha:{' '}
+            <Link to={`/runs/${state.learnRunId}`}>ver la ejecución</Link>.
+          </>
+        )}
+        {state.learn === 'missing' &&
+          ' No se lanzó «Conocer el repositorio»: no hay una versión publicada de ese workflow.'}
+        {state.learn === 'failed' &&
+          ' No se pudo lanzar «Conocer el repositorio»: lánzalo desde un trabajo del proyecto.'}
+      </p>
+    </div>
   )
 }

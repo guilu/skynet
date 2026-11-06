@@ -1,0 +1,66 @@
+[ {
+  "runnerId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a71",
+  "runnerName" : "omarchy",
+  "lastHeartbeatAt" : "2026-11-06T09:31:10Z",
+  "scannedAt" : "2026-11-06T09:30:00Z",
+  "receivedAt" : "2026-11-06T09:30:01Z",
+  "roots" : [ "/home/diego/code" ],
+  "truncated" : false,
+  "repositories" : [ {
+    "repository" : {
+      "path" : "/home/diego/code/forma",
+      "name" : "forma",
+      "projectName" : "forma",
+      "projectNameSource" : "package.json",
+      "description" : "Gestor de entrenamientos de fuerza",
+      "descriptionSource" : "package.json",
+      "remoteUrl" : "git@github.com:guilu/forma.git",
+      "defaultBranch" : "main",
+      "defaultBranchSource" : "origin/HEAD",
+      "tool" : "pnpm",
+      "validationCommand" : "pnpm test",
+      "testReportPaths" : [ ],
+      "protectedPaths" : [ ".github/workflows/**" ],
+      "lastCommit" : "4f2a9c1",
+      "lastCommitSubject" : "Gráfica de progreso por ejercicio",
+      "lastCommitAt" : "2026-11-05T18:12:00Z",
+      "dirty" : true,
+      "agentInstructions" : true
+    },
+    "registered" : null,
+    "github" : {
+      "fullName" : "guilu/forma",
+      "covered" : true,
+      "description" : "Forma: entrenamientos",
+      "htmlUrl" : "https://github.com/guilu/forma"
+    }
+  }, {
+    "repository" : {
+      "path" : "/home/diego/code/akademia",
+      "name" : "akademia",
+      "projectName" : "akademia",
+      "projectNameSource" : "settings.gradle.kts",
+      "description" : null,
+      "descriptionSource" : null,
+      "remoteUrl" : null,
+      "defaultBranch" : "develop",
+      "defaultBranchSource" : "current",
+      "tool" : "gradle",
+      "validationCommand" : "./gradlew check",
+      "testReportPaths" : [ "build/test-results/test/*.xml" ],
+      "protectedPaths" : [ ],
+      "lastCommit" : "9b07e3d",
+      "lastCommitSubject" : "Inicial",
+      "lastCommitAt" : "2026-10-30T11:00:00Z",
+      "dirty" : false,
+      "agentInstructions" : false
+    },
+    "registered" : {
+      "projectId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a72",
+      "projectKey" : "AKA",
+      "projectName" : "Akademia",
+      "repositoryId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a73"
+    },
+    "github" : null
+  } ]
+} ]

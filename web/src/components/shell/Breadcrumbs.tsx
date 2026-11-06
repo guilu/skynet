@@ -17,7 +17,11 @@ interface Crumb {
  */
 export function Breadcrumbs() {
   const { pathname } = useLocation()
-  const projectId = matchPath('/projects/:projectId', pathname)?.params.projectId
+  const importing = pathname === '/projects/import'
+  // «/projects/import» no es un proyecto: sin esto se pediría el proyecto «import».
+  const projectId = importing
+    ? undefined
+    : matchPath('/projects/:projectId', pathname)?.params.projectId
   const workItemId = matchPath('/work-items/:workItemId', pathname)?.params.workItemId
   const runId = matchPath('/runs/:runId', pathname)?.params.runId
   const workflowKey = matchPath('/workflows/:key', pathname)?.params.key
@@ -50,7 +54,10 @@ export function Breadcrumbs() {
   let area: string | undefined
   if (projectId || workItemId || runId) area = 'Espacio de trabajo'
   else if (approvalId || workflowKey) area = 'Fábrica'
-  if (projectId) crumbs = [projects, projectCrumb()]
+  if (importing) {
+    area = 'Espacio de trabajo'
+    crumbs = [projects, { label: 'Importar proyecto' }]
+  } else if (projectId) crumbs = [projects, projectCrumb()]
   else if (workItemId)
     crumbs = [
       projects,

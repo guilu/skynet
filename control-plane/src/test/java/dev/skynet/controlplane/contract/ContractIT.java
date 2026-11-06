@@ -12,8 +12,10 @@ import dev.skynet.controlplane.definition.VersionView;
 import dev.skynet.controlplane.definition.WorkflowSummary;
 import dev.skynet.controlplane.definition.WorkflowView;
 import dev.skynet.controlplane.event.StoredEvent;
+import dev.skynet.controlplane.github.GitHubRepositories;
 import dev.skynet.controlplane.github.GitHubStatus;
 import dev.skynet.controlplane.github.WebhookDelivery;
+import dev.skynet.controlplane.project.RepositoryCatalogs;
 import dev.skynet.controlplane.runner.ProviderShortage;
 import dev.skynet.controlplane.runner.ProviderView;
 import dev.skynet.controlplane.runner.RunnerView;
@@ -50,6 +52,7 @@ import dev.skynet.protocol.AgentObservableStatus;
 import dev.skynet.protocol.AgentProviderKind.Capability;
 import dev.skynet.protocol.StageStatus;
 import dev.skynet.protocol.WorkflowRunStatus;
+import dev.skynet.protocol.runner.DiscoveredRepository;
 import dev.skynet.protocol.runner.ProviderInfo;
 import dev.skynet.protocol.runner.VerificationCheck;
 import java.io.IOException;
@@ -117,7 +120,8 @@ class ContractIT extends IntegrationTest {
         Arguments.of("github-deliveries", Samples.gitHubDeliveries()),
         Arguments.of("project-overview", Samples.projectOverview()),
         Arguments.of("work-item-summaries", List.of(Samples.workItemSummary())),
-        Arguments.of("changes", List.of(Samples.change())));
+        Arguments.of("changes", List.of(Samples.change())),
+        Arguments.of("repository-catalog", List.of(Samples.repositoryCatalog())));
   }
 
   @ParameterizedTest(name = "{0}")
@@ -872,6 +876,76 @@ class ContractIT extends IntegrationTest {
           mapper.valueToTree(payload),
           at(17),
           at(17));
+    }
+
+    /** Catálogo de omarchy: forma por importar (con GitHub) y akademia ya registrado (IP). */
+    static RepositoryCatalogs.RunnerCatalog repositoryCatalog() {
+      Instant scanned = Instant.parse("2026-11-06T09:30:00Z");
+      DiscoveredRepository forma =
+          new DiscoveredRepository(
+              "/home/diego/code/forma",
+              "forma",
+              "forma",
+              "package.json",
+              "Gestor de entrenamientos de fuerza",
+              "package.json",
+              "git@github.com:guilu/forma.git",
+              "main",
+              "origin/HEAD",
+              "pnpm",
+              "pnpm test",
+              List.of(),
+              List.of(".github/workflows/**"),
+              "4f2a9c1",
+              "Gráfica de progreso por ejercicio",
+              Instant.parse("2026-11-05T18:12:00Z"),
+              true,
+              true);
+      DiscoveredRepository akademia =
+          new DiscoveredRepository(
+              "/home/diego/code/akademia",
+              "akademia",
+              "akademia",
+              "settings.gradle.kts",
+              null,
+              null,
+              null,
+              "develop",
+              "current",
+              "gradle",
+              "./gradlew check",
+              List.of("build/test-results/test/*.xml"),
+              List.of(),
+              "9b07e3d",
+              "Inicial",
+              Instant.parse("2026-10-30T11:00:00Z"),
+              false,
+              false);
+      return new RepositoryCatalogs.RunnerCatalog(
+          UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a71"),
+          "omarchy",
+          Instant.parse("2026-11-06T09:31:10Z"),
+          scanned,
+          Instant.parse("2026-11-06T09:30:01Z"),
+          List.of("/home/diego/code"),
+          false,
+          List.of(
+              new RepositoryCatalogs.Entry(
+                  forma,
+                  null,
+                  new GitHubRepositories.RemoteInfo(
+                      "guilu/forma",
+                      true,
+                      "Forma: entrenamientos",
+                      "https://github.com/guilu/forma")),
+              new RepositoryCatalogs.Entry(
+                  akademia,
+                  new RepositoryCatalogs.Registered(
+                      UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a72"),
+                      "AKA",
+                      "Akademia",
+                      UUID.fromString("0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a73")),
+                  null)));
     }
 
     static GitHubStatus gitHubStatus() {
