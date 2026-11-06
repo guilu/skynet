@@ -16,7 +16,8 @@
   "enabled" : true,
   "createdAt" : "2026-10-05T09:00:00Z",
   "updatedAt" : "2026-10-05T09:00:00Z",
-  "schedule" : null
+  "schedule" : null,
+  "deployment" : null
 }, {
   "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a21",
   "repositoryId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a03",
@@ -40,6 +41,30 @@
     "lastFiredAt" : "2026-10-05T09:00:00Z",
     "lastOutcome" : "LAUNCHED",
     "lastReason" : null,
+    "lastRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04"
+  },
+  "deployment" : null
+}, {
+  "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a45",
+  "repositoryId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a03",
+  "kind" : "DEPLOYMENT",
+  "workflowKey" : "humo",
+  "label" : null,
+  "workItemType" : "FEATURE",
+  "inputs" : { },
+  "inputPolicy" : { },
+  "enabled" : false,
+  "createdAt" : "2026-10-05T09:00:00Z",
+  "updatedAt" : "2026-10-05T09:00:00Z",
+  "schedule" : null,
+  "deployment" : {
+    "environment" : "omarchy",
+    "health" : "HEALTHY",
+    "workItemTitle" : "humo (al desplegar en omarchy)",
+    "workItemId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a02",
+    "lastFiredAt" : "2026-10-05T09:00:00Z",
+    "lastOutcome" : "SKIPPED",
+    "lastReason" : "La ejecución anterior sigue en marcha",
     "lastRunId" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a04"
   }
 } ]

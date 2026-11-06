@@ -114,4 +114,42 @@ describe('Disparadores (DS-C)', () => {
       maxConcurrentRuns: 3,
     })
   })
+
+  it('por despliegue (DL-D): se ve qué vigila y se crea apagado', async () => {
+    const fetch = stubApi({
+      [`/api/repositories/${REPO}/run-queue`]: queue,
+      [`/api/repositories/${REPO}/triggers`]: rules,
+      [`POST /api/repositories/${REPO}/triggers`]: rules[2],
+      '/api/workflows': [{ key: 'humo', name: 'Pruebas de humo' }],
+    })
+    renderAt('/projects/p1', <RepositoryTriggers repository={repository} editable />)
+
+    const list = await screen.findByRole('region', { name: 'Disparadores de demo' })
+    const item = (await within(list).findByText(/Al quedar sano/)).closest('li') as HTMLElement
+    expect(within(item).getByText('omarchy')).toBeInTheDocument()
+    expect(within(item).getByText('Desactivado')).toBeInTheDocument()
+    expect(within(item).getByText(/nunca por un SHA ya sustituido/)).toBeInTheDocument()
+    expect(within(item).getByText('se saltó')).toBeInTheDocument()
+    expect(within(item).queryByRole('button', { name: 'Disparar ya' })).not.toBeInTheDocument()
+
+    fireEvent.click(within(list).getByRole('button', { name: 'Nuevo disparador en demo' }))
+    const sheet = await screen.findByRole('dialog')
+    fireEvent.click(within(sheet).getByLabelText(/Al desplegar/))
+    fireEvent.change(await within(sheet).findByRole('combobox', { name: /Workflow/ }), {
+      target: { value: 'humo' },
+    })
+    fireEvent.change(within(sheet).getByRole('combobox', { name: /Cuándo/ }), {
+      target: { value: 'UNHEALTHY' },
+    })
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Crear disparador' }))
+    await waitFor(() =>
+      expect(bodyOf(fetch, 'POST', `/api/repositories/${REPO}/triggers`)).toEqual({
+        kind: 'DEPLOYMENT',
+        workflowKey: 'humo',
+        environment: 'omarchy',
+        health: 'UNHEALTHY',
+        enabled: false,
+      }),
+    )
+  })
 })

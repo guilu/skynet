@@ -161,10 +161,12 @@ class TriggerSettings {
   /** Las peticiones de GitHub que han lanzado una ejecución hoy (desde las 00:00 en Madrid). */
   int launchedToday() {
     Instant midnight = time.now().atZone(ZONE).toLocalDate().atStartOfDay(ZONE).toInstant();
+    // Las de GitHub (issues y órdenes) y las de los despliegues (DL-D) comparten el freno.
     return jdbc.sql(
-            "SELECT count(*) FROM trigger_launch WHERE status IN ('LAUNCHED', 'FINISHED')"
-                + " AND created_at >= ?")
-        .param(Timestamp.from(midnight))
+            "SELECT (SELECT count(*) FROM trigger_launch WHERE status IN ('LAUNCHED', 'FINISHED')"
+                + " AND created_at >= :since) + (SELECT count(*) FROM trigger_deployment_fire"
+                + " WHERE outcome = 'LAUNCHED' AND created_at >= :since)")
+        .param("since", Timestamp.from(midnight))
         .query(Integer.class)
         .single();
   }

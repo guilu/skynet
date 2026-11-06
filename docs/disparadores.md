@@ -1,6 +1,6 @@
 # Disparadores
 
-Con la GitHub App conectada ([`github.md`](github.md)), Skynet lanza workflows **desde GitHub, sin abrir la web** (hito DS): con una **etiqueta en una issue** (DS-A) y con **comentarios `/skynet`** y **revisiones que piden cambios** (DS-B, §5). Y **a una hora**, sin GitHub (DS-C, §6). Cada repositorio tiene además una **cola**: como mucho tantas ejecuciones a la vez, vengan de donde vengan (§7).
+Con la GitHub App conectada ([`github.md`](github.md)), Skynet lanza workflows **desde GitHub, sin abrir la web** (hito DS): con una **etiqueta en una issue** (DS-A) y con **comentarios `/skynet`** y **revisiones que piden cambios** (DS-B, §5). Y **a una hora**, sin GitHub (DS-C, §6), o **al desplegar**, cuando lo desplegado queda sano o falla la salud (DL-D, §13). Cada repositorio tiene además una **cola**: como mucho tantas ejecuciones a la vez, vengan de donde vengan (§7).
 
 Todo se maneja desde la web: el interruptor, quién puede lanzar y el freno diario en **Ajustes → GitHub**; las reglas, los programados y la cola en la **ficha de cada repositorio** (Proyecto → Repositorios). La API (§11) hace lo mismo.
 
@@ -181,7 +181,7 @@ Con `{"maxConcurrentRuns": null}` vuelve al general. Al subirlo, las que esperan
 
 ## 8. Freno diario
 
-Como mucho **10 ejecuciones al día lanzadas desde GitHub** (etiquetas, `/skynet <workflow>` y repositorios de órdenes), contadas desde las 00:00 en Madrid. La siguiente queda rechazada y se contesta en la issue: «Límite diario alcanzado: ya van 10 ejecuciones lanzadas desde GitHub hoy». Las órdenes `corrige`, `cancela` y `estado` no cuentan, ni los programados ni lo que se lanza desde la web.
+Como mucho **10 ejecuciones al día lanzadas desde GitHub** (etiquetas, `/skynet <workflow>`, repositorios de órdenes y disparadores por despliegue, §13), contadas desde las 00:00 en Madrid. La siguiente queda rechazada y se contesta en la issue: «Límite diario alcanzado: ya van 10 ejecuciones lanzadas desde GitHub hoy». Las órdenes `corrige`, `cancela` y `estado` no cuentan, ni los programados ni lo que se lanza desde la web.
 
 Se cambia en **Ajustes → GitHub → Ejecuciones al día desde GitHub** (de 0 a 1000; 0 es ninguna), o con `PUT /api/triggers/settings` y `{"dailyLimit": 20}`. La web enseña «Hoy van N de M».
 
@@ -220,7 +220,7 @@ Si GitHub falla al avisar, el aviso se reintenta con espera creciente, hasta 5 v
 |---|---|---|
 | `GET` | `/api/triggers/settings` | interruptor, autorizados (y si son los de la instalación), repositorios de órdenes, `dailyLimit` y `launchedToday` |
 | `PUT` | `/api/triggers/settings` | cambia lo que llegue: `enabled`, `authorizedLogins`, `orderRepositories`, `dailyLimit` |
-| `GET` | `/api/repositories/{id}/triggers` | las reglas del repositorio, con `schedule` en los programados |
+| `GET` | `/api/repositories/{id}/triggers` | las reglas del repositorio, con `schedule` en los programados y `deployment` en los de despliegue |
 | `POST` | `/api/repositories/{id}/triggers` | crea una regla (409 si la etiqueta ya está en ese repositorio) |
 | `GET`, `PUT`, `DELETE` | `/api/triggers/{id}` | lee, cambia o borra una regla |
 | `POST` | `/api/triggers/{id}/fire` | adelanta un programado a ahora (400 si no es programado, 409 si está desactivado) |
@@ -228,7 +228,7 @@ Si GitHub falla al avisar, el aviso se reintenta con espera creciente, hasta 5 v
 | `GET`, `PUT` | `/api/repositories/{id}/run-queue` | el límite del repositorio (`maxConcurrentRuns`, `custom`, `defaultLimit`), las que ocupan hueco (`running`) y las que esperan (`queued`) |
 | `GET` | `/api/workflow-runs/{id}/queue` | el puesto de una ejecución en la cola (`position`, 0 si no está en cola) |
 
-Eventos en el agregado `repository`: `trigger.launched`, `trigger.duplicate` y `trigger.rejected` (este último solo cuando se sabe el repositorio). Las órdenes: `trigger.command.corrige`, `trigger.command.cancela`, `trigger.command.estado` y `trigger.command.rejected`. Los programados: `trigger.schedule.launched`, `trigger.schedule.skipped` y `trigger.schedule.rejected`. En la ejecución, `workflow.queued` cuando entra en cola. Todos tienen su frase en Actividad.
+Eventos en el agregado `repository`: `trigger.launched`, `trigger.duplicate` y `trigger.rejected` (este último solo cuando se sabe el repositorio). Las órdenes: `trigger.command.corrige`, `trigger.command.cancela`, `trigger.command.estado` y `trigger.command.rejected`. Los programados: `trigger.schedule.launched`, `trigger.schedule.skipped` y `trigger.schedule.rejected`. Los de despliegue: `trigger.deployment.launched`, `trigger.deployment.skipped` y `trigger.deployment.rejected`, con el entorno, la salud, el despliegue y su SHA. En la ejecución, `workflow.queued` cuando entra en cola. Todos tienen su frase en Actividad.
 
 ## 12. Del puente `skynet-commands` a Skynet
 
@@ -252,3 +252,42 @@ El puente se retira cuando la guía de DS-C pasa de punta a punta en `guilu/demo
 4. En `guilu/skynet-commands` → Settings → Webhooks, borra el webhook del puente. La App ya recibe los eventos con el suyo.
 5. Para el servicio del puente y quítalo del arranque del equipo. Revoca su token de GitHub y cambia la contraseña de Skynet que usaba, si era la del administrador.
 6. Archiva el repositorio del puente en GitHub (Settings → Archive this repository).
+
+## 13. Al desplegar (DL-D)
+
+Un disparador **por despliegue** lanza su workflow cuando lo desplegado en un entorno **queda sano** o **falla la salud** (no sano o sin respuesta), siempre **sobre el mismo trabajo**. Sirve, por ejemplo, para unas pruebas de humo tras cada despliegue o para investigar un despliegue que no responde. Necesita los despliegues y la comprobación de salud de ese entorno ([`despliegues.md`](despliegues.md) §3 y §4).
+
+En la web: ficha del repositorio → **Disparadores** → **Nuevo disparador** → «Al desplegar». Con la API:
+
+```bash
+curl -s -u admin:<contraseña> -H 'Content-Type: application/json' \
+  -X POST http://localhost:8080/api/repositories/<id>/triggers \
+  -d '{"kind": "DEPLOYMENT", "workflowKey": "pruebas-humo", "environment": "omarchy",
+       "health": "HEALTHY", "enabled": true}'
+```
+
+| Campo | Por defecto | Qué es |
+|---|---|---|
+| `kind` | `ISSUE` | `DEPLOYMENT` para uno por despliegue |
+| `environment` | (obligatorio) | el entorno, con el nombre que manda el listener |
+| `health` | (obligatorio) | `HEALTHY` (al quedar sano) o `UNHEALTHY` (al fallar la salud: no sano o sin respuesta) |
+| `enabled` | **`false`** | nace **apagado**: lanzar agentes al desplegar es una decisión explícita |
+| `workItemTitle` | `<workflow> (al desplegar en <entorno>)` | el título del trabajo, que se crea en el primer disparo |
+| `inputs` | `{}` | los datos del workflow, fijos |
+
+Como un programado, no lleva etiqueta ni `inputPolicy`.
+
+Cómo se comporta:
+
+- **Una sola vez por despliegue.** Cada despliegue dispara cada regla una vez como mucho, aunque la entrega de GitHub se repita, se vuelva a comprobar la salud o haya varias instancias. Lo garantiza la clave primaria de `trigger_deployment_fire`, escrita en la misma transacción que el lanzamiento.
+- **Nunca por un SHA ya sustituido.** Solo mira lo desplegado ahora (`SUCCEEDED`); un despliegue que otro ha sustituido no dispara nada, aunque su comprobación terminara bien.
+- **Solo lo nuevo.** Cuentan las comprobaciones que terminan después de crear o cambiar la regla, y como mucho las del último día: encender una regla no lanza por lo viejo.
+- **El interruptor manda**: apagados, el disparo queda `REJECTED` y ese despliegue ya no se reintenta.
+- **El freno diario (§8) sí lo cuenta**, junto con lo de GitHub.
+- **La cola del repositorio (§7) también**. Si la ejecución anterior de la regla sigue en marcha, ese despliegue **se salta** (`SKIPPED`).
+- Lo recoge una pasada cada 15 s (`skynet.triggers.deployment-interval`).
+- **No toca nada de Hermes**: ni la aprobación ni la fusión ni el despliegue. Solo lanza un workflow después, si alguien lo ha configurado.
+
+Cada regla enseña el **último disparo** en `deployment` (`lastFiredAt`, `lastOutcome`, `lastReason`, `lastRunId`). El trabajo lleva `externalRef = skynet:deployment:<id de la regla>`.
+
+Las pruebas reales se hacen solo sobre **demo-repo**, nunca sobre skynet.

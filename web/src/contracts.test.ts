@@ -50,6 +50,7 @@ import type {
   TriggerSettings,
   TriggerRule,
   TriggerSchedule,
+  TriggerDeployWatch,
   TriggerLaunch,
   RunQueue,
   RunQueuePosition,
@@ -761,6 +762,18 @@ const TRIGGER_RULE: Keys<TriggerRule> = {
   createdAt: true,
   updatedAt: true,
   schedule: true,
+  deployment: true,
+}
+
+const TRIGGER_DEPLOY_WATCH: Keys<TriggerDeployWatch> = {
+  environment: true,
+  health: true,
+  workItemTitle: true,
+  workItemId: true,
+  lastFiredAt: true,
+  lastOutcome: true,
+  lastReason: true,
+  lastRunId: true,
 }
 
 const TRIGGER_SCHEDULE: Keys<TriggerSchedule> = {
@@ -1094,8 +1107,9 @@ describe('contratos con el backend', () => {
     rules.forEach((r) => {
       expectShape(r, TRIGGER_RULE)
       if (r.schedule) expectShape(r.schedule, TRIGGER_SCHEDULE)
+      if (r.deployment) expectShape(r.deployment, TRIGGER_DEPLOY_WATCH)
     })
-    expect(rules.map((r) => r.kind)).toEqual(['ISSUE', 'SCHEDULE'])
+    expect(rules.map((r) => r.kind)).toEqual(['ISSUE', 'SCHEDULE', 'DEPLOYMENT'])
     ;(triggerLaunches as TriggerLaunch[]).forEach((l) => expectShape(l, TRIGGER_LAUNCH))
     expectShape(runQueue, RUN_QUEUE)
     expectShape(runQueuePosition, RUN_QUEUE_POSITION)

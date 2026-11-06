@@ -49,7 +49,9 @@ class TriggerController {
       Boolean enabled,
       @Size(max = 200) String cron,
       @Size(max = 100) String timeZone,
-      @Size(max = 300) String workItemTitle) {
+      @Size(max = 300) String workItemTitle,
+      @Size(max = 64) String environment,
+      TriggerRules.DeployHealth health) {
 
     TriggerRules.Draft draft() {
       return new TriggerRules.Draft(
@@ -62,7 +64,9 @@ class TriggerController {
           enabled,
           cron,
           timeZone,
-          workItemTitle);
+          workItemTitle,
+          environment,
+          health);
     }
   }
 
