@@ -14,6 +14,7 @@ La definición funcional y técnica inicial se encuentra en:
 - [`docs/entrega-por-pr.md`](docs/entrega-por-pr.md): la entrega por PR, de la rama a la fusión.
 - [`docs/disparadores.md`](docs/disparadores.md): lanzar workflows desde GitHub con una etiqueta en una issue o a una hora (cron), corregir, cancelar o ver el estado con comentarios `/skynet`, y la cola de ejecuciones de cada repositorio.
 - [`docs/despliegues.md`](docs/despliegues.md): qué versión de cada repositorio hay en cada entorno, con el estado del despliegue y su salud por separado (hito DL, en curso).
+- [`docs/importar-proyecto.md`](docs/importar-proyecto.md): crear un proyecto a partir de un repositorio ya clonado en el disco del runner, con lo que el runner deduce de él (hito IP, en curso).
 - [`docs/arranque-local.md`](docs/arranque-local.md): empezar de cero en local y los workflows iniciales, con qué proveedor y modelo hace cada fase.
 
 ## Arquitectura prevista

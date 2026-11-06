@@ -7,6 +7,7 @@ import dev.skynet.protocol.runner.EventBatchResult;
 import dev.skynet.protocol.runner.HeartbeatReply;
 import dev.skynet.protocol.runner.MemoryToken;
 import dev.skynet.protocol.runner.PushToken;
+import dev.skynet.protocol.runner.RepositoryCatalog;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
@@ -62,6 +63,12 @@ public class ControlPlaneClient {
     return body == null || body.isBlank()
         ? new HeartbeatReply(false)
         : JSON.readValue(body, HeartbeatReply.class);
+  }
+
+  /** Envía el catálogo de repositorios de las carpetas raíz (IP-A); sustituye al anterior. */
+  public void repositoryCatalog(RepositoryCatalog catalog)
+      throws IOException, InterruptedException {
+    send(post("/api/runner/repository-catalog", catalog, true), Void.class, TIMEOUT);
   }
 
   /** Long-poll de órdenes: vuelve en cuanto hay alguna o al agotar {@code wait}. */

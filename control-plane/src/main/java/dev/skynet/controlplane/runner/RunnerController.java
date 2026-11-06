@@ -4,6 +4,8 @@ import dev.skynet.controlplane.artifact.ArtifactService;
 import dev.skynet.controlplane.artifact.ArtifactTooLargeException;
 import dev.skynet.controlplane.artifact.InvalidArtifactException;
 import dev.skynet.controlplane.memory.MemoryAgents;
+import dev.skynet.controlplane.project.RepositoryCatalogRefresh;
+import dev.skynet.controlplane.project.RepositoryCatalogs;
 import dev.skynet.controlplane.usage.QuotaRefresh;
 import dev.skynet.controlplane.usage.QuotaSnapshots;
 import dev.skynet.controlplane.workflow.AgentEventIngestion;
@@ -16,6 +18,7 @@ import dev.skynet.protocol.runner.EventBatchResult;
 import dev.skynet.protocol.runner.HeartbeatReply;
 import dev.skynet.protocol.runner.MemoryToken;
 import dev.skynet.protocol.runner.PushToken;
+import dev.skynet.protocol.runner.RepositoryCatalog;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.RunnerHeartbeat;
 import dev.skynet.protocol.runner.RunnerRegistered;
@@ -66,6 +69,8 @@ class RunnerController {
   private final QuotaRefresh refresh;
   private final MemoryAgents memory;
   private final PullRequests pullRequests;
+  private final RepositoryCatalogs catalogs;
+  private final RepositoryCatalogRefresh catalogRefresh;
 
   RunnerController(
       RunnerRegistry registry,
@@ -78,7 +83,9 @@ class RunnerController {
       QuotaSnapshots quotas,
       QuotaRefresh refresh,
       MemoryAgents memory,
-      PullRequests pullRequests) {
+      PullRequests pullRequests,
+      RepositoryCatalogs catalogs,
+      RepositoryCatalogRefresh catalogRefresh) {
     this.registry = registry;
     this.commands = commands;
     this.signal = signal;
@@ -90,6 +97,8 @@ class RunnerController {
     this.refresh = refresh;
     this.memory = memory;
     this.pullRequests = pullRequests;
+    this.catalogs = catalogs;
+    this.catalogRefresh = catalogRefresh;
   }
 
   /**
@@ -122,7 +131,10 @@ class RunnerController {
     return registry.register(registration);
   }
 
-  /** Latido; la respuesta dice si alguien ha pedido «Actualizar» las cuotas en la página Uso. */
+  /**
+   * Latido; la respuesta dice si alguien ha pedido «Actualizar» las cuotas en la página Uso o
+   * «Volver a buscar» los repositorios en el asistente de importación.
+   */
   @PostMapping("/heartbeat")
   HeartbeatReply heartbeat(
       @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
@@ -132,7 +144,16 @@ class RunnerController {
     registry.heartbeat(runnerId, heartbeat);
     lost.reconcile(runnerId, heartbeat);
     quotas.recordPolled(runnerId, heartbeat.quotas());
-    return new HeartbeatReply(refresh.consume(runnerId));
+    return new HeartbeatReply(refresh.consume(runnerId), catalogRefresh.consume(runnerId));
+  }
+
+  /** Catálogo de los repositorios de las carpetas raíz del runner (IP-A); sustituye al anterior. */
+  @PostMapping("/repository-catalog")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  void repositoryCatalog(
+      @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+      @RequestBody RepositoryCatalog catalog) {
+    catalogs.record(registry.authenticate(authorization), catalog);
   }
 
   /**
