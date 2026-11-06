@@ -1,6 +1,6 @@
 # Despliegues
 
-Skynet lleva la cuenta de **qué versión de cada repositorio hay en cada entorno** (hito DL). No despliega nada: lo hacen los listeners de Hermes en Omarchy con Git y Docker Compose. Skynet observa lo que pasa y, a partir de DL-C, comprueba si lo desplegado está sano.
+Skynet lleva la cuenta de **qué versión de cada repositorio hay en cada entorno** (hito DL). No despliega nada: lo hacen los listeners de Hermes en Omarchy con Git y Docker Compose. Skynet observa lo que pasa, comprueba si lo desplegado está sano (DL-C) y lo enseña en la web (DL-E).
 
 | PR | Qué añade |
 |---|---|
@@ -132,7 +132,21 @@ Cómo funciona:
 - Recupera los eventos perdidos, por ejemplo los de un despliegue de Skynet sobre sí mismo.
 - `POST /api/repositories/{id}/deployments/reconcile` lo hace ya y devuelve `deployments`, `statuses` y `changed`. Necesita la App instalada en el repositorio (si no, 409) y su permiso **Deployments: lectura**.
 
-## 5. API
+## 5. En la web (DL-E)
+
+**Proyecto → Despliegues**, una tarjeta por repositorio:
+- **Cada entorno**: lo desplegado ahora (SHA corto, rama, enlace a la PR, URL del listener y hora), con su **estado y su salud en dos píldoras** distintas («Desplegado» y «Sano», «No sano», «No responde», «Comprobando» o «Salud sin comprobar») y el resumen del último intento.
+- **El último pedido**, si no es lo desplegado (uno que falló o que aún está en curso): se ve aparte y **sin salud**, porque la salud del entorno es la de lo desplegado.
+- **El historial**: los últimos 20 despliegues. Uno sustituido no enseña salud salvo que llegara a comprobarse.
+- **Reconciliar con GitHub**, si el repositorio es de GitHub, pide ya a GitHub lo que falte y dice cuántos cambios aplicó.
+- Al pulsar un SHA se abre el **detalle**: todos los datos, la salud de *ese* SHA con cada intento (resultado, código HTTP, latencia y hora), «Volver a comprobar» si está desplegado, y los estados recibidos, marcando los que llegaron tarde y no cambiaron nada.
+- Se refresca cada 15 segundos, y cada 3 mientras se comprueba la salud.
+
+**Proyecto → Configuración**, en la ficha de cada repositorio, **Salud de los despliegues**: crear, editar y quitar la comprobación de cada entorno (URL, intentos, espera entre intentos, espera inicial, plazo, «exige el SHA» y activa).
+
+Un proyecto o repositorio archivado se ve, pero sin botones.
+
+## 6. API
 
 Todas piden la sesión de admin.
 
@@ -149,7 +163,7 @@ Todas piden la sesión de admin.
 
 Un despliegue lleva `id`, `repositoryId`, `environment`, `externalId`, `commitSha`, `ref`, `pullRequestNumber`, `url`, `creator`, `status`, `health`, `error`, `requestedAt`, `startedAt`, `finishedAt`, `statusAt`, `supersededBy`, `createdAt`, `updatedAt`, `healthDetail`, `healthCheckedAt`, `healthAttempts` y `stuckAt`.
 
-## 6. Eventos
+## 7. Eventos
 
 Con aggregate `deployment`:
 - `deployment.created`;

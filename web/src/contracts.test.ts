@@ -34,7 +34,19 @@ import runQueuePosition from '../../fixtures/contracts/run-queue-position.json'
 import projectOverview from '../../fixtures/contracts/project-overview.json'
 import workItemSummaries from '../../fixtures/contracts/work-item-summaries.json'
 import changes from '../../fixtures/contracts/changes.json'
+import deployments from '../../fixtures/contracts/deployments.json'
+import deploymentEnvironments from '../../fixtures/contracts/deployment-environments.json'
+import deploymentDetail from '../../fixtures/contracts/deployment-detail.json'
+import healthChecks from '../../fixtures/contracts/health-checks.json'
+import deploymentReconciled from '../../fixtures/contracts/deployment-reconciled.json'
 import type {
+  Deployment,
+  DeploymentDetail,
+  DeploymentEnvironment,
+  DeploymentReconciled,
+  DeploymentStatusRecord,
+  HealthCheck,
+  HealthProbe,
   TriggerSettings,
   TriggerRule,
   TriggerSchedule,
@@ -805,6 +817,81 @@ const RUN_QUEUE_POSITION: Keys<RunQueuePosition> = {
   maxConcurrentRuns: true,
 }
 
+const DEPLOYMENT: Keys<Deployment> = {
+  id: true,
+  repositoryId: true,
+  environment: true,
+  externalId: true,
+  commitSha: true,
+  ref: true,
+  pullRequestNumber: true,
+  url: true,
+  creator: true,
+  status: true,
+  health: true,
+  error: true,
+  requestedAt: true,
+  startedAt: true,
+  finishedAt: true,
+  statusAt: true,
+  supersededBy: true,
+  createdAt: true,
+  updatedAt: true,
+  healthDetail: true,
+  healthCheckedAt: true,
+  healthAttempts: true,
+  stuckAt: true,
+}
+
+const DEPLOYMENT_ENVIRONMENT: Keys<DeploymentEnvironment> = {
+  environment: true,
+  deployed: true,
+  latest: true,
+}
+
+const DEPLOYMENT_STATUS_RECORD: Keys<DeploymentStatusRecord> = {
+  id: true,
+  externalId: true,
+  state: true,
+  description: true,
+  occurredAt: true,
+  applied: true,
+  receivedAt: true,
+}
+
+const HEALTH_PROBE: Keys<HealthProbe> = {
+  attempt: true,
+  url: true,
+  outcome: true,
+  statusCode: true,
+  latencyMs: true,
+  detail: true,
+  checkedAt: true,
+}
+
+const DEPLOYMENT_DETAIL: Keys<DeploymentDetail> = { deployment: true, statuses: true, probes: true }
+
+const HEALTH_CHECK: Keys<HealthCheck> = {
+  repositoryId: true,
+  environment: true,
+  url: true,
+  timeoutSeconds: true,
+  attempts: true,
+  intervalSeconds: true,
+  initialDelaySeconds: true,
+  expectSha: true,
+  enabled: true,
+  createdAt: true,
+  updatedAt: true,
+}
+
+const DEPLOYMENT_RECONCILED: Keys<DeploymentReconciled> = {
+  repositoryId: true,
+  deployments: true,
+  statuses: true,
+  changed: true,
+}
+
 const expectShape = (value: object, shape: object) => expect(keysOf(value)).toEqual(keysOf(shape))
 
 function expectAgent(agent: AgentRun) {
@@ -1012,5 +1099,21 @@ describe('contratos con el backend', () => {
     ;(triggerLaunches as TriggerLaunch[]).forEach((l) => expectShape(l, TRIGGER_LAUNCH))
     expectShape(runQueue, RUN_QUEUE)
     expectShape(runQueuePosition, RUN_QUEUE_POSITION)
+  })
+
+  it('despliegues (DL)', () => {
+    ;(deployments as Deployment[]).forEach((d) => expectShape(d, DEPLOYMENT))
+    ;(deploymentEnvironments as DeploymentEnvironment[]).forEach((e) => {
+      expectShape(e, DEPLOYMENT_ENVIRONMENT)
+      if (e.deployed) expectShape(e.deployed, DEPLOYMENT)
+      if (e.latest) expectShape(e.latest, DEPLOYMENT)
+    })
+    const detail = deploymentDetail as DeploymentDetail
+    expectShape(detail, DEPLOYMENT_DETAIL)
+    expectShape(detail.deployment, DEPLOYMENT)
+    detail.statuses.forEach((s) => expectShape(s, DEPLOYMENT_STATUS_RECORD))
+    detail.probes.forEach((p) => expectShape(p, HEALTH_PROBE))
+    ;(healthChecks as HealthCheck[]).forEach((h) => expectShape(h, HEALTH_CHECK))
+    expectShape(deploymentReconciled, DEPLOYMENT_RECONCILED)
   })
 })
