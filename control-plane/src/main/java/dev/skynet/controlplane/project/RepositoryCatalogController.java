@@ -26,7 +26,7 @@ class RepositoryCatalogController {
 
   /** «Volver a buscar»: los runners buscan en su siguiente latido y mandan el catálogo nuevo. */
   @PostMapping("/refresh")
-  @ResponseStatus(HttpStatus.ACCEPTED)
+  @ResponseStatus(HttpStatus.NO_CONTENT)
   void refresh() {
     catalogs.requestRefresh();
   }

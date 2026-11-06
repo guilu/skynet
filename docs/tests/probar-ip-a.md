@@ -96,7 +96,7 @@ api http://localhost:8080/api/repository-catalog | jq '.[0].repositories[] | {pa
 
 ```bash
 git clone -q https://github.com/guilu/demo-repo.git /tmp/ip-a/code/demo-3
-api -X POST -o /dev/null -w '%{http_code}\n' http://localhost:8080/api/repository-catalog/refresh   # 202
+api -X POST -o /dev/null -w '%{http_code}\n' http://localhost:8080/api/repository-catalog/refresh   # 204
 ```
 
 Antes de 20 segundos (lo que tarda un latido), el catálogo tiene cuatro repositorios con `demo-3`, y su `scannedAt` es nuevo. Sin la petición, con `SKYNET_REPO_SCAN=off`, el runner no habría vuelto a buscar.

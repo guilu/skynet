@@ -61,4 +61,4 @@ Del runner (con su token):
 De la web:
 
 - `GET /api/repository-catalog`: un elemento por runner con catálogo (`runnerId`, `runnerName`, `lastHeartbeatAt`, `scannedAt`, `receivedAt`, `roots`, `truncated`) y sus `repositories`, cada una con `repository` (lo de la tabla de arriba) y `registered` (`projectId`, `projectKey`, `projectName`, `repositoryId`) si ya hay un repositorio registrado en esa ruta, o `null`.
-- `POST /api/repository-catalog/refresh` (202): todos los runners vuelven a buscar en su siguiente latido. La petición caduca a los 2 minutos.
+- `POST /api/repository-catalog/refresh` (204): todos los runners vuelven a buscar en su siguiente latido. La petición caduca a los 2 minutos.
