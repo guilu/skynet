@@ -1,5 +1,6 @@
 package dev.skynet.controlplane.project;
 
+import dev.skynet.controlplane.github.GitHubRepositories;
 import dev.skynet.controlplane.shared.InvalidRequestException;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.protocol.SafeText;
@@ -34,21 +35,33 @@ public class RepositoryCatalogs {
   private final ObjectMapper json;
   private final TimeSource time;
   private final RepositoryCatalogRefresh refresh;
+  private final GitHubRepositories github;
 
   RepositoryCatalogs(
-      JdbcClient jdbc, ObjectMapper json, TimeSource time, RepositoryCatalogRefresh refresh) {
+      JdbcClient jdbc,
+      ObjectMapper json,
+      TimeSource time,
+      RepositoryCatalogRefresh refresh,
+      GitHubRepositories github) {
     this.jdbc = jdbc;
     this.json = json;
     this.time = time;
     this.refresh = refresh;
+    this.github = github;
   }
 
   /** Repositorio ya registrado en la ruta de una entrada del catálogo. */
   public record Registered(
       UUID projectId, String projectKey, String projectName, UUID repositoryId) {}
 
-  /** Una entrada del catálogo, con su registro si ya existe. */
-  public record Entry(DiscoveredRepository repository, Registered registered) {}
+  /**
+   * Una entrada del catálogo, con su registro si ya existe y, si no y su remoto es de GitHub, lo
+   * que dice GitHub de él (IP-B).
+   */
+  public record Entry(
+      DiscoveredRepository repository,
+      Registered registered,
+      GitHubRepositories.RemoteInfo github) {}
 
   /** El catálogo de un runner. */
   public record RunnerCatalog(
@@ -88,7 +101,6 @@ public class RepositoryCatalogs {
   /**
    * Los catálogos de todos los runners, con cada entrada cruzada con los repositorios registrados.
    */
-  @Transactional(readOnly = true)
   public List<RunnerCatalog> list() {
     Map<String, Registered> registered = new HashMap<>();
     jdbc.sql(
@@ -117,7 +129,12 @@ public class RepositoryCatalogs {
                       new TypeReference<List<DiscoveredRepository>>() {});
               List<Entry> entries = new ArrayList<>();
               for (DiscoveredRepository repository : repositories) {
-                entries.add(new Entry(repository, registered.get(normalize(repository.path()))));
+                Registered existing = registered.get(normalize(repository.path()));
+                GitHubRepositories.RemoteInfo remote =
+                    existing != null || repository.remoteUrl() == null
+                        ? null
+                        : github.describeRemote(repository.remoteUrl()).orElse(null);
+                entries.add(new Entry(repository, existing, remote));
               }
               OffsetDateTime heartbeat = rs.getObject("last_heartbeat_at", OffsetDateTime.class);
               return new RunnerCatalog(

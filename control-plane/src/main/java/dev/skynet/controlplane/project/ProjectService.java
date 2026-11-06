@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -55,6 +56,87 @@ public class ProjectService {
             Map.of("key", key, "name", name),
             now));
     return project;
+  }
+
+  /**
+   * Crea a la vez el proyecto y su repositorio a partir de una entrada del catálogo (IP-B): si algo
+   * falla, no se crea nada. La clave tiene que estar libre y la ruta sin registrar.
+   */
+  @Transactional
+  public Imported importProject(String key, String name, String description, RepositorySpec spec) {
+    if (projects.existsByKey(key)) {
+      throw new ConflictException("Ya hay un proyecto con la clave " + key);
+    }
+    String path = RepositoryCatalogs.normalize(spec.localPath());
+    registeredAt(path)
+        .ifPresent(
+            project -> {
+              throw new ConflictException(
+                  "El repositorio " + path + " ya está registrado en el proyecto " + project);
+            });
+    Instant now = time.now();
+    Project project = projects.save(Project.create(key, name, description, now));
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("key", key);
+    payload.put("name", name);
+    payload.put("importedFrom", path);
+    events.append(EventDraft.of("project", project.getId(), "project.created", null, payload, now));
+    CodeRepository created =
+        CodeRepository.create(
+            project.getId(), spec.name(), path, spec.remoteUrl(), spec.defaultBranch(), now);
+    created.configureVerification(spec.validationCommand(), spec.testReportPaths());
+    created.configureProtectedPaths(spec.protectedPaths());
+    CodeRepository repository = repositories.save(created);
+    events.append(
+        EventDraft.of(
+            "repository",
+            repository.getId(),
+            "repository.registered",
+            null,
+            Map.of("projectId", project.getId(), "name", spec.name(), "localPath", path),
+            now));
+    return new Imported(project, repository);
+  }
+
+  /** Lo que se registra del repositorio al importar un proyecto. */
+  public record RepositorySpec(
+      String name,
+      String localPath,
+      String remoteUrl,
+      String defaultBranch,
+      String validationCommand,
+      List<String> testReportPaths,
+      List<String> protectedPaths) {}
+
+  /** El proyecto importado y su repositorio. */
+  public record Imported(Project project, CodeRepository repository) {}
+
+  /** La clave del proyecto con un repositorio ya registrado en {@code path}, si lo hay. */
+  Optional<String> registeredAt(String path) {
+    return jdbc.sql(
+            "SELECT p.key FROM repository r JOIN project p ON p.id = r.project_id"
+                + " WHERE rtrim(r.local_path, '/') = rtrim(?, '/') ORDER BY p.key LIMIT 1")
+        .param(path)
+        .query(String.class)
+        .optional();
+  }
+
+  /** Una clave libre para un proyecto llamado {@code name} (IP-B). */
+  @Transactional(readOnly = true)
+  public String suggestKey(String name) {
+    String base = ProjectKeys.base(name);
+    if (!projects.existsByKey(base)) {
+      return base;
+    }
+    for (int i = 2; i < 100; i++) {
+      String suffix = Integer.toString(i);
+      String candidate =
+          base.substring(0, Math.min(base.length(), ProjectKeys.MAX - suffix.length())) + suffix;
+      if (!projects.existsByKey(candidate)) {
+        return candidate;
+      }
+    }
+    return base;
   }
 
   @Transactional(readOnly = true)

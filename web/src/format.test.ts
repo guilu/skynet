@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { describeEvent, formatCompact, formatDuration, providerName, statusTone } from './format'
 
 describe('describeEvent', () => {
+  it('dice desde dónde se importó un proyecto', () => {
+    expect(describeEvent('project.created', { key: 'FORMA' })).toBe('Proyecto FORMA creado')
+    expect(
+      describeEvent('project.created', { key: 'FORMA', importedFrom: '/home/diego/code/forma' }),
+    ).toBe('Proyecto FORMA importado desde /home/diego/code/forma')
+  })
+
   it('describe los disparadores y la cola (DS)', () => {
     expect(describeEvent('workflow.queued', { repositoryId: 'r1', running: 2, limit: 2 })).toBe(
       'En cola: el repositorio ya tiene 2 en marcha (límite 2)',

@@ -165,6 +165,75 @@ class ProjectController {
     return RepositoryView.of(repository, service.agentPolicy(repository));
   }
 
+  /** Proyecto y repositorio a partir de una entrada del catálogo de un runner (IP-B). */
+  record ImportProject(
+      @NotBlank
+          @Pattern(
+              regexp = "^[A-Z][A-Z0-9]{1,9}$",
+              message = "2-10 caracteres: mayúsculas y dígitos, empezando por letra")
+          String key,
+      @NotBlank @Size(max = 200) String name,
+      @Size(max = 2000) String description,
+      @NotNull @Valid ImportedRepository repository) {}
+
+  record ImportedRepository(
+      @NotBlank @Size(max = 200) String name,
+      @NotBlank @Pattern(regexp = "^/.*", message = "debe ser una ruta absoluta") String localPath,
+      @Size(max = 500) String remoteUrl,
+      @Size(max = 200) String defaultBranch,
+      @Size(max = 2000) String validationCommand,
+      List<@Size(max = 500) String> testReportPaths,
+      @Size(max = 50) List<@Size(max = 500) String> protectedPaths) {}
+
+  record ImportedView(ProjectView project, RepositoryView repository) {}
+
+  record KeySuggestion(String key) {}
+
+  @PostMapping("/import")
+  @ResponseStatus(HttpStatus.CREATED)
+  ImportedView importProject(@Valid @RequestBody ImportProject request) {
+    ImportedRepository r = request.repository();
+    checkProtectedPaths(r.protectedPaths());
+    ProjectService.Imported imported =
+        service.importProject(
+            request.key(),
+            request.name().strip(),
+            blankToNull(request.description()),
+            new ProjectService.RepositorySpec(
+                r.name().strip(),
+                r.localPath().strip(),
+                blankToNull(r.remoteUrl()),
+                blankToNull(r.defaultBranch()),
+                r.validationCommand(),
+                r.testReportPaths(),
+                r.protectedPaths()));
+    return new ImportedView(ProjectView.of(imported.project()), view(imported.repository()));
+  }
+
+  /** Una clave libre para un proyecto con ese nombre. */
+  @GetMapping("/key-suggestion")
+  KeySuggestion suggestKey(@RequestParam String name) {
+    return new KeySuggestion(service.suggestKey(name));
+  }
+
+  private static String blankToNull(String value) {
+    return value == null || value.isBlank() ? null : value.strip();
+  }
+
+  private static void checkProtectedPaths(List<String> globs) {
+    if (globs == null) {
+      return;
+    }
+    for (String glob : globs) {
+      if (glob != null && !glob.isBlank() && !ProtectedPaths.insideRepository(glob.strip())) {
+        throw new InvalidRequestException(
+            "`"
+                + glob.strip()
+                + "` tiene que ser una ruta dentro del repositorio, p. ej. `docs/tests/**`");
+      }
+    }
+  }
+
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   ProjectView create(@Valid @RequestBody CreateProject request) {

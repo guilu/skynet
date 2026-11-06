@@ -108,7 +108,11 @@ public final class FakeGitHub implements AutoCloseable {
     installations.remove(id);
   }
 
+  /** Descripción en GitHub de cada repositorio, para el asistente de importación (IP-B). */
+  final Map<String, String> descriptions = new ConcurrentHashMap<>();
+
   void reset() {
+    descriptions.clear();
     installations.clear();
     issuedTokens.clear();
     tokenRequests.clear();
@@ -411,7 +415,11 @@ public final class FakeGitHub implements AutoCloseable {
     Map<Long, Map<String, Object>> prs =
         pulls.computeIfAbsent(fullName, k -> new ConcurrentHashMap<>());
     if (m.group(2) == null && method.equals("GET")) {
-      send(exchange, 200, Map.of("full_name", fullName, "default_branch", "main"));
+      Map<String, Object> repo = new java.util.HashMap<>();
+      repo.put("full_name", fullName);
+      repo.put("default_branch", "main");
+      repo.put("description", descriptions.get(fullName));
+      send(exchange, 200, repo);
     } else if ("/pulls".equals(m.group(2)) && method.equals("GET")) {
       String query = String.valueOf(exchange.getRequestURI().getQuery());
       String head = query.replaceAll(".*head=([^&]*).*", "$1");

@@ -82,7 +82,9 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
   const p = (k: string) => String(payload[k] ?? '')
   switch (type) {
     case 'project.created':
-      return `Proyecto ${p('key')} creado`
+      return payload.importedFrom
+        ? `Proyecto ${p('key')} importado desde ${p('importedFrom')}`
+        : `Proyecto ${p('key')} creado`
     case 'repository.registered':
       return `Repositorio ${p('name')} registrado (${p('localPath')})`
     case 'workitem.created':
