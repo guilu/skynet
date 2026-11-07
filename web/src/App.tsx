@@ -11,6 +11,7 @@ import { HomePage } from './pages/HomePage'
 import { WorkPage } from './pages/WorkPage'
 import { ProjectPage } from './pages/ProjectPage'
 import { ProjectsPage } from './pages/ProjectsPage'
+import { ImportProjectPage } from './pages/ImportProjectPage'
 import { RunnersPage } from './pages/RunnersPage'
 import { UsagePage } from './pages/UsagePage'
 import { FactoryPage } from './pages/FactoryPage'
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/work" element={<WorkPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/projects/import" element={<ImportProjectPage />} />
             <Route path="/projects/:projectId" element={<ProjectPage />} />
             <Route path="/work-items/:workItemId" element={<WorkItemPage />} />
             <Route path="/workflows" element={<WorkflowsPage />} />

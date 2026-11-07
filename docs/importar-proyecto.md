@@ -101,3 +101,16 @@ Si la GitHub App está configurada y el remoto de una entrada del catálogo es d
 - `description`: la descripción del repositorio en GitHub, solo si está cubierto y tiene una. Se pide con un token de `metadata: read` limitado a ese repositorio y se recuerda 10 minutos.
 
 Las entradas ya registradas, sin remoto o con un remoto de otro sitio llevan `github: null`. Si GitHub no responde, la entrada sale igual, sin descripción.
+
+## El asistente (IP-C)
+
+En **Proyectos**, la tarjeta «Importar desde un repositorio» lleva a `/projects/import`. El alta manual («Nuevo proyecto») sigue igual al lado.
+
+1. **Repositorio.** La lista del catálogo de cada runner: nombre, herramienta, ruta (con `~`), remoto (o «Sin remoto»), rama, fecha del último commit y «Cambios sin commitear» si los hay. Lo que ya está registrado sale atenuado, sin poder elegirse, con «Ya está en CLAVE» y enlace al proyecto. Se puede buscar por nombre o ruta. «Volver a buscar» pide al runner que busque en su siguiente latido y la lista se refresca sola hasta que llega el catálogo nuevo (como mucho 45 s). Debajo, desde qué runner, en qué carpetas y cuándo se buscó. Sin catálogo, Skyny explica que hay que poner `SKYNET_REPO_ROOTS` en `runner.env` y reiniciar el runner.
+2. **Proyecto.** Clave (la sugerida por `key-suggestion`, validada en vivo), nombre (el del manifiesto o la carpeta, capitalizado) y descripción, cada uno con de dónde sale. Si GitHub tiene otra descripción, se ofrece con «Usar esa».
+3. **Configuración.** Nombre del repositorio, rama, ruta (solo lectura), remoto, comando de validación, informes JUnit y rutas protegidas, cada uno con su origen. Avisos que no bloquean: cambios sin commitear, sin remoto, la App de GitHub no cubre el repositorio. La política de agentes es la global.
+4. **Resumen.** Lo que se va a crear y «Crear proyecto» (`POST /api/projects/import`). Una casilla, **desmarcada** por defecto, lanza además «Conocer el repositorio» al terminar: crea el trabajo «Conocer el repositorio» y lanza la versión publicada del workflow `conocer-repositorio`, que es una ejecución de agentes con su coste. Si no hay versión publicada, el proyecto se crea igual y se avisa.
+
+Al terminar, va a la página del proyecto con el aviso «Proyecto importado desde …». En el móvil los pasos se apilan y solo se ve el nombre del paso actual.
+
+La miga de pan de `/projects/import` es «Proyectos › Importar proyecto» (y ya no pide el proyecto «import»).

@@ -14,6 +14,7 @@ import runPage from '../../fixtures/contracts/run-page.json'
 import runView from '../../fixtures/contracts/run-view.json'
 import providers from '../../fixtures/contracts/providers.json'
 import runners from '../../fixtures/contracts/runners.json'
+import repositoryCatalog from '../../fixtures/contracts/repository-catalog.json'
 import storedEvent from '../../fixtures/contracts/stored-event.json'
 import usageAgents from '../../fixtures/contracts/usage-agents.json'
 import usageHistory from '../../fixtures/contracts/usage-history.json'
@@ -40,6 +41,10 @@ import deploymentDetail from '../../fixtures/contracts/deployment-detail.json'
 import healthChecks from '../../fixtures/contracts/health-checks.json'
 import deploymentReconciled from '../../fixtures/contracts/deployment-reconciled.json'
 import type {
+  CatalogEntry,
+  CatalogGitHub,
+  DiscoveredRepository,
+  RunnerCatalog,
   Deployment,
   DeploymentDetail,
   DeploymentEnvironment,
@@ -393,6 +398,54 @@ const CHANGE: Keys<ChangeView> = {
 const RUN_PAGE: Keys<RunPage> = { items: true, page: true, size: true, total: true }
 const PROMPT: Keys<Prompt> = { id: true, role: true, content: true, sha256: true, createdAt: true }
 const AGENT_RUN_DETAIL: Keys<AgentRunDetail> = { agent: true, workflowRunId: true, prompts: true }
+const DISCOVERED_REPOSITORY: Keys<DiscoveredRepository> = {
+  path: true,
+  name: true,
+  projectName: true,
+  projectNameSource: true,
+  description: true,
+  descriptionSource: true,
+  remoteUrl: true,
+  defaultBranch: true,
+  defaultBranchSource: true,
+  tool: true,
+  validationCommand: true,
+  testReportPaths: true,
+  protectedPaths: true,
+  lastCommit: true,
+  lastCommitSubject: true,
+  lastCommitAt: true,
+  dirty: true,
+  agentInstructions: true,
+}
+
+const CATALOG_GITHUB: Keys<CatalogGitHub> = {
+  fullName: true,
+  covered: true,
+  description: true,
+  htmlUrl: true,
+}
+
+const CATALOG_REGISTERED: Keys<NonNullable<CatalogEntry['registered']>> = {
+  projectId: true,
+  projectKey: true,
+  projectName: true,
+  repositoryId: true,
+}
+
+const CATALOG_ENTRY: Keys<CatalogEntry> = { repository: true, registered: true, github: true }
+
+const RUNNER_CATALOG: Keys<RunnerCatalog> = {
+  runnerId: true,
+  runnerName: true,
+  lastHeartbeatAt: true,
+  scannedAt: true,
+  receivedAt: true,
+  roots: true,
+  truncated: true,
+  repositories: true,
+}
+
 const RUNNER: Keys<Runner> = {
   id: true,
   name: true,
@@ -1129,5 +1182,21 @@ describe('contratos con el backend', () => {
     detail.probes.forEach((p) => expectShape(p, HEALTH_PROBE))
     ;(healthChecks as HealthCheck[]).forEach((h) => expectShape(h, HEALTH_CHECK))
     expectShape(deploymentReconciled, DEPLOYMENT_RECONCILED)
+  })
+
+  it('catálogo de repositorios (IP)', () => {
+    const catalogs = repositoryCatalog as RunnerCatalog[]
+    expect(catalogs.length).toBeGreaterThan(0)
+    catalogs.forEach((c) => {
+      expectShape(c, RUNNER_CATALOG)
+      c.repositories.forEach((e) => {
+        expectShape(e, CATALOG_ENTRY)
+        expectShape(e.repository, DISCOVERED_REPOSITORY)
+        if (e.registered) expectShape(e.registered, CATALOG_REGISTERED)
+        if (e.github) expectShape(e.github, CATALOG_GITHUB)
+      })
+    })
+    expect(catalogs[0].repositories.some((e) => e.registered && !e.github)).toBe(true)
+    expect(catalogs[0].repositories.some((e) => e.github && !e.registered)).toBe(true)
   })
 })

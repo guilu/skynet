@@ -32,6 +32,9 @@ export SKYNET_GITHUB_WEB_URL=https://github.com
 # empuja a file://…/remotes/guilu/demo-repo.git y el GitHub falso lee de ahí cada rama.
 export E2E_GITHUB_REMOTES=$OUT/remotes
 export SKYNET_GITHUB_GIT_URL=file://$E2E_GITHUB_REMOTES
+# Carpeta raíz de repositorios clonados que el runner cataloga (web/e2e/import-project.e2e.ts crea
+# ahí los suyos y pulsa «Volver a buscar»).
+export E2E_REPO_ROOT=$OUT/code
 
 cleanup() {
   "$ROOT/scripts/e2e-service.sh" stop runner || true
@@ -45,8 +48,8 @@ if [[ "${E2E_SKIP_BUILD:-}" != 1 ]]; then
 fi
 
 # Repositorio de juguete para el worktree del agente.
-rm -rf "$E2E_REPO_PATH" "$E2E_GITHUB_REMOTES" "$OUT/runner-home" "$OUT/claude" "$OUT/codex" "$OUT/agy" "$OUT"/*.log
-mkdir -p "$E2E_REPO_PATH"
+rm -rf "$E2E_REPO_PATH" "$E2E_GITHUB_REMOTES" "$E2E_REPO_ROOT" "$OUT/runner-home" "$OUT/claude" "$OUT/codex" "$OUT/agy" "$OUT"/*.log
+mkdir -p "$E2E_REPO_PATH" "$E2E_REPO_ROOT"
 git -C "$E2E_REPO_PATH" init -q -b main
 # Secretos falsos que no deben llegar nunca a la web (web/e2e/review.e2e.ts): uno en calc.py, que
 # sale como contexto en el diff, y otro que imprime check.sh, que sale en el log de la verificación.

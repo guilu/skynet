@@ -9582,3 +9582,474 @@
     text-transform: none;
   }
 }
+
+/* ---------- Importar proyecto (IP-C) ---------- */
+@layer components {
+  .projects-aside {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .projects-aside > .card {
+    margin-top: 0;
+  }
+
+  .import-choice {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding-top: 18px;
+    border-color: var(--primary);
+    background: var(--primary-soft);
+  }
+
+  .import-choice h2 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .import-choice p {
+    margin: 4px 0 12px;
+    font-size: 0.875rem;
+  }
+
+  .import-choice-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--r-md);
+    background: var(--surface);
+    color: var(--primary-ink);
+  }
+
+  .import-steps ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+    margin: var(--space-4) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .import-steps li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+
+  .import-steps li + li::before {
+    content: '';
+    width: 28px;
+    height: 1px;
+    margin-right: 4px;
+    background: var(--border-strong);
+  }
+
+  .import-steps li.is-current {
+    color: var(--fg);
+    font-weight: 500;
+  }
+
+  .import-step-n {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+
+  .is-current .import-step-n {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--on-primary);
+  }
+
+  .is-done .import-step-n {
+    background: var(--ok-soft);
+    border-color: transparent;
+    color: var(--ok-ink);
+  }
+
+  .import-wizard {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: var(--space-6);
+    align-items: start;
+  }
+
+  .import-main {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+    margin-top: 24px;
+  }
+
+  .import-main > .card {
+    margin-top: 0;
+  }
+
+  .import-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .import-toolbar > :first-child {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .import-runner {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .import-list.card {
+    margin-top: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .import-none {
+    padding: 14px 18px;
+    margin: 0;
+  }
+
+  .import-cand {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: center;
+    padding: 14px 18px;
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+  }
+
+  .import-cand:first-child {
+    border-top: none;
+  }
+
+  .import-cand input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--primary);
+  }
+
+  .import-cand.is-selected {
+    background: var(--primary-soft);
+    box-shadow: inset 0 0 0 1px var(--primary);
+  }
+
+  .import-cand.is-taken {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  .import-cand-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .import-cand-name {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .import-cand-name strong {
+    font-weight: 600;
+  }
+
+  .import-cand-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    font-size: 0.8125rem;
+    color: var(--muted);
+  }
+
+  .import-cand-meta span {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+    overflow-wrap: anywhere;
+  }
+
+  .import-cand-when {
+    font-size: 0.75rem;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .import-cand .chip {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+    padding: 0 7px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.78rem;
+    line-height: 20px;
+    color: var(--muted);
+  }
+
+  .import-form.card,
+  .import-summary.card {
+    padding-top: 20px;
+  }
+
+  .import-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    /* Ocupa la columna del asistente, no los 560px de un formulario suelto. */
+    max-width: none;
+  }
+
+  .import-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .import-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .import-field .mono,
+  .import-summary .mono {
+    font-family: ui-monospace, 'JetBrains Mono', monospace;
+    font-size: 0.8125rem;
+  }
+
+  .import-field input[readonly] {
+    background: var(--surface-2);
+    color: var(--muted);
+  }
+
+  .import-source {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  .import-source.is-ok {
+    color: var(--ok-ink);
+  }
+
+  .import-note {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin: 0;
+    padding: 10px 14px;
+    border-radius: var(--r-md);
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+
+  .import-note svg {
+    flex: none;
+    margin-top: 2px;
+  }
+
+  .import-note.is-warn {
+    background: var(--warn-soft);
+    color: var(--warn-ink);
+  }
+
+  .import-summary-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .import-summary h2 {
+    margin: 0 0 12px;
+    font-size: 1.05rem;
+  }
+
+  .import-summary dl {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 10px 18px;
+    margin: 0;
+    font-size: 0.875rem;
+  }
+
+  .import-summary dt {
+    color: var(--muted);
+  }
+
+  .import-summary dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .import-check {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    cursor: pointer;
+  }
+
+  .import-check input {
+    width: 18px;
+    height: 18px;
+    margin: 2px 0 0;
+    flex: none;
+    accent-color: var(--primary);
+  }
+
+  .import-check > span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .import-nav {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 4px;
+  }
+
+  .import-aside.card {
+    margin-top: 24px;
+    padding-top: 18px;
+  }
+
+  .import-aside h2 {
+    margin: 0 0 12px;
+    font-size: 1rem;
+  }
+
+  .import-aside ul {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.875rem;
+    color: var(--muted);
+  }
+
+  .import-aside li {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .import-aside li > span:first-child {
+    flex: none;
+    margin-top: 2px;
+  }
+
+  .import-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 32px 24px;
+    text-align: center;
+  }
+
+  .import-empty h2 {
+    margin: 0;
+  }
+
+  .import-empty p {
+    margin: 0;
+    max-width: 520px;
+  }
+
+  .import-code {
+    margin: 0;
+    padding: 10px 14px;
+    border-radius: var(--r-md);
+    background: var(--surface-2);
+    font-size: 0.8125rem;
+  }
+
+  .import-done {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: var(--space-4);
+    padding: 10px 16px;
+    border: 1px solid var(--ok);
+    border-radius: var(--r-lg);
+    background: var(--ok-soft);
+    color: var(--ok-ink);
+    font-size: 0.875rem;
+  }
+
+  .import-done p {
+    margin: 0;
+  }
+
+  @media (max-width: 760px) {
+    .import-wizard,
+    .import-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .import-aside {
+      display: none;
+    }
+
+    .import-steps li:not(.is-current) .import-step-label {
+      display: none;
+    }
+
+    .import-steps li + li::before {
+      width: 14px;
+    }
+
+    .import-cand {
+      grid-template-columns: 22px minmax(0, 1fr);
+      padding: 12px 14px;
+    }
+
+    .import-cand-when {
+      display: none;
+    }
+
+    .import-summary dl {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 2px;
+    }
+
+    .import-summary dd {
+      margin-bottom: 10px;
+    }
+  }
+}
