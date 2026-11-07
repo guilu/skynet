@@ -3,13 +3,14 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, type Session } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
-import { Companion } from '../components/companion/Companion'
+import { LoginSkyny } from '../components/companion/LoginSkyny'
 import { Button } from '../components/ui/Button'
 import { Pill } from '../components/ui/Pill'
 
 /**
- * Entrada a la web con el usuario único del control plane. Skyny sigue con los ojos lo que haces,
- * se tapa los ojos mientras escribes la contraseña y mira de reojo si la muestras (SY-C).
+ * Entrada a la web con el usuario único del control plane. Skyny (en 3D desde TD-A) sigue con los
+ * ojos lo que haces, se tapa los ojos mientras escribes la contraseña y mira de reojo si la
+ * muestras (SY-C).
  */
 export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) {
   const [username, setUsername] = useState('')
@@ -35,12 +36,7 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
     <main className="login">
       <div className="login-card">
         <section className="login-hero" aria-hidden="true">
-          <Companion
-            state="calm"
-            size={128}
-            look
-            pose={reveal ? 'peek' : secret ? 'cover' : undefined}
-          />
+          <LoginSkyny pose={reveal ? 'peek' : secret ? 'cover' : undefined} />
           <p className="login-tagline">Tus agentes, a la vista.</p>
           <ul className="login-states">
             <li>
