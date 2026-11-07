@@ -16,7 +16,7 @@ Ninguna prueba modifica ficheros versionados de skynet ni de otros repositorios,
 ```bash
 SKYNET_TEST_DB_URL=jdbc:postgresql://localhost:5432/skynet_test \
   ./gradlew :control-plane:test --tests '*ProjectImportIT' --tests '*ProjectKeysTest' \
-  --tests '*CatalogGitHubIT' --tests '*RepositoryCatalogIT' --tests '*ModularityTest'
+  --tests '*GitHubIT' --tests '*RepositoryCatalogIT' --tests '*ModularityTest'
 cd web && npx vitest run src/format.test.ts
 ```
 
@@ -27,7 +27,7 @@ cd web && npx vitest run src/format.test.ts
   - rechaza rutas protegidas fuera del repositorio, rutas relativas y claves en minúsculas;
   - sugiere FORMA, AKA, TOK y FORMA2 cuando FORMA está ocupada.
 - `ProjectKeysTest`: acentos, números al principio, nombres de una letra o sin letras.
-- `CatalogGitHubIT`, con el GitHub falso:
+- `GitHubIT` (catalogEntriesCarryWhatGitHubSaysOfTheirRemote), con el GitHub falso:
   - un remoto cubierto trae su descripción, o `null` si no la tiene;
   - uno sin instalar dice `covered: false`;
   - GitLab y sin remoto llevan `github: null`.
