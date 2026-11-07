@@ -1,16 +1,21 @@
 import { useEffect, useRef } from 'react'
-import { SkynyScene, type Pose3D, type SkynyColors } from './scene'
+import { prefersReducedMotion } from '../look'
+import type { CompanionState } from '../state'
+import { SkynyScene, type Pose3D } from './scene'
+import { onThemeChange, readColors } from './tokens'
 
 /**
- * Skyny en 3D (TD-A), en Reposo: flota, parpadea, sigue con la mirada al cursor y al foco, y se
- * tapa los ojos (`cover`) o mira de reojo (`peek`). Va en un trozo aparte (React.lazy) con three;
- * si WebGL falla al arrancar o se pierde el contexto, avisa con `onFail` para volver al 2D.
+ * Skyny en 3D (TD): flota, parpadea, sigue con la mirada al cursor y al foco, y se tapa los ojos
+ * (`cover`) o mira de reojo (`peek`). Va en un trozo aparte (React.lazy) con three; si WebGL falla
+ * al arrancar o se pierde el contexto, avisa con `onFail` para volver al 2D.
  */
 export default function Skyny3D({
+  state = 'calm',
   size,
   pose,
   onFail,
 }: {
+  state?: CompanionState
   size: number
   pose?: Pose3D
   onFail: () => void
@@ -27,7 +32,7 @@ export default function Skyny3D({
     if (!el) return
     let skyny: SkynyScene
     try {
-      skyny = new SkynyScene(el, readColors())
+      skyny = new SkynyScene(el, readColors(), { gestures: !prefersReducedMotion() })
     } catch {
       fail.current()
       return
@@ -41,16 +46,7 @@ export default function Skyny3D({
       fail.current()
     }
     el.addEventListener('webglcontextlost', lost)
-
-    // Sigue al tema y a la paleta, como el editor (lib/monaco.ts).
-    const recolor = () => skyny.setColors(readColors())
-    const observer = new MutationObserver(recolor)
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme', 'data-palette'],
-    })
-    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
-    media?.addEventListener('change', recolor)
+    const stopTheme = onThemeChange(() => skyny.setColors(readColors()))
 
     // Mira hacia el cursor o hacia lo que tiene el foco.
     const aim = (x: number, y: number) => {
@@ -71,13 +67,16 @@ export default function Skyny3D({
     return () => {
       window.removeEventListener('pointermove', onMove)
       document.removeEventListener('focusin', onFocus)
-      media?.removeEventListener('change', recolor)
-      observer.disconnect()
+      stopTheme()
       el.removeEventListener('webglcontextlost', lost)
       skyny.dispose()
       scene.current = null
     }
   }, [size])
+
+  useEffect(() => {
+    if (scene.current && scene.current.current !== state) scene.current.setState(state)
+  }, [state])
 
   useEffect(() => {
     scene.current?.setPose(pose)
@@ -90,40 +89,9 @@ export default function Skyny3D({
       width={size}
       height={size}
       style={{ width: size, height: size }}
+      data-state={state}
       data-pose={pose}
       aria-hidden="true"
     />
   )
-}
-
-/** Tema oscuro: `data-theme` en `<html>` o, si no hay, el del sistema. */
-function isDark() {
-  const theme = document.documentElement.getAttribute('data-theme')
-  if (theme) return theme === 'dark'
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
-}
-
-let probe: CanvasRenderingContext2D | null | undefined
-
-/** Un color CSS cualquiera (hex, rgb, color-mix…) como lo entiende three. */
-function toHex(color: string, fallback: string) {
-  probe ??= document.createElement('canvas').getContext('2d')
-  if (!probe || !color) return fallback
-  probe.fillStyle = fallback
-  probe.fillStyle = color
-  return probe.fillStyle
-}
-
-function readColors(): SkynyColors {
-  const style = getComputedStyle(document.documentElement)
-  const token = (name: string, fallback: string) =>
-    toHex(style.getPropertyValue(name).trim(), fallback)
-  return {
-    body: token('--primary', '#335fe0'),
-    band: token('--companion-band', '#1f2647'),
-    node: token('--companion-node', '#ffffff'),
-    glow: token('--companion-glow', '#49c2ff'),
-    core: token('--companion-eye', '#c9f1ff'),
-    dark: isDark(),
-  }
 }
