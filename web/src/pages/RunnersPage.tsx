@@ -116,6 +116,7 @@ export function RunnersPage() {
             rows={rows}
             rowKey={(r) => r.id}
             hidden={hidden}
+            cards
             empty={
               <EmptyState
                 icon={Server}

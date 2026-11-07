@@ -485,6 +485,26 @@ describe('App', () => {
     ).toBeInTheDocument()
   })
 
+  it('en el móvil, la página de runners pinta tarjetas en lugar de tabla', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      (query: string) =>
+        ({
+          matches: query === '(max-width: 640px)',
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList,
+    )
+    stubApi({ '/api/runners': runners, '/api/runners?archived=all': runners })
+    renderAt('/runners', <App />)
+    const card = (await screen.findByText('runner-01')).closest('li')!
+    expect(screen.queryByRole('table', { name: 'Runners' })).toBeNull()
+    expect(screen.getByRole('list', { name: 'Runners' })).toBeInTheDocument()
+    expect(within(card).getByText('Agentes / capacidad')).toBeInTheDocument()
+    expect(within(card).getByText('1 / 2')).toBeInTheDocument()
+    expect(within(card).getByRole('button', { name: 'Revocar token…' })).toBeInTheDocument()
+  })
+
   it('la cabecera de una ejecución en curso muestra estado, runner, tokens y conexión', async () => {
     vi.stubGlobal('EventSource', FakeEventSource)
     stubApi({

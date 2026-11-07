@@ -5324,6 +5324,71 @@
     color: var(--fg);
   }
 
+  /* Lista en tarjetas: la versión móvil de una DataTable con `cards`. */
+  .data-cards {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .data-card {
+    display: grid;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    font-size: 0.875rem;
+  }
+
+  .data-card-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 1rem;
+  }
+
+  .data-card-fields {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+  }
+
+  .data-card-fields > div {
+    display: grid;
+    grid-template-columns: minmax(96px, 38%) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .data-card-fields dt {
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
+  .data-card-fields dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .data-card-footer {
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border);
+  }
+
+  .data-card-footer .row-actions {
+    flex-wrap: wrap;
+  }
+
+  .data-card.row-archived {
+    color: var(--muted);
+  }
+
   .row-actions {
     display: inline-flex;
     align-items: center;
