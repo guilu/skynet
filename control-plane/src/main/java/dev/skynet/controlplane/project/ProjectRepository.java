@@ -7,4 +7,6 @@ import org.springframework.data.repository.ListCrudRepository;
 interface ProjectRepository extends ListCrudRepository<Project, UUID> {
 
   List<Project> findAllByOrderByKeyAsc();
+
+  boolean existsByKey(String key);
 }

@@ -154,6 +154,73 @@ public class GitHubRepositories {
     return tokens.forRepository(link.installationId(), link.githubRepositoryId(), CONTENTS_WRITE);
   }
 
+  /** Leer el repositorio: su descripción, para el asistente de importación (IP-B). */
+  static final Map<String, String> METADATA_READ = Map.of("metadata", "read");
+
+  /** Cuánto se recuerda lo que GitHub dice de un remoto. */
+  static final java.time.Duration REMOTE_INFO_TTL = java.time.Duration.ofMinutes(10);
+
+  private final Map<String, CachedRemote> remoteInfo =
+      new java.util.concurrent.ConcurrentHashMap<>();
+
+  private record CachedRemote(RemoteInfo info, java.time.Instant at) {}
+
+  /**
+   * Lo que GitHub dice de una URL remota (IP-B).
+   *
+   * @param fullName {@code owner/nombre} según la URL o, si está cubierto, según GitHub
+   * @param covered si la App está instalada en él
+   * @param description su descripción en GitHub; solo si está cubierto y la tiene
+   * @param htmlUrl su página en GitHub
+   */
+  public record RemoteInfo(String fullName, boolean covered, String description, String htmlUrl) {}
+
+  /**
+   * Lo que GitHub dice del remoto {@code remoteUrl}, o vacío si no es de este GitHub o la App no
+   * está configurada. Si GitHub no responde, sin descripción. Se recuerda {@link #REMOTE_INFO_TTL}.
+   */
+  public Optional<RemoteInfo> describeRemote(String remoteUrl) {
+    if (!properties.configured()) {
+      return Optional.empty();
+    }
+    String host = properties.webHost().toLowerCase(Locale.ROOT);
+    Optional<RemoteName> remote = RemoteName.parse(remoteUrl).filter(n -> n.host().equals(host));
+    if (remote.isEmpty()) {
+      return Optional.empty();
+    }
+    String key = remote.get().fullName().toLowerCase(Locale.ROOT);
+    java.time.Instant now = java.time.Instant.now();
+    CachedRemote cached = remoteInfo.get(key);
+    if (cached != null && cached.at().plus(REMOTE_INFO_TTL).isAfter(now)) {
+      return Optional.of(cached.info());
+    }
+    String webUrl = properties.webUrl();
+    Optional<Link> link = linkNamed(remote.get().fullName());
+    RemoteInfo info;
+    if (link.isEmpty()) {
+      info =
+          new RemoteInfo(
+              remote.get().fullName(), false, null, webUrl + "/" + remote.get().fullName());
+    } else {
+      String description = null;
+      try {
+        String token =
+            tokens.forRepository(
+                link.get().installationId(), link.get().githubRepositoryId(), METADATA_READ);
+        String value =
+            api.repository(token, link.get().fullName()).path("description").asString(null);
+        description = value == null || value.isBlank() ? null : value.strip();
+      } catch (RuntimeException e) {
+        // Sin descripción: el asistente sigue con la del manifiesto o el README.
+      }
+      info =
+          new RemoteInfo(
+              link.get().fullName(), true, description, webUrl + "/" + link.get().fullName());
+    }
+    remoteInfo.put(key, new CachedRemote(info, now));
+    return Optional.of(info);
+  }
+
   /** La rama por defecto del repositorio en GitHub. */
   public String defaultBranch(Link link) {
     return api.repository(token(link), link.fullName()).path("default_branch").asString("main");

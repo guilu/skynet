@@ -7,7 +7,7 @@ El control plane no ve el disco del runner, así que es el runner quien busca y 
 | PR | Qué añade |
 |---|---|
 | IP-A (#252) | El catálogo: el runner busca, deduce y manda; el control plane lo guarda y lo sirve. |
-| IP-B (#253) | Crear proyecto y repositorio a partir de una entrada del catálogo en un solo paso. |
+| IP-B (#253) | Crear proyecto y repositorio a partir de una entrada del catálogo en un solo paso, y lo que dice GitHub de cada remoto. |
 | IP-C (#254) | El asistente «Importar proyecto» en la web. |
 
 ## Configuración del runner
@@ -62,3 +62,42 @@ De la web:
 
 - `GET /api/repository-catalog`: un elemento por runner con catálogo (`runnerId`, `runnerName`, `lastHeartbeatAt`, `scannedAt`, `receivedAt`, `roots`, `truncated`) y sus `repositories`, cada una con `repository` (lo de la tabla de arriba) y `registered` (`projectId`, `projectKey`, `projectName`, `repositoryId`) si ya hay un repositorio registrado en esa ruta, o `null`.
 - `POST /api/repository-catalog/refresh` (204): todos los runners vuelven a buscar en su siguiente latido. La petición caduca a los 2 minutos.
+
+## Importar (IP-B)
+
+`POST /api/projects/import` crea el proyecto y su repositorio **en una sola transacción**: si algo falla, no se crea nada.
+
+```json
+{
+  "key": "FORMA",
+  "name": "Forma",
+  "description": "Gestor de formularios dinámicos",
+  "repository": {
+    "name": "forma",
+    "localPath": "/home/diego/code/forma",
+    "remoteUrl": "git@github.com:guilu/forma.git",
+    "defaultBranch": "main",
+    "validationCommand": "./gradlew check",
+    "testReportPaths": ["**/build/test-results/**/*.xml"],
+    "protectedPaths": [".github/workflows/**"]
+  }
+}
+```
+
+- Responde 201 con `project` y `repository` (las mismas vistas que `GET /api/projects/{id}` y la lista de repositorios).
+- 409 si la clave ya existe o si ya hay un repositorio registrado en esa ruta, aunque se registrara con una barra final. El mensaje dice en qué proyecto está.
+- 400 con las mismas reglas que el alta manual: clave `^[A-Z][A-Z0-9]{1,9}$`, ruta absoluta y rutas protegidas dentro del repositorio.
+- La política de los agentes es la global, como en el alta manual.
+- En Actividad, el `project.created` lleva `importedFrom` y se lee «Proyecto FORMA importado desde /home/diego/code/forma». Le sigue el `repository.registered` de siempre.
+
+`GET /api/projects/key-suggestion?name=forma` da `{"key": "FORMA"}`: el nombre en mayúsculas, sin acentos ni símbolos, si cabe en 6 letras; si no, sus 3 primeras (`akademia` → `AKA`, `tokenmeter` → `TOK`). Si ya existe, le añade un número (`FORMA2`). Si empieza por un número, le antepone una `P`.
+
+### Lo que dice GitHub
+
+Si la GitHub App está configurada y el remoto de una entrada del catálogo es de ese GitHub, la entrada lleva `github`:
+
+- `fullName` y `htmlUrl`;
+- `covered`: si la App está instalada en ese repositorio;
+- `description`: la descripción del repositorio en GitHub, solo si está cubierto y tiene una. Se pide con un token de `metadata: read` limitado a ese repositorio y se recuerda 10 minutos.
+
+Las entradas ya registradas, sin remoto o con un remoto de otro sitio llevan `github: null`. Si GitHub no responde, la entrada sale igual, sin descripción.
