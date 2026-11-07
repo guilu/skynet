@@ -5,6 +5,8 @@ import dev.skynet.runner.agent.AgentExecutor;
 import dev.skynet.runner.agent.ArtifactSender;
 import dev.skynet.runner.agent.ArtifactSpool;
 import dev.skynet.runner.agent.EventSender;
+import dev.skynet.runner.catalog.RepositoryCatalogPublisher;
+import dev.skynet.runner.catalog.RepositoryScanner;
 import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.memory.MemoryMcpMain;
 import dev.skynet.runner.memory.MemorySessions;
@@ -117,7 +119,11 @@ public final class RunnerMain {
                 artifactSender,
                 supervisor,
                 providers.available(),
-                quotaPoller(config, providers, codex))) {
+                quotaPoller(config, providers, codex),
+                new RepositoryCatalogPublisher(
+                    new RepositoryScanner(config.repoRoots(), config.home()),
+                    config.repoScan(),
+                    client::repositoryCatalog))) {
       daemon.start();
       System.out.println(
           "skynet-runner "

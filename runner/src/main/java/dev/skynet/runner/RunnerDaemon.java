@@ -10,6 +10,7 @@ import dev.skynet.protocol.runner.RunnerRegistration;
 import dev.skynet.runner.agent.AgentExecutor;
 import dev.skynet.runner.agent.ArtifactSender;
 import dev.skynet.runner.agent.EventSender;
+import dev.skynet.runner.catalog.RepositoryCatalogPublisher;
 import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.quota.QuotaPoller;
 import dev.skynet.runner.supervisor.ProcessSupervisor;
@@ -48,6 +49,7 @@ public final class RunnerDaemon implements AutoCloseable {
   private final ProcessSupervisor supervisor;
   private final List<ProviderInfo> providers;
   private final QuotaPoller quotas;
+  private final RepositoryCatalogPublisher catalog;
   private final ScheduledExecutorService heartbeats =
       Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon().factory());
   private volatile boolean running;
@@ -84,7 +86,32 @@ public final class RunnerDaemon implements AutoCloseable {
       ProcessSupervisor supervisor,
       List<ProviderInfo> providers,
       QuotaPoller quotas) {
+    this(
+        config,
+        client,
+        journal,
+        executor,
+        sender,
+        artifactSender,
+        supervisor,
+        providers,
+        quotas,
+        RepositoryCatalogPublisher.disabled());
+  }
+
+  public RunnerDaemon(
+      RunnerConfig config,
+      ControlPlaneClient client,
+      Journal journal,
+      AgentExecutor executor,
+      EventSender sender,
+      ArtifactSender artifactSender,
+      ProcessSupervisor supervisor,
+      List<ProviderInfo> providers,
+      QuotaPoller quotas,
+      RepositoryCatalogPublisher catalog) {
     this.quotas = quotas;
+    this.catalog = catalog;
     this.config = config;
     this.client = client;
     this.journal = journal;
@@ -102,6 +129,7 @@ public final class RunnerDaemon implements AutoCloseable {
     artifactSender.start();
     running = true;
     quotas.start();
+    catalog.start();
     heartbeats.scheduleWithFixedDelay(
         this::heartbeat, 0, config.heartbeatInterval().toMillis(), TimeUnit.MILLISECONDS);
     heartbeats.scheduleWithFixedDelay(this::purgeLogs, 0, 1, TimeUnit.HOURS);
@@ -247,6 +275,9 @@ public final class RunnerDaemon implements AutoCloseable {
       if (reply.refreshQuotas()) {
         quotas.refresh();
       }
+      if (reply.refreshRepositories()) {
+        catalog.refresh();
+      }
     } catch (IOException | RuntimeException e) {
       quotas.restore(heartbeat.quotas());
       throw e;
@@ -284,6 +315,7 @@ public final class RunnerDaemon implements AutoCloseable {
     }
     heartbeats.shutdownNow();
     quotas.close();
+    catalog.close();
     executor.close();
     sender.flush();
     artifactSender.flush();

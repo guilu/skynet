@@ -36,6 +36,10 @@ import java.util.stream.Collectors;
  * @param declaredFiles límites de los ficheros declarados en {@code artifacts} que se suben de una
  *     fase ({@code SKYNET_ARTIFACT_FILE_MAX_MB}, 10 por defecto; {@code
  *     SKYNET_ARTIFACT_STAGE_MAX_MB}, 50; {@code SKYNET_ARTIFACT_STAGE_MAX_FILES}, 50)
+ * @param repoRoots carpetas en las que busca repositorios git para el asistente «Importar proyecto»
+ *     ({@code SKYNET_REPO_ROOTS}, separadas por {@code :}; IP-A); vacío para no buscar
+ * @param repoScan cada cuánto vuelve a buscarlos ({@code SKYNET_REPO_SCAN}, {@code 10m} por
+ *     defecto; {@code off} busca solo al arrancar y cuando se pide), o {@code null}
  */
 public record RunnerConfig(
     URI controlPlane,
@@ -54,10 +58,54 @@ public record RunnerConfig(
     Set<String> providers,
     String agyExecutable,
     Duration quotaPoll,
-    DeclaredFiles.Limits declaredFiles) {
+    DeclaredFiles.Limits declaredFiles,
+    List<Path> repoRoots,
+    Duration repoScan) {
 
   public RunnerConfig {
     declaredFiles = declaredFiles == null ? DeclaredFiles.Limits.DEFAULT : declaredFiles;
+    repoRoots = repoRoots == null ? List.of() : List.copyOf(repoRoots);
+  }
+
+  /** Configuración sin carpetas de repositorios: el runner no manda catálogo. */
+  public RunnerConfig(
+      URI controlPlane,
+      String name,
+      String registrationToken,
+      int capacity,
+      Path home,
+      String claudeExecutable,
+      String codexExecutable,
+      List<String> extraEnv,
+      Duration pollWait,
+      Duration heartbeatInterval,
+      Duration cancelGrace,
+      Path modelPrices,
+      Duration logRetention,
+      Set<String> providers,
+      String agyExecutable,
+      Duration quotaPoll,
+      DeclaredFiles.Limits declaredFiles) {
+    this(
+        controlPlane,
+        name,
+        registrationToken,
+        capacity,
+        home,
+        claudeExecutable,
+        codexExecutable,
+        extraEnv,
+        pollWait,
+        heartbeatInterval,
+        cancelGrace,
+        modelPrices,
+        logRetention,
+        providers,
+        agyExecutable,
+        quotaPoll,
+        declaredFiles,
+        List.of(),
+        null);
   }
 
   public Path journalFile() {
@@ -100,11 +148,33 @@ public record RunnerConfig(
         Duration.ofDays(Long.parseLong(env.getOrDefault("SKYNET_LOG_RETENTION_DAYS", "7"))),
         providers(env.get("SKYNET_PROVIDERS")),
         env.getOrDefault("SKYNET_AGY_BIN", "agy"),
-        interval(env.getOrDefault("SKYNET_QUOTA_POLL", "10m")),
+        interval("SKYNET_QUOTA_POLL", env.getOrDefault("SKYNET_QUOTA_POLL", "10m")),
         new DeclaredFiles.Limits(
             megabytes(env, "SKYNET_ARTIFACT_FILE_MAX_MB", 10),
             megabytes(env, "SKYNET_ARTIFACT_STAGE_MAX_MB", 50),
-            Integer.parseInt(env.getOrDefault("SKYNET_ARTIFACT_STAGE_MAX_FILES", "50"))));
+            Integer.parseInt(env.getOrDefault("SKYNET_ARTIFACT_STAGE_MAX_FILES", "50"))),
+        repoRoots(env.get("SKYNET_REPO_ROOTS")),
+        interval("SKYNET_REPO_SCAN", env.getOrDefault("SKYNET_REPO_SCAN", "10m")));
+  }
+
+  /**
+   * Las carpetas de {@code SKYNET_REPO_ROOTS}: separadas por {@code :}, con {@code ~} como la
+   * carpeta personal. Las relativas se ignoran: dependerían de dónde arranque el servicio.
+   */
+  static List<Path> repoRoots(String value) {
+    if (value == null || value.isBlank()) {
+      return List.of();
+    }
+    String home = System.getProperty("user.home");
+    return Arrays.stream(value.split(":"))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .map(s -> s.equals("~") ? home : s.startsWith("~/") ? home + s.substring(1) : s)
+        .map(Path::of)
+        .filter(Path::isAbsolute)
+        .map(Path::normalize)
+        .distinct()
+        .toList();
   }
 
   private static long megabytes(Map<String, String> env, String name, long defaultValue) {
@@ -113,13 +183,18 @@ public record RunnerConfig(
 
   /** {@code 30s}, {@code 10m} o {@code 2h}; {@code off} (o {@code 0}) es {@code null}. */
   static Duration interval(String value) {
+    return interval("SKYNET_QUOTA_POLL", value);
+  }
+
+  /** {@link #interval(String)} de la variable {@code variable}, que nombra si no se entiende. */
+  static Duration interval(String variable, String value) {
     String v = value.trim().toLowerCase(java.util.Locale.ROOT);
     if (v.equals("off") || v.equals("0")) {
       return null;
     }
     if (!v.matches("\\d+[smh]")) {
       throw new IllegalArgumentException(
-          "SKYNET_QUOTA_POLL: " + value + " no es un intervalo (p. ej. 10m, 30s, 1h u off)");
+          variable + ": " + value + " no es un intervalo (p. ej. 10m, 30s, 1h u off)");
     }
     long n = Long.parseLong(v.substring(0, v.length() - 1));
     return switch (v.charAt(v.length() - 1)) {
