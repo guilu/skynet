@@ -13,6 +13,8 @@
   --surface-2: #f1f4f9;
   --border: #e3e8f0;
   --border-strong: #d0d8e5;
+  /* Grosor de los bordes y separadores de paneles y tarjetas (los controles siguen a 1 px). */
+  --panel-border: 2px;
   /* Nunca negro: los textos son una escala de grises azulados. */
   --fg: #343c4e;
   --muted: #5b667c;
@@ -403,7 +405,7 @@
     flex-direction: column;
     gap: var(--space-2);
     padding: 20px 14px;
-    border-right: 1px solid var(--border);
+    border-right: var(--panel-border) solid var(--border);
     background: var(--surface);
   }
 
@@ -533,7 +535,7 @@
 
   .sidebar[data-collapsed] .nav-area + .nav-area {
     padding-top: var(--space-3);
-    border-top: 1px solid var(--border);
+    border-top: var(--panel-border) solid var(--border);
   }
 
   .crumbs-area > span {
@@ -561,7 +563,7 @@
     justify-items: center;
     gap: 6px;
     padding: 12px 6px 10px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     color: var(--fg);
     font-size: 0.8125rem;
@@ -611,7 +613,7 @@
     align-items: center;
     gap: 10px;
     padding: 10px 12px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     color: var(--fg);
     text-decoration: none;
@@ -694,7 +696,7 @@
     align-items: center;
     gap: var(--space-3);
     padding: 14px var(--space-6);
-    border-bottom: 1px solid var(--border);
+    border-bottom: var(--panel-border) solid var(--border);
     background: color-mix(in oklab, var(--bg) 88%, transparent);
     backdrop-filter: blur(8px);
     position: sticky;
@@ -826,7 +828,7 @@
     z-index: 50;
     min-width: 200px;
     padding: 6px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
     box-shadow: none;
@@ -892,7 +894,7 @@
     left: 50%;
     translate: -50% 0;
     width: min(640px, calc(100vw - 32px));
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-lg);
     background: var(--surface);
     box-shadow: none;
@@ -905,7 +907,7 @@
     align-items: center;
     gap: 10px;
     padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: var(--panel-border) solid var(--border);
     color: var(--muted);
   }
 
@@ -1002,7 +1004,7 @@
     display: grid;
     gap: var(--space-3);
     padding: var(--space-4) var(--space-4) calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
-    border-top: 1px solid var(--border);
+    border-top: var(--panel-border) solid var(--border);
     border-radius: var(--r-lg) var(--r-lg) 0 0;
     background: var(--surface);
     animation: drawer-in 220ms var(--ease-pop) both;
@@ -1141,7 +1143,7 @@
       grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 4px;
       padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
-      border-top: 1px solid var(--border);
+      border-top: var(--panel-border) solid var(--border);
       background: var(--surface);
     }
 
@@ -1220,7 +1222,7 @@
   /* ---------- Tarjetas y listas ---------- */
   .card {
     background: var(--surface);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-lg);
     box-shadow: none;
     padding: 8px 24px 22px;
@@ -1230,7 +1232,7 @@
 
   .list > li {
     padding: 10px 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: var(--panel-border) solid var(--border);
   }
 
   .list > li:last-child {
@@ -1245,7 +1247,7 @@
 
   .json {
     background: var(--surface-2);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-sm);
     padding: 10px 12px;
     font-size: 0.8rem;
@@ -1325,7 +1327,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: var(--space-3);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     padding: var(--space-2) var(--space-4) var(--space-4);
   }
@@ -1716,7 +1718,7 @@
   }
 
   .tool-calls > li {
-    border-bottom: 1px solid var(--border);
+    border-bottom: var(--panel-border) solid var(--border);
     padding: var(--space-2) 0;
   }
 
@@ -1737,7 +1739,7 @@
 
   .action-panel {
     max-width: none;
-    border: 1px solid color-mix(in oklab, var(--warn) 55%, var(--border));
+    border: var(--panel-border) solid color-mix(in oklab, var(--warn) 55%, var(--border));
     border-radius: var(--r-md);
     background: var(--surface);
     padding: var(--space-2) var(--space-4) var(--space-4);
@@ -1749,7 +1751,7 @@
   }
 
   .turn {
-    border-bottom: 1px solid var(--border);
+    border-bottom: var(--panel-border) solid var(--border);
     padding: var(--space-3) 0;
   }
 
@@ -1786,7 +1788,7 @@
     min-width: 0;
     border-radius: 6px 18px 18px 18px;
     padding: 8px 14px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     background: var(--surface-2);
   }
 
@@ -1808,7 +1810,7 @@
   /* Herramienta dentro de la conversación: plegada, con su estado. */
   .tool-card {
     margin: var(--space-2) 0 var(--space-2) 46px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
     box-shadow: none;
@@ -1882,7 +1884,7 @@
 
   .tool-card-body {
     padding: 8px 12px 10px;
-    border-top: 1px dashed var(--border);
+    border-top: var(--panel-border) dashed var(--border);
     background: var(--surface-2);
   }
 
@@ -1932,7 +1934,7 @@
     color: var(--fg);
     font: inherit;
     border: none;
-    border-bottom: 1px solid var(--border);
+    border-bottom: var(--panel-border) solid var(--border);
     padding: 7px 8px;
     cursor: pointer;
   }
@@ -1968,7 +1970,7 @@
     background: none;
     color: var(--muted);
     border: none;
-    border-bottom: 1px solid var(--border);
+    border-bottom: var(--panel-border) solid var(--border);
     padding: 0;
     cursor: pointer;
   }
@@ -2043,7 +2045,7 @@
   }
 
   .monaco-view {
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     overflow: hidden;
   }
@@ -2110,7 +2112,7 @@
     width: 100%;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-lg);
     box-shadow: none;
     background: var(--surface);
@@ -2124,7 +2126,7 @@
     gap: var(--space-4);
     padding: 40px 32px;
     background: var(--primary-soft);
-    border-right: 1px solid var(--border);
+    border-right: var(--panel-border) solid var(--border);
   }
 
   .login-tagline {
@@ -2205,7 +2207,7 @@
 
     .login-hero {
       border-right: none;
-      border-bottom: 1px solid var(--border);
+      border-bottom: var(--panel-border) solid var(--border);
       padding: 24px;
     }
 
@@ -2238,7 +2240,7 @@
     column-gap: 12px;
     align-items: center;
     padding: 12px 14px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
   }
@@ -2425,7 +2427,7 @@
     flex-direction: column;
     gap: 2px;
     background: var(--surface);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-sm);
     box-shadow: none;
     padding: var(--space-2) var(--space-3);
@@ -2530,7 +2532,7 @@
     align-items: center;
     gap: var(--space-3);
     padding: var(--space-3);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
     box-shadow: none;
@@ -2794,7 +2796,7 @@
     justify-items: center;
     gap: 6px;
     padding: 32px 16px;
-    border: 1px dashed var(--border-strong);
+    border: var(--panel-border) dashed var(--border-strong);
     border-radius: var(--r-lg);
     text-align: center;
     color: var(--muted);
@@ -2885,7 +2887,7 @@
     overflow: auto;
     overscroll-behavior: contain;
     background: var(--surface);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-lg);
     box-shadow: none;
   }
@@ -3390,7 +3392,7 @@
   .step-detail {
     margin-top: var(--space-3);
     padding: var(--space-3) var(--space-4);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface-2);
   }
@@ -3574,7 +3576,7 @@
     gap: 4px 8px;
     min-width: 0;
     padding: 6px 12px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
     color: var(--fg);
@@ -3807,7 +3809,7 @@
 
   .json-tree {
     padding: 8px 12px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-sm);
     background: var(--surface-2);
     font-family: var(--font-mono);
@@ -3877,7 +3879,7 @@
     flex-direction: column;
     gap: var(--space-3);
     padding: var(--space-4) var(--space-6) var(--space-6);
-    border-left: 1px solid var(--border);
+    border-left: var(--panel-border) solid var(--border);
     border-radius: var(--r-lg) 0 0 var(--r-lg);
     background: var(--surface);
     box-shadow: -4px 0 0 var(--border);
@@ -3930,7 +3932,7 @@
       max-height: 92dvh;
       padding: var(--space-4) var(--space-4) calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
       border-left: none;
-      border-top: 1px solid var(--border);
+      border-top: var(--panel-border) solid var(--border);
       border-radius: var(--r-lg) var(--r-lg) 0 0;
       box-shadow: none;
       animation-name: drawer-in;
@@ -4098,7 +4100,7 @@
     gap: 6px;
     width: 100%;
     padding: var(--space-3);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
     box-shadow: none;
@@ -4158,7 +4160,7 @@
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--warn-ink);
+    border: var(--panel-border) solid var(--warn-ink);
     border-radius: var(--r-md);
     background: var(--warn-soft);
     color: var(--warn-ink);
@@ -4220,7 +4222,7 @@
   }
 
   .repo-section {
-    border-top: 1px solid var(--border);
+    border-top: var(--panel-border) solid var(--border);
     padding-top: var(--space-3);
   }
 
@@ -4299,7 +4301,7 @@
     display: grid;
     gap: var(--space-2);
     padding: var(--space-3) var(--space-3) var(--space-3) 2rem;
-    border: 1px solid color-mix(in oklab, var(--warn) 55%, var(--border));
+    border: var(--panel-border) solid color-mix(in oklab, var(--warn) 55%, var(--border));
     border-radius: var(--r-md);
     background: var(--warn-soft);
     color: var(--fg);
@@ -4410,7 +4412,7 @@
     align-items: center;
     gap: 4px var(--space-2);
     padding: 8px 10px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-sm);
     background: var(--surface);
   }
@@ -4432,7 +4434,7 @@
 
   .log-list > li {
     padding: 6px 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: var(--panel-border) solid var(--border);
   }
 
   .log-list > li:last-child {
@@ -4472,14 +4474,14 @@
     display: block;
     max-width: 100%;
     max-height: 480px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface-2);
   }
 
   .markdown {
     padding: var(--space-3) var(--space-4);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
     font-size: 0.95rem;
@@ -4514,7 +4516,7 @@
 
   /* ---------- Verificación ---------- */
   .verify-card {
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     padding: 4px var(--space-4) var(--space-3);
     background: var(--surface);
@@ -4776,7 +4778,7 @@
     min-width: 0;
     margin: 0;
     padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface-2);
     overflow-x: auto;
@@ -4886,7 +4888,7 @@
     gap: var(--space-2);
     align-content: start;
     padding: var(--space-3);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: 12px;
     min-width: 0;
   }
@@ -4901,7 +4903,7 @@
     display: grid;
     gap: 6px;
     padding-top: var(--space-2);
-    border-top: 1px solid var(--border);
+    border-top: var(--panel-border) solid var(--border);
   }
 
   .deploy-pills {
@@ -4943,7 +4945,7 @@
     display: grid;
     gap: 4px;
     padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: 12px;
     overflow-wrap: anywhere;
   }
@@ -4963,7 +4965,7 @@
     justify-content: space-between;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: 12px;
   }
 
@@ -5048,7 +5050,7 @@
     display: grid;
     gap: var(--space-2);
     padding: var(--space-3);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
     box-shadow: none;
@@ -5134,7 +5136,7 @@
     gap: var(--space-3);
     margin: 0;
     padding: var(--space-4);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--bg);
     color: var(--fg);
@@ -5288,7 +5290,7 @@
     gap: var(--space-2) var(--space-3);
     padding: var(--space-3) var(--space-4);
     margin-bottom: var(--space-4);
-    border: 1px solid color-mix(in oklab, var(--warn) 55%, var(--border));
+    border: var(--panel-border) solid color-mix(in oklab, var(--warn) 55%, var(--border));
     border-radius: var(--r-md);
     background: var(--warn-soft);
     color: var(--fg);
@@ -5318,7 +5320,7 @@
     gap: var(--space-2);
     justify-items: start;
     padding: var(--space-3) var(--space-4);
-    border: 1px solid color-mix(in oklab, var(--bad) 45%, var(--border));
+    border: var(--panel-border) solid color-mix(in oklab, var(--bad) 45%, var(--border));
     border-radius: var(--r-md);
     background: var(--bad-soft);
     color: var(--fg);
@@ -5337,7 +5339,7 @@
     display: grid;
     gap: var(--space-3);
     padding: var(--space-4);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
     font-size: 0.875rem;
@@ -5378,7 +5380,7 @@
 
   .data-card-footer {
     padding-top: var(--space-3);
-    border-top: 1px solid var(--border);
+    border-top: var(--panel-border) solid var(--border);
   }
 
   .data-card-footer .row-actions {
@@ -5416,7 +5418,7 @@
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
     margin-bottom: var(--space-3);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface-2);
   }
@@ -5534,7 +5536,7 @@
     align-items: flex-start;
     width: 100%;
     padding: 8px 10px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-sm);
     background: var(--surface);
     color: var(--fg);
@@ -5707,7 +5709,7 @@
   .approval-dependency + .approval-dependency {
     margin-top: 18px;
     padding-top: 6px;
-    border-top: 1px solid var(--border);
+    border-top: var(--panel-border) solid var(--border);
   }
 
   .approval-agent + .approval-agent {
@@ -5801,7 +5803,7 @@
     width: 100%;
     min-height: 200px;
     background: var(--surface);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     overflow: hidden;
   }
@@ -5819,7 +5821,7 @@
     display: flex;
     background: var(--surface);
     color: var(--fg);
-    border: 1px solid var(--border-strong);
+    border: var(--panel-border) solid var(--border-strong);
     border-radius: var(--r-md);
     box-shadow: none;
     font-size: 0.8125rem;
@@ -6180,7 +6182,7 @@
     gap: 6px 14px;
     margin: 0;
     padding: 8px 12px 10px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
   }
 
@@ -6208,7 +6210,7 @@
   }
 
   .definition-entry {
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     padding: 8px 12px;
   }
@@ -6256,7 +6258,7 @@
     align-items: flex-start;
     padding: 8px 12px;
     background: color-mix(in srgb, var(--surface-2) 70%, transparent);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     pointer-events: none;
   }
@@ -6274,7 +6276,7 @@
     gap: 2px;
     padding: 3px;
     background: var(--surface);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-sm);
   }
 
@@ -6307,7 +6309,7 @@
   }
 
   .workflow-graph .react-flow__minimap {
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-sm);
   }
 
@@ -6479,7 +6481,7 @@
   .prov-group-head {
     margin: 0;
     padding-top: 6px;
-    border-top: 1px dashed var(--border);
+    border-top: var(--panel-border) dashed var(--border);
     color: var(--muted);
     font-size: 0.75rem;
     font-weight: 600;
@@ -6719,7 +6721,7 @@
     align-items: center;
     gap: 14px;
     padding: 12px 14px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     box-shadow: none;
     color: inherit;
@@ -7660,7 +7662,7 @@
     gap: 4px;
     width: 100%;
     padding: 10px 6px 8px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
     color: var(--fg);
@@ -7855,7 +7857,7 @@
     align-items: flex-start;
     gap: 12px;
     padding: 12px 12px 12px 10px;
-    border: 1px solid var(--c-shade);
+    border: var(--panel-border) solid var(--c-shade);
     border-radius: var(--r-md);
     background: var(--c-soft);
     color: var(--fg);
@@ -7964,7 +7966,7 @@
     position: relative;
     margin: 0 0 40px;
     padding: 8px 14px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: 16px;
     background: var(--surface);
     box-shadow: none;
@@ -8020,8 +8022,8 @@
     bottom: 10px;
     width: 14px;
     height: 14px;
-    border-left: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
+    border-left: var(--panel-border) solid var(--border);
+    border-bottom: var(--panel-border) solid var(--border);
     background: var(--surface);
     transform: rotate(45deg);
   }
@@ -8162,7 +8164,7 @@
     padding: var(--space-3);
     border-radius: var(--r-md);
     background: var(--bg);
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     color: var(--fg);
   }
 
@@ -8244,7 +8246,7 @@
     align-content: start;
     gap: 6px;
     padding: 14px 8px 10px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
     text-align: center;
@@ -8490,7 +8492,7 @@
   .proj-repos th,
   .proj-repos td {
     padding: 10px 22px 10px 0;
-    border-top: 1px solid var(--border);
+    border-top: var(--panel-border) solid var(--border);
     text-align: left;
     font-weight: 400;
     white-space: nowrap;
@@ -8531,7 +8533,7 @@
     flex-wrap: wrap;
     gap: var(--space-1) var(--space-6);
     padding: 14px 22px;
-    border-top: 1px solid var(--border);
+    border-top: var(--panel-border) solid var(--border);
     color: var(--muted);
     font-size: 0.9375rem;
   }
@@ -8573,7 +8575,7 @@
 
   .work-list > li + li,
   .home-activity > li + li {
-    border-top: 1px solid var(--border);
+    border-top: var(--panel-border) solid var(--border);
   }
 
   .work-row {
@@ -8831,7 +8833,7 @@
 
   .side-list > li + li,
   .cost-bars > li + li {
-    border-top: 1px solid var(--border);
+    border-top: var(--panel-border) solid var(--border);
   }
 
   .side-list small {
@@ -8991,7 +8993,7 @@
     display: grid;
     gap: 8px;
     padding: 12px 14px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
   }
@@ -9146,7 +9148,7 @@
   .stage-step {
     position: relative;
     padding: 6px 14px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: 999px;
     color: var(--muted);
     font-weight: 500;
@@ -9197,7 +9199,7 @@
     gap: var(--space-3);
     align-items: center;
     padding: 14px 0;
-    border-top: 1px solid var(--border);
+    border-top: var(--panel-border) solid var(--border);
   }
 
   .attempt-n .row-link {
@@ -9332,7 +9334,7 @@
       display: flex;
       gap: var(--space-2);
       padding: 10px 16px;
-      border-top: 1px solid var(--border);
+      border-top: var(--panel-border) solid var(--border);
       background: var(--bg);
     }
 
@@ -9377,7 +9379,7 @@
   }
 
   .live-list > li + li {
-    border-top: 1px solid var(--border);
+    border-top: var(--panel-border) solid var(--border);
   }
 
   .live-row {
@@ -9567,7 +9569,7 @@
   }
 
   .maint-list li + li {
-    border-top: 1px solid var(--border);
+    border-top: var(--panel-border) solid var(--border);
   }
 
   .maint-list li > span {
@@ -9623,7 +9625,7 @@
 
     .admin-grid {
       gap: 0;
-      border: 1px solid var(--border);
+      border: var(--panel-border) solid var(--border);
       border-radius: var(--r-lg);
       background: var(--surface);
       overflow: hidden;
@@ -9636,7 +9638,7 @@
     }
 
     .admin-grid > .admin-card + .admin-card {
-      border-top: 1px solid var(--border);
+      border-top: var(--panel-border) solid var(--border);
     }
   }
 
@@ -9799,7 +9801,7 @@
     gap: 14px;
     align-items: center;
     padding: 14px 18px;
-    border-top: 1px solid var(--border);
+    border-top: var(--panel-border) solid var(--border);
     cursor: pointer;
   }
 
@@ -9980,7 +9982,7 @@
     gap: 12px;
     align-items: flex-start;
     padding: 14px 16px;
-    border: 1px solid var(--border);
+    border: var(--panel-border) solid var(--border);
     border-radius: var(--r-lg);
     cursor: pointer;
   }
@@ -10070,7 +10072,7 @@
     align-items: center;
     margin-top: var(--space-4);
     padding: 10px 16px;
-    border: 1px solid var(--ok);
+    border: var(--panel-border) solid var(--ok);
     border-radius: var(--r-lg);
     background: var(--ok-soft);
     color: var(--ok-ink);
