@@ -16,6 +16,8 @@ export interface Column<T> {
   hideable?: boolean
   /** Cabecera solo para lectores de pantalla (p. ej. la de acciones). */
   hiddenHeader?: boolean
+  /** En las tarjetas del móvil, el valor ocupa todo el ancho, sin etiqueta (textos largos). */
+  cardWide?: boolean
 }
 
 /** Selección de filas con casillas, para las acciones en bloque. */
@@ -90,8 +92,8 @@ export function DataTable<T>({
               {fields.length > 0 && (
                 <dl className="data-card-fields">
                   {fields.map((c) => (
-                    <div key={c.id}>
-                      <dt>{c.header}</dt>
+                    <div key={c.id} className={cn(c.cardWide && 'data-card-wide')}>
+                      <dt className={cn(c.cardWide && 'visually-hidden')}>{c.header}</dt>
                       <dd>{c.cell(row)}</dd>
                     </div>
                   ))}

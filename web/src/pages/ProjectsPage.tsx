@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
-import { Folder, HardDrive } from 'lucide-react'
+import { Folder, HardDrive, Plus } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { api, type Project } from '../api'
 import { ArchiveMenu, ArchivedToggle } from '../components/archive/Archive'
@@ -8,6 +8,7 @@ import { ErrorMessage } from '../components/ErrorMessage'
 import { DataTable, EmptyState, type Column } from '../components/list/DataTable'
 import { ListToolbar, SearchField } from '../components/list/Toolbar'
 import { Button } from '../components/ui/Button'
+import { Sheet } from '../components/ui/Sheet'
 import { formatDateTime } from '../format'
 import { TableSkeleton } from '../components/ui/Skeleton'
 
@@ -22,7 +23,7 @@ const COLUMNS: Column<Project>[] = [
       </Link>
     ),
   },
-  { id: 'description', header: 'Descripción', cell: (p) => p.description ?? '—' },
+  { id: 'description', header: 'Descripción', cardWide: true, cell: (p) => p.description ?? '—' },
   { id: 'created', header: 'Creado', cell: (p) => formatDateTime(p.createdAt) },
   {
     id: 'actions',
@@ -44,8 +45,8 @@ const matches = (p: Project, text: string) =>
   `${p.key} ${p.name} ${p.description ?? ''}`.toLowerCase().includes(text.toLowerCase())
 
 /**
- * Proyectos, con búsqueda por clave, nombre o descripción y el chip «Archivados» (en la URL), y el
- * alta de uno nuevo.
+ * Proyectos, con búsqueda por clave, nombre o descripción y el chip «Archivados» (en la URL). El
+ * alta se hace en un panel lateral que abre «Nuevo proyecto»; en el móvil, la lista va en tarjetas.
  */
 export function ProjectsPage() {
   const queryClient = useQueryClient()
@@ -63,6 +64,7 @@ export function ProjectsPage() {
     if (next.archived ?? archived) p.set('archived', 'true')
     setParams(p, { replace: true })
   }
+  const [creating, setCreating] = useState(false)
   const [key, setKey] = useState('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -72,6 +74,7 @@ export function ProjectsPage() {
       setKey('')
       setName('')
       setDescription('')
+      setCreating(false)
       void queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
   })
@@ -83,7 +86,17 @@ export function ProjectsPage() {
 
   return (
     <>
-      <h1>Proyectos</h1>
+      <div className="page-head">
+        <div className="page-title">
+          <h1>Proyectos</h1>
+        </div>
+        <div className="page-actions">
+          <Button onClick={() => setCreating(true)}>
+            <Plus size={18} strokeWidth={2.75} aria-hidden="true" />
+            Nuevo proyecto
+          </Button>
+        </div>
+      </div>
       <div className="list-with-aside">
         <section aria-label="Lista de proyectos">
           <ListToolbar>
@@ -103,6 +116,7 @@ export function ProjectsPage() {
               columns={COLUMNS}
               rows={projects.data.filter((p) => !q || matches(p, q))}
               rowKey={(p) => p.id}
+              cards
               empty={
                 <EmptyState
                   icon={Folder}
@@ -116,10 +130,7 @@ export function ProjectsPage() {
                   }
                 >
                   {!q && !archived && (
-                    <p>
-                      Impórtalo desde un repositorio clonado o créalo con el formulario «Nuevo
-                      proyecto».
-                    </p>
+                    <p>Impórtalo desde un repositorio clonado o créalo con «Nuevo proyecto».</p>
                   )}
                 </EmptyState>
               }
@@ -141,34 +152,33 @@ export function ProjectsPage() {
               </Link>
             </div>
           </section>
-          <section className="card" aria-labelledby="new-project">
-            <h2 id="new-project">Nuevo proyecto</h2>
-            <form className="form" onSubmit={submit}>
-              <label>
-                Clave
-                <input
-                  value={key}
-                  onChange={(e) => setKey(e.target.value.toUpperCase())}
-                  placeholder="TKM"
-                  required
-                />
-              </label>
-              <label>
-                Nombre
-                <input value={name} onChange={(e) => setName(e.target.value)} required />
-              </label>
-              <label>
-                Descripción
-                <input value={description} onChange={(e) => setDescription(e.target.value)} />
-              </label>
-              <Button type="submit" disabled={create.isPending}>
-                Crear proyecto
-              </Button>
-              <ErrorMessage error={create.error} />
-            </form>
-          </section>
         </div>
       </div>
+      <Sheet open={creating} onOpenChange={setCreating} title="Nuevo proyecto">
+        <form className="form" onSubmit={submit}>
+          <label>
+            Clave
+            <input
+              value={key}
+              onChange={(e) => setKey(e.target.value.toUpperCase())}
+              placeholder="TKM"
+              required
+            />
+          </label>
+          <label>
+            Nombre
+            <input value={name} onChange={(e) => setName(e.target.value)} required />
+          </label>
+          <label>
+            Descripción
+            <input value={description} onChange={(e) => setDescription(e.target.value)} />
+          </label>
+          <Button type="submit" disabled={create.isPending}>
+            Crear proyecto
+          </Button>
+          <ErrorMessage error={create.error} />
+        </form>
+      </Sheet>
     </>
   )
 }

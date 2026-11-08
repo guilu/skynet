@@ -5367,6 +5367,11 @@
     gap: var(--space-3);
   }
 
+  .data-card-fields > .data-card-wide {
+    grid-template-columns: minmax(0, 1fr);
+    color: var(--muted);
+  }
+
   .data-card-fields dt {
     color: var(--muted);
     font-size: 0.8125rem;

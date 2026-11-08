@@ -155,6 +155,21 @@ describe('App', () => {
     expect(await screen.findByText('disponible')).toBeInTheDocument()
   })
 
+  it('«Nuevo proyecto» abre el formulario en un panel lateral y lo cierra al crear', async () => {
+    const project = { id: 'p2', key: 'NEW', name: 'Nuevo', description: null, createdAt: '' }
+    const fetch = stubApi({ '/api/projects': [], 'POST /api/projects': project })
+    renderAt('/projects', <App />)
+    expect(screen.queryByLabelText('Clave')).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: 'Nuevo proyecto' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Nuevo proyecto' })
+    fireEvent.change(within(sheet).getByLabelText('Clave'), { target: { value: 'new' } })
+    fireEvent.change(within(sheet).getByLabelText('Nombre'), { target: { value: 'Nuevo' } })
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Crear proyecto' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    const post = fetch.mock.calls.find(([, init]) => init?.method === 'POST')!
+    expect(JSON.parse(String(post[1]!.body))).toMatchObject({ key: 'NEW', name: 'Nuevo' })
+  })
+
   it('muestra el control plane no disponible si la petición falla', async () => {
     const api = mockFetch({ '/api/auth/session': { username: 'admin' }, '/api/projects': [] })
     vi.stubGlobal(
