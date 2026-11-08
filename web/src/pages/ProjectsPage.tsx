@@ -86,17 +86,7 @@ export function ProjectsPage() {
 
   return (
     <>
-      <div className="page-head">
-        <div className="page-title">
-          <h1>Proyectos</h1>
-        </div>
-        <div className="page-actions">
-          <Button onClick={() => setCreating(true)}>
-            <Plus size={18} strokeWidth={2.75} aria-hidden="true" />
-            Nuevo proyecto
-          </Button>
-        </div>
-      </div>
+      <h1>Proyectos</h1>
       <div className="list-with-aside">
         <section aria-label="Lista de proyectos">
           <ListToolbar>
@@ -107,6 +97,12 @@ export function ProjectsPage() {
               onChange={(text) => setFilters({ q: text })}
             />
             <ArchivedToggle on={archived} onChange={(on) => setFilters({ archived: on })} />
+            <span className="toolbar-end">
+              <Button size="sm" onClick={() => setCreating(true)}>
+                <Plus size={16} strokeWidth={2.75} aria-hidden="true" />
+                Nuevo proyecto
+              </Button>
+            </span>
           </ListToolbar>
           <ErrorMessage error={projects.error} />
           {projects.isPending && <TableSkeleton label="los proyectos" columns={3} />}
