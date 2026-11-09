@@ -2,6 +2,7 @@ import * as Menu from '@radix-ui/react-dropdown-menu'
 import { Check, Columns3, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/cn'
+import { useMediaQuery } from '../../useMediaQuery'
 import { Companion } from '../companion/Companion'
 import type { CompanionState } from '../companion/state'
 
@@ -15,6 +16,8 @@ export interface Column<T> {
   hideable?: boolean
   /** Cabecera solo para lectores de pantalla (p. ej. la de acciones). */
   hiddenHeader?: boolean
+  /** En las tarjetas del móvil, el valor ocupa todo el ancho, sin etiqueta (textos largos). */
+  cardWide?: boolean
 }
 
 /** Selección de filas con casillas, para las acciones en bloque. */
@@ -28,7 +31,9 @@ export interface RowSelection<T> {
 /**
  * Tabla de una lista: filas en bloques redondeados, columnas que se pueden ocultar (`hidden`) y un
  * estado vacío con icono, texto y, si hace falta, una acción. Con `selection`, cada fila lleva una
- * casilla y la cabecera otra para todas las visibles.
+ * casilla y la cabecera otra para todas las visibles. Con `cards`, en pantallas estrechas cada fila
+ * se pinta como una tarjeta: la primera columna de título, el resto como pares etiqueta / valor y
+ * las columnas sin cabecera visible (las acciones) al pie.
  */
 export function DataTable<T>({
   label,
@@ -39,6 +44,7 @@ export function DataTable<T>({
   empty,
   rowClassName,
   selection,
+  cards = false,
 }: {
   label: string
   columns: Column<T>[]
@@ -48,7 +54,9 @@ export function DataTable<T>({
   empty: ReactNode
   rowClassName?: (row: T) => string | undefined
   selection?: RowSelection<T>
+  cards?: boolean
 }) {
+  const narrow = useMediaQuery('(max-width: 640px)')
   const visible = columns.filter((c) => !hidden?.has(c.id))
   if (rows.length === 0) return <>{empty}</>
   const keys = rows.map(rowKey)
@@ -59,6 +67,48 @@ export function DataTable<T>({
     if (on) next.add(key)
     else next.delete(key)
     selection.onChange(next)
+  }
+  if (cards && narrow) {
+    const [title, ...rest] = visible
+    const fields = rest.filter((c) => !c.hiddenHeader)
+    const footer = rest.filter((c) => c.hiddenHeader)
+    return (
+      <ul className="data-cards" aria-label={label}>
+        {rows.map((row) => {
+          const key = rowKey(row)
+          return (
+            <li key={key} className={cn('data-card', rowClassName?.(row))}>
+              <div className="data-card-title">
+                {selection && (
+                  <input
+                    type="checkbox"
+                    aria-label={selection.rowLabel(row)}
+                    checked={selection.selected.has(key)}
+                    onChange={(e) => toggle(key, e.target.checked)}
+                  />
+                )}
+                {title?.cell(row)}
+              </div>
+              {fields.length > 0 && (
+                <dl className="data-card-fields">
+                  {fields.map((c) => (
+                    <div key={c.id} className={cn(c.cardWide && 'data-card-wide')}>
+                      <dt className={cn(c.cardWide && 'visually-hidden')}>{c.header}</dt>
+                      <dd>{c.cell(row)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+              {footer.map((c) => (
+                <div key={c.id} className="data-card-footer">
+                  {c.cell(row)}
+                </div>
+              ))}
+            </li>
+          )
+        })}
+      </ul>
+    )
   }
   return (
     <div className="table-scroll">
