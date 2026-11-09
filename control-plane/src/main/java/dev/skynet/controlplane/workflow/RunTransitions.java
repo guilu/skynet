@@ -160,6 +160,11 @@ class RunTransitions {
       // Una fase github-pr sigue en marcha hasta que se abre la PR (PullRequests, EN-A).
       return stage;
     }
+    if (outcome == AgentObservableStatus.COMPLETED && agents.stream().anyMatch(AgentRun::isJudge)) {
+      // Con jueces, la cierra quien los lanzó cuando decide con sus veredictos: StageJudges en una
+      // fase verification (VA-B) o DeltaJudges en una github-check (AU-B).
+      return stage;
+    }
     String reason = "agent-" + outcome.name().toLowerCase(java.util.Locale.ROOT);
     return switch (outcome) {
       case COMPLETED -> advanceStage(stage, StageStatus.SUCCEEDED, reason, now);

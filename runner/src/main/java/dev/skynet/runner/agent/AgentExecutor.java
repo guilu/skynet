@@ -662,11 +662,15 @@ public final class AgentExecutor implements AutoCloseable {
   private static void addRisk(GitIndexer.Changes changes, Workspace workspace, RiskRequest risk)
       throws InterruptedException {
     try {
+      String base = risk.base() != null ? risk.base() : workspace.baseCommit();
       RiskClassifier.Result result =
-          RiskClassifier.assess(
-              workspace.path(), workspace.baseCommit(), risk.paths(), risk.patterns());
+          RiskClassifier.assess(workspace.path(), base, risk.paths(), risk.patterns());
       Map<String, Object> measured = result.toMap();
       measured.put("summary", result.summary());
+      if (base != null) {
+        // Desde dónde se midió: el control plane comprueba que es el commit que vio el juez (AU-B).
+        measured.put("base", base);
+      }
       if (!result.warnings().isEmpty()) {
         measured.put("warnings", result.warnings());
       }

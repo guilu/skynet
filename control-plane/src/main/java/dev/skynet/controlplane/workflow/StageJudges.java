@@ -485,6 +485,140 @@ class StageJudges {
         .orElse(invocation);
   }
 
+  // ---- El delta tras el juicio (AU-B) -----------------------------------------------------------
+
+  /**
+   * Lanza los jueces de {@code judgeStage} sobre lo que cambió después de que aprobaran (AU-B):
+   * cada uno en una copia de {@code source}, en solo lectura, mirando el diff desde {@code
+   * judgedSha}. Son agentes de {@code stage} (la fase que espera, p. ej. una {@code github-check})
+   * y sus veredictos van en {@code stage_verdict} con ella, ronda 1. En el nivel 1 juzga solo el
+   * primer juez; en el 2, todos. Devuelve los jueces lanzados.
+   */
+  List<Map<String, Object>> launchDelta(
+      StageRun stage,
+      StageRun judgeStage,
+      StageDefinition judgeDefinition,
+      WorkspaceView source,
+      String judgedSha,
+      int tier,
+      Instant now) {
+    JudgeSpec spec = judgeDefinition.judge();
+    WorkflowRun run = workflowRuns.findById(stage.getWorkflowRunId()).orElseThrow();
+    WorkflowDefinition workflow = definitions.published(run.getDefinitionId()).definition();
+    WorkItem workItem = workItems.get(run.getWorkItemId());
+    CodeRepository repository = projects.getRepository(repositoryOf(run));
+    workItems.requireActive(workItem);
+    projects.requireActive(repository);
+    String author = authorProvider(judgeStage, judgeDefinition, workflow);
+    AgentLimits limits = launchLimits(run);
+    String schema = JudgeVerdicts.outputSchema(spec.rubricFile() != null);
+    List<JudgeSpec.Judge> panel = tier >= 2 ? spec.agents() : spec.agents().subList(0, 1);
+    List<Map<String, Object>> launched = new ArrayList<>();
+    for (JudgeSpec.Judge judge : panel) {
+      AgentDefinition agent = workflow.agent(judge.agent()).orElseThrow();
+      String prompt =
+          JudgePrompt.delta(
+              new JudgePrompt.Context(
+                  workItem.getKey(),
+                  workItem.getTitle(),
+                  workItem.getDescription(),
+                  judgedSha,
+                  List.of(),
+                  1,
+                  agent.prompt()),
+              spec,
+              judge,
+              tier);
+      EffectivePolicy policy =
+          EffectivePolicy.of(projects.agentPolicy(repository), agent, limits)
+              .withOutputSchema(schema)
+              .withMemory(StageDefinition.MEMORY_OFF)
+              .withPermissionMode("plan");
+      Invocation invocation =
+          routed(stage, Invocation.inCopyOf(prompt, policy, source), agent, author);
+      AgentRun queued =
+          agentQueue.queue(run, stage, workItem, repository, invocation, judge.agent(), now);
+      queued.asJudge();
+      queued.recordBaseCommit(judgedSha);
+      queued = agentRuns.save(queued);
+      jdbc.sql(
+              "INSERT INTO stage_verdict (id, stage_run_id, workflow_run_id, round, judge, lens,"
+                  + " agent_run_id, status, created_at, updated_at) VALUES (:id, :stage, :run, 1,"
+                  + " :judge, :lens, :agent, 'PENDING', :now, :now)")
+          .param("id", UUID.randomUUID())
+          .param("stage", stage.getId())
+          .param("run", run.getId())
+          .param("judge", judge.agent())
+          .param("lens", judge.lens())
+          .param("agent", queued.getId())
+          .param("now", Timestamp.from(now))
+          .update();
+      Map<String, Object> one = new LinkedHashMap<>();
+      one.put("agent", judge.agent());
+      if (judge.lens() != null) {
+        one.put("lens", judge.lens());
+      }
+      one.put("agentRunId", queued.getId());
+      one.put("provider", queued.getProvider());
+      launched.add(one);
+    }
+    return launched;
+  }
+
+  /**
+   * Lo que dijeron los jueces del delta de {@code stageRunId} (AU-B), cuando han terminado todos;
+   * vacío mientras falte alguno. Guarda el veredicto de cada uno.
+   */
+  Optional<DeltaOutcome> collectDelta(UUID stageRunId, JudgeSpec spec, Instant now) {
+    List<VerdictRow> rows = verdictRows(stageRunId, 1);
+    Map<UUID, AgentRun> agents = new LinkedHashMap<>();
+    for (VerdictRow row : rows) {
+      AgentRun agent = agentRuns.findById(row.agentRunId()).orElseThrow();
+      if (!agent.getStatus().isTerminal()) {
+        return Optional.empty();
+      }
+      agents.put(row.agentRunId(), agent);
+    }
+    List<Verdict> verdicts = new ArrayList<>();
+    for (VerdictRow row : rows) {
+      AgentRun agent = agents.get(row.agentRunId());
+      if (agent.getStatus() == AgentObservableStatus.CANCELLED) {
+        verdictFailed(row, "Se canceló", now);
+        return Optional.of(
+            new DeltaOutcome(null, List.of(), true, "Se canceló el juez " + row.judge()));
+      }
+      JsonNode output =
+          agent.getStructuredOutput() == null ? null : json.readTree(agent.getStructuredOutput());
+      if (agent.getStatus() != AgentObservableStatus.COMPLETED
+          || output == null
+          || !output.isObject()) {
+        String error =
+            agent.getStatus() != AgentObservableStatus.COMPLETED
+                ? "no terminó bien" + (agent.getError() == null ? "" : ": " + agent.getError())
+                : "no devolvió su veredicto";
+        verdictFailed(row, error, now);
+        return Optional.of(
+            new DeltaOutcome(null, List.of(), false, "El juez `" + row.judge() + "` " + error));
+      }
+      Verdict verdict = JudgeVerdicts.verdict(row.judge(), row.lens(), spec, output);
+      saveVerdict(row, verdict, now);
+      verdicts.add(verdict);
+    }
+    return Optional.of(new DeltaOutcome(JudgeVerdicts.aggregate(verdicts), verdicts, false, null));
+  }
+
+  /**
+   * Lo que dijeron los jueces del delta: el veredicto conjunto, o {@code error} si alguno no llegó
+   * a darlo ({@code cancelled} si se canceló).
+   */
+  record DeltaOutcome(
+      Aggregate aggregate, List<Verdict> verdicts, boolean cancelled, String error) {}
+
+  /** Los hallazgos de un veredicto, como se guardan. */
+  static List<Map<String, Object>> findingsOf(List<Finding> findings) {
+    return findings(findings);
+  }
+
   // ---- Veredicto --------------------------------------------------------------------------------
 
   /**
@@ -684,6 +818,7 @@ class StageJudges {
         "stage_run", stage.getId(), "stage.judge.verdict", stage.getWorkflowRunId(), payload, now);
     if (aggregate.passed()) {
       status(stage.getId(), PASSED, round, null, now);
+      recordJudged(stage, round, now);
       transitions.advanceStage(stage, StageStatus.SUCCEEDED, "judge-passed", now);
       return;
     }
@@ -930,10 +1065,16 @@ class StageJudges {
    */
   Object value(UUID stageRunId, List<String> parts) {
     State state = state(stageRunId).orElse(null);
-    if (state == null || state.score() == null) {
+    if (state == null) {
       return null;
     }
     String field = parts.get(1);
+    if (parts.size() == 2 && field.equals("judgedSha")) {
+      return judgedSha(stageRunId).orElse(null);
+    }
+    if (state.score() == null) {
+      return null;
+    }
     if (parts.size() == 2) {
       return switch (field) {
         case "score" -> state.score();
@@ -947,6 +1088,34 @@ class StageJudges {
       return score == null || !score.isNumber() ? null : score.decimalValue();
     }
     return null;
+  }
+
+  /**
+   * Lo que se juzgó (AU-B): el commit que vieron los jueces de la ronda que aprobó la fase. Si no
+   * todos vieron el mismo (no debería: el worktree no cambia mientras se juzga), no hay uno solo y
+   * no se fija.
+   */
+  private void recordJudged(StageRun stage, int round, Instant now) {
+    List<String> seen =
+        jdbc.sql("SELECT DISTINCT head_sha FROM stage_verdict WHERE stage_run_id = ? AND round = ?")
+            .params(stage.getId(), round)
+            .query(String.class)
+            .list();
+    if (seen.size() != 1 || seen.getFirst() == null) {
+      return;
+    }
+    jdbc.sql("UPDATE stage_judge SET judged_sha = ?, updated_at = ? WHERE stage_run_id = ?")
+        .params(seen.getFirst(), Timestamp.from(now), stage.getId())
+        .update();
+  }
+
+  /** El commit que se juzgó en una fase con juez que aprobó (AU-B). */
+  Optional<String> judgedSha(UUID stageRunId) {
+    return jdbc.sql("SELECT judged_sha FROM stage_judge WHERE stage_run_id = ?")
+        .param(stageRunId)
+        .query(String.class)
+        .optional()
+        .filter(sha -> sha != null);
   }
 
   /** El juez de una fase, para la web: la última ronda con el veredicto de cada juez. */
@@ -1192,6 +1361,20 @@ class StageJudges {
         .param("error", verdict.reasons().isEmpty() ? null : String.join("; ", verdict.reasons()))
         .param("now", Timestamp.from(now))
         .param("id", row.id())
+        .update();
+    recordHead(jdbc, row.id());
+  }
+
+  /**
+   * El commit que vio el juez de {@code verdictId} (AU-B): la instantánea de su copia si tenía
+   * cambios sin confirmar o, si no, el {@code HEAD} del que partió la copia.
+   */
+  static void recordHead(JdbcClient jdbc, UUID verdictId) {
+    jdbc.sql(
+            "UPDATE stage_verdict v SET head_sha = coalesce(a.base_snapshot, w.base_commit) FROM"
+                + " agent_run a LEFT JOIN workspace w ON w.id = a.workspace_id WHERE v.id = ? AND"
+                + " a.id = v.agent_run_id AND v.head_sha IS NULL")
+        .param(verdictId)
         .update();
   }
 

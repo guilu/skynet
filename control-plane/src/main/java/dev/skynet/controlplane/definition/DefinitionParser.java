@@ -3275,7 +3275,7 @@ public final class DefinitionParser {
 
     /**
      * El tipo de un dato del juez de una fase {@code verification} (VA-B): {@code score}, {@code
-     * passed}, {@code findings} o {@code criteria.<id>.score}.
+     * passed}, {@code findings}, {@code judgedSha} (AU-B) o {@code criteria.<id>.score}.
      */
     private static Condition.Type judgeType(
         Condition.Path path, StageDefinition stage, List<String> parts) {
@@ -3290,6 +3290,9 @@ public final class DefinitionParser {
           }
           case "findings" -> {
             return Condition.Type.LIST;
+          }
+          case "judgedSha" -> {
+            return Condition.Type.STRING;
           }
           default -> {}
         }
@@ -3317,7 +3320,9 @@ public final class DefinitionParser {
               + stage.id()
               + ".passed`, `"
               + stage.id()
-              + ".findings` o `"
+              + ".findings`, `"
+              + stage.id()
+              + ".judgedSha` o `"
               + stage.id()
               + ".criteria.<id>.score`",
           path.position());

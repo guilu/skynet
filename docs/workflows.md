@@ -329,7 +329,7 @@ stages:
 - **Qué devuelve:** Skynet le pide una salida estructurada con la nota y la justificación de cada criterio, sus hallazgos (fichero, línea si la sabe, gravedad `blocking` o `minor` y por qué) y un resumen.
 - **Cómo se decide:** cada juez aprueba si su media ponderada llega al umbral, ningún criterio obligatorio baja de 3 y no encuentra nada `blocking`. La fase pasa si **aprueba la mayoría** de los jueces y **ninguno encuentra nada que bloquee**; con un juez, manda él. La nota de la fase es la media de las medias. Un criterio que el juez no puntúa cuenta como un 1. Un juez que no termina bien o no devuelve su veredicto hace fallar la fase (corregir no lo arreglaría).
 - **Las rondas:** cada una empieza por las comprobaciones de la fase (si las tiene). Si no pasan, la ronda suspende sin llamar a los jueces. Si la ronda suspende y quedan rondas, el agente de `fix` sigue en su sesión con lo que se encontró (los hallazgos que bloquean, los criterios con nota baja y lo menor); cuando termina, y si pasan las comprobaciones de su propia fase, empieza la ronda siguiente desde cero. Sin rondas, la fase falla con «Suspende el juez: 2,8 / 5 · suspenso: aprueba 0 de 1 tras 2 rondas de corrección».
-- Las fases siguientes leen `juzgar.score`, `juzgar.passed`, `juzgar.findings` y `juzgar.criteria.<id>.score` en sus condiciones, y `{{stages.juzgar.output.score}}` (o `findings`, como JSON) en sus prompts.
+- Las fases siguientes leen `juzgar.score`, `juzgar.passed`, `juzgar.findings`, `juzgar.judgedSha` (el commit que vieron los jueces al aprobar) y `juzgar.criteria.<id>.score` en sus condiciones, y `{{stages.juzgar.output.score}}` (o `findings`, como JSON) en sus prompts.
 - **Al publicar se avisa** si un juez usa el mismo proveedor y modelo que el agente que juzga («es menos independiente»), si la reserva de un juez (CQ-B) es el proveedor del autor (y entonces, sin cuota, el juez espera en vez de cambiar a ella) y si hay varios jueces sin lente («dan más con lentes distintas»).
 - Cada ronda deja `stage.judge.started`, `stage.judge.verdict` (nota, aprobados, hallazgos que bloquean), `stage.judge.fix.started` y `stage.judge.round.started`; si falla, `stage.judge.failed` con el motivo. El veredicto de cada juez en cada ronda queda en `stage_verdict`, y el estado del juez de la fase en `stage_judge`.
 - **En la web:** la fase dice «Juzgando: 2 jueces», «implementar corrige lo que suspendió el juez (ronda 1 de 2)» o su nota, «3,8 / 5 · aprobado por 2 de 2». Al abrirla se ve la nota de cada criterio por juez (con su justificación), los hallazgos con su fichero y el resumen de cada juez. En el grafo, la caja de la fase dice cuántos jueces, el umbral y quién corrige. Con una fase `github-pr` detrás, la descripción de la PR lleva la nota y los hallazgos.
@@ -429,6 +429,18 @@ stages:
   - Los logs piden el permiso **Actions: lectura** de la App. Sin él, el agente recibe solo las anotaciones, y se le dice.
   - Si la corrección falla, no cambia nada o se agotan las rondas, la fase falla con lo que falló. La PR se queda abierta.
 - Eventos `stage.github.ci.waiting`, `stage.github.ci.passed` (con `warning` si no hay CI), `stage.github.ci.failed` y `stage.github.ci.fix.started`. `GET /api/workflow-runs/{id}/ci-checks` da el estado de la espera, la ronda y cada check.
+
+**Lo que se fusiona es lo juzgado (AU-B).** Si una fase `judge` aprobó el cambio y después lo tocó la corrección de la CI, lo que se va a fusionar ya no es lo que vieron los jueces. Por eso:
+
+- Al aprobar, la fase `judge` guarda el commit que juzgó (`judgedSha`): la instantánea de la copia del juez si tenía cambios sin commitear, o el commit del que partió.
+- El agente que corrige la CI mide su riesgo (AU-A) **desde ese commit**, no desde la rama base: el nivel es el del delta.
+- Cuando la CI pasa, según el nivel del delta:
+  - sin cambios desde lo juzgado: no se juzga otra vez (`stage.judge.delta.unchanged`);
+  - nivel 0: tampoco (`stage.judge.delta.skipped`);
+  - nivel 1: lo juzga el primer juez de la fase, en una copia del worktree, solo lo que cambió desde `judgedSha`;
+  - nivel 2, o si no hay medida del delta: lo juzga todo el panel.
+- Mientras juzgan, la espera de la CI está en `JUDGING` (eventos `stage.judge.delta.started` y `stage.judge.delta.verdict`). Si suspenden, la fase de CI falla con «El juez suspende lo que se cambió después de aprobar: …». Aún no se llama a los escépticos (llega con AU-C), ni se repiten las fases `guide`.
+- La aprobación de la fusión lo dice: «Juzgado en `abc1234` · se fusiona `def5678` · delta revisado (nivel 1, 4 / 5)». El delta de cada fase de CI queda en la tabla `judged_delta`.
 
 **Fusionar la PR.** Una fase `type: github-merge` fusiona la PR de la ejecución, normalmente detrás de su `github-check` y de una puerta que lo aprueba (EN-C):
 

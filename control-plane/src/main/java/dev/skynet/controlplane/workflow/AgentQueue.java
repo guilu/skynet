@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
 /**
@@ -40,6 +41,7 @@ class AgentQueue {
   private final ApplicationEventPublisher publisher;
   private final MemoryAgents memoryAgents;
   private final WorkflowDefinitions definitions;
+  private final JdbcClient jdbc;
 
   AgentQueue(
       AgentRunRepository agentRuns,
@@ -48,7 +50,8 @@ class AgentQueue {
       AgentDefaults defaults,
       ApplicationEventPublisher publisher,
       MemoryAgents memoryAgents,
-      WorkflowDefinitions definitions) {
+      WorkflowDefinitions definitions,
+      JdbcClient jdbc) {
     this.agentRuns = agentRuns;
     this.prompts = prompts;
     this.transitions = transitions;
@@ -56,6 +59,7 @@ class AgentQueue {
     this.publisher = publisher;
     this.memoryAgents = memoryAgents;
     this.definitions = definitions;
+    this.jdbc = jdbc;
   }
 
   AgentRun queue(
@@ -291,7 +295,23 @@ class AgentQueue {
     List<String> patterns = new ArrayList<>(workflow.risk().patterns());
     repository.getRiskPaths().stream().filter(p -> !paths.contains(p)).forEach(paths::add);
     repository.getRiskPatterns().stream().filter(p -> !patterns.contains(p)).forEach(patterns::add);
-    return new RiskRequest(paths, patterns);
+    RiskRequest request = new RiskRequest(paths, patterns);
+    // En el worktree que ya aprobó un juez, lo que cambia se mide desde lo que vio (AU-B): así una
+    // corrección posterior, p. ej. de la CI, lleva el nivel de todo lo que no se juzgó.
+    String judged = invocation.workspaceId() == null ? null : judgedSha(run, invocation);
+    return judged == null ? request : request.from(judged);
+  }
+
+  /** El último commit juzgado y aprobado en el worktree de {@code invocation} (AU-B). */
+  private String judgedSha(WorkflowRun run, Invocation invocation) {
+    return jdbc.sql(
+            "SELECT judged_sha FROM stage_judge WHERE workflow_run_id = ? AND workspace_id = ?"
+                + " AND status = 'PASSED' AND judged_sha IS NOT NULL ORDER BY updated_at DESC"
+                + " LIMIT 1")
+        .params(run.getId(), invocation.workspaceId())
+        .query(String.class)
+        .optional()
+        .orElse(null);
   }
 
   /**

@@ -169,7 +169,25 @@ public class WorkspaceManager {
       git(source, List.of("branch", "-D", branch));
       throw e;
     }
-    return new Workspace(path, branch, head);
+    return new Workspace(path, branch, head, forkSnapshot(path, agentRunId));
+  }
+
+  /**
+   * Lo que ve el fork, si no es solo {@code HEAD}: con cambios sin confirmar, una instantánea
+   * ({@link #snapshot}) para saber qué contenido exacto vio quien trabaja en él, p. ej. un juez
+   * (AU-B). Si no se puede hacer, nada: se toma {@code HEAD}, que deja fuera lo sin confirmar y
+   * hace que se vuelva a mirar.
+   */
+  private static String forkSnapshot(Path fork, UUID agentRunId) throws InterruptedException {
+    try {
+      if (git(fork, List.of("status", "--porcelain", "--untracked-files=all")).isBlank()) {
+        return null;
+      }
+      return snapshot(fork, agentRunId);
+    } catch (IOException e) {
+      LOG.warning(() -> "No se pudo hacer la instantánea del fork " + fork + ": " + e.getMessage());
+      return null;
+    }
   }
 
   /**

@@ -346,6 +346,11 @@ function MergeEvidence({ pr }: { pr: ApprovalPullRequest }) {
         )}
         . Se fusiona solo si sigue en ese commit y con la CI en verde.
       </p>
+      {pr.judged && (
+        <p className={pr.judged.status === 'FAILED' || pr.judged.status == null ? 'warn' : 'muted'}>
+          <InlineCode text={pr.judged.text} />
+        </p>
+      )}
       {pr.ci ? (
         <>
           <p className="muted small">
@@ -364,4 +369,9 @@ function MergeEvidence({ pr }: { pr: ApprovalPullRequest }) {
       )}
     </section>
   )
+}
+
+/** Un texto con `código` entre comillas invertidas, como lo escribe el servidor. */
+function InlineCode({ text }: { text: string }) {
+  return <>{text.split('`').map((part, i) => (i % 2 === 1 ? <code key={i}>{part}</code> : part))}</>
 }
