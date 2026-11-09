@@ -127,6 +127,18 @@
           "description": "El agente de `agents` que hace de escéptico. Por defecto, el del primer juez.",
           "type": "string",
           "minLength": 1
+        },
+        "minRisk": {
+          "description": "AU-C: el nivel de riesgo del cambio (0 docs, 1 código, 2 delicado) desde el que se juzga. Por debajo, la fase pasa sin juez. Sin medir, se juzga. Por defecto 0: siempre.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "refuteMinRisk": {
+          "description": "AU-C: el nivel de riesgo desde el que corren los escépticos de `refute`, también al juzgar lo corregido después del juez. Por defecto 0: siempre.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
         }
       }
     },
@@ -373,6 +385,20 @@
           "description": "Solo en fases human-approval: la fase agent cuyo agente recibe el comentario al pedir cambios. Por defecto, su única dependencia agent.",
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "autoApprove": {
+          "description": "AU-C. Solo en fases human-approval: la puerta se aprueba sola si el nivel de riesgo de la ejecución es ≤ maxRisk, las líneas de código ≤ maxLines, la CI está en verde, lo que se fusiona está juzgado y el repositorio tiene la autonomía encendida. true usa {maxRisk: 1, maxLines: 400}.",
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "maxRisk": { "type": "integer", "minimum": 0, "maximum": 1 },
+                "maxLines": { "type": "integer", "minimum": 0, "maximum": 5000 }
+              }
+            }
+          ]
         },
         "retry": {
           "description": "Solo en fases agent y command (en una parallel, en cada hijo): cuántas veces se reintenta si falla y por qué fallos.",

@@ -1405,10 +1405,20 @@ public class RunSteps {
         .map(AgentRun::getWorkspaceId)
         .filter(java.util.Objects::nonNull)
         .reduce((first, second) -> second)
+        // Una fase con juez que pasó sin juez por su nivel (AU-C) no tiene agentes: deja el
+        // worktree que iba a juzgar.
+        .or(() -> child == null ? judgedWorkspace(stage.getId()) : java.util.Optional.empty())
         .flatMap(workspaces::find)
         .orElseThrow(
             () ->
                 new ConflictException("La fase " + source + " no dejó un worktree que continuar"));
+  }
+
+  private java.util.Optional<UUID> judgedWorkspace(UUID stageRunId) {
+    return jdbc.sql("SELECT workspace_id FROM stage_judge WHERE stage_run_id = ?")
+        .param(stageRunId)
+        .query(UUID.class)
+        .optional();
   }
 
   /** Último intento de cada fase, en el orden en que se crearon. */

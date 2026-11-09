@@ -21,6 +21,10 @@ import java.util.List;
  * @param refuteAgent el agente de los escépticos; {@code null} para el del primer juez
  * @param guide la guía de pruebas que ejecuta el agente (VA-D), o {@code null} en un juez con
  *     rúbrica; con guía, {@code agents} es solo ese agente
+ * @param minRisk el nivel de riesgo (AU-A) desde el que se juzga (AU-C): por debajo, la fase pasa
+ *     sin juez; 0 juzga siempre
+ * @param refuteMinRisk el nivel desde el que corren los escépticos (AU-C); 0 siempre que haya
+ *     {@code refute}
  */
 public record JudgeSpec(
     List<Judge> agents,
@@ -31,7 +35,9 @@ public record JudgeSpec(
     int maxRounds,
     int refute,
     String refuteAgent,
-    GuideSpec guide) {
+    GuideSpec guide,
+    int minRisk,
+    int refuteMinRisk) {
 
   /** Media ponderada mínima si no se dice otra. */
   public static final BigDecimal DEFAULT_THRESHOLD = new BigDecimal("3.5");
@@ -73,7 +79,7 @@ public record JudgeSpec(
       BigDecimal threshold,
       String fix,
       int maxRounds) {
-    this(agents, rubric, rubricFile, threshold, fix, maxRounds, 0, null, null);
+    this(agents, rubric, rubricFile, threshold, fix, maxRounds, 0, null, null, 0, 0);
   }
 
   /** Un juez con rúbrica, sin guía (VA-C). */
@@ -86,7 +92,34 @@ public record JudgeSpec(
       int maxRounds,
       int refute,
       String refuteAgent) {
-    this(agents, rubric, rubricFile, threshold, fix, maxRounds, refute, refuteAgent, null);
+    this(agents, rubric, rubricFile, threshold, fix, maxRounds, refute, refuteAgent, null, 0, 0);
+  }
+
+  /** Sin niveles de riesgo (VA-D). */
+  public JudgeSpec(
+      List<Judge> agents,
+      List<Criterion> rubric,
+      String rubricFile,
+      BigDecimal threshold,
+      String fix,
+      int maxRounds,
+      int refute,
+      String refuteAgent,
+      GuideSpec guide) {
+    this(agents, rubric, rubricFile, threshold, fix, maxRounds, refute, refuteAgent, guide, 0, 0);
+  }
+
+  /**
+   * Si con el nivel {@code tier} del cambio la fase pasa sin juez (AU-C). Un nivel sin medir
+   * ({@code null}) se juzga; una guía, siempre.
+   */
+  public boolean skipsAt(Integer tier) {
+    return guide == null && tier != null && tier < minRisk;
+  }
+
+  /** Si con el nivel {@code tier} corren los escépticos (AU-C). Sin medir, sí. */
+  public boolean refutesAt(Integer tier) {
+    return refute > 0 && (tier == null || tier >= refuteMinRisk);
   }
 
   /** Si es la guía de pruebas como fase (VA-D) y no un juez con rúbrica. */

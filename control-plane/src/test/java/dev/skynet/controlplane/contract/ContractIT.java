@@ -454,6 +454,7 @@ class ContractIT extends IntegrationTest {
       evidence.put("consequences", consequences);
       evidence.put("changesRequested", null);
       evidence.put("pullRequest", null);
+      evidence.put("autoApprove", null);
       return new ApprovalView(
           APPROVAL,
           RUN,

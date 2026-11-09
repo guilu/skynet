@@ -565,8 +565,25 @@ public record StageDefinition(
    * @param action la acción que se aprueba, con las variables de un prompt
    * @param risk el riesgo de aprobarla
    * @param revise fase cuyo agente corrige al pedir cambios, o {@code null} si no hay a quién
+   * @param autoApprove cuándo se aprueba sola (AU-C), o {@code null} si siempre pregunta
    */
-  public record Approval(String action, Risk risk, String revise) {}
+  public record Approval(String action, Risk risk, String revise, AutoApprove autoApprove) {
+
+    public Approval(String action, Risk risk, String revise) {
+      this(action, risk, revise, null);
+    }
+  }
+
+  /**
+   * Cuándo se aprueba sola una puerta de fusión (AU-C): con el nivel de riesgo de la ejecución
+   * hasta {@code maxRisk} y como mucho {@code maxLines} líneas de código, además de la CI en verde,
+   * lo que se fusiona juzgado y la autonomía del repositorio encendida.
+   */
+  public record AutoApprove(int maxRisk, int maxLines) {
+
+    public static final int DEFAULT_MAX_RISK = 1;
+    public static final int DEFAULT_MAX_LINES = 400;
+  }
 
   /** Riesgo de una aprobación ({@code risk} en el YAML). */
   public enum Risk {

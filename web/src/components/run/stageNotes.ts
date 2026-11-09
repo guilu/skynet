@@ -249,6 +249,8 @@ export function judgeNote(stage: StageRun): string | null {
         return judge.guide.note ?? 'Pasa la guía'
       case 'FAILED':
         return judge.error ? `No pasó: ${judge.error}` : judge.guide.note
+      case 'SKIPPED':
+        return null
     }
   }
   switch (judge.status) {
@@ -268,6 +270,8 @@ export function judgeNote(stage: StageRun): string | null {
       return judgeScore(stage)
     case 'FAILED':
       return judge.error ? `No pasó: ${judge.error}` : judgeScore(stage)
+    case 'SKIPPED':
+      return `Sin juez: nivel ${judge.risk ?? 0} (juzga desde el nivel ${judge.minRisk ?? 1})`
   }
 }
 

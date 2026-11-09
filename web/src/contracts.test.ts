@@ -608,6 +608,7 @@ const APPROVAL_EVIDENCE: Keys<ApprovalEvidence> = {
   consequences: true,
   changesRequested: true,
   pullRequest: true,
+  autoApprove: true,
 }
 const APPROVAL_AGENT: Keys<ApprovalEvidenceAgent> = {
   agentRunId: true,

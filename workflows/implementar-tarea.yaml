@@ -91,6 +91,9 @@ stages:
         - {id: tests, text: "Los tests cubren el cambio y sus casos límite", weight: 2}
         - {id: alcance, text: "No cambia nada que la tarea no pida", weight: 1}
       refute: 2
+      # AU-C: un cambio de solo documentación pasa sin juez; los escépticos, solo en el nivel 2.
+      minRisk: 1
+      refuteMinRisk: 2
     fix: implementar
   # Entrega por PR (EN): en un repositorio con la GitHub App sube la rama, abre la PR (con la nota
   # del juez), espera la CI (si falla, la corrige implementar), pide aprobar la fusión y fusiona. En
@@ -113,6 +116,9 @@ stages:
     condition: repository.github
     action: "Fusionar la PR de {{workItem.key}}: {{workItem.title}}"
     risk: high
+    # AU-C: se aprueba sola si el repositorio lo permite y el cambio es de riesgo 0-1, de 400
+    # líneas como mucho, con la CI en verde y juzgado.
+    autoApprove: {maxRisk: 1, maxLines: 400}
   - id: fusionar
     type: github-merge
     dependsOn: [aprobar-fusion]

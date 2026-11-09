@@ -298,7 +298,8 @@ public class ProjectService {
 
   /**
    * Cambia el comando de validación del repositorio, dónde deja sus informes JUnit y, si vienen,
-   * sus rutas protegidas (VA-A) y sus reglas de riesgo (AU-A); {@code null} las deja como estaban.
+   * sus rutas protegidas (VA-A), sus reglas de riesgo (AU-A) y si se fusiona solo lo de poco riesgo
+   * (AU-C); {@code null} las deja como estaban.
    */
   @Transactional
   public CodeRepository configureVerification(
@@ -308,8 +309,12 @@ public class ProjectService {
       List<String> reportPaths,
       List<String> protectedPaths,
       List<String> riskPaths,
-      List<String> riskPatterns) {
+      List<String> riskPatterns,
+      Boolean autoMerge) {
     CodeRepository repository = editableRepository(projectId, repositoryId);
+    if (autoMerge != null) {
+      repository.configureAutoMerge(autoMerge);
+    }
     repository.configureVerification(command, reportPaths);
     if (protectedPaths != null) {
       repository.configureProtectedPaths(protectedPaths);
@@ -326,6 +331,7 @@ public class ProjectService {
     payload.put("protectedPaths", repository.getProtectedPaths());
     payload.put("riskPaths", repository.getRiskPaths());
     payload.put("riskPatterns", repository.getRiskPatterns());
+    payload.put("autoMerge", repository.isAutoMerge());
     events.append(
         EventDraft.of(
             "repository",

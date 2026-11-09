@@ -8,8 +8,8 @@ import java.util.UUID;
  * El juez de una fase {@code verification} (VA-B), para la web: en qué ronda va, la nota de la fase
  * y el veredicto de cada juez en la última ronda juzgada.
  *
- * @param status {@code CHECKING}, {@code JUDGING}, {@code REFUTING}, {@code FIXING}, {@code PASSED}
- *     o {@code FAILED}
+ * @param status {@code CHECKING}, {@code JUDGING}, {@code REFUTING}, {@code FIXING}, {@code
+ *     PASSED}, {@code FAILED} o {@code SKIPPED} (el cambio no llegó a {@code minRisk}, AU-C)
  * @param round la ronda en curso, desde 1
  * @param shownRound la ronda de {@code judgements}: la anterior mientras se corrige
  * @param maxRounds rondas de corrección como mucho; 0 sin {@code fix}
@@ -25,6 +25,9 @@ import java.util.UUID;
  * @param refute escépticos por hallazgo que bloquea (VA-C); 0 sin verificación adversarial
  * @param refuting cuántos hallazgos se están intentando refutar ahora
  * @param refuteNote el aviso si no se pudieron refutar todos (los topes), o {@code null}
+ * @param risk el nivel de riesgo de lo que se juzgó en la última ronda (AU-C), o {@code null} sin
+ *     medir
+ * @param minRisk el nivel desde el que se juzga; 0 siempre
  */
 public record JudgeView(
     String status,
@@ -43,7 +46,9 @@ public record JudgeView(
     int refute,
     int refuting,
     String refuteNote,
-    Guide guide) {
+    Guide guide,
+    Integer risk,
+    int minRisk) {
 
   /**
    * La guía de pruebas como fase (VA-D): qué guías se buscan, cuáles se ejecutaron y cada paso con

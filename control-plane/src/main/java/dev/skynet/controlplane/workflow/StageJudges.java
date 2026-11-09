@@ -63,6 +63,7 @@ class StageJudges {
   static final String FIXING = "FIXING";
   static final String PASSED = "PASSED";
   static final String FAILED = "FAILED";
+  static final String SKIPPED = "SKIPPED";
 
   private final JdbcClient jdbc;
   private final AgentRunRepository agentRuns;
@@ -77,6 +78,7 @@ class StageJudges {
   private final AgentQueue agentQueue;
   private final QuotaWaits quotaWaits;
   private final ObjectProvider<RunService> runs;
+  private final RunRisks risks;
   private final ApplicationEventPublisher publisher;
   private final ObjectMapper json;
   private final TimeSource time;
@@ -95,6 +97,7 @@ class StageJudges {
       AgentQueue agentQueue,
       QuotaWaits quotaWaits,
       ObjectProvider<RunService> runs,
+      RunRisks risks,
       ApplicationEventPublisher publisher,
       ObjectMapper json,
       TimeSource time) {
@@ -111,6 +114,7 @@ class StageJudges {
     this.agentQueue = agentQueue;
     this.quotaWaits = quotaWaits;
     this.runs = runs;
+    this.risks = risks;
     this.publisher = publisher;
     this.json = json;
     this.time = time;
@@ -234,6 +238,15 @@ class StageJudges {
           stage, spec, round, source, run, workflow, workItem, repository, author, limits, now);
       return;
     }
+    // El nivel de lo que se juzga (AU-C): por debajo de minRisk, la fase pasa sin juez.
+    Integer tier = risks.workspaceTier(run.getId(), source.id()).orElse(null);
+    jdbc.sql("UPDATE stage_judge SET risk = ? WHERE stage_run_id = ?")
+        .params(tier, stage.getId())
+        .update();
+    if (round == 1 && spec.skipsAt(tier)) {
+      skip(stage, spec, tier, now);
+      return;
+    }
     String schema = JudgeVerdicts.outputSchema(spec.rubricFile() != null);
     List<Map<String, Object>> launched = new ArrayList<>();
     for (JudgeSpec.Judge judge : spec.agents()) {
@@ -293,6 +306,32 @@ class StageJudges {
     payload.put("judges", launched);
     transitions.append(
         "stage_run", stage.getId(), "stage.judge.started", run.getId(), payload, now);
+  }
+
+  /**
+   * El cambio no llega al nivel {@code judge.minRisk} (AU-C): la fase pasa sin llamar a los jueces,
+   * con el motivo. Si después sube el nivel (p. ej. lo corrige la CI), la puerta de fusión ya no se
+   * aprueba sola.
+   */
+  private void skip(StageRun stage, JudgeSpec spec, int tier, Instant now) {
+    String note = "nivel " + tier + ": sin juez (juzga desde el nivel " + spec.minRisk() + ")";
+    jdbc.sql(
+            "UPDATE stage_judge SET status = :status, min_risk = :min, error = NULL, updated_at ="
+                + " :now WHERE stage_run_id = :stage")
+        .param("status", SKIPPED)
+        .param("min", spec.minRisk())
+        .param("now", Timestamp.from(now))
+        .param("stage", stage.getId())
+        .update();
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("stageKey", stage.getStageKey());
+    payload.put("tier", tier);
+    payload.put("minRisk", spec.minRisk());
+    payload.put("note", note);
+    transitions.append(
+        "stage_run", stage.getId(), "stage.judge.skipped", stage.getWorkflowRunId(), payload, now);
+    transitions.advanceStage(stage, StageStatus.SUCCEEDED, "judge-skipped", now);
+    publisher.publishEvent(new WorkflowRunChanged(stage.getWorkflowRunId()));
   }
 
   /**
@@ -381,8 +420,53 @@ class StageJudges {
       fail(stage, state, "El worktree que se juzga ya no existe", now);
       return;
     }
-    AgentDefinition agent = workflow.agent(spec.skeptic()).orElseThrow();
     String author = authorProvider(stage, definition, workflow);
+    queueSkeptics(
+        stage,
+        run,
+        workflow,
+        workItem,
+        repository,
+        spec,
+        author,
+        source,
+        source.baseCommit(),
+        state.round(),
+        targets,
+        now);
+    status(stage.getId(), REFUTING, state.round(), null, now);
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("stageKey", stage.getStageKey());
+    payload.put("round", state.round());
+    payload.put("findings", targets.size());
+    payload.put("skeptics", spec.refute());
+    payload.put("agent", spec.skeptic());
+    if (note != null) {
+      payload.put("note", note);
+    }
+    transitions.append(
+        "stage_run", stage.getId(), "stage.judge.refute.started", run.getId(), payload, now);
+  }
+
+  /**
+   * Pone en cola {@code refute} escépticos por cada hallazgo de {@code targets} (VA-C), como
+   * agentes de {@code stage}, cada uno en una copia de {@code source} y mirando el diff desde
+   * {@code base}.
+   */
+  private void queueSkeptics(
+      StageRun stage,
+      WorkflowRun run,
+      WorkflowDefinition workflow,
+      WorkItem workItem,
+      CodeRepository repository,
+      JudgeSpec spec,
+      String author,
+      WorkspaceView source,
+      String base,
+      int round,
+      List<JudgeVerdicts.Target> targets,
+      Instant now) {
+    AgentDefinition agent = workflow.agent(spec.skeptic()).orElseThrow();
     AgentLimits limits = launchLimits(run);
     String schema = JudgeVerdicts.refutationSchema();
     JudgePrompt.Context context =
@@ -390,9 +474,9 @@ class StageJudges {
             workItem.getKey(),
             workItem.getTitle(),
             workItem.getDescription(),
-            source.baseCommit(),
+            base,
             List.of(),
-            state.round(),
+            round,
             null);
     for (int f = 0; f < targets.size(); f++) {
       JudgeVerdicts.Finding finding = targets.get(f).finding();
@@ -408,8 +492,8 @@ class StageJudges {
         AgentRun queued =
             agentQueue.queue(run, stage, workItem, repository, invocation, spec.skeptic(), now);
         queued.asSkeptic();
-        if (source.baseCommit() != null) {
-          queued.recordBaseCommit(source.baseCommit());
+        if (base != null) {
+          queued.recordBaseCommit(base);
         }
         queued = agentRuns.save(queued);
         jdbc.sql(
@@ -420,7 +504,7 @@ class StageJudges {
             .param("id", UUID.randomUUID())
             .param("stage", stage.getId())
             .param("run", run.getId())
-            .param("round", state.round())
+            .param("round", round)
             .param("finding", f)
             .param("judge", finding.judge())
             .param("content", json.writeValueAsString(findings(List.of(finding)).getFirst()))
@@ -430,18 +514,97 @@ class StageJudges {
             .update();
       }
     }
-    status(stage.getId(), REFUTING, state.round(), null, now);
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("stageKey", stage.getStageKey());
-    payload.put("round", state.round());
-    payload.put("findings", targets.size());
-    payload.put("skeptics", spec.refute());
-    payload.put("agent", spec.skeptic());
-    if (note != null) {
-      payload.put("note", note);
+  }
+
+  /**
+   * Lanza los escépticos de lo que encontraron los jueces del delta (AU-B, AU-C) como agentes de
+   * {@code stage}, la fase que espera la CI. Sus respuestas van en {@code stage_refutation} con
+   * ella, ronda 1. Devuelve cuántos hallazgos se intentan refutar.
+   */
+  int launchDeltaSkeptics(
+      StageRun stage,
+      StageRun judgeStage,
+      StageDefinition judgeDefinition,
+      WorkspaceView source,
+      String judgedSha,
+      List<Verdict> verdicts,
+      Instant now) {
+    JudgeSpec spec = judgeDefinition.judge();
+    int budget = JudgeSpec.MAX_AGENT_CALLS - calls(stage.getId());
+    List<JudgeVerdicts.Target> targets = JudgeVerdicts.targets(verdicts, spec.refute(), budget);
+    if (targets.isEmpty()) {
+      return 0;
     }
-    transitions.append(
-        "stage_run", stage.getId(), "stage.judge.refute.started", run.getId(), payload, now);
+    WorkflowRun run = workflowRuns.findById(stage.getWorkflowRunId()).orElseThrow();
+    WorkflowDefinition workflow = definitions.published(run.getDefinitionId()).definition();
+    WorkItem workItem = workItems.get(run.getWorkItemId());
+    CodeRepository repository = projects.getRepository(repositoryOf(run));
+    String author = authorProvider(judgeStage, judgeDefinition, workflow);
+    queueSkeptics(
+        stage,
+        run,
+        workflow,
+        workItem,
+        repository,
+        spec,
+        author,
+        source,
+        judgedSha,
+        1,
+        targets,
+        now);
+    return targets.size();
+  }
+
+  /**
+   * Lo que dijeron los escépticos del delta de {@code stageRunId}: los veredictos de sus jueces con
+   * los hallazgos refutados descartados, cuando han terminado todos; vacío mientras falte alguno.
+   */
+  Optional<DeltaOutcome> collectDeltaRefutations(UUID stageRunId, JudgeSpec spec, Instant now) {
+    List<RefutationRow> rows = refutationRows(stageRunId, 1);
+    Map<UUID, AgentRun> agents = new LinkedHashMap<>();
+    for (RefutationRow row : rows) {
+      AgentRun agent = agentRuns.findById(row.agentRunId()).orElseThrow();
+      if (!agent.getStatus().isTerminal()) {
+        return Optional.empty();
+      }
+      agents.put(row.agentRunId(), agent);
+    }
+    Map<Integer, List<JudgeVerdicts.Refutation>> byFinding = new LinkedHashMap<>();
+    for (RefutationRow row : rows) {
+      AgentRun agent = agents.get(row.agentRunId());
+      if (agent.getStatus() == AgentObservableStatus.CANCELLED) {
+        return Optional.of(new DeltaOutcome(null, List.of(), true, "Se canceló un escéptico"));
+      }
+      JudgeVerdicts.Refutation said =
+          agent.getStatus() == AgentObservableStatus.COMPLETED
+                  && agent.getStructuredOutput() != null
+              ? JudgeVerdicts.refutation(json.readTree(agent.getStructuredOutput()))
+              : null;
+      saveRefutation(
+          row,
+          said,
+          said != null
+              ? null
+              : agent.getStatus() != AgentObservableStatus.COMPLETED
+                  ? "no terminó bien" + (agent.getError() == null ? "" : ": " + agent.getError())
+                  : "no devolvió su respuesta",
+          now);
+      byFinding
+          .computeIfAbsent(row.finding(), k -> new ArrayList<>())
+          .add(said == null ? new JudgeVerdicts.Refutation(false, null) : said);
+    }
+    List<Verdict> after = refuted(stageRunId, 1, spec, byFinding, now);
+    return Optional.of(new DeltaOutcome(JudgeVerdicts.aggregate(after), after, false, null));
+  }
+
+  /** El nivel de lo que se juzgó en la última ronda de la fase, si se midió (AU-C). */
+  private Integer riskOf(UUID stageRunId) {
+    return jdbc.sql("SELECT risk FROM stage_judge WHERE stage_run_id = ?")
+        .param(stageRunId)
+        .query((rs, n) -> rs.getObject("risk", Integer.class))
+        .optional()
+        .orElse(null);
   }
 
   /** Cuántas llamadas a agentes lleva la fase entre jueces y escépticos, en todas las rondas. */
@@ -683,7 +846,18 @@ class StageJudges {
       saveVerdict(row, verdict, now);
       verdicts.add(verdict);
     }
-    if (spec.refute() > 0) {
+    Integer tier = riskOf(stage.getId());
+    if (spec.refute() > 0 && !spec.refutesAt(tier)) {
+      refuteNote(
+          stage.getId(),
+          "Nivel "
+              + tier
+              + ": sin escépticos (refutan desde el nivel "
+              + spec.refuteMinRisk()
+              + ")",
+          now);
+    }
+    if (spec.refutesAt(tier)) {
       List<JudgeVerdicts.Target> all = JudgeVerdicts.blockingTargets(verdicts);
       int budget = JudgeSpec.MAX_AGENT_CALLS - calls(stage.getId());
       List<JudgeVerdicts.Target> targets = JudgeVerdicts.targets(verdicts, spec.refute(), budget);
@@ -746,7 +920,31 @@ class StageJudges {
           .add(said == null ? new JudgeVerdicts.Refutation(false, null) : said);
       firstOf.putIfAbsent(row.finding(), row);
     }
-    List<VerdictRow> verdictRows = verdictRows(stage.getId(), state.round());
+    List<Verdict> after = refuted(stage.getId(), state.round(), spec, byFinding, now);
+    long refuted =
+        after.stream().flatMap(v -> v.findings().stream()).filter(Finding::discarded).count();
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("stageKey", stage.getStageKey());
+    payload.put("round", state.round());
+    payload.put("refuted", refuted);
+    payload.put("findings", byFinding.size());
+    transitions.append(
+        "stage_run", stage.getId(), "stage.judge.refuted", stage.getWorkflowRunId(), payload, now);
+    decide(stage, definition, state.round(), after, now);
+  }
+
+  /**
+   * Los veredictos de la ronda {@code round} con lo que dijeron los escépticos de cada hallazgo
+   * ({@code byFinding}, por su orden entre los que bloquean): los refutados se descartan y se
+   * guardan.
+   */
+  private List<Verdict> refuted(
+      UUID stageRunId,
+      int round,
+      JudgeSpec spec,
+      Map<Integer, List<JudgeVerdicts.Refutation>> byFinding,
+      Instant now) {
+    List<VerdictRow> verdictRows = verdictRows(stageRunId, round);
     List<Verdict> verdicts = new ArrayList<>();
     for (VerdictRow row : verdictRows) {
       AgentRun judge = agentRuns.findById(row.agentRunId()).orElseThrow();
@@ -756,7 +954,6 @@ class StageJudges {
     }
     List<JudgeVerdicts.Target> targets = JudgeVerdicts.blockingTargets(verdicts);
     Map<Integer, Map<Integer, JudgeVerdicts.Finding>> decided = new LinkedHashMap<>();
-    int refuted = 0;
     for (Map.Entry<Integer, List<JudgeVerdicts.Refutation>> entry : byFinding.entrySet()) {
       if (entry.getKey() >= targets.size()) {
         continue;
@@ -764,7 +961,6 @@ class StageJudges {
       JudgeVerdicts.Target target = targets.get(entry.getKey());
       JudgeVerdicts.Finding finding =
           JudgeVerdicts.decide(target.finding(), entry.getValue(), spec.refute());
-      refuted += finding.discarded() ? 1 : 0;
       decided
           .computeIfAbsent(target.verdict(), k -> new LinkedHashMap<>())
           .put(target.index(), finding);
@@ -776,14 +972,7 @@ class StageJudges {
       saveVerdict(verdictRows.get(i), verdict, now);
       after.add(verdict);
     }
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("stageKey", stage.getStageKey());
-    payload.put("round", state.round());
-    payload.put("refuted", refuted);
-    payload.put("findings", byFinding.size());
-    transitions.append(
-        "stage_run", stage.getId(), "stage.judge.refuted", stage.getWorkflowRunId(), payload, now);
-    decide(stage, definition, state.round(), after, now);
+    return after;
   }
 
   /** El veredicto de la ronda con los de sus jueces: la fase pasa o la ronda suspende. */
@@ -1171,7 +1360,9 @@ class StageJudges {
                         .count()
                 : 0,
             state.refuteNote(),
-            spec.isGuide() ? guideView(stageRunId, spec.guide()) : null));
+            spec.isGuide() ? guideView(stageRunId, spec.guide()) : null,
+            riskOf(stageRunId),
+            spec.minRisk()));
   }
 
   private JudgeView.Guide guideView(UUID stageRunId, JudgeSpec.GuideSpec spec) {

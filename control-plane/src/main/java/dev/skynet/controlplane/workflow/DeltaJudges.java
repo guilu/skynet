@@ -38,6 +38,7 @@ class DeltaJudges {
   static final String UNCHANGED = "UNCHANGED";
   static final String SKIPPED = "SKIPPED";
   static final String JUDGING = "JUDGING";
+  static final String REFUTING = "REFUTING";
   static final String PASSED = "PASSED";
   static final String FAILED = "FAILED";
 
@@ -135,14 +136,25 @@ class DeltaJudges {
   /** Si ya han terminado los jueces del delta de {@code stage}, lo que decidieron. */
   Optional<Decision> settle(StageRun stage, Instant now) {
     Row row = row(stage.getId()).orElse(null);
-    if (row == null || !JUDGING.equals(row.status())) {
+    if (row == null || !(JUDGING.equals(row.status()) || REFUTING.equals(row.status()))) {
       return Optional.empty();
     }
     StageRun judgeStage = stageRuns.findById(row.judgeStageRunId()).orElseThrow();
     StageDefinition definition = definitionOf(judgeStage);
+    boolean refuting = REFUTING.equals(row.status());
     StageJudges.DeltaOutcome outcome =
-        judges.collectDelta(stage.getId(), definition.judge(), now).orElse(null);
+        (refuting
+                ? judges.collectDeltaRefutations(stage.getId(), definition.judge(), now)
+                : judges.collectDelta(stage.getId(), definition.judge(), now))
+            .orElse(null);
     if (outcome == null) {
+      return Optional.empty();
+    }
+    if (!refuting
+        && outcome.error() == null
+        && !outcome.aggregate().passed()
+        && definition.judge().refutesAt(row.tier())
+        && refute(stage, judgeStage, definition, row, outcome, now)) {
       return Optional.empty();
     }
     Map<String, Object> payload = new LinkedHashMap<>();
@@ -174,6 +186,8 @@ class DeltaJudges {
     payload.put("judges", aggregate.judges());
     payload.put(
         "blocking", aggregate.findings().stream().filter(JudgeVerdicts.Finding::blocking).count());
+    payload.put(
+        "refuted", aggregate.findings().stream().filter(JudgeVerdicts.Finding::discarded).count());
     append(stage, "stage.judge.delta.verdict", payload, now);
     return Optional.of(
         new Decision(
@@ -182,6 +196,44 @@ class DeltaJudges {
                 ? note
                 : "El juez suspende lo que se cambió después de aprobar: "
                     + JudgeVerdicts.note(aggregate)));
+  }
+
+  /**
+   * Los jueces del delta encontraron algo que bloquea y su nivel llega a {@code refuteMinRisk}
+   * (AU-C): antes de suspender, los escépticos intentan refutarlo. Devuelve si se lanzaron.
+   */
+  private boolean refute(
+      StageRun stage,
+      StageRun judgeStage,
+      StageDefinition definition,
+      Row row,
+      StageJudges.DeltaOutcome outcome,
+      Instant now) {
+    WorkspaceView source =
+        judges
+            .state(judgeStage.getId())
+            .flatMap(state -> workspaces.find(state.workspaceId()))
+            .orElse(null);
+    if (source == null || source.unusable()) {
+      return false;
+    }
+    int findings =
+        judges.launchDeltaSkeptics(
+            stage, judgeStage, definition, source, row.judgedSha(), outcome.verdicts(), now);
+    if (findings == 0) {
+      return false;
+    }
+    jdbc.sql("UPDATE judged_delta SET status = ?, updated_at = ? WHERE stage_run_id = ?")
+        .params(REFUTING, Timestamp.from(now), stage.getId())
+        .update();
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("stageKey", stage.getStageKey());
+    payload.put("judgeStageKey", judgeStage.getStageKey());
+    payload.put("tier", row.tier());
+    payload.put("findings", findings);
+    payload.put("skeptics", definition.judge().refute());
+    append(stage, "stage.judge.delta.refute.started", payload, now);
+    return true;
   }
 
   /**
@@ -216,6 +268,7 @@ class DeltaJudges {
             case UNCHANGED -> "sin cambios desde el juicio";
             case SKIPPED -> "delta de nivel 0, sin volver a juzgar";
             case JUDGING -> "juzgando el delta (nivel " + row.tier() + ")";
+            case REFUTING -> "los escépticos revisan lo que encontró el juez del delta";
             case PASSED ->
                 "delta revisado (nivel "
                     + row.tier()

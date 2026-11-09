@@ -7,6 +7,7 @@ import {
   type ApprovalEvidence,
   type ApprovalEvidenceAgent,
   type ApprovalPullRequest,
+  type AutoApproveCheck,
 } from '../api'
 import {
   APPROVAL_STATUS_LABEL,
@@ -151,6 +152,8 @@ export function ApprovalPage() {
           </p>
         </section>
       )}
+
+      {a.evidence.autoApprove && <AutoApproveEvidence check={a.evidence.autoApprove} />}
 
       {a.evidence.pullRequest && <MergeEvidence pr={a.evidence.pullRequest} />}
 
@@ -367,6 +370,23 @@ function MergeEvidence({ pr }: { pr: ApprovalPullRequest }) {
       ) : (
         <p className="muted small">Esta ejecución no espera la CI antes de fusionar.</p>
       )}
+    </section>
+  )
+}
+
+/** Si la puerta se aprobó sola (AU-C) y, si no, qué condición faltó. */
+function AutoApproveEvidence({ check }: { check: AutoApproveCheck }) {
+  return (
+    <section className="card" aria-labelledby="auto-title">
+      <h2 id="auto-title">{check.approved ? 'Se aprobó sola' : 'No se aprueba sola'}</h2>
+      <ul className="attempt-list">
+        {check.conditions.map((c) => (
+          <li key={c.id} className={c.met ? 'muted' : 'warn'}>
+            {c.met ? '✓ ' : '✗ '}
+            <InlineCode text={c.text} />
+          </li>
+        ))}
+      </ul>
     </section>
   )
 }
