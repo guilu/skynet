@@ -57,7 +57,7 @@ stages:
 
 ## Referencia
 
-**Raíz:** `id` (obligatorio; de 2 a 49 minúsculas, números y guiones; `new`, `schema` y `validate` están reservados), `version`, `name`, `description`, `inputs`, `agents`, `protected` (rutas que ningún agente puede cambiar, ver «Verificación de una fase») y `stages` (obligatorio, al menos una fase).
+**Raíz:** `id` (obligatorio; de 2 a 49 minúsculas, números y guiones; `new`, `schema` y `validate` están reservados), `version`, `name`, `description`, `inputs`, `agents`, `protected` (rutas que ningún agente puede cambiar, ver «Verificación de una fase»), `risk` (rutas y patrones que suben un cambio a riesgo 2, ver «Nivel de riesgo del cambio») y `stages` (obligatorio, al menos una fase).
 
 **`inputs.<nombre>`:** `type` (`string` por defecto), `required`, `default` y `description`. Los prompts los usan como `{{inputs.<nombre>}}`.
 
@@ -248,6 +248,36 @@ stages:
 - Cada comprobación deja `stage.verification.started` y `stage.verification.completed` (con el resultado de cada check), y el resultado es una verificación de la invocación con origen `STAGE`.
 - **En la web:** en el progreso de la ejecución, la fase dice «Verificando» mientras se comprueba y, si falla, qué no pasó («No pasó artifacts: `openspec/proposal.md` no existe»). Al abrirla se ve cada comprobación con ✓, ✗ y su motivo, y los datos de otras fases que lee su prompt («Recibe spec.output.summary»). La pestaña **Verificación** del agente pone lo comprobado junto a lo que declaró (su respuesta y su salida estructurada). El resumen del workflow enseña qué comprueba cada fase y, al publicar, se avisa de los comandos de `checks` y de las fases que pasan el comando de verificación del repositorio.
 - La plantilla **Especificar, planificar e implementar** es un ejemplo completo: `spec` deja `openspec/proposal.md` y devuelve un resumen, `plan` lo recibe en su prompt, la puerta `aprobar-plan` espera a que alguien apruebe el plan (o pida cambios, que corrige `plan`) e `implement` solo termina bien con `checks: [tests, diff]`.
+
+**Nivel de riesgo del cambio** (AU-A). Skynet mide cuánto riesgo tiene lo que cambia una ejecución **a partir del diff, nunca de lo que diga el agente**. Por ahora solo mide: no cambia nada de lo que se ejecuta. AU-C usará el nivel para decidir cuánto se juzga y si la fusión necesita a una persona.
+
+- **Los niveles:**
+  - **0**: todo lo que cambia es documentación o texto: `*.md`, `*.txt`, `*.rst`, `*.adoc`, `docs/**`, `plans/**`, imágenes, `LICENSE` y `NOTICE`;
+  - **1**: código normal, incluidos los tests;
+  - **2**: una ruta delicada o una línea añadida delicada. Pedirá siempre a una persona.
+- **Rutas de nivel 2** (por defecto): migraciones (`**/db/migration/**`), CI (`.github/workflows/**`, `.github/actions/**`), dependencias y build (`build.gradle*`, `settings.gradle*`, `gradle.properties`, `gradle/**`, `build-logic/**`, `pom.xml`, `package.json`, los lockfiles, `requirements*.txt`, `pyproject.toml`, `go.mod`, `Cargo.toml`), los workflows de Skynet (`workflows/*.yaml`), despliegue (`deploy/**`, `Dockerfile`, `docker-compose*.yml`, `compose*.yaml`), seguridad (`**/security/**`, `**/auth/**`) y entornos (`.env*`). Cuentan la ruta vieja y la nueva de un renombrado.
+- **Patrones de nivel 2** (por defecto, sin distinguir mayúsculas): en las líneas que el diff **añade** en código (no en tests ni en documentación):
+  - esquema de BD: `CREATE`/`ALTER`/`DROP TABLE|INDEX|SCHEMA|TYPE|VIEW|SEQUENCE|EXTENSION`, `TRUNCATE TABLE`;
+  - secretos: `password`, `secret`, `api_key`, `private_key`, `access_token`, `refresh_token`, `client_secret` («token» a secas no, porque sale en demasiado código que no es un secreto);
+  - autenticación: `BCrypt`, `PasswordEncoder`, `@PreAuthorize`, `@Secured`, `@RolesAllowed`, `SecurityFilterChain`, `authorizeHttpRequests`;
+  - cookies de sesión: `Set-Cookie`, `HttpOnly`, `SameSite`;
+  - permisos: una línea que empieza por `permissions:`.
+- **Más rutas y patrones**, que solo pueden **subir** el nivel, nunca bajarlo:
+  - en la raíz del workflow:
+
+    ```yaml
+    risk:
+      paths: [infra/**, "**/billing/**"]
+      patterns: ['\bfeature_flag\b']
+    ```
+
+    Las rutas son globs de Java, como `protected` (un glob que empieza por `**/` también casa en la raíz). Los patrones son expresiones regulares de Java; una que no compila es un error al publicar.
+  - en la ficha del repositorio (**Configurar verificación → Rutas de riesgo 2 / Patrones de riesgo 2**, `PUT /api/projects/{id}/repositories/{rid}/verification` con `riskPaths` y `riskPatterns`): valen para todos los workflows en ese repositorio. Una expresión que no compila es un 400.
+- **Las líneas cambiadas:** las añadidas y quitadas, sin contar tests ni documentación. AU-C dejará fusionar solo lo de nivel 0-1 con menos de 400.
+- **Cuándo se mide:** cuando termina cada agente de una fase `agent` o `parallel` que trabaja en el worktree de la ejecución, contra el commit con el que empezó la fase. El runner lo mide con los cambios del worktree (lo confirmado, lo que no y los ficheros nuevos) y lo manda con el artefacto `changes.json`, bajo `risk`. Los jueces, los escépticos y quien ejecuta la guía trabajan en una copia y no se miden, como tampoco las fases `command`.
+- **Dónde queda:** la fase guarda el máximo de sus agentes (`stage_run.risk`) y la ejecución el máximo de sus fases (`workflow_run.risk`), cada una con el resultado que lo fijó (`risk_detail`). **Solo sube**: un cambio posterior más pequeño no baja el nivel de lo que ya se hizo.
+- **Eventos:** `stage.risk.assessed` en cada medida (nivel, ficheros, líneas y resumen) y `run.risk.raised` cuando sube el nivel de la ejecución (de cuál a cuál y por qué fase).
+- **En la web:** una insignia **Riesgo 0/1/2** en la cabecera de la ejecución y en cada fase del progreso. Al pasar por encima dice el resumen («Nivel 2: `db/migration/V2__x.sql` (ruta)», «Nivel 1: 12 líneas de código» o «Nivel 0: solo documentación») y, debajo, hasta cinco ficheros del nivel con su motivo, p. ej. «src/Config.java (secretos: «password»)».
 
 **Fases `verification`.** No ejecutan nada: comprueban el worktree que heredan de la fase de la que dependen, p. ej. pasar los tests después de un agente sin darle a este las comprobaciones:
 

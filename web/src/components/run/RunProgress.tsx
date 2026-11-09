@@ -10,6 +10,7 @@ import { outputSummary } from './agentOutput'
 import { spanDuration, type Span } from './runSpans'
 import { RISK_LABEL } from '../approval/approvalFormat'
 import { StageQuotaSkip } from './StageQuotaSkip'
+import { RiskPill } from './RiskPill'
 import { StageRetry } from './StageRetry'
 import { StageGuide } from './StageGuide'
 import { StageJudge } from './StageJudge'
@@ -165,6 +166,12 @@ export function RunProgress({
           <div className="step-detail">
             <p className="step-detail-head">
               <strong>{open.name ?? open.stageKey}</strong> <StatusBadge status={open.status} />
+              {open.risk && (
+                <>
+                  {' '}
+                  <RiskPill risk={open.risk} />
+                </>
+              )}
               {open.attempt > 1 && (
                 <span className="muted small">
                   {' '}

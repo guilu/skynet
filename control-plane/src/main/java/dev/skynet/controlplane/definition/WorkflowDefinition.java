@@ -24,12 +24,25 @@ public record WorkflowDefinition(
     String description,
     List<InputDefinition> inputs,
     List<AgentDefinition> agents,
-    List<StageDefinition> stages) {
+    List<StageDefinition> stages,
+    RiskSpec risk) {
 
   public WorkflowDefinition {
     inputs = List.copyOf(inputs);
     agents = List.copyOf(agents);
     stages = List.copyOf(stages);
+    risk = risk == null ? RiskSpec.NONE : risk;
+  }
+
+  /** Sin reglas de riesgo propias. */
+  public WorkflowDefinition(
+      String key,
+      String name,
+      String description,
+      List<InputDefinition> inputs,
+      List<AgentDefinition> agents,
+      List<StageDefinition> stages) {
+    this(key, name, description, inputs, agents, stages, RiskSpec.NONE);
   }
 
   public Optional<AgentDefinition> agent(String name) {

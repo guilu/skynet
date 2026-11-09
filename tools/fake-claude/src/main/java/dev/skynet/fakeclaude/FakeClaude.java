@@ -111,6 +111,7 @@ public final class FakeClaude {
         return 1;
       }
     }
+    touch(env.get("FAKE_CLAUDE_TOUCH"), cwd);
     String sessionId = inv.effectiveSessionId();
     Path sessionFile = sessionFile(env, cwd, sessionId);
     String quota = env.get("FAKE_CLAUDE_QUOTA");
@@ -277,6 +278,44 @@ public final class FakeClaude {
 
   /** Segundos hasta que se renueva la ventana si el testigo no dice otra cosa. */
   static final long DEFAULT_QUOTA_RESET_SECONDS = 60;
+
+  /**
+   * {@code FAKE_CLAUDE_TOUCH=<fichero>} (AU-A): si el fichero existe, el agente cambia los ficheros
+   * que lista para forzar el nivel de riesgo, y luego lo borra (como {@code FAKE_CLAUDE_CHEAT}).
+   * Una línea por fichero: {@code ruta} o {@code ruta=línea}. A cada uno se le añade esa línea (o
+   * «Cambio de fake-claude») al final, y se crea si no existe. Las rutas no salen del worktree.
+   */
+  static void touch(String marker, Path cwd) throws IOException {
+    if (marker == null || marker.isBlank()) {
+      return;
+    }
+    Path list = cwd.resolve(marker);
+    if (!Files.isRegularFile(list)) {
+      return;
+    }
+    List<String> items = Files.readAllLines(list, StandardCharsets.UTF_8);
+    Files.delete(list);
+    Path root = cwd.toAbsolutePath().normalize();
+    for (String item : items) {
+      if (item.isBlank()) {
+        continue;
+      }
+      int eq = item.indexOf('=');
+      String path = (eq < 0 ? item : item.substring(0, eq)).strip();
+      String line = eq < 0 ? "Cambio de fake-claude" : item.substring(eq + 1);
+      Path file = root.resolve(path).normalize();
+      if (path.isEmpty() || !file.startsWith(root) || file.equals(root)) {
+        continue;
+      }
+      Files.createDirectories(file.getParent());
+      Files.writeString(
+          file,
+          line + "\n",
+          StandardCharsets.UTF_8,
+          java.nio.file.StandardOpenOption.CREATE,
+          java.nio.file.StandardOpenOption.APPEND);
+    }
+  }
 
   /**
    * La invocación que se queda sin cuota (CQ-A): sesión, trabajo a medias y rechazo de la ventana

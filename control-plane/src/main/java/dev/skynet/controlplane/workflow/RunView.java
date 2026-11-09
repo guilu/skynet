@@ -34,13 +34,56 @@ public record RunView(
     UUID currentAgentRunId,
     RunTotals totals,
     WorkflowRef workflow,
-    List<StageRunView> stages) {
+    List<StageRunView> stages,
+    RiskView risk) {
+
+  /** Sin nivel de riesgo (antes de AU-A). */
+  public RunView(
+      UUID id,
+      UUID workItemId,
+      String workItemKey,
+      String workItemTitle,
+      UUID projectId,
+      WorkflowRunStatus status,
+      Instant createdAt,
+      Instant startedAt,
+      Instant finishedAt,
+      Instant archivedAt,
+      Instant cancelRequestedAt,
+      UUID currentStageRunId,
+      UUID currentAgentRunId,
+      RunTotals totals,
+      WorkflowRef workflow,
+      List<StageRunView> stages) {
+    this(
+        id,
+        workItemId,
+        workItemKey,
+        workItemTitle,
+        projectId,
+        status,
+        createdAt,
+        startedAt,
+        finishedAt,
+        archivedAt,
+        cancelRequestedAt,
+        currentStageRunId,
+        currentAgentRunId,
+        totals,
+        workflow,
+        stages,
+        null);
+  }
 
   /** El workflow que sigue una ejecución: su clave, su versión y su nombre (o {@code null}). */
   public record WorkflowRef(String key, int version, String name) {}
 
   static RunView of(
-      WorkflowRun r, WorkItem workItem, WorkflowRef workflow, List<StageRunView> stages) {
+      WorkflowRun r,
+      WorkItem workItem,
+      WorkflowRef workflow,
+      List<StageRunView> stages,
+      RiskView risk) {
     List<AgentRunView> agents = stages.stream().flatMap(s -> s.agents().stream()).toList();
     return new RunView(
         r.getId(),
@@ -66,6 +109,7 @@ public record RunView(
             .orElse(null),
         RunTotals.of(agents),
         workflow,
-        stages);
+        stages,
+        risk);
   }
 }

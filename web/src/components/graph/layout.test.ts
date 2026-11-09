@@ -171,7 +171,10 @@ describe('nodos de la definición', () => {
     )
     expect(
       stageDetail(
-        definition({ type: 'verification', checks: [{ name: 'diff', paths: [], command: null }] }),
+        definition({
+          type: 'verification',
+          checks: [{ name: 'diff', paths: [], command: null }],
+        }),
       ),
     ).toBe('1 comprobación')
     expect(
@@ -204,6 +207,7 @@ describe('nodos de la definición', () => {
         key: 'k',
         name: null,
         description: null,
+        risk: { paths: [], patterns: [] },
         inputs: [],
         agents: [],
         stages: [

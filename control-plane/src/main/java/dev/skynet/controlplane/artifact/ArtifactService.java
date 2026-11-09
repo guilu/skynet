@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +56,7 @@ public class ArtifactService {
   private final ObjectMapper json;
   private final ArtifactProperties properties;
   private final TimeSource time;
+  private final ApplicationEventPublisher publisher;
 
   ArtifactService(
       JdbcClient jdbc,
@@ -63,7 +65,8 @@ public class ArtifactService {
       EventStore events,
       ObjectMapper json,
       ArtifactProperties properties,
-      TimeSource time) {
+      TimeSource time,
+      ApplicationEventPublisher publisher) {
     this.jdbc = jdbc;
     this.blobs = blobs;
     this.redactor = redactor;
@@ -71,6 +74,7 @@ public class ArtifactService {
     this.json = json;
     this.properties = properties;
     this.time = time;
+    this.publisher = publisher;
   }
 
   /** Metadatos de una subida: el JSON de {@link ArtifactUpload} en base64url. */
@@ -181,6 +185,9 @@ public class ArtifactService {
     payload.put("truncated", truncated);
     events.append(
         EventDraft.of("artifact", id, "artifact.created", agent.workflowRunId(), payload, now));
+    publisher.publishEvent(
+        new ArtifactCreated(
+            id, upload.agentRunId(), upload.verificationRunId(), upload.type().name(), metadata));
     return new ArtifactStored(id, false);
   }
 

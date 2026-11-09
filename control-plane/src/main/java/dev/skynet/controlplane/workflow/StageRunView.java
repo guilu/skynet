@@ -67,7 +67,70 @@ public record StageRunView(
     List<String> children,
     String phase,
     QuotaWaitView quotaWait,
-    JudgeView judge) {
+    JudgeView judge,
+    RiskView risk) {
+
+  /** Sin nivel de riesgo (antes de AU-A). */
+  public StageRunView(
+      UUID id,
+      String stageKey,
+      String name,
+      String agent,
+      List<Dependency> dependsOn,
+      String type,
+      String command,
+      String condition,
+      List<VerificationCheck> checks,
+      List<String> reads,
+      StageStatus status,
+      int attempt,
+      Instant startedAt,
+      Instant finishedAt,
+      List<AgentRunView> agents,
+      List<VerificationResult> verifications,
+      ApprovalSummary approval,
+      RetryView retry,
+      Instant notBefore,
+      Long timeoutSeconds,
+      Instant deadline,
+      Instant timedOutAt,
+      boolean cancelling,
+      String retriedBy,
+      List<String> children,
+      String phase,
+      QuotaWaitView quotaWait,
+      JudgeView judge) {
+    this(
+        id,
+        stageKey,
+        name,
+        agent,
+        dependsOn,
+        type,
+        command,
+        condition,
+        checks,
+        reads,
+        status,
+        attempt,
+        startedAt,
+        finishedAt,
+        agents,
+        verifications,
+        approval,
+        retry,
+        notBefore,
+        timeoutSeconds,
+        deadline,
+        timedOutAt,
+        cancelling,
+        retriedBy,
+        children,
+        phase,
+        quotaWait,
+        judge,
+        null);
+  }
 
   /**
    * La cuota que espera una fase (CQ-A): de qué proveedor, qué ventana ({@code five_hour} o {@code
@@ -109,7 +172,8 @@ public record StageRunView(
       List<AgentRunView> agents,
       List<VerificationResult> verifications,
       ApprovalSummary approval,
-      JudgeView judge) {
+      JudgeView judge,
+      RiskView risk) {
     StageDefinition definition =
         workflow == null ? null : workflow.stage(s.getStageKey()).orElse(null);
     return new StageRunView(
@@ -142,6 +206,7 @@ public record StageRunView(
             : definition.children().stream().map(StageDefinition.ChildDefinition::id).toList(),
         definition == null ? null : definition.phase(),
         QuotaWaitView.of(s),
-        judge);
+        judge,
+        risk);
   }
 }

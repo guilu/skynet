@@ -98,8 +98,24 @@
       "children" : [ ],
       "phase" : null,
       "quotaWait" : null,
-      "judge" : null
-    } ]
+      "judge" : null,
+      "risk" : null
+    } ],
+    "risk" : {
+      "tier" : 1,
+      "summary" : "Nivel 1: 12 líneas de código",
+      "files" : 2,
+      "lines" : 12,
+      "reasons" : [ {
+        "path" : "src/pricing/Importer.java",
+        "tier" : 1,
+        "kind" : "code"
+      }, {
+        "path" : "docs/spec.md",
+        "tier" : 0,
+        "kind" : "docs"
+      } ]
+    }
   } ],
   "page" : 0,
   "size" : 50,

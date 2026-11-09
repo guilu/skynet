@@ -34,6 +34,7 @@ import dev.skynet.controlplane.workflow.ApprovalSummary;
 import dev.skynet.controlplane.workflow.ApprovalView;
 import dev.skynet.controlplane.workflow.ConversationView;
 import dev.skynet.controlplane.workflow.PromptView;
+import dev.skynet.controlplane.workflow.RiskView;
 import dev.skynet.controlplane.workflow.RunMetrics;
 import dev.skynet.controlplane.workflow.RunPage;
 import dev.skynet.controlplane.workflow.RunTotals;
@@ -539,7 +540,21 @@ class ContractIT extends IntegrationTest {
               agent.costUsd(),
               QuotaShare.sum(agent.quota())),
           new RunView.WorkflowRef("adhoc", 1, "Agente suelto"),
-          List.of(stage));
+          List.of(stage),
+          risk());
+    }
+
+    /** El nivel de riesgo de la ejecución (AU-A). */
+    static RiskView risk() {
+      Map<String, Object> code = new LinkedHashMap<>();
+      code.put("path", "src/pricing/Importer.java");
+      code.put("tier", 1);
+      code.put("kind", "code");
+      Map<String, Object> docs = new LinkedHashMap<>();
+      docs.put("path", "docs/spec.md");
+      docs.put("tier", 0);
+      docs.put("kind", "docs");
+      return new RiskView(1, "Nivel 1: 12 líneas de código", 2, 12, List.of(code, docs));
     }
 
     static List<StagePolicy> effectivePolicy() {

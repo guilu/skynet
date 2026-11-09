@@ -106,6 +106,25 @@ class FakeClaudeTest {
   }
 
   @Test
+  void withTouchItChangesThoseFilesInsideTheWorktreeOnce(@TempDir Path dir) throws Exception {
+    Path work = Files.createDirectories(dir.resolve("work"));
+    Files.writeString(work.resolve("README.md"), "# Demo\n");
+    Path marker = dir.resolve("tocar");
+    Files.writeString(
+        marker, "README.md\ndb/migration/V2__x.sql=CREATE TABLE x (id int)\n../fuera.txt\n");
+    Map<String, String> env =
+        Map.of("FAKE_CLAUDE_TOUCH", marker.toString(), "FAKE_CLAUDE_DELAY_MS", "0");
+
+    Result result = run(env, work, "-p", "x", "--output-format", "stream-json");
+
+    assertThat(result.exitCode).isZero();
+    assertThat(work.resolve("README.md")).hasContent("# Demo\nCambio de fake-claude");
+    assertThat(work.resolve("db/migration/V2__x.sql")).hasContent("CREATE TABLE x (id int)");
+    assertThat(dir.resolve("fuera.txt")).doesNotExist();
+    assertThat(marker).doesNotExist();
+  }
+
+  @Test
   void withQuotaTheRunIsRejectedOnceAndLeavesItsWork(@TempDir Path dir) throws Exception {
     Path marker = dir.resolve("sin-cuota");
     Files.writeString(marker, "90\n");

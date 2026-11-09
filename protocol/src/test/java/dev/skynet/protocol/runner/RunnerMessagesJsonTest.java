@@ -42,6 +42,39 @@ class RunnerMessagesJsonTest {
   }
 
   @Test
+  void theRiskAndTheProtectedPathsSurviveTheRoundTripAndAnotherOutputSchema() {
+    StartAgent start =
+        new StartAgent(
+            UUID.randomUUID(),
+            "TKM-1",
+            "/home/dev/demo",
+            "main",
+            UUID.randomUUID(),
+            "Arregla add()",
+            List.of("Read", "Edit"),
+            "dontAsk",
+            null,
+            AgentLimits.none(),
+            null,
+            null,
+            null,
+            null,
+            "schemas/salida.json",
+            null,
+            null,
+            null,
+            List.of("docs/tests/**"),
+            new RiskRequest(List.of("infra/**"), List.of("\\bfeature_flag\\b")));
+    RunnerCommand command = RunnerCommand.start(UUID.randomUUID(), UUID.randomUUID(), NOW, start);
+    assertThat(roundTrip(command, RunnerCommand.class)).isEqualTo(command);
+
+    StartAgent resolved = start.withOutputSchema("{\"type\":\"object\"}");
+    assertThat(resolved.outputSchema()).isEqualTo("{\"type\":\"object\"}");
+    assertThat(resolved.protectedPaths()).containsExactly("docs/tests/**");
+    assertThat(resolved.risk()).isEqualTo(start.risk());
+  }
+
+  @Test
   void startInAnExistingWorktreeRoundTrip() {
     StartAgent start =
         new StartAgent(

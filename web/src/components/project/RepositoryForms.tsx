@@ -133,6 +133,8 @@ export function VerificationForm({
   const [command, setCommand] = useState(repository.validationCommand ?? '')
   const [reportPaths, setReportPaths] = useState(repository.testReportPaths.join('\n'))
   const [protectedPaths, setProtectedPaths] = useState((repository.protectedPaths ?? []).join('\n'))
+  const [riskPaths, setRiskPaths] = useState((repository.riskPaths ?? []).join('\n'))
+  const [riskPatterns, setRiskPatterns] = useState((repository.riskPatterns ?? []).join('\n'))
   const missing = PROTECTED_SUGGESTIONS.filter((s) => !lines(protectedPaths).includes(s))
   const save = useMutation({
     mutationFn: () =>
@@ -140,6 +142,8 @@ export function VerificationForm({
         validationCommand: command.trim() || null,
         testReportPaths: globs(reportPaths),
         protectedPaths: lines(protectedPaths),
+        riskPaths: lines(riskPaths),
+        riskPatterns: lines(riskPatterns),
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['repositories', projectId] })
@@ -195,6 +199,32 @@ export function VerificationForm({
           ))}
         </p>
       )}
+      <label>
+        Rutas de riesgo 2, un glob por línea
+        <textarea
+          value={riskPaths}
+          onChange={(e) => setRiskPaths(e.target.value)}
+          rows={2}
+          placeholder="billing/**"
+        />
+        <span className="hint">
+          Un cambio que las toca es de riesgo 2, como las migraciones, la CI o las dependencias. Se
+          suman a las de siempre: no bajan el riesgo de nada.
+        </span>
+      </label>
+      <label>
+        Patrones de riesgo 2, una expresión regular por línea
+        <textarea
+          value={riskPatterns}
+          onChange={(e) => setRiskPatterns(e.target.value)}
+          rows={2}
+          placeholder="stripe\."
+        />
+        <span className="hint">
+          Una línea añadida en código que casa con alguno sube el cambio a riesgo 2, sin distinguir
+          mayúsculas.
+        </span>
+      </label>
       <div className="form-actions">
         <Button type="submit" disabled={save.isPending}>
           Guardar verificación

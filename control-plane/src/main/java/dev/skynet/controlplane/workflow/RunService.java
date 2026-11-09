@@ -85,6 +85,8 @@ public class RunService {
   private final RunQueue queue;
   private final StageJudges judges;
 
+  private final RunRisks risks;
+
   RunService(
       WorkflowRunRepository workflowRuns,
       StageRunRepository stageRuns,
@@ -105,7 +107,8 @@ public class RunService {
       CiChecks ciChecks,
       QuotaShares quotaShares,
       RunQueue queue,
-      StageJudges judges) {
+      StageJudges judges,
+      RunRisks risks) {
     this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
     this.agentRuns = agentRuns;
@@ -126,6 +129,7 @@ public class RunService {
     this.quotaShares = quotaShares;
     this.queue = queue;
     this.judges = judges;
+    this.risks = risks;
   }
 
   /**
@@ -1605,6 +1609,8 @@ public class RunService {
         verifications.latestOfStages(stages.stream().map(StageRun::getId).toList());
     Map<UUID, ApprovalSummary> stageApprovals =
         approvals.latestOfStages(stages.stream().map(StageRun::getId).toList());
+    Map<UUID, RiskView> stageRisks = risks.ofStages(stages.stream().map(StageRun::getId).toList());
+    Map<UUID, RiskView> runRisks = risks.ofRuns(runs.stream().map(WorkflowRun::getId).toList());
     Map<UUID, List<QuotaShare>> quota =
         quotaShares.ofAgents(agents.stream().map(AgentRun::getId).toList());
     Map<UUID, PublishedDefinition> published = new HashMap<>();
@@ -1642,8 +1648,10 @@ public class RunService {
                                       .toList(),
                                   stageChecks.getOrDefault(s.getId(), List.of()),
                                   stageApprovals.get(s.getId()),
-                                  judgeOf(definition, s)))
-                      .toList());
+                                  judgeOf(definition, s),
+                                  stageRisks.get(s.getId())))
+                      .toList(),
+                  runRisks.get(run.getId()));
             })
         .toList();
   }

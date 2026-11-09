@@ -235,6 +235,14 @@ class RunnerEndToEndIT extends IntegrationTest {
     assertThat(artifactTypes(run)).hasSameSizeAs(expected);
     JsonNode changes = artifact(run, "GIT_CHANGES");
     assertThat(changes.path("metadata").path("commits").asInt()).isEqualTo(1);
+    // El runner mide el riesgo del cambio con los cambios (AU-A): calc.py es código.
+    JsonNode risk = changes.path("metadata").path("risk");
+    assertThat(risk.path("tier").asInt()).isEqualTo(1);
+    assertThat(risk.path("summary").asString()).isEqualTo("Nivel 1: 2 líneas de código");
+    assertThat(risk.path("reasons").get(0).path("path").asString()).isEqualTo("calc.py");
+    JsonNode runRisk = get("/api/workflow-runs/" + run.runId()).path("risk");
+    assertThat(runRisk.path("tier").asInt()).isEqualTo(1);
+    assertThat(runRisk.path("lines").asInt()).isEqualTo(2);
     assertThat(content(artifact(run, "DIFF"))).contains("+    return a + b");
     assertThat(content(artifact(run, "VERIFICATION_LOG"))).contains("verificado");
     assertThat(artifact(run, "VERIFICATION_LOG").path("verificationRunId").asString())

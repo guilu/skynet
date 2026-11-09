@@ -72,12 +72,15 @@ class ProjectController {
   /**
    * Verificación del repositorio. Sin {@code validationCommand} no se verifica; sin {@code
    * testReportPaths} se buscan los informes JUnit de Gradle y Maven. {@code protectedPaths} son las
-   * rutas que ningún agente puede cambiar (VA-A); sin ellas, se quedan como estaban.
+   * rutas que ningún agente puede cambiar (VA-A); {@code riskPaths} y {@code riskPatterns}, lo que
+   * sube un cambio a nivel de riesgo 2 (AU-A). Sin ellas, se quedan como estaban.
    */
   record VerificationSettings(
       @Size(max = 2000) String validationCommand,
       List<@Size(max = 500) String> testReportPaths,
-      @Size(max = 50) List<@Size(max = 500) String> protectedPaths) {}
+      @Size(max = 50) List<@Size(max = 500) String> protectedPaths,
+      @Size(max = 50) List<@Size(max = 500) String> riskPaths,
+      @Size(max = 50) List<@Size(max = 500) String> riskPatterns) {}
 
   /**
    * Política propia de los agentes del repositorio. Sin {@code environment}, el agente recibe todas
@@ -139,6 +142,8 @@ class ProjectController {
       String validationCommand,
       List<String> testReportPaths,
       List<String> protectedPaths,
+      List<String> riskPaths,
+      List<String> riskPatterns,
       AgentPolicy agentPolicy,
       boolean agentPolicyCustom,
       Instant createdAt,
@@ -154,6 +159,8 @@ class ProjectController {
           r.getValidationCommand(),
           r.getTestReportPaths(),
           r.getProtectedPaths(),
+          r.getRiskPaths(),
+          r.getRiskPatterns(),
           policy,
           r.hasCustomAgentPolicy(),
           r.getCreatedAt(),
@@ -300,13 +307,38 @@ class ProjectController {
         }
       }
     }
+    if (request.riskPaths() != null) {
+      for (String glob : request.riskPaths()) {
+        if (glob != null && !glob.isBlank() && !ProtectedPaths.insideRepository(glob.strip())) {
+          throw new InvalidRequestException(
+              "`"
+                  + glob.strip()
+                  + "` tiene que ser una ruta dentro del repositorio, p. ej. `billing/**`");
+        }
+      }
+    }
+    if (request.riskPatterns() != null) {
+      for (String regex : request.riskPatterns()) {
+        if (regex == null || regex.isBlank()) {
+          continue;
+        }
+        try {
+          java.util.regex.Pattern.compile(regex.strip());
+        } catch (java.util.regex.PatternSyntaxException e) {
+          throw new InvalidRequestException(
+              "`" + regex.strip() + "` no es una expresión regular válida: " + e.getDescription());
+        }
+      }
+    }
     return view(
         service.configureVerification(
             id,
             repositoryId,
             request.validationCommand(),
             request.testReportPaths(),
-            request.protectedPaths()));
+            request.protectedPaths(),
+            request.riskPaths(),
+            request.riskPatterns()));
   }
 
   @PutMapping("/{id}/repositories/{repositoryId}/agent-policy")
