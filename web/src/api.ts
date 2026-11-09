@@ -497,7 +497,8 @@ export interface CiCheck {
 export interface CiCheckView {
   stageRunId: string
   stageKey: string
-  status: 'WAITING' | 'FIXING' | 'PUSHING' | 'PASSED' | 'FAILED'
+  /** `JUDGING`: la CI pasó y los jueces miran lo que cambió después del juicio (AU-B). */
+  status: 'WAITING' | 'FIXING' | 'PUSHING' | 'JUDGING' | 'PASSED' | 'FAILED'
   headSha: string
   round: number
   checks: CiCheck[]
@@ -525,6 +526,26 @@ export interface ApprovalPullRequest {
   base: string | null
   headSha: string | null
   ci: { status: CiCheckView['status']; round: number; checks: CiCheck[] } | null
+  /** Qué se juzgó y qué se fusiona (AU-B); null si la ejecución no tiene un juez que aprobara. */
+  judged: JudgedMerge | null
+}
+
+/** Lo juzgado frente a lo que se fusiona (AU-B). */
+export interface JudgedMerge {
+  /** La fase con juez que aprobó. */
+  stageKey: string
+  /** El commit que vieron sus jueces (una instantánea si había cambios sin confirmar). */
+  judgedSha: string
+  /** El commit de la PR. */
+  mergeSha: string | null
+  /** Qué pasó con lo de en medio; null si cambió y no se juzgó. */
+  status: 'UNCHANGED' | 'SKIPPED' | 'JUDGING' | 'PASSED' | 'FAILED' | null
+  /** El nivel de riesgo del delta, si se midió. */
+  tier?: number | null
+  /** La nota de los jueces del delta, si lo juzgaron. */
+  score?: number | null
+  /** «Juzgado en `abc1234` · se fusiona `def5678` · delta revisado (nivel 1, 3,9 / 5)». */
+  text: string
 }
 
 /** La foto que se tomó al crear la petición. */

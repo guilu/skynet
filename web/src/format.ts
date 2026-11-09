@@ -251,6 +251,23 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       })} / 5 · ${payload.passed ? 'aprobado' : 'suspenso'}, aprueba ${p('approvals')} de ${p(
         'judges',
       )}${Number(payload.blocking) > 0 ? ` · ${p('blocking')} bloquea` : ''}`
+    // Lo que cambió después del juez, al corregir la CI (AU-B).
+    case 'stage.judge.delta.started':
+      return `${p('stageKey')}: ${
+        Array.isArray(payload.judges) && payload.judges.length === 1
+          ? '1 juez mira'
+          : `${Array.isArray(payload.judges) ? payload.judges.length : 0} jueces miran`
+      } lo que cambió desde ${p('judgedSha').slice(0, 7)} (nivel ${p('tier') || '2'})`
+    case 'stage.judge.delta.verdict':
+      return payload.error
+        ? `${p('stageKey')}: no se pudo juzgar el delta: ${truncate(p('error'), 100)}`
+        : `${p('stageKey')}: delta ${payload.passed ? 'aprobado' : 'suspendido'} con ${Number(
+            payload.score,
+          ).toLocaleString('es-ES', { maximumFractionDigits: 2 })} / 5`
+    case 'stage.judge.delta.unchanged':
+      return `${p('stageKey')}: sin cambios desde el juicio en ${p('judgedSha').slice(0, 7)}`
+    case 'stage.judge.delta.skipped':
+      return `${p('stageKey')}: lo que cambió desde el juicio es de nivel 0, no se vuelve a juzgar`
     case 'stage.judge.refute.started':
       return `${p('stageKey')}: ${
         Number(payload.skeptics) === 1 ? '1 escéptico' : `${p('skeptics')} escépticos`

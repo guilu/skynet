@@ -234,6 +234,288 @@ class CiCheckIT extends IntegrationTest {
             "stage.github.ci.passed");
   }
 
+  /** Un juez que aprueba antes de la PR, una CI que se corrige y una puerta de fusión (AU-B). */
+  static final String JUDGED =
+      """
+      id: juzgada-ci
+      version: 1
+      agents:
+        juez:
+          model: otro-modelo
+        revisor:
+          model: otro-modelo
+      stages:
+        - id: implementar
+          type: agent
+          prompt: Implementa
+        - id: juzgar
+          type: verification
+          dependsOn: [implementar]
+          judge:
+            agents: [{agent: juez}, {agent: revisor}]
+            rubric:
+              - {id: resuelve, text: "Resuelve la tarea", required: true}
+        - id: pr
+          type: github-pr
+          dependsOn: [juzgar]
+        - id: ci
+          type: github-check
+          dependsOn: [pr]
+          fix: implementar
+          maxRounds: 1
+        - id: aprobar
+          type: human-approval
+          dependsOn: [ci]
+          action: Fusionar
+        - id: fusionar
+          type: github-merge
+          dependsOn: [aprobar]
+      """;
+
+  /** Lo que vieron los jueces: la instantánea de su copia, con lo que no estaba confirmado. */
+  private static final String JUDGED_SHA = "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a";
+
+  @Test
+  void aFixAfterTheJudgeIsJudgedAgainOnlyOnItsDeltaByOneJudgeAtLevelOne() {
+    Runner runner = register("portatil");
+    String runId = launch(publish(JUDGED)).path("id").asString();
+    JsonNode fix = judgedThenRed(runner, runId);
+    // La corrección mide su nivel desde lo que se juzgó.
+    assertThat(fix.path("start").path("risk").path("base").asString()).isEqualTo(JUDGED_SHA);
+    fixed(runner, fix, Map.of("tier", 1, "files", 1, "lines", 3, "base", JUDGED_SHA));
+
+    // La CI pasa, pero la fase espera al juez del delta: nivel 1, solo el primero.
+    assertThat(stageStatuses(runId)).containsEntry("ci", "RUNNING");
+    assertThat(get("/api/workflow-runs/" + runId + "/ci-checks").get(0).path("status").asString())
+        .isEqualTo("JUDGING");
+    List<JsonNode> judges = runner.claim();
+    assertThat(judges).hasSize(1);
+    JsonNode judge = judges.getFirst();
+    assertThat(judge.path("start").path("workspace").path("copy").asBoolean()).isTrue();
+    assertThat(judge.path("start").path("permissionMode").asString()).isEqualTo("plan");
+    assertThat(taskPrompt(judge.path("start")))
+        .contains("Este cambio ya lo aprobó un juez en el commit `" + JUDGED_SHA + "`")
+        .contains("nivel de riesgo 1")
+        .contains("`git diff " + JUDGED_SHA + "`");
+    judged(runner, judge, "/w/demo/delta", 4);
+    awaitStage(runId, "ci", "SUCCEEDED");
+
+    assertThat(eventTypes(runId))
+        .containsSubsequence(
+            "stage.github.ci.fix.started",
+            "stage.judge.delta.started",
+            "stage.judge.delta.verdict",
+            "stage.github.ci.passed");
+    Map<String, Object> delta =
+        jdbc.sql("SELECT status, tier, judged_sha, head_sha FROM judged_delta").query().singleRow();
+    assertThat(delta)
+        .containsEntry("status", "PASSED")
+        .containsEntry("tier", 1)
+        .containsEntry("judged_sha", JUDGED_SHA)
+        .containsEntry("head_sha", FIXED);
+    // La puerta de fusión dice qué se juzgó y qué se fusiona.
+    JsonNode approval = awaitApproval(runId);
+    JsonNode judged = approval.path("evidence").path("pullRequest").path("judged");
+    assertThat(judged.path("judgedSha").asString()).isEqualTo(JUDGED_SHA);
+    assertThat(judged.path("mergeSha").asString()).isEqualTo(FIXED);
+    assertThat(judged.path("status").asString()).isEqualTo("PASSED");
+    assertThat(judged.path("text").asString())
+        .startsWith("Juzgado en `5a5a5a5` · se fusiona `c0ffee0` · delta revisado (nivel 1, 4");
+  }
+
+  @Test
+  void aDeltaOfLevelTwoIsJudgedByThePanelAndFailsTheStageIfTheyFailIt() {
+    Runner runner = register("portatil");
+    String runId = launch(publish(JUDGED)).path("id").asString();
+    JsonNode fix = judgedThenRed(runner, runId);
+    fixed(runner, fix, Map.of("tier", 2, "files", 1, "lines", 3, "base", JUDGED_SHA));
+
+    List<JsonNode> judges = runner.claim();
+    assertThat(judges).hasSize(2);
+    judged(runner, judges.get(0), "/w/demo/delta-1", 2);
+    judged(runner, judges.get(1), "/w/demo/delta-2", 2);
+    awaitStage(runId, "ci", "FAILED");
+    assertThat(get("/api/workflow-runs/" + runId + "/ci-checks").get(0).path("error").asString())
+        .startsWith("El juez suspende lo que se cambió después de aprobar: 2");
+    assertThat(jdbc.sql("SELECT status FROM judged_delta").query(String.class).single())
+        .isEqualTo("FAILED");
+  }
+
+  @Test
+  void aDeltaOfLevelZeroIsNotJudgedAgain() {
+    Runner runner = register("portatil");
+    String runId = launch(publish(JUDGED)).path("id").asString();
+    fixed(
+        runner,
+        judgedThenRed(runner, runId),
+        Map.of("tier", 0, "files", 1, "lines", 0, "base", JUDGED_SHA));
+    awaitStage(runId, "ci", "SUCCEEDED");
+    assertThat(eventTypes(runId)).contains("stage.judge.delta.skipped");
+    assertThat(
+            awaitApproval(runId)
+                .path("evidence")
+                .path("pullRequest")
+                .path("judged")
+                .path("text")
+                .asString())
+        .endsWith("delta de nivel 0, sin volver a juzgar");
+  }
+
+  @Test
+  void aDeltaMeasuredFromAnotherCommitIsJudgedByTheWholePanel() {
+    Runner runner = register("portatil");
+    String runId = launch(publish(JUDGED)).path("id").asString();
+    fixed(
+        runner,
+        judgedThenRed(runner, runId),
+        Map.of("tier", 0, "files", 1, "lines", 0, "base", "abc1234"));
+    assertThat(runner.claim()).hasSize(2);
+    assertThat(jdbc.sql("SELECT tier FROM judged_delta").query(Integer.class).single())
+        .isEqualTo(2);
+  }
+
+  /**
+   * Implementa, los dos jueces aprueban (en copias con cambios sin confirmar), se abre la PR y su
+   * CI falla: devuelve la corrección.
+   */
+  private JsonNode judgedThenRed(Runner runner, String runId) {
+    JsonNode implement = awaitStart(runner, "Implementa");
+    complete(runner, implement, Map.of());
+    List<JsonNode> panel = new ArrayList<>();
+    for (int i = 0; i < 20 && panel.size() < 2; i++) {
+      panel.addAll(runner.claim());
+    }
+    assertThat(panel).hasSize(2);
+    judged(runner, panel.get(0), "/w/demo/juez", 5);
+    judged(runner, panel.get(1), "/w/demo/revisor", 5);
+    awaitStage(runId, "juzgar", "SUCCEEDED");
+    assertThat(
+            jdbc.sql("SELECT judged_sha FROM stage_judge WHERE workflow_run_id = ?::uuid")
+                .param(runId)
+                .query(String.class)
+                .single())
+        .isEqualTo(JUDGED_SHA);
+    sendPushed(runner, runner.claim().getFirst(), SHA);
+    pullRequests.openPending();
+    awaitStage(runId, "ci", "RUNNING");
+    GITHUB.checkRun(SHA, "test", "github-actions", "completed", "failure");
+    jdbc.sql("UPDATE github_ci_wait SET next_check_at = now() - interval '1 second'").update();
+    ciChecks.checkDue();
+    return runner.claim().getFirst();
+  }
+
+  /**
+   * La corrección termina, el runner sube sus cambios con el nivel medido ({@code risk}), la rama
+   * se sube y la CI pasa.
+   */
+  private void fixed(Runner runner, JsonNode fix, Map<String, Object> risk) {
+    upload(
+        runner,
+        UUID.fromString(fix.path("agentRunId").asString()),
+        Map.of("risk", risk, "files", 1));
+    complete(runner, fix, Map.of());
+    sendPushed(runner, runner.claim().getFirst(), FIXED);
+    GITHUB.checkRun(FIXED, "test", "github-actions", "completed", "success");
+    jdbc.sql("UPDATE github_ci_wait SET next_check_at = now() - interval '1 second'").update();
+    ciChecks.checkDue();
+  }
+
+  /** Un juez termina en su copia, con la instantánea de lo que vio y su nota. */
+  private void judged(Runner runner, JsonNode command, String path, int score) {
+    Events events = new Events(UUID.fromString(command.path("agentRunId").asString()));
+    events.add(
+        AgentEventType.WORKSPACE_READY,
+        Map.of(
+            "path",
+            path,
+            "branch",
+            "skynet/copia",
+            "baseCommit",
+            "abc1234",
+            "snapshot",
+            JUDGED_SHA));
+    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", UUID.randomUUID().toString()));
+    events.add(
+        AgentEventType.RESULT,
+        Map.of(
+            "subtype",
+            "success",
+            "isError",
+            false,
+            "structuredOutput",
+            Map.of(
+                "criteria",
+                List.of(Map.of("id", "resuelve", "score", score, "reason", "motivo")),
+                "findings",
+                List.of(),
+                "summary",
+                "Resumen")));
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 0));
+    runner.send(events);
+  }
+
+  private void upload(Runner runner, UUID agentRunId, Map<String, Object> metadata) {
+    byte[] content = "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    String sha256;
+    try {
+      sha256 =
+          java.util.HexFormat.of()
+              .formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(content));
+    } catch (java.security.NoSuchAlgorithmException e) {
+      throw new IllegalStateException(e);
+    }
+    dev.skynet.protocol.runner.ArtifactUpload upload =
+        new dev.skynet.protocol.runner.ArtifactUpload(
+            agentRunId,
+            null,
+            dev.skynet.protocol.runner.ArtifactType.GIT_CHANGES,
+            "changes.json",
+            "application/json",
+            sha256,
+            metadata);
+    http.post()
+        .uri("/api/runner/artifacts")
+        .header(HttpHeaders.AUTHORIZATION, "Bearer " + runner.token)
+        .header(
+            dev.skynet.protocol.runner.ArtifactUpload.HEADER,
+            java.util.Base64.getUrlEncoder()
+                .encodeToString(
+                    tools.jackson.databind.json.JsonMapper.builder()
+                        .build()
+                        .writeValueAsBytes(upload)))
+        .contentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM)
+        .body(content)
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  private void awaitStage(String runId, String stage, String status) {
+    for (int i = 0; i < 100 && !status.equals(stageStatuses(runId).get(stage)); i++) {
+      try {
+        Thread.sleep(100);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
+    assertThat(stageStatuses(runId)).containsEntry(stage, status);
+  }
+
+  private JsonNode awaitApproval(String runId) {
+    for (int i = 0; i < 100; i++) {
+      for (JsonNode approval : get("/api/approvals?status=PENDING")) {
+        if (approval.path("workflowRunId").asString().equals(runId)) {
+          return get("/api/approvals/" + approval.path("id").asString());
+        }
+      }
+      try {
+        Thread.sleep(100);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
+    throw new AssertionError("No llegó la puerta de " + runId);
+  }
+
   @Test
   void aCiStillRedAfterItsRoundsFailsTheStage() {
     GITHUB.deniedPermissions.add("actions");

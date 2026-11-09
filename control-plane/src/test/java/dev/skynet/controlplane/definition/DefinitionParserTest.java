@@ -1567,7 +1567,7 @@ class DefinitionParserTest {
         .contains(
             "La rúbrica de `juzgar` no tiene el criterio `nada`",
             "`juzgar.nota` no es un dato del juez: usa `juzgar.score`, `juzgar.passed`,"
-                + " `juzgar.findings` o `juzgar.criteria.<id>.score`");
+                + " `juzgar.findings`, `juzgar.judgedSha` o `juzgar.criteria.<id>.score`");
   }
 
   @Test

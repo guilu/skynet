@@ -68,6 +68,7 @@ public class CiChecks {
   static final String WAITING = "WAITING";
   static final String FIXING = "FIXING";
   static final String PUSHING = "PUSHING";
+  static final String JUDGING = "JUDGING";
   static final String PASSED = "PASSED";
   static final String FAILED = "FAILED";
 
@@ -96,6 +97,7 @@ public class CiChecks {
   private final WorkItemService workItems;
   private final ProjectService projects;
   private final PayloadRedactor redactor;
+  private final DeltaJudges deltas;
   private final ApplicationEventPublisher publisher;
   private final TransactionTemplate transactions;
   private final ObjectMapper json;
@@ -117,6 +119,7 @@ public class CiChecks {
       WorkItemService workItems,
       ProjectService projects,
       PayloadRedactor redactor,
+      DeltaJudges deltas,
       ApplicationEventPublisher publisher,
       TransactionTemplate transactions,
       ObjectMapper json,
@@ -136,6 +139,7 @@ public class CiChecks {
     this.workItems = workItems;
     this.projects = projects;
     this.redactor = redactor;
+    this.deltas = deltas;
     this.publisher = publisher;
     this.transactions = transactions;
     this.json = json;
@@ -703,6 +707,73 @@ public class CiChecks {
         "stage_run", stageRunId, "stage.github.ci.waiting", stage.getWorkflowRunId(), payload, now);
   }
 
+  /**
+   * Las fases que esperan a los jueces del delta (AU-B): cuando deciden, la fase termina bien o
+   * falla con el motivo. Devuelve si cambió alguna.
+   */
+  boolean settleDeltas(UUID runId) {
+    boolean changed = false;
+    List<UUID> judging =
+        jdbc.sql(
+                "SELECT stage_run_id FROM github_ci_wait WHERE workflow_run_id = ? AND status ="
+                    + " 'JUDGING'")
+            .param(runId)
+            .query(UUID.class)
+            .list();
+    for (UUID stageRunId : judging) {
+      StageRun stage = stageRuns.findById(stageRunId).orElseThrow();
+      Instant now = time.now();
+      if (stage.getStatus().isTerminal()) {
+        status(stageRunId, FAILED, now);
+        changed = true;
+        continue;
+      }
+      DeltaJudges.Decision decision = deltas.settle(stage, now).orElse(null);
+      if (decision == null) {
+        continue;
+      }
+      String headSha =
+          jdbc.sql("SELECT head_sha FROM github_ci_wait WHERE stage_run_id = ?")
+              .param(stageRunId)
+              .query(String.class)
+              .single();
+      Map<String, Object> payload = new LinkedHashMap<>();
+      payload.put("stageKey", stage.getStageKey());
+      payload.put("headSha", headSha);
+      if (decision.passed()) {
+        payload.put("warning", decision.note());
+        transitions.append("stage_run", stageRunId, "stage.github.ci.passed", runId, payload, now);
+      } else {
+        payload.put("error", decision.note());
+        transitions.append("stage_run", stageRunId, "stage.github.ci.failed", runId, payload, now);
+      }
+      jdbc.sql(
+              "UPDATE github_ci_wait SET status = :status, error = :error, updated_at = :now"
+                  + " WHERE stage_run_id = :stage")
+          .param("status", decision.passed() ? PASSED : FAILED)
+          .param("error", decision.note())
+          .param("now", Timestamp.from(now))
+          .param("stage", stageRunId)
+          .update();
+      transitions.advanceStage(
+          stage,
+          decision.passed() ? StageStatus.SUCCEEDED : StageStatus.FAILED,
+          decision.passed() ? "ci-passed" : "delta-judge-failed",
+          now);
+      changed = true;
+    }
+    return changed;
+  }
+
+  /** La última corrección de la CI de la fase, o {@code null} si no hubo. */
+  private UUID fixAgentOf(UUID stageRunId) {
+    return jdbc.sql("SELECT fix_agent_run_id FROM github_ci_wait WHERE stage_run_id = ?")
+        .param(stageRunId)
+        .query(UUID.class)
+        .optional()
+        .orElse(null);
+  }
+
   /** La corrección en curso de la fase, para pararla con ella (cancelar, tiempo agotado). */
   Optional<UUID> fixAgent(UUID stageRunId) {
     return jdbc.sql(
@@ -720,6 +791,25 @@ public class CiChecks {
       return;
     }
     StageRun stage = stageRuns.findById(wait.stageRunId()).orElseThrow();
+    if (passed && !stage.getStatus().isTerminal()) {
+      // Lo que se fusiona es lo juzgado (AU-B): si se corrigió después del juez, el delta antes.
+      DeltaJudges.Start delta;
+      try {
+        delta = deltas.start(stage, wait.headSha(), fixAgentOf(wait.stageRunId()), now);
+      } catch (ConflictException e) {
+        passed = false;
+        error = "No se pudo juzgar lo que cambió después del juez: " + e.getMessage();
+        delta = DeltaJudges.Start.NONE;
+      }
+      if (delta.judging()) {
+        update(wait.stageRunId(), JUDGING, checks, null, null, now);
+        publisher.publishEvent(new WorkflowRunChanged(wait.runId()));
+        return;
+      }
+      if (passed && delta.note() != null) {
+        warning = warning == null ? delta.note() : warning + "; " + delta.note();
+      }
+    }
     if (passed) {
       Map<String, Object> payload = new LinkedHashMap<>();
       payload.put("stageKey", stage.getStageKey());

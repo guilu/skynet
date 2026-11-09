@@ -83,6 +83,7 @@ public class Approvals {
   private final ProjectService projects;
   private final ApplicationEventPublisher publisher;
   private final ObjectProvider<RunService> runs;
+  private final ObjectProvider<DeltaJudges> deltas;
   private final TimeSource time;
 
   Approvals(
@@ -96,6 +97,7 @@ public class Approvals {
       ProjectService projects,
       ApplicationEventPublisher publisher,
       ObjectProvider<RunService> runs,
+      ObjectProvider<DeltaJudges> deltas,
       TimeSource time) {
     this.jdbc = jdbc;
     this.json = json;
@@ -107,6 +109,7 @@ public class Approvals {
     this.projects = projects;
     this.publisher = publisher;
     this.runs = runs;
+    this.deltas = deltas;
     this.time = time;
   }
 
@@ -689,6 +692,8 @@ public class Approvals {
                         new TypeReference<List<Map<String, Object>>>() {}));
               }
               pr.put("ci", ci);
+              // Qué se juzgó y qué se fusiona (AU-B).
+              pr.put("judged", deltas.getObject().summary(runId, rs.getString("head_sha")));
               return pr;
             })
         .optional()

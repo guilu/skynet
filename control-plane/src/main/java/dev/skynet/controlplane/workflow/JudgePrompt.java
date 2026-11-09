@@ -100,6 +100,27 @@ final class JudgePrompt {
     return out.toString();
   }
 
+  /**
+   * El prompt de un juez del delta (AU-B): el de siempre, con {@code context.baseCommit()} en el
+   * commit que ya se aprobó, y una nota para que juzgue solo lo que cambió desde entonces.
+   */
+  static String delta(Context context, JudgeSpec spec, JudgeSpec.Judge judge, int tier) {
+    String prompt = build(context, spec, judge);
+    String note =
+        "Este cambio ya lo aprobó un juez en el commit `"
+            + context.baseCommit()
+            + "`. Después se corrigió para que pasara la CI, y lo corregido tiene nivel de riesgo "
+            + tier
+            + ". Juzga **solo lo que cambió desde ese commit**: que la corrección es buena, que no"
+            + " rompe lo que ya estaba bien y que no mete nada que la tarea no pida. Puntúa la"
+            + " rúbrica pensando en ese delta.\n\n";
+    String marker = "\n## El cambio\n\n";
+    int at = prompt.indexOf(marker);
+    return at < 0
+        ? note + prompt
+        : prompt.substring(0, at + marker.length()) + note + prompt.substring(at + marker.length());
+  }
+
   static String build(Context context, JudgeSpec spec, JudgeSpec.Judge judge) {
     StringBuilder out = new StringBuilder();
     out.append(

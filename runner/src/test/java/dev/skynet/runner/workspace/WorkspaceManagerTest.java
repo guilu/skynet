@@ -141,6 +141,16 @@ class WorkspaceManagerTest {
     // El worktree del padre no cambia.
     assertThat(Files.readString(parent.path().resolve("calc.py"), StandardCharsets.ISO_8859_1))
         .contains("# sin confirmar");
+    // Con cambios sin confirmar, la instantánea guarda lo que ve el fork (AU-B): sin ellos no hay.
+    assertThat(fork.snapshot()).isNotNull();
+    assertThat(TestRepos.git(fork.path(), "rev-parse", fork.snapshot() + "^"))
+        .isEqualTo(fork.baseCommit());
+    assertThat(TestRepos.git(fork.path(), "show", fork.snapshot() + ":tests/test_calc.py"))
+        .isEqualTo("nuevo");
+    TestRepos.git(parent.path(), "checkout", "--", "calc.py");
+    TestRepos.git(parent.path(), "clean", "-fdxq");
+    Workspace clean = manager.fork(parent.path(), UUID.randomUUID(), "TKM-1", UUID.randomUUID());
+    assertThat(clean.snapshot()).isNull();
   }
 
   @Test

@@ -18,6 +18,30 @@ describe('describeEvent', () => {
     )
   })
 
+  it('describes the delta after the judge (AU-B)', () => {
+    const sha = '5a5a5a5a5a5a5a5a5a5a'
+    expect(
+      describeEvent('stage.judge.delta.started', {
+        stageKey: 'ci',
+        judgedSha: sha,
+        tier: 1,
+        judges: [{ agent: 'juez' }],
+      }),
+    ).toBe('ci: 1 juez mira lo que cambió desde 5a5a5a5 (nivel 1)')
+    expect(
+      describeEvent('stage.judge.delta.verdict', { stageKey: 'ci', score: 3.9, passed: true }),
+    ).toBe('ci: delta aprobado con 3,9 / 5')
+    expect(
+      describeEvent('stage.judge.delta.verdict', { stageKey: 'ci', error: 'no terminó bien' }),
+    ).toBe('ci: no se pudo juzgar el delta: no terminó bien')
+    expect(describeEvent('stage.judge.delta.unchanged', { stageKey: 'ci', judgedSha: sha })).toBe(
+      'ci: sin cambios desde el juicio en 5a5a5a5',
+    )
+    expect(describeEvent('stage.judge.delta.skipped', { stageKey: 'ci' })).toBe(
+      'ci: lo que cambió desde el juicio es de nivel 0, no se vuelve a juzgar',
+    )
+  })
+
   it('dice desde dónde se importó un proyecto', () => {
     expect(describeEvent('project.created', { key: 'FORMA' })).toBe('Proyecto FORMA creado')
     expect(

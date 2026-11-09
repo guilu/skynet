@@ -156,6 +156,7 @@ const CI_LABEL: Record<CiCheckView['status'], string> = {
   WAITING: 'Esperando',
   FIXING: 'Corrigiendo',
   PUSHING: 'Subiendo la corrección',
+  JUDGING: 'En verde · juzgando lo corregido',
   PASSED: 'En verde',
   FAILED: 'En rojo',
 }
@@ -164,6 +165,7 @@ const CI_TONE: Record<CiCheckView['status'], StatusTone> = {
   WAITING: 'active',
   FIXING: 'warn',
   PUSHING: 'active',
+  JUDGING: 'active',
   PASSED: 'ok',
   FAILED: 'bad',
 }

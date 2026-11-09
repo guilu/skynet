@@ -1136,6 +1136,8 @@ public class RunSteps {
     }
     // Las correcciones de la CI de las fases github-check (EN-B).
     changed |= ciChecks.settleFixes(runId);
+    // Los jueces de lo que cambió después del juez al corregir la CI (AU-B).
+    changed |= ciChecks.settleDeltas(runId);
     // Las correcciones de lo que suspendió un juez (VA-B).
     changed |= stageVerifications.settleJudges(runId, time.now());
     return changed;
