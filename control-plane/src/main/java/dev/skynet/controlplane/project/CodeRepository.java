@@ -34,6 +34,8 @@ public class CodeRepository {
   private BigDecimal agentMaxBudgetUsd;
   private Integer agentTimeoutMinutes;
   private List<String> protectedPaths;
+  private List<String> riskPaths;
+  private List<String> riskPatterns;
   private final Instant createdAt;
 
   /** Lo escribe solo el archivado (UPDATE directo); el resto de guardados no lo toca. */
@@ -59,6 +61,8 @@ public class CodeRepository {
       BigDecimal agentMaxBudgetUsd,
       Integer agentTimeoutMinutes,
       List<String> protectedPaths,
+      List<String> riskPaths,
+      List<String> riskPatterns,
       Instant createdAt,
       Long version) {
     this.id = id;
@@ -77,6 +81,8 @@ public class CodeRepository {
     this.agentMaxBudgetUsd = agentMaxBudgetUsd;
     this.agentTimeoutMinutes = agentTimeoutMinutes;
     this.protectedPaths = protectedPaths == null ? List.of() : List.copyOf(protectedPaths);
+    this.riskPaths = riskPaths == null ? List.of() : List.copyOf(riskPaths);
+    this.riskPatterns = riskPatterns == null ? List.of() : List.copyOf(riskPatterns);
     this.createdAt = createdAt;
     this.version = version;
   }
@@ -104,6 +110,8 @@ public class CodeRepository {
         null,
         null,
         null,
+        List.of(),
+        List.of(),
         List.of(),
         now,
         null);
@@ -134,6 +142,26 @@ public class CodeRepository {
         globs == null
             ? List.of()
             : globs.stream().map(String::strip).filter(p -> !p.isEmpty()).distinct().toList();
+  }
+
+  /**
+   * Lo que sube a nivel 2 un cambio en este repositorio (AU-A): globs relativos a su raíz y
+   * expresiones regulares para las líneas añadidas. Se suman a las reglas de siempre.
+   */
+  void configureRisk(List<String> paths, List<String> patterns) {
+    this.riskPaths = clean(paths);
+    this.riskPatterns = clean(patterns);
+  }
+
+  private static List<String> clean(List<String> values) {
+    return values == null
+        ? List.of()
+        : values.stream()
+            .filter(v -> v != null)
+            .map(String::strip)
+            .filter(v -> !v.isEmpty())
+            .distinct()
+            .toList();
   }
 
   /** Política propia de los agentes; sustituye a la global. */
@@ -210,6 +238,14 @@ public class CodeRepository {
 
   public List<String> getProtectedPaths() {
     return protectedPaths;
+  }
+
+  public List<String> getRiskPaths() {
+    return riskPaths;
+  }
+
+  public List<String> getRiskPatterns() {
+    return riskPatterns;
   }
 
   public Instant getCreatedAt() {

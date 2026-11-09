@@ -50,6 +50,7 @@ function stage(
     phase: null,
     quotaWait: null,
     judge: null,
+    risk: null,
   }
 }
 

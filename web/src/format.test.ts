@@ -2,6 +2,22 @@ import { describe, expect, it } from 'vitest'
 import { describeEvent, formatCompact, formatDuration, providerName, statusTone } from './format'
 
 describe('describeEvent', () => {
+  it('describes the change risk (AU-A)', () => {
+    expect(
+      describeEvent('stage.risk.assessed', {
+        stageKey: 'implementar',
+        tier: 2,
+        summary: 'Nivel 2: `db/migration/V2__x.sql` (ruta)',
+      }),
+    ).toBe('implementar: Nivel 2: `db/migration/V2__x.sql` (ruta)')
+    expect(describeEvent('run.risk.raised', { to: 1, stageKey: 'implementar' })).toBe(
+      'Riesgo de la ejecución: a 1 por implementar',
+    )
+    expect(describeEvent('run.risk.raised', { from: 1, to: 2, stageKey: 'corregir' })).toBe(
+      'Riesgo de la ejecución: de 1 a 2 por corregir',
+    )
+  })
+
   it('dice desde dónde se importó un proyecto', () => {
     expect(describeEvent('project.created', { key: 'FORMA' })).toBe('Proyecto FORMA creado')
     expect(

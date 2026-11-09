@@ -93,6 +93,7 @@ import type {
   MetricsBucket,
   Problem,
   Prompt,
+  Risk,
   Run,
   RunMetrics,
   RunPage,
@@ -186,6 +187,7 @@ const CONVERSATION_MESSAGE: Keys<ConversationMessage> = {
   text: true,
 }
 const STAGE_RUN: Keys<StageRun> = {
+  risk: true,
   children: true,
   phase: true,
   quotaWait: true,
@@ -294,6 +296,7 @@ const RUN_USAGE: Keys<RunUsage> = {
   quota: true,
 }
 const RUN: Keys<Run> = {
+  risk: true,
   id: true,
   workItemId: true,
   workItemKey: true,
@@ -683,6 +686,7 @@ const WORKFLOW_MODEL: Keys<WorkflowModel> = {
   inputs: true,
   agents: true,
   stages: true,
+  risk: true,
 }
 const INPUT: Keys<InputDefinition> = {
   name: true,
@@ -731,7 +735,12 @@ const STAGE_DEFINITION: Keys<StageDefinition> = {
   checks: true,
   approval: true,
 }
-const VERIFICATION_CHECK: Keys<VerificationCheck> = { name: true, command: true, paths: true }
+const VERIFICATION_CHECK: Keys<VerificationCheck> = {
+  name: true,
+  command: true,
+  paths: true,
+}
+const RISK: Keys<Risk> = { tier: true, summary: true, files: true, lines: true, reasons: true }
 
 function expectSummary(summary: WorkflowSummary) {
   expectShape(summary, WORKFLOW_SUMMARY)
@@ -968,6 +977,7 @@ function expectAgent(agent: AgentRun) {
 
 function expectRun(run: Run) {
   expectShape(run, RUN)
+  if (run.risk) expectShape(run.risk, RISK)
   expectShape(run.totals, RUN_TOTALS)
   run.totals.quota.forEach((q) => expectShape(q, QUOTA_SHARE))
   if (run.workflow) expectShape(run.workflow, WORKFLOW_REF)

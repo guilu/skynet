@@ -239,6 +239,12 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
           ? '1 juez'
           : `${Array.isArray(payload.judges) ? payload.judges.length : 0} jueces`
       }${Number(payload.round) > 1 ? ` (ronda ${p('round')})` : ''}`
+    case 'stage.risk.assessed':
+      return `${p('stageKey')}: ${payload.summary ? p('summary') : `nivel ${p('tier')}`}`
+    case 'run.risk.raised':
+      return `Riesgo de la ejecución: ${
+        payload.from == null ? '' : `de ${p('from')} `
+      }a ${p('to')} por ${p('stageKey')}`
     case 'stage.judge.verdict':
       return `${p('stageKey')}: ${Number(payload.score).toLocaleString('es-ES', {
         maximumFractionDigits: 2,

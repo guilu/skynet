@@ -174,6 +174,117 @@ class VerificationAndArtifactsIT extends IntegrationTest {
   }
 
   @Test
+  void theRiskMeasuredWithTheChangesRaisesTheStageAndTheRunAndNeverLowersThem() {
+    Runner runner = register("owner");
+    Launched run = launch(null);
+    JsonNode first = poll(runner).getFirst();
+    assertThat(first.path("start").path("risk").path("paths").isEmpty()).isTrue();
+    ack(runner, first);
+    // Las reglas del repositorio van en la orden; una expresión que no compila se rechaza.
+    put(
+        "/api/projects/" + projectId + "/repositories/" + repositoryId + "/verification",
+        Map.of("riskPaths", List.of("infra/**"), "riskPatterns", List.of("\\bfeature_flag\\b")));
+    assertStatus(
+        HttpStatus.BAD_REQUEST,
+        () ->
+            put(
+                "/api/projects/" + projectId + "/repositories/" + repositoryId + "/verification",
+                Map.of("riskPatterns", List.of("(sin cerrar"))));
+    JsonNode repository = get("/api/projects/" + projectId + "/repositories").get(0);
+    assertThat(repository.path("riskPaths"))
+        .extracting(JsonNode::asString)
+        .containsExactly("infra/**");
+    completed(runner, run.agentId());
+    Launched second = launch(null);
+    List<JsonNode> starts = new ArrayList<>();
+    for (int i = 0; i < 50 && starts.stream().noneMatch(c -> isStartOf(c, second)); i++) {
+      starts.addAll(poll(runner));
+      sleep(100);
+    }
+    JsonNode risk =
+        starts.stream()
+            .filter(c -> isStartOf(c, second))
+            .findFirst()
+            .orElseThrow()
+            .path("start")
+            .path("risk");
+    assertThat(risk.path("paths")).extracting(JsonNode::asString).containsExactly("infra/**");
+    assertThat(risk.path("patterns"))
+        .extracting(JsonNode::asString)
+        .containsExactly("\\bfeature_flag\\b");
+    starts.forEach(c -> ack(runner, c));
+
+    changes(runner, run, 1, "Nivel 1: 12 líneas de código");
+    JsonNode view = get("/api/workflow-runs/" + run.runId());
+    assertThat(view.path("risk").path("tier").asInt()).isEqualTo(1);
+    assertThat(view.path("risk").path("summary").asString())
+        .isEqualTo("Nivel 1: 12 líneas de código");
+    assertThat(view.path("stages").get(0).path("risk").path("tier").asInt()).isEqualTo(1);
+
+    // Sube con un cambio de nivel 2 y no baja con uno posterior de nivel 0.
+    changes(runner, run, 2, "Nivel 2: `V49__risk.sql` (ruta)");
+    changes(runner, run, 0, "Nivel 0: solo documentación");
+    view = get("/api/workflow-runs/" + run.runId());
+    assertThat(view.path("risk").path("tier").asInt()).isEqualTo(2);
+    assertThat(view.path("risk").path("summary").asString())
+        .isEqualTo("Nivel 2: `V49__risk.sql` (ruta)");
+    assertThat(view.path("risk").path("reasons").get(0).path("label").asString()).isEqualTo("ruta");
+    assertThat(view.path("stages").get(0).path("risk").path("tier").asInt()).isEqualTo(2);
+    assertThat(eventTypes(run))
+        .filteredOn(t -> t.startsWith("stage.risk") || t.startsWith("run.risk"))
+        .containsExactlyInAnyOrder(
+            "stage.risk.assessed",
+            "stage.risk.assessed",
+            "stage.risk.assessed",
+            "run.risk.raised",
+            "run.risk.raised");
+
+    // Otra ejecución del mismo repositorio no se ve afectada.
+    assertThat(get("/api/workflow-runs/" + second.runId()).path("risk").isNull()).isTrue();
+  }
+
+  private static boolean isStartOf(JsonNode command, Launched run) {
+    return command.path("agentRunId").asString().equals(run.agentId().toString());
+  }
+
+  private static void sleep(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+  }
+
+  /** El runner sube los cambios del agente con el nivel que midió. */
+  private void changes(Runner runner, Launched run, int tier, String summary) {
+    Map<String, Object> reason = new LinkedHashMap<>();
+    reason.put("path", tier == 2 ? "db/migration/V49__risk.sql" : "src/Calc.java");
+    reason.put("tier", tier);
+    reason.put("kind", tier == 2 ? "level-2" : tier == 1 ? "code" : "docs");
+    if (tier == 2) {
+      reason.put("label", "ruta");
+    }
+    Map<String, Object> risk = new LinkedHashMap<>();
+    risk.put("tier", tier);
+    risk.put("files", 1);
+    risk.put("lines", 12);
+    risk.put("reasons", List.of(reason));
+    risk.put("summary", summary);
+    byte[] content = ("{\"tier\":" + tier + "}").getBytes(StandardCharsets.UTF_8);
+    upload(
+        runner,
+        new ArtifactUpload(
+            run.agentId(),
+            null,
+            ArtifactType.GIT_CHANGES,
+            "changes-" + tier + ".json",
+            "application/json",
+            sha256(content),
+            Map.of("risk", risk)),
+        content);
+  }
+
+  @Test
   void artifactsAreStoredOnceRedactedAndServedInChunks() {
     Runner runner = register("owner");
     Launched run = launch(null);

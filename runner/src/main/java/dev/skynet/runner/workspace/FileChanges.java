@@ -98,4 +98,113 @@ public final class FileChanges {
         ? Git.text(worktree, List.of("rev-parse", "HEAD")).trim()
         : Git.commit(baseCommit);
   }
+
+  /**
+   * Las líneas que añade y cuántas quita el cambio de {@code worktree} respecto a {@code
+   * baseCommit} (AU-A), por fichero: lo confirmado y lo que no, más los nuevos sin seguimiento. Los
+   * binarios no salen. De cada fichero se leen como mucho {@code maxBytes} del contenido añadido.
+   *
+   * @param added las líneas añadidas, sin el {@code +} (las que caben en {@code maxBytes})
+   * @param addedCount cuántas líneas añade, todas
+   * @param removed cuántas líneas quita
+   */
+  public record Lines(List<String> added, int addedCount, int removed) {}
+
+  public static Map<String, Lines> lines(Path worktree, String baseCommit, int maxBytes)
+      throws IOException, InterruptedException {
+    String base = Git.commit(baseCommit);
+    Map<String, Lines> result = new java.util.LinkedHashMap<>();
+    String diff =
+        Git.text(
+            worktree,
+            List.of(
+                "-c",
+                "core.quotePath=false",
+                "diff",
+                "--no-color",
+                "--no-ext-diff",
+                "--no-renames",
+                "-U0",
+                base,
+                "--"));
+    String path = null;
+    List<String> added = new ArrayList<>();
+    int addedCount = 0;
+    int removed = 0;
+    int bytes = 0;
+    // Las cabeceras (---, +++) solo van entre «diff --git» y el primer «@@»: una línea quitada que
+    // empieza por «-- » (un comentario SQL) también sale como «--- ».
+    boolean header = false;
+    for (String line : diff.split("\n", -1)) {
+      if (line.startsWith("@@")) {
+        header = false;
+      } else if (line.startsWith("diff --git ")) {
+        header = true;
+        if (path != null) {
+          result.put(path, new Lines(List.copyOf(added), addedCount, removed));
+        }
+        path = null;
+        added = new ArrayList<>();
+        addedCount = 0;
+        removed = 0;
+        bytes = 0;
+      } else if (header && line.startsWith("+++ ")) {
+        String target = line.substring(4);
+        if (!target.equals("/dev/null")) {
+          path = target.startsWith("b/") ? target.substring(2) : target;
+        }
+      } else if (header && line.startsWith("--- ")) {
+        String source = line.substring(4);
+        if (path == null && !source.equals("/dev/null")) {
+          path = source.startsWith("a/") ? source.substring(2) : source;
+        }
+      } else if (header) {
+        continue;
+      } else if (line.startsWith("+")) {
+        addedCount++;
+        if (bytes < maxBytes) {
+          added.add(line.substring(1));
+          bytes += line.length();
+        }
+      } else if (line.startsWith("-")) {
+        removed++;
+      }
+    }
+    if (path != null) {
+      result.put(path, new Lines(List.copyOf(added), addedCount, removed));
+    }
+    for (String untracked :
+        Git.text(worktree, List.of("ls-files", "-z", "--others", "--exclude-standard"))
+            .split("\0")) {
+      if (untracked.isEmpty() || result.containsKey(untracked)) {
+        continue;
+      }
+      Path file = worktree.resolve(untracked);
+      if (!java.nio.file.Files.isRegularFile(file, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+        continue;
+      }
+      byte[] content;
+      try (var in = java.nio.file.Files.newInputStream(file)) {
+        content = in.readNBytes(maxBytes);
+      }
+      if (binary(content)) {
+        continue;
+      }
+      List<String> lines =
+          List.of(new String(content, StandardCharsets.UTF_8).split("\n", -1)).stream()
+              .filter(l -> !l.isEmpty())
+              .toList();
+      result.put(untracked, new Lines(lines, lines.size(), 0));
+    }
+    return result;
+  }
+
+  private static boolean binary(byte[] content) {
+    for (byte b : content) {
+      if (b == 0) {
+        return true;
+      }
+    }
+    return false;
+  }
 }

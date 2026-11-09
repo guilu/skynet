@@ -7,6 +7,7 @@ import dev.skynet.protocol.runner.ArtifactType;
 import dev.skynet.protocol.runner.CleanupWorkspace;
 import dev.skynet.protocol.runner.PushBranch;
 import dev.skynet.protocol.runner.ResumeFrom;
+import dev.skynet.protocol.runner.RiskRequest;
 import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.StartAgent;
@@ -24,6 +25,7 @@ import dev.skynet.runner.supervisor.ProcessSupervisor;
 import dev.skynet.runner.supervisor.SupervisedProcess;
 import dev.skynet.runner.verify.DeclaredFiles;
 import dev.skynet.runner.verify.JUnitReports;
+import dev.skynet.runner.verify.RiskClassifier;
 import dev.skynet.runner.verify.StageChecks;
 import dev.skynet.runner.workspace.GitIndexer;
 import dev.skynet.runner.workspace.GitPush;
@@ -604,14 +606,21 @@ public final class AgentExecutor implements AutoCloseable {
             }
           });
     }
-    collectChanges(id, workspace);
+    collectChanges(id, workspace, start.risk());
   }
 
-  /** Rama, commits y diff del worktree respecto a su commit de partida. */
-  private void collectChanges(UUID id, Workspace workspace) throws InterruptedException {
+  /**
+   * Rama, commits y diff del worktree respecto a su commit de partida y, si se pide ({@code risk}),
+   * el nivel de riesgo del cambio (AU-A), que va en el resumen del artefacto bajo {@code risk}.
+   */
+  private void collectChanges(UUID id, Workspace workspace, RiskRequest risk)
+      throws InterruptedException {
     Path diff = logs.resolve(id + ".diff");
     try {
       GitIndexer.Changes changes = GitIndexer.index(workspace.path(), workspace.baseCommit(), diff);
+      if (risk != null) {
+        addRisk(changes, workspace, risk);
+      }
       artifact(
           id,
           "GIT_CHANGES",
@@ -644,6 +653,28 @@ public final class AgentExecutor implements AutoCloseable {
           () -> "No se pudo indexar el worktree " + workspace.path() + ": " + e.getMessage());
     } finally {
       deleteQuietly(diff);
+    }
+  }
+
+  /**
+   * El nivel de riesgo del cambio en los cambios del agente; si no se puede medir, se avisa y ya.
+   */
+  private static void addRisk(GitIndexer.Changes changes, Workspace workspace, RiskRequest risk)
+      throws InterruptedException {
+    try {
+      RiskClassifier.Result result =
+          RiskClassifier.assess(
+              workspace.path(), workspace.baseCommit(), risk.paths(), risk.patterns());
+      Map<String, Object> measured = result.toMap();
+      measured.put("summary", result.summary());
+      if (!result.warnings().isEmpty()) {
+        measured.put("warnings", result.warnings());
+      }
+      changes.changes().put("risk", measured);
+      changes.summary().put("risk", measured);
+    } catch (IOException | RuntimeException e) {
+      LOG.warning(
+          () -> "No se pudo medir el riesgo en " + workspace.path() + ": " + e.getMessage());
     }
   }
 
@@ -737,7 +768,7 @@ public final class AgentExecutor implements AutoCloseable {
                   log,
                   Map.of(EXIT_CODE, exit.exitCode(), "bytes", Files.size(log))));
     }
-    collectChanges(id, workspace);
+    collectChanges(id, workspace, null);
 
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put(EXIT_CODE, exit.exitCode());
@@ -793,7 +824,7 @@ public final class AgentExecutor implements AutoCloseable {
     completed.put("isError", false);
     completed.put("output", result.output());
     emit(id, AgentEventType.TOOL_COMPLETED, completed);
-    collectChanges(id, workspace);
+    collectChanges(id, workspace, null);
     Map<String, Object> pushed = new LinkedHashMap<>();
     pushed.put("branch", push.branch());
     pushed.put("sha", result.sha());

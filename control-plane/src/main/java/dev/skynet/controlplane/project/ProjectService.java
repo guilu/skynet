@@ -298,7 +298,7 @@ public class ProjectService {
 
   /**
    * Cambia el comando de validación del repositorio, dónde deja sus informes JUnit y, si vienen,
-   * sus rutas protegidas (VA-A; {@code null} las deja como estaban).
+   * sus rutas protegidas (VA-A) y sus reglas de riesgo (AU-A); {@code null} las deja como estaban.
    */
   @Transactional
   public CodeRepository configureVerification(
@@ -306,17 +306,26 @@ public class ProjectService {
       UUID repositoryId,
       String command,
       List<String> reportPaths,
-      List<String> protectedPaths) {
+      List<String> protectedPaths,
+      List<String> riskPaths,
+      List<String> riskPatterns) {
     CodeRepository repository = editableRepository(projectId, repositoryId);
     repository.configureVerification(command, reportPaths);
     if (protectedPaths != null) {
       repository.configureProtectedPaths(protectedPaths);
+    }
+    if (riskPaths != null || riskPatterns != null) {
+      repository.configureRisk(
+          riskPaths == null ? repository.getRiskPaths() : riskPaths,
+          riskPatterns == null ? repository.getRiskPatterns() : riskPatterns);
     }
     repository = repositories.save(repository);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("validationCommand", repository.getValidationCommand());
     payload.put("testReportPaths", repository.getTestReportPaths());
     payload.put("protectedPaths", repository.getProtectedPaths());
+    payload.put("riskPaths", repository.getRiskPaths());
+    payload.put("riskPatterns", repository.getRiskPatterns());
     events.append(
         EventDraft.of(
             "repository",

@@ -33,6 +33,7 @@ const definition: WorkflowModel = {
   key: 'demo',
   name: null,
   description: null,
+  risk: { paths: [], patterns: [] },
   inputs: [],
   agents: [],
   stages: [stage('plan', ['spec']), stage('build', ['plan']), stage('review', ['build'])],

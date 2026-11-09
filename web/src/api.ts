@@ -37,6 +37,10 @@ export interface Repository {
   testReportPaths: string[]
   /** Rutas que ningún agente puede cambiar (VA-A), globs relativos a la raíz. */
   protectedPaths: string[]
+  /** Rutas que suben un cambio a riesgo 2 (AU-A), además de las de siempre. */
+  riskPaths: string[]
+  /** Expresiones regulares que suben a riesgo 2 una línea añadida en código (AU-A). */
+  riskPatterns: string[]
   /** Política efectiva de los agentes: la propia o, sin ella, la global. */
   agentPolicy: AgentPolicy
   /** Si el repositorio tiene política propia. */
@@ -340,6 +344,35 @@ export interface StageRun {
   quotaWait: QuotaWait | null
   /** El juez de una fase `verification` con `judge` (VA-B); null en las demás. */
   judge: StageJudge | null
+  /** El nivel de riesgo de lo que cambió la fase (AU-A); null si no se ha medido. */
+  risk: Risk | null
+}
+
+/** Un fichero que cuenta para el nivel de riesgo y por qué. */
+export interface RiskReason {
+  path: string
+  tier: RiskTier
+  kind: 'docs' | 'tests' | 'code' | 'level-2'
+  /** Por qué es nivel 2: «ruta», «esquema de BD», «secretos»… */
+  label?: string
+  /** El trozo de la línea añadida que casó con un patrón. */
+  match?: string
+}
+
+export type RiskTier = 0 | 1 | 2
+
+/**
+ * El nivel de riesgo de un cambio (AU-A), calculado del diff: 0 documentación, 1 código, 2
+ * migraciones, CI, dependencias, despliegue, seguridad o secretos.
+ */
+export interface Risk {
+  tier: RiskTier
+  /** Una línea: «Nivel 2: `V49__risk.sql` (ruta)». */
+  summary: string
+  files: number
+  /** Líneas añadidas y quitadas sin tests ni documentación. */
+  lines: number
+  reasons: RiskReason[]
 }
 
 /** La cuota que espera una fase: de qué proveedor, qué ventana y cuándo se renueva. */
@@ -666,6 +699,8 @@ export interface Run {
   /** Workflow y versión que sigue; null si la versión ya no se puede leer. */
   workflow: WorkflowRef | null
   stages: StageRun[]
+  /** El nivel de riesgo de la ejecución, el máximo de sus fases (AU-A); null si no se ha medido. */
+  risk: Risk | null
 }
 
 export interface WorkflowRef {
@@ -1067,6 +1102,8 @@ export interface WorkflowModel {
   inputs: InputDefinition[]
   agents: AgentDefinition[]
   stages: StageDefinition[]
+  /** `risk` en la raíz (AU-A): rutas y patrones que suben un cambio a riesgo 2. */
+  risk: { paths: string[]; patterns: string[] }
 }
 
 /** Una versión con su YAML, su validación y el workflow leído. */
@@ -1987,6 +2024,9 @@ export const api = {
       testReportPaths?: string[]
       /** Sin ellas, las rutas protegidas se quedan como estaban. */
       protectedPaths?: string[]
+      /** Sin ellas, las reglas de riesgo se quedan como estaban (AU-A). */
+      riskPaths?: string[]
+      riskPatterns?: string[]
     },
   ) =>
     request<Repository>(

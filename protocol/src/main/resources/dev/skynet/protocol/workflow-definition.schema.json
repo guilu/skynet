@@ -37,6 +37,23 @@
       "minItems": 1,
       "items": { "type": "string", "minLength": 1 }
     },
+    "risk": {
+      "description": "Nivel de riesgo del cambio (AU-A): rutas y patrones de las líneas añadidas que suben un cambio a riesgo 2. Se suman a los de por defecto y a los del repositorio; solo suben el nivel.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "paths": {
+          "description": "Globs del repositorio que son riesgo 2.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "patterns": {
+          "description": "Expresiones regulares de Java (sin distinguir mayúsculas) que, en una línea añadida de código, suben a riesgo 2.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "stages": {
       "description": "Fases del workflow.",
       "type": "array",

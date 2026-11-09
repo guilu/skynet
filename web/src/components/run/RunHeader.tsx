@@ -29,6 +29,7 @@ import { useIconPack } from '../icons/pack'
 import type { IconName } from '../icons/registry'
 import { headlineShare, sharesByProvider, sharesLine } from '../usage/quotaFormat'
 import { AgentActions } from './AgentActions'
+import { RiskPill } from './RiskPill'
 import { headlineAgent } from './headlineAgent'
 import { useAttempt } from '../work/attempts'
 
@@ -175,6 +176,11 @@ export function RunHeader({
               <Chip icon="branch" label="Rama">
                 <span className="mono">{branch}</span>
               </Chip>
+            )}
+            {run.risk && (
+              <li className="chip chip-risk">
+                <RiskPill risk={run.risk} />
+              </li>
             )}
           </ul>
           {run.status === 'PENDING' && run.cancelRequestedAt == null && (

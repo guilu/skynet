@@ -156,6 +156,10 @@
       "merge" : null,
       "judge" : null,
       "timeoutSeconds" : 1800
-    } ]
+    } ],
+    "risk" : {
+      "paths" : [ ],
+      "patterns" : [ ]
+    }
   }
 }

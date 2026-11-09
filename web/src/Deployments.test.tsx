@@ -40,6 +40,8 @@ const repository: Repository = {
   validationCommand: null,
   testReportPaths: [],
   protectedPaths: [],
+  riskPaths: [],
+  riskPatterns: [],
   agentPolicy: {
     allowedTools: ['Read'],
     permissionMode: 'dontAsk',

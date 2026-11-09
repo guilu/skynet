@@ -54,7 +54,17 @@ public final class DefinitionParser {
   public static final int MAX_SOURCE = 256 * 1024;
 
   static final Set<String> ROOT_KEYS =
-      Set.of("id", "version", "name", "description", "inputs", "agents", "stages", "protected");
+      Set.of(
+          "id",
+          "version",
+          "name",
+          "description",
+          "inputs",
+          "agents",
+          "stages",
+          "protected",
+          "risk");
+  static final Set<String> RISK_KEYS = Set.of("paths", "patterns");
   static final Set<String> INPUT_KEYS = Set.of("type", "required", "default", "description");
   static final Set<String> AGENT_KEYS =
       Set.of(
@@ -301,6 +311,7 @@ public final class DefinitionParser {
       List<InputDefinition> inputs = inputs(fields.get("inputs"));
       List<AgentDefinition> agents = agents(fields.get("agents"));
       workflowProtected = globs(fields.get("protected"), "protected", "protected");
+      RiskSpec risk = risk(fields.get("risk"));
       Entry stagesEntry = fields.get("stages");
       if (stagesEntry != null) {
         List<String> all = new ArrayList<>(workflowProtected);
@@ -321,8 +332,61 @@ public final class DefinitionParser {
       }
       WorkflowDefinition definition =
           new WorkflowDefinition(
-              key, name, description, inputs, agents, stages.stream().map(StageAt::stage).toList());
+              key,
+              name,
+              description,
+              inputs,
+              agents,
+              stages.stream().map(StageAt::stage).toList(),
+              risk);
       return done(key, definition);
+    }
+
+    /**
+     * {@code risk} en la raíz (AU-A): rutas y patrones que suben un cambio a nivel 2. Cada patrón
+     * tiene que ser una expresión regular válida.
+     */
+    private RiskSpec risk(Entry entry) {
+      if (entry == null || isNull(entry.value())) {
+        return RiskSpec.NONE;
+      }
+      Map<String, Entry> fields = mapping(entry.value(), "risk", RISK_KEYS, Map.of());
+      if (fields == null) {
+        return RiskSpec.NONE;
+      }
+      List<String> paths = globs(fields.get("paths"), "risk.paths", "paths");
+      List<String> patterns = new ArrayList<>();
+      Entry patternsEntry = fields.get("patterns");
+      if (patternsEntry != null && !isNull(patternsEntry.value())) {
+        if (!(patternsEntry.value() instanceof SequenceNode sequence)) {
+          error(
+              patternsEntry.value(),
+              "risk.patterns",
+              "`patterns` debe ser una lista de expresiones regulares, p. ej. `patterns:"
+                  + " [\"stripe\\\\.\"]`");
+        } else {
+          for (int i = 0; i < sequence.getValue().size(); i++) {
+            Node item = sequence.getValue().get(i);
+            String regex = scalarText(item, "risk.patterns[" + i + "]");
+            if (regex == null) {
+              continue;
+            }
+            try {
+              java.util.regex.Pattern.compile(regex);
+            } catch (java.util.regex.PatternSyntaxException e) {
+              error(
+                  item,
+                  "risk.patterns[" + i + "]",
+                  "`" + regex + "` no es una expresión regular válida: " + e.getDescription());
+              continue;
+            }
+            if (!patterns.contains(regex)) {
+              patterns.add(regex);
+            }
+          }
+        }
+      }
+      return new RiskSpec(paths, patterns);
     }
 
     /**

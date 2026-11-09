@@ -1,6 +1,8 @@
 package dev.skynet.controlplane.workflow;
 
 import dev.skynet.controlplane.definition.StageDefinition;
+import dev.skynet.controlplane.definition.StageType;
+import dev.skynet.controlplane.definition.WorkflowDefinition;
 import dev.skynet.controlplane.definition.WorkflowDefinitions;
 import dev.skynet.controlplane.memory.MemoryAgents;
 import dev.skynet.controlplane.project.AgentDefaults;
@@ -9,8 +11,10 @@ import dev.skynet.controlplane.workitem.WorkItem;
 import dev.skynet.protocol.AgentProviderKind;
 import dev.skynet.protocol.AgentProviderKind.Capability;
 import dev.skynet.protocol.runner.AgentLimits;
+import dev.skynet.protocol.runner.RiskRequest;
 import dev.skynet.protocol.runner.StartAgent;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -177,6 +181,10 @@ class AgentQueue {
         sent = protectedNote(protectedPaths) + "\n\n" + sent;
       }
     }
+    RiskRequest risk = noAgent ? null : riskRequest(run, stage, repository, agent, invocation);
+    if (risk != null && (!risk.paths().isEmpty() || !risk.patterns().isEmpty())) {
+      spawned.put("risk", Map.of("paths", risk.paths(), "patterns", risk.patterns()));
+    }
     if (memory != null) {
       Map<String, Object> memoryPayload = new LinkedHashMap<>();
       memoryPayload.put("mode", memory);
@@ -238,7 +246,8 @@ class AgentQueue {
                 agent.isCommand() ? null : agent.getProvider(),
                 memory == null ? null : memory.toLowerCase(Locale.ROOT),
                 invocation.push(),
-                protectedPaths),
+                protectedPaths,
+                risk),
             invocation.runnerId()));
     return agent;
   }
@@ -252,6 +261,37 @@ class AgentQueue {
             .stage(stage.getStageKey())
             .orElse(null);
     return StageCheckList.protectedPaths(definition, repository);
+  }
+
+  /**
+   * Lo que pide medir el nivel de riesgo al terminar (AU-A): solo un agente de una fase {@code
+   * agent} o {@code parallel} que trabaja en el worktree de la ejecución, con las reglas del
+   * workflow y del repositorio. Un juez, un escéptico o quien ejecuta la guía trabajan en una copia
+   * que no llega al cambio: no se mide.
+   */
+  private RiskRequest riskRequest(
+      WorkflowRun run,
+      StageRun stage,
+      CodeRepository repository,
+      AgentRun agent,
+      Invocation invocation) {
+    if (agent.isJudge()
+        || agent.isSkeptic()
+        || agent.isGuide()
+        || (invocation.workspace() != null && invocation.workspace().copy())) {
+      return null;
+    }
+    WorkflowDefinition workflow = definitions.published(run.getDefinitionId()).definition();
+    StageDefinition definition = workflow.stage(stage.getStageKey()).orElse(null);
+    if (definition == null
+        || (definition.type() != StageType.AGENT && definition.type() != StageType.PARALLEL)) {
+      return null;
+    }
+    List<String> paths = new ArrayList<>(workflow.risk().paths());
+    List<String> patterns = new ArrayList<>(workflow.risk().patterns());
+    repository.getRiskPaths().stream().filter(p -> !paths.contains(p)).forEach(paths::add);
+    repository.getRiskPatterns().stream().filter(p -> !patterns.contains(p)).forEach(patterns::add);
+    return new RiskRequest(paths, patterns);
   }
 
   /**

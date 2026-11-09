@@ -1078,6 +1078,53 @@ class DefinitionParserTest {
   }
 
   @Test
+  void theRiskAtTheRootAddsLevelTwoPathsAndPatterns() {
+    Parsed parsed =
+        parse(
+            """
+            id: con-riesgo
+            risk:
+              paths: [infra/**, "**/billing/**"]
+              patterns: ['\\bfeature_flag\\b']
+            stages:
+              - id: implementar
+                type: agent
+                prompt: Implementa
+            """);
+    assertThat(messages(parsed, Severity.ERROR)).isEmpty();
+    assertThat(parsed.definition().risk())
+        .isEqualTo(
+            new RiskSpec(List.of("infra/**", "**/billing/**"), List.of("\\bfeature_flag\\b")));
+    assertThat(
+            parse(
+                    """
+                    id: sin-riesgo
+                    stages:
+                      - id: implementar
+                        type: agent
+                        prompt: Implementa
+                    """)
+                .definition()
+                .risk())
+        .isEqualTo(RiskSpec.NONE);
+
+    Parsed wrong =
+        parse(
+            """
+            id: mal
+            risk:
+              patterns: ['(sin cerrar']
+              levels: [3]
+            stages:
+              - id: implementar
+                type: agent
+                prompt: Implementa
+            """);
+    assertThat(errors(wrong)).extracting(Problem::path).contains("risk.patterns[0]");
+    assertThat(errors(wrong)).anySatisfy(p -> assertThat(p.message()).contains("levels"));
+  }
+
+  @Test
   void protectedPathsAndTestsIntactBecomeChecks() {
     Parsed parsed =
         parse(

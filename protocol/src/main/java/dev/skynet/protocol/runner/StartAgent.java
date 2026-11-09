@@ -38,6 +38,8 @@ import java.util.UUID;
  * @param protectedPaths globs relativos al worktree que el agente no puede cambiar (VA-A): Claude
  *     Code los recibe como reglas {@code deny}; los demás proveedores, solo en el prompt. Vacío si
  *     no hay ninguno
+ * @param risk si hay que medir el nivel de riesgo del cambio al terminar (AU-A), con lo que suman
+ *     el workflow y el repositorio; {@code null} si no
  */
 public record StartAgent(
     UUID workflowRunId,
@@ -58,7 +60,8 @@ public record StartAgent(
     String provider,
     String memory,
     PushBranch push,
-    List<String> protectedPaths) {
+    List<String> protectedPaths,
+    RiskRequest risk) {
 
   public static final String MEMORY_READ = "read";
   public static final String MEMORY_WRITE = "write";
@@ -96,6 +99,50 @@ public record StartAgent(
       throw new IllegalArgumentException(
           "Un push solo sube un worktree existente: sin comando, reanudación, salida ni memoria");
     }
+  }
+
+  /** Invocación sin medir el riesgo. */
+  public StartAgent(
+      UUID workflowRunId,
+      String workItemKey,
+      String repositoryPath,
+      String baseBranch,
+      UUID sessionId,
+      String prompt,
+      List<String> allowedTools,
+      String permissionMode,
+      String model,
+      AgentLimits limits,
+      ResumeFrom resume,
+      List<String> environment,
+      WorkspaceRef workspace,
+      String command,
+      String outputSchema,
+      String provider,
+      String memory,
+      PushBranch push,
+      List<String> protectedPaths) {
+    this(
+        workflowRunId,
+        workItemKey,
+        repositoryPath,
+        baseBranch,
+        sessionId,
+        prompt,
+        allowedTools,
+        permissionMode,
+        model,
+        limits,
+        resume,
+        environment,
+        workspace,
+        command,
+        outputSchema,
+        provider,
+        memory,
+        push,
+        protectedPaths,
+        null);
   }
 
   /** Invocación sin rutas protegidas. */
@@ -274,7 +321,9 @@ public record StartAgent(
         schema,
         provider,
         memory,
-        push);
+        push,
+        protectedPaths,
+        risk);
   }
 
   /** Proveedor efectivo: {@code claude-code} si no se indica. */
