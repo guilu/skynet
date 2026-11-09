@@ -84,7 +84,7 @@ stages:
 - `memory`: solo en las fases `agent` y `parallel` (vale para todos sus hijos). Cómo usa su agente la memoria del proyecto: `write` (por defecto) recibe el bloque de memoria al principio del prompt y tiene las herramientas para buscar y guardar; `read` recibe el bloque y puede buscar (`mem_search`, `mem_get`), pero no guardar, lo que viene bien en un revisor o un investigador; `off` no recibe ni el bloque ni las herramientas. Ver «Memoria del proyecto».
 - `condition`: la fase solo se ejecuta si es verdadera; si es falsa, se omite. Ver «Condiciones».
 - `artifacts`, `checks`, `scope`, `protected` y `allowTestRemoval`: lo que Skynet comprueba en el worktree de la fase antes de darla por buena. Ver «Verificación de una fase».
-- `action`, `risk` y `revise`: solo en las fases `type: human-approval`. Ver «Puertas de aprobación».
+- `action`, `risk`, `revise` y `autoApprove`: solo en las fases `type: human-approval`. Ver «Puertas de aprobación» y «Revisión y fusión según el riesgo (AU-C)».
 - `pullRequest`: solo en las fases `type: github-pr`. Ver «Entrega por PR».
 - `required`, `ifNoChecks`, `fix` y `maxRounds`: solo en las fases `type: github-check` (`fix` y `maxRounds`, también en una `verification` con `judge`). Ver «Esperar la CI de la PR».
 - `judge`: solo en las fases `type: verification`. Ver «Juez con rúbrica (VA-B)» y «Verificación adversarial (VA-C)».
@@ -249,7 +249,7 @@ stages:
 - **En la web:** en el progreso de la ejecución, la fase dice «Verificando» mientras se comprueba y, si falla, qué no pasó («No pasó artifacts: `openspec/proposal.md` no existe»). Al abrirla se ve cada comprobación con ✓, ✗ y su motivo, y los datos de otras fases que lee su prompt («Recibe spec.output.summary»). La pestaña **Verificación** del agente pone lo comprobado junto a lo que declaró (su respuesta y su salida estructurada). El resumen del workflow enseña qué comprueba cada fase y, al publicar, se avisa de los comandos de `checks` y de las fases que pasan el comando de verificación del repositorio.
 - La plantilla **Especificar, planificar e implementar** es un ejemplo completo: `spec` deja `openspec/proposal.md` y devuelve un resumen, `plan` lo recibe en su prompt, la puerta `aprobar-plan` espera a que alguien apruebe el plan (o pida cambios, que corrige `plan`) e `implement` solo termina bien con `checks: [tests, diff]`.
 
-**Nivel de riesgo del cambio** (AU-A). Skynet mide cuánto riesgo tiene lo que cambia una ejecución **a partir del diff, nunca de lo que diga el agente**. Por ahora solo mide: no cambia nada de lo que se ejecuta. AU-C usará el nivel para decidir cuánto se juzga y si la fusión necesita a una persona.
+**Nivel de riesgo del cambio** (AU-A). Skynet mide cuánto riesgo tiene lo que cambia una ejecución **a partir del diff, nunca de lo que diga el agente**. Con el nivel, una fase `judge` puede pasar sin juez o sin escépticos (`minRisk`, `refuteMinRisk`) y una puerta de fusión puede aprobarse sola (`autoApprove`), ver «Revisión y fusión según el riesgo (AU-C)».
 
 - **Los niveles:**
   - **0**: todo lo que cambia es documentación o texto: `*.md`, `*.txt`, `*.rst`, `*.adoc`, `docs/**`, `plans/**`, imágenes, `LICENSE` y `NOTICE`;
@@ -347,6 +347,7 @@ stages:
 ```
 
 - `refute`: de 0 (por defecto, sin refutar) a 5. `refuteAgent`: un agente de `agents`; sin él, el del primer juez. Con `refuteAgent` y sin `refute`, se avisa al publicar.
+- `refuteMinRisk` (AU-C): el nivel de riesgo desde el que corren los escépticos, de 0 (por defecto, siempre) a 2. Por debajo, la fase lo dice: «Nivel 1: sin escépticos (refutan desde el nivel 2)». Sin medir el nivel, corren.
 - Cada escéptico trabaja en una copia del worktree, **en solo lectura** y sin memoria, como un juez. Solo ve la tarea, el hallazgo (fichero, línea y texto) y de dónde mirar el cambio; ni la nota del juez ni lo que dijo el autor. Devuelve si lo refuta y por qué, y se le pide que no lo refute si duda.
 - Un hallazgo se descarta si lo refuta **más de la mitad** de sus escépticos: con 2, los dos; un empate no lo descarta. Un escéptico que no termina bien no lo refuta. Los `minor` no se refutan: no bloquean.
 - **Topes:** como mucho **8 hallazgos por ronda** (los primeros, en el orden de los jueces) y **20 llamadas a agentes por fase**, jueces y escépticos de todas las rondas. Si no caben todos, los demás cuentan sin refutar y la fase lo dice: «Se han intentado refutar 8 de 11 hallazgos que bloquean (como mucho 8 por ronda); los demás cuentan sin refutar». Nada de recortes en silencio.
@@ -439,8 +440,41 @@ stages:
   - nivel 0: tampoco (`stage.judge.delta.skipped`);
   - nivel 1: lo juzga el primer juez de la fase, en una copia del worktree, solo lo que cambió desde `judgedSha`;
   - nivel 2, o si no hay medida del delta: lo juzga todo el panel.
-- Mientras juzgan, la espera de la CI está en `JUDGING` (eventos `stage.judge.delta.started` y `stage.judge.delta.verdict`). Si suspenden, la fase de CI falla con «El juez suspende lo que se cambió después de aprobar: …». Aún no se llama a los escépticos (llega con AU-C), ni se repiten las fases `guide`.
+- Mientras juzgan, la espera de la CI está en `JUDGING` (eventos `stage.judge.delta.started` y `stage.judge.delta.verdict`). Si encuentran algo que bloquea y el nivel del delta llega a `refuteMinRisk` (AU-C), los escépticos de `refute` intentan refutarlo antes de decidir (`stage.judge.delta.refute.started`; el delta queda en `REFUTING`). Si suspenden, la fase de CI falla con «El juez suspende lo que se cambió después de aprobar: …». No se repiten las fases `guide`.
 - La aprobación de la fusión lo dice: «Juzgado en `abc1234` · se fusiona `def5678` · delta revisado (nivel 1, 4 / 5)». El delta de cada fase de CI queda en la tabla `judged_delta`.
+
+**Revisión y fusión según el riesgo (AU-C).** El nivel de riesgo (AU-A) decide cuánto se revisa y si la fusión necesita a una persona:
+
+```yaml
+  - id: juzgar
+    type: verification
+    dependsOn: [implementar]
+    judge:
+      agents: [calidad, seguridad]
+      refute: 2
+      minRisk: 1          # un cambio de nivel 0 (solo documentación) pasa sin juez
+      refuteMinRisk: 2    # los escépticos, solo en el nivel 2
+  # …pr y ci…
+  - id: aprobar-fusion
+    type: human-approval
+    dependsOn: [ci]
+    action: Fusionar la PR
+    autoApprove: {maxRisk: 1, maxLines: 400}   # o `true`, con estos mismos límites
+  - id: fusionar
+    type: github-merge
+    dependsOn: [aprobar-fusion]
+```
+
+- **`judge.minRisk`** (de 0 a 2; por defecto 0, siempre se juzga): si el nivel de lo que cambiaron los agentes en el worktree que se juzga no llega, la fase termina bien sin llamar a los jueces, con `stage.judge.skipped` y «Sin juez: nivel 0 (juzga desde el nivel 1)». Las comprobaciones de la fase sí se hacen. Si algún agente de ese worktree no tiene su nivel medido, se juzga. No vale en una guía (`guide`).
+- **`autoApprove`** en una puerta `human-approval` que desbloquea una fase `github-merge`. La primera vez que pregunta (no tras pedir cambios), se aprueba sola si se cumple **todo**:
+  - el repositorio tiene encendido «Fusionar sola lo de riesgo 0-1» en **Configurar verificación** (`autoMerge`; viene apagado);
+  - el nivel de la ejecución es como mucho `maxRisk` (0 o 1; por defecto 1);
+  - las líneas de código cambiadas (sin tests ni documentación, como las mide AU-A) son como mucho `maxLines` (por defecto 400);
+  - la CI de la PR está en verde;
+  - lo que se fusiona está juzgado (AU-B): el juez aprobó ese commit, el delta pasó o no hacía falta juzgarlo, o la fase pasó sin juez por `minRisk` y el nivel no ha subido desde entonces;
+  - Skynet no ha aprobado solo ya 10 puertas hoy (UTC) en el repositorio (`SKYNET_AUTONOMY_MAX_MERGES_PER_DAY`).
+- Si se cumple, decide el actor `skynet` con un comentario que lista lo que se cumplió, y la fusión sigue sin esperar (`approval.granted` con `auto: true`; no avisa de que hay algo pendiente). Si falla una sola, pregunta como siempre y la puerta dice por qué: «No se aprueba sola: nivel 2: `db/migration/V2__x.sql` (ruta)». En la página de la aprobación sale cada condición con ✓ o ✗ (`evidence.autoApprove`).
+- Las tres fases `aprobar-fusion` de los workflows iniciales llevan `autoApprove: {maxRisk: 1, maxLines: 400}` y sus `juzgar`, `minRisk: 1` y `refuteMinRisk: 2`. `scripts/seed-workflows.sh --actualizar` publica las versiones nuevas. Mientras el interruptor del repositorio esté apagado, la fusión pregunta como antes; lo que sí cambia con esas versiones es que un cambio de solo documentación pasa sin juez y los escépticos solo corren en el nivel 2.
 
 **Fusionar la PR.** Una fase `type: github-merge` fusiona la PR de la ejecución, normalmente detrás de su `github-check` y de una puerta que lo aprueba (EN-C):
 

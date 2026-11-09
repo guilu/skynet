@@ -81,6 +81,7 @@ class CiCheckIT extends IntegrationTest {
   @Autowired private CiChecks ciChecks;
   @Autowired private ApplicationEventPublisher publisher;
 
+  private String projectId;
   private String repositoryId;
   private String workItemId;
   private String workItemKey;
@@ -89,8 +90,7 @@ class CiCheckIT extends IntegrationTest {
   void setUp() {
     GITHUB.reset();
     GITHUB.install(7, "guilu", "guilu/demo-repo");
-    String projectId =
-        post("/api/projects", Map.of("key", "CIX", "name", "CI")).path("id").asString();
+    projectId = post("/api/projects", Map.of("key", "CIX", "name", "CI")).path("id").asString();
     repositoryId =
         post(
                 "/api/projects/" + projectId + "/repositories",
@@ -422,6 +422,12 @@ class CiCheckIT extends IntegrationTest {
 
   /** Un juez termina en su copia, con la instantánea de lo que vio y su nota. */
   private void judged(Runner runner, JsonNode command, String path, int score) {
+    judged(runner, command, path, score, List.of());
+  }
+
+  /** Un juez termina con su nota y sus hallazgos. */
+  private void judged(
+      Runner runner, JsonNode command, String path, int score, List<Map<String, Object>> found) {
     Events events = new Events(UUID.fromString(command.path("agentRunId").asString()));
     events.add(
         AgentEventType.WORKSPACE_READY,
@@ -447,7 +453,7 @@ class CiCheckIT extends IntegrationTest {
                 "criteria",
                 List.of(Map.of("id", "resuelve", "score", score, "reason", "motivo")),
                 "findings",
-                List.of(),
+                found,
                 "summary",
                 "Resumen")));
     events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 0));
@@ -514,6 +520,222 @@ class CiCheckIT extends IntegrationTest {
       }
     }
     throw new AssertionError("No llegó la puerta de " + runId);
+  }
+
+  /** Como {@link #JUDGED}, con el juez según el nivel y la puerta que se aprueba sola (AU-C). */
+  static final String AUTO =
+      JUDGED
+          .replace("id: juzgada-ci", "id: autonoma-ci")
+          .replace(
+              "      rubric:",
+              "      minRisk: 1\n      refute: 1\n      refuteMinRisk: 2\n      rubric:")
+          .replace("    action: Fusionar", "    action: Fusionar\n    autoApprove: true");
+
+  @Test
+  void aSmallJudgedChangeIsApprovedAloneWhenTheRepositoryAllowsIt() {
+    autonomy(true);
+    Runner runner = register("portatil");
+    String runId = launch(publish(AUTO)).path("id").asString();
+    judgedThenGreen(runner, runId, Map.of("tier", 1, "files", 1, "lines", 12, "base", "abc1234"));
+
+    awaitStage(runId, "aprobar", "SUCCEEDED");
+    Map<String, Object> decision =
+        jdbc.sql("SELECT action, actor, comment FROM approval_decision").query().singleRow();
+    assertThat(decision).containsEntry("action", "APPROVE").containsEntry("actor", "skynet");
+    assertThat((String) decision.get("comment"))
+        .startsWith("Se aprueba sola (AU-C):")
+        .contains("Nivel 1 (como mucho 1)")
+        .contains("12 líneas de código (como mucho 400)")
+        .contains("La CI de la PR está en verde")
+        .contains("sin cambios desde el juicio");
+    assertThat(eventTypes(runId)).containsSubsequence("approval.requested", "approval.granted");
+    JsonNode evidence =
+        get("/api/approvals/"
+                + jdbc.sql("SELECT id FROM approval_request").query(String.class).single())
+            .path("evidence");
+    assertThat(evidence.path("autoApprove").path("approved").asBoolean()).isTrue();
+  }
+
+  @Test
+  void withTheSwitchOffTheGateAsksAndSaysWhy() {
+    Runner runner = register("portatil");
+    String runId = launch(publish(AUTO)).path("id").asString();
+    judgedThenGreen(runner, runId, Map.of("tier", 1, "files", 1, "lines", 12, "base", "abc1234"));
+
+    JsonNode auto = awaitApproval(runId).path("evidence").path("autoApprove");
+    assertThat(auto.path("approved").asBoolean()).isFalse();
+    assertThat(auto.path("note").asString())
+        .isEqualTo("No se aprueba sola: la autonomía del repositorio está apagada");
+    assertThat(stageStatuses(runId)).containsEntry("aprobar", "WAITING_FOR_APPROVAL");
+  }
+
+  @Test
+  void aChangeOfLevelTwoWaitsForAPersonWithTheReason() {
+    autonomy(true);
+    Runner runner = register("portatil");
+    String runId = launch(publish(AUTO)).path("id").asString();
+    judgedThenGreen(
+        runner,
+        runId,
+        Map.of(
+            "tier",
+            2,
+            "files",
+            1,
+            "lines",
+            3,
+            "base",
+            "abc1234",
+            "summary",
+            "Nivel 2: `db/migration/V2__x.sql` (ruta)"));
+
+    JsonNode auto = awaitApproval(runId).path("evidence").path("autoApprove");
+    assertThat(auto.path("approved").asBoolean()).isFalse();
+    assertThat(auto.path("note").asString())
+        .isEqualTo("No se aprueba sola: nivel 2: `db/migration/V2__x.sql` (ruta)");
+  }
+
+  @Test
+  void aChangeOfLevelZeroSkipsTheJudgeAndIsApprovedAlone() {
+    autonomy(true);
+    Runner runner = register("portatil");
+    String runId = launch(publish(AUTO)).path("id").asString();
+    JsonNode implement = awaitStart(runner, "Implementa");
+    upload(
+        runner,
+        UUID.fromString(implement.path("agentRunId").asString()),
+        Map.of("risk", Map.of("tier", 0, "files", 1, "lines", 0, "base", "abc1234")));
+    complete(runner, implement, Map.of());
+    awaitStage(runId, "juzgar", "SUCCEEDED");
+    assertThat(eventTypes(runId))
+        .contains("stage.judge.skipped")
+        .doesNotContain("stage.judge.started");
+    assertThat(
+            jdbc.sql("SELECT status FROM stage_judge WHERE workflow_run_id = ?::uuid")
+                .param(runId)
+                .query(String.class)
+                .single())
+        .isEqualTo("SKIPPED");
+    green(runner, runId);
+
+    awaitStage(runId, "aprobar", "SUCCEEDED");
+    assertThat(jdbc.sql("SELECT comment FROM approval_decision").query(String.class).single())
+        .contains("Nivel 0: sin juez (juzga desde el nivel 1)");
+  }
+
+  @Test
+  void belowRefuteMinRiskTheSkepticsDoNotRun() {
+    Runner runner = register("portatil");
+    String runId = launch(publish(AUTO)).path("id").asString();
+    JsonNode implement = awaitStart(runner, "Implementa");
+    upload(
+        runner,
+        UUID.fromString(implement.path("agentRunId").asString()),
+        Map.of("risk", Map.of("tier", 1, "files", 1, "lines", 4, "base", "abc1234")));
+    complete(runner, implement, Map.of());
+    List<JsonNode> panel = claimJudges(runner, 2);
+    judged(runner, panel.get(0), "/w/demo/juez", 5, List.of(blocking("calc.py", "Falla")));
+    judged(runner, panel.get(1), "/w/demo/revisor", 5);
+    awaitStage(runId, "juzgar", "FAILED");
+    assertThat(eventTypes(runId)).doesNotContain("stage.judge.refute.started");
+    assertThat(
+            jdbc.sql("SELECT refute_note FROM stage_judge WHERE workflow_run_id = ?::uuid")
+                .param(runId)
+                .query(String.class)
+                .single())
+        .isEqualTo("Nivel 1: sin escépticos (refutan desde el nivel 2)");
+  }
+
+  @Test
+  void theSkepticsCheckWhatTheDeltaJudgesFoundFromRefuteMinRisk() {
+    Runner runner = register("portatil");
+    String runId =
+        launch(publish(AUTO.replace("refuteMinRisk: 2", "refuteMinRisk: 1"))).path("id").asString();
+    JsonNode fix = judgedThenRed(runner, runId);
+    fixed(runner, fix, Map.of("tier", 2, "files", 1, "lines", 3, "base", JUDGED_SHA));
+    List<JsonNode> judges = claimJudges(runner, 2);
+    judged(runner, judges.get(0), "/w/demo/delta-1", 5, List.of(blocking("calc.py", "Rompe")));
+    judged(runner, judges.get(1), "/w/demo/delta-2", 5);
+    List<JsonNode> skeptics = claimJudges(runner, 1);
+    assertThat(taskPrompt(skeptics.getFirst().path("start"))).contains("Rompe");
+    refuted(runner, skeptics.getFirst());
+    awaitStage(runId, "ci", "SUCCEEDED");
+    assertThat(eventTypes(runId))
+        .containsSubsequence(
+            "stage.judge.delta.started",
+            "stage.judge.delta.refute.started",
+            "stage.judge.delta.verdict",
+            "stage.github.ci.passed");
+    assertThat(jdbc.sql("SELECT status FROM judged_delta").query(String.class).single())
+        .isEqualTo("PASSED");
+  }
+
+  /** Enciende o apaga la autonomía del repositorio (AU-C). */
+  private void autonomy(boolean on) {
+    JsonNode repository =
+        put(
+            "/api/projects/" + projectId + "/repositories/" + repositoryId + "/verification",
+            Map.of("autoMerge", on));
+    assertThat(repository.path("autoMerge").asBoolean()).isEqualTo(on);
+  }
+
+  private static Map<String, Object> blocking(String file, String text) {
+    return Map.of("file", file, "severity", "blocking", "text", text);
+  }
+
+  private List<JsonNode> claimJudges(Runner runner, int count) {
+    List<JsonNode> claimed = new ArrayList<>();
+    for (int i = 0; i < 30 && claimed.size() < count; i++) {
+      claimed.addAll(runner.claim());
+    }
+    assertThat(claimed).hasSize(count);
+    return claimed;
+  }
+
+  /** Un escéptico refuta el hallazgo. */
+  private void refuted(Runner runner, JsonNode command) {
+    Events events = new Events(UUID.fromString(command.path("agentRunId").asString()));
+    events.add(
+        AgentEventType.WORKSPACE_READY,
+        Map.of("path", "/w/demo/esceptico", "branch", "skynet/copia", "baseCommit", "abc1234"));
+    events.add(AgentEventType.SESSION_STARTED, Map.of("sessionId", UUID.randomUUID().toString()));
+    events.add(
+        AgentEventType.RESULT,
+        Map.of(
+            "subtype",
+            "success",
+            "isError",
+            false,
+            "structuredOutput",
+            Map.of("refuted", true, "reason", "No pasa")));
+    events.add(AgentEventType.PROCESS_EXITED, Map.of("exitCode", 0));
+    runner.send(events);
+  }
+
+  /**
+   * Implementa con el nivel {@code risk}, los dos jueces aprueban, se abre la PR y su CI pasa a la
+   * primera.
+   */
+  private void judgedThenGreen(Runner runner, String runId, Map<String, Object> risk) {
+    JsonNode implement = awaitStart(runner, "Implementa");
+    upload(runner, UUID.fromString(implement.path("agentRunId").asString()), Map.of("risk", risk));
+    complete(runner, implement, Map.of());
+    List<JsonNode> panel = claimJudges(runner, 2);
+    judged(runner, panel.get(0), "/w/demo/juez", 5);
+    judged(runner, panel.get(1), "/w/demo/revisor", 5);
+    awaitStage(runId, "juzgar", "SUCCEEDED");
+    green(runner, runId);
+  }
+
+  /** La rama se sube, se abre la PR y su CI pasa. */
+  private void green(Runner runner, String runId) {
+    sendPushed(runner, claimJudges(runner, 1).getFirst(), SHA);
+    pullRequests.openPending();
+    awaitStage(runId, "ci", "RUNNING");
+    GITHUB.checkRun(SHA, "test", "github-actions", "completed", "success");
+    jdbc.sql("UPDATE github_ci_wait SET next_check_at = now() - interval '1 second'").update();
+    ciChecks.checkDue();
+    awaitStage(runId, "ci", "SUCCEEDED");
   }
 
   @Test
@@ -821,6 +1043,10 @@ class CiCheckIT extends IntegrationTest {
 
   private JsonNode post(String path, Object body) {
     return http.post().uri(path).body(body).retrieve().body(JsonNode.class);
+  }
+
+  private JsonNode put(String path, Object body) {
+    return http.put().uri(path).body(body).retrieve().body(JsonNode.class);
   }
 
   private JsonNode get(String path) {

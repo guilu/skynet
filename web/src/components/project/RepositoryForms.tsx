@@ -135,6 +135,7 @@ export function VerificationForm({
   const [protectedPaths, setProtectedPaths] = useState((repository.protectedPaths ?? []).join('\n'))
   const [riskPaths, setRiskPaths] = useState((repository.riskPaths ?? []).join('\n'))
   const [riskPatterns, setRiskPatterns] = useState((repository.riskPatterns ?? []).join('\n'))
+  const [autoMerge, setAutoMerge] = useState(repository.autoMerge ?? false)
   const missing = PROTECTED_SUGGESTIONS.filter((s) => !lines(protectedPaths).includes(s))
   const save = useMutation({
     mutationFn: () =>
@@ -144,6 +145,7 @@ export function VerificationForm({
         protectedPaths: lines(protectedPaths),
         riskPaths: lines(riskPaths),
         riskPatterns: lines(riskPatterns),
+        autoMerge,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['repositories', projectId] })
@@ -223,6 +225,18 @@ export function VerificationForm({
         <span className="hint">
           Una línea añadida en código que casa con alguno sube el cambio a riesgo 2, sin distinguir
           mayúsculas.
+        </span>
+      </label>
+      <label className="switch">
+        <input
+          type="checkbox"
+          checked={autoMerge}
+          onChange={(e) => setAutoMerge(e.target.checked)}
+        />
+        <span>
+          Fusionar sola lo de riesgo 0-1. Las puertas con <code>autoApprove</code> se aprueban sin
+          preguntar si el cambio es de riesgo 0 o 1, pequeño, con la CI en verde y juzgado. Como
+          mucho 10 al día; lo demás sigue preguntando.
         </span>
       </label>
       <div className="form-actions">

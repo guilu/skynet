@@ -41,6 +41,8 @@ export interface Repository {
   riskPaths: string[]
   /** Expresiones regulares que suben a riesgo 2 una línea añadida en código (AU-A). */
   riskPatterns: string[]
+  /** Si las puertas con `autoApprove` se aprueban solas (AU-C). Viene apagado. */
+  autoMerge?: boolean
   /** Política efectiva de los agentes: la propia o, sin ella, la global. */
   agentPolicy: AgentPolicy
   /** Si el repositorio tiene política propia. */
@@ -539,7 +541,7 @@ export interface JudgedMerge {
   /** El commit de la PR. */
   mergeSha: string | null
   /** Qué pasó con lo de en medio; null si cambió y no se juzgó. */
-  status: 'UNCHANGED' | 'SKIPPED' | 'JUDGING' | 'PASSED' | 'FAILED' | null
+  status: 'UNCHANGED' | 'SKIPPED' | 'JUDGING' | 'REFUTING' | 'PASSED' | 'FAILED' | null
   /** El nivel de riesgo del delta, si se midió. */
   tier?: number | null
   /** La nota de los jueces del delta, si lo juzgaron. */
@@ -575,6 +577,16 @@ export interface ApprovalEvidence {
   } | null
   /** Si la aprobación desbloquea una fase `github-merge`, la PR que fusionará; si no, null. */
   pullRequest: ApprovalPullRequest | null
+  /** Si la puerta tiene `autoApprove` (AU-C): si se aprobó sola y cada condición. */
+  autoApprove: AutoApproveCheck | null
+}
+
+/** Lo que miró Skynet para aprobar sola una puerta de fusión (AU-C). */
+export interface AutoApproveCheck {
+  approved: boolean
+  /** «Se aprueba sola: …» o «No se aprueba sola: nivel 2 por …». */
+  note: string
+  conditions: { id: string; met: boolean; text: string }[]
 }
 
 /** Una decisión o un comentario, que no se reescribe. */
@@ -582,7 +594,7 @@ export interface ApprovalDecision {
   id: string
   action: ApprovalAction | 'CANCEL'
   comment: string | null
-  /** El usuario de la web, o `skynet` si se canceló con su ejecución. */
+  /** El usuario de la web, o `skynet` si se canceló con su ejecución o se aprobó sola (AU-C). */
   actor: string
   createdAt: string
 }
@@ -1054,7 +1066,8 @@ export interface JudgeFinding {
 
 /** El juez de una fase en una ejecución: en qué ronda va y el veredicto de la última ronda. */
 export interface StageJudge {
-  status: 'CHECKING' | 'JUDGING' | 'REFUTING' | 'FIXING' | 'PASSED' | 'FAILED'
+  /** SKIPPED: el cambio no llegó a `minRisk` y la fase pasó sin juez (AU-C). */
+  status: 'CHECKING' | 'JUDGING' | 'REFUTING' | 'FIXING' | 'PASSED' | 'FAILED' | 'SKIPPED'
   round: number
   /** La ronda de `judgements`: la anterior mientras se corrige. */
   shownRound: number
@@ -1103,6 +1116,10 @@ export interface StageJudge {
     /** «2 de 3 pasos pasan · 1 no se pudo»; null antes de la primera ronda. */
     note: string | null
   } | null
+  /** El nivel de riesgo de lo que se juzgó (AU-C); null o ausente sin medir. */
+  risk?: number | null
+  /** El nivel desde el que se juzga; 0 siempre. */
+  minRisk?: number
 }
 
 /** Una comprobación de fase: `artifacts`, `tests`, `diff`, `commit`, `scope` o `command`. */
@@ -2048,6 +2065,8 @@ export const api = {
       /** Sin ellas, las reglas de riesgo se quedan como estaban (AU-A). */
       riskPaths?: string[]
       riskPatterns?: string[]
+      /** Sin él, el interruptor se queda como estaba (AU-C). */
+      autoMerge?: boolean
     },
   ) =>
     request<Repository>(

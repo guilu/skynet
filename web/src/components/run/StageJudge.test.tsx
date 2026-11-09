@@ -98,4 +98,14 @@ describe('StageJudge', () => {
     expect(screen.getByText(/Refutado: Ya se comprueba en la línea 10/)).toBeInTheDocument()
     expect(screen.getByText(/No se pudo refutar: Pasa con -0,5/)).toBeInTheDocument()
   })
+
+  it('dice que la fase pasó sin juez por el nivel del cambio (AU-C)', () => {
+    render(
+      <StageJudge
+        judge={{ ...judge, status: 'SKIPPED', judgements: [], findings: [], risk: 0, minRisk: 1 }}
+      />,
+    )
+    expect(screen.getByText('Sin juez')).toBeInTheDocument()
+    expect(screen.getByText(/nivel 0: juzga desde el nivel 1/)).toBeInTheDocument()
+  })
 })

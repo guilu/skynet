@@ -73,14 +73,16 @@ class ProjectController {
    * Verificación del repositorio. Sin {@code validationCommand} no se verifica; sin {@code
    * testReportPaths} se buscan los informes JUnit de Gradle y Maven. {@code protectedPaths} son las
    * rutas que ningún agente puede cambiar (VA-A); {@code riskPaths} y {@code riskPatterns}, lo que
-   * sube un cambio a nivel de riesgo 2 (AU-A). Sin ellas, se quedan como estaban.
+   * sube un cambio a nivel de riesgo 2 (AU-A); {@code autoMerge}, si las puertas con {@code
+   * autoApprove} se aprueban solas (AU-C). Sin ellas, se quedan como estaban.
    */
   record VerificationSettings(
       @Size(max = 2000) String validationCommand,
       List<@Size(max = 500) String> testReportPaths,
       @Size(max = 50) List<@Size(max = 500) String> protectedPaths,
       @Size(max = 50) List<@Size(max = 500) String> riskPaths,
-      @Size(max = 50) List<@Size(max = 500) String> riskPatterns) {}
+      @Size(max = 50) List<@Size(max = 500) String> riskPatterns,
+      Boolean autoMerge) {}
 
   /**
    * Política propia de los agentes del repositorio. Sin {@code environment}, el agente recibe todas
@@ -144,6 +146,7 @@ class ProjectController {
       List<String> protectedPaths,
       List<String> riskPaths,
       List<String> riskPatterns,
+      boolean autoMerge,
       AgentPolicy agentPolicy,
       boolean agentPolicyCustom,
       Instant createdAt,
@@ -161,6 +164,7 @@ class ProjectController {
           r.getProtectedPaths(),
           r.getRiskPaths(),
           r.getRiskPatterns(),
+          r.isAutoMerge(),
           policy,
           r.hasCustomAgentPolicy(),
           r.getCreatedAt(),
@@ -338,7 +342,8 @@ class ProjectController {
             request.testReportPaths(),
             request.protectedPaths(),
             request.riskPaths(),
-            request.riskPatterns()));
+            request.riskPatterns(),
+            request.autoMerge()));
   }
 
   @PutMapping("/{id}/repositories/{repositoryId}/agent-policy")

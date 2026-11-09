@@ -103,6 +103,7 @@ public final class DefinitionParser {
           "action",
           "risk",
           "revise",
+          "autoApprove",
           "retry",
           "timeout",
           "phase",
@@ -135,7 +136,15 @@ public final class DefinitionParser {
   static final Set<String> GUIDE_KEYS = Set.of("path", "agent", "skip", "ifMissing");
 
   static final Set<String> JUDGE_KEYS =
-      Set.of("agents", "rubric", "rubricFile", "threshold", "refute", "refuteAgent");
+      Set.of(
+          "agents",
+          "rubric",
+          "rubricFile",
+          "threshold",
+          "refute",
+          "refuteAgent",
+          "minRisk",
+          "refuteMinRisk");
 
   /** Las claves de un juez de {@code judge.agents} escrito como objeto. */
   static final Set<String> JUDGE_AGENT_KEYS = Set.of("agent", "lens");
@@ -1625,7 +1634,7 @@ public final class DefinitionParser {
      * agente ni prompt. En las demás fases, esas claves no valen.
      */
     private Approval approval(Map<String, Entry> fields, StageType type, Node node, String path) {
-      List<String> keys = List.of("action", "risk", "revise");
+      List<String> keys = List.of("action", "risk", "revise", "autoApprove");
       if (type != StageType.HUMAN_APPROVAL) {
         for (String key : keys) {
           Entry used = fields.get(key);
@@ -1687,7 +1696,48 @@ public final class DefinitionParser {
           risk = known;
         }
       }
-      return new Approval(action, risk, text(fields.get("revise"), path + ".revise"));
+      return new Approval(
+          action,
+          risk,
+          text(fields.get("revise"), path + ".revise"),
+          autoApprove(fields.get("autoApprove"), path + ".autoApprove"));
+    }
+
+    /**
+     * El {@code autoApprove} de una puerta (AU-C): {@code true} con los límites de siempre, o
+     * {@code {maxRisk, maxLines}}. {@code false} o sin poner, la puerta pregunta siempre.
+     */
+    private StageDefinition.AutoApprove autoApprove(Entry entry, String at) {
+      if (entry == null) {
+        return null;
+      }
+      if (entry.value() instanceof ScalarNode scalar) {
+        String value = scalar.getValue();
+        if ("true".equals(value)) {
+          return new StageDefinition.AutoApprove(
+              StageDefinition.AutoApprove.DEFAULT_MAX_RISK,
+              StageDefinition.AutoApprove.DEFAULT_MAX_LINES);
+        }
+        if ("false".equals(value)) {
+          return null;
+        }
+        error(
+            entry.value(),
+            at,
+            "`autoApprove` es `true` o `{maxRisk: 1, maxLines: 400}`: cuándo se aprueba sola la"
+                + " puerta");
+        return null;
+      }
+      Map<String, Entry> fields =
+          mapping(entry.value(), at, Set.of("maxRisk", "maxLines"), Map.of());
+      if (fields == null) {
+        return null;
+      }
+      Integer maxRisk = integer(fields.get("maxRisk"), at + ".maxRisk", 0, 1);
+      Integer maxLines = integer(fields.get("maxLines"), at + ".maxLines", 0, 5000);
+      return new StageDefinition.AutoApprove(
+          maxRisk == null ? StageDefinition.AutoApprove.DEFAULT_MAX_RISK : maxRisk,
+          maxLines == null ? StageDefinition.AutoApprove.DEFAULT_MAX_LINES : maxLines);
     }
 
     /**
@@ -2208,6 +2258,14 @@ public final class DefinitionParser {
             at + ".refuteAgent",
             "`refuteAgent` no se usa sin `refute`: pon cuántos escépticos, p. ej. `refute: 2`");
       }
+      Integer minRisk = integer(judge.get("minRisk"), at + ".minRisk", 0, 2);
+      Integer refuteMinRisk = integer(judge.get("refuteMinRisk"), at + ".refuteMinRisk", 0, 2);
+      if (refuteMinRisk != null && (refute == null || refute == 0)) {
+        warning(
+            judge.get("refuteMinRisk").key(),
+            at + ".refuteMinRisk",
+            "`refuteMinRisk` no se usa sin `refute`: pon cuántos escépticos, p. ej. `refute: 2`");
+      }
       return new JudgeSpec(
           agents,
           rubric,
@@ -2216,7 +2274,10 @@ public final class DefinitionParser {
           fix,
           maxRounds == null ? JudgeSpec.DEFAULT_MAX_ROUNDS : maxRounds,
           refute == null ? 0 : refute,
-          refuteAgent);
+          refuteAgent,
+          null,
+          minRisk == null ? 0 : minRisk,
+          refuteMinRisk == null ? 0 : refuteMinRisk);
     }
 
     /**

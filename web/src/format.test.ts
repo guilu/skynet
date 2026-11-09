@@ -42,6 +42,24 @@ describe('describeEvent', () => {
     )
   })
 
+  it('dice cuándo se omite el juez y cuándo se aprueba sola la puerta (AU-C)', () => {
+    expect(
+      describeEvent('stage.judge.skipped', {
+        stageKey: 'juzgar',
+        note: 'nivel 0: sin juez (juzga desde el nivel 1)',
+      }),
+    ).toBe('juzgar: nivel 0: sin juez (juzga desde el nivel 1)')
+    expect(describeEvent('stage.judge.delta.refute.started', { stageKey: 'ci', findings: 1 })).toBe(
+      'ci: los escépticos revisan 1 hallazgo del juez del delta',
+    )
+    expect(
+      describeEvent('approval.granted', { stageKey: 'aprobar', actor: 'skynet', auto: true }),
+    ).toBe('aprobar se aprobó sola: riesgo bajo, CI en verde y juzgado')
+    expect(describeEvent('approval.granted', { stageKey: 'aprobar', actor: 'diego' })).toBe(
+      'diego aprobó aprobar',
+    )
+  })
+
   it('dice desde dónde se importó un proyecto', () => {
     expect(describeEvent('project.created', { key: 'FORMA' })).toBe('Proyecto FORMA creado')
     expect(

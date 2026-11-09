@@ -36,6 +36,7 @@ public class CodeRepository {
   private List<String> protectedPaths;
   private List<String> riskPaths;
   private List<String> riskPatterns;
+  private boolean autoMerge;
   private final Instant createdAt;
 
   /** Lo escribe solo el archivado (UPDATE directo); el resto de guardados no lo toca. */
@@ -63,6 +64,7 @@ public class CodeRepository {
       List<String> protectedPaths,
       List<String> riskPaths,
       List<String> riskPatterns,
+      boolean autoMerge,
       Instant createdAt,
       Long version) {
     this.id = id;
@@ -83,6 +85,7 @@ public class CodeRepository {
     this.protectedPaths = protectedPaths == null ? List.of() : List.copyOf(protectedPaths);
     this.riskPaths = riskPaths == null ? List.of() : List.copyOf(riskPaths);
     this.riskPatterns = riskPatterns == null ? List.of() : List.copyOf(riskPatterns);
+    this.autoMerge = autoMerge;
     this.createdAt = createdAt;
     this.version = version;
   }
@@ -113,6 +116,7 @@ public class CodeRepository {
         List.of(),
         List.of(),
         List.of(),
+        false,
         now,
         null);
   }
@@ -151,6 +155,14 @@ public class CodeRepository {
   void configureRisk(List<String> paths, List<String> patterns) {
     this.riskPaths = clean(paths);
     this.riskPatterns = clean(patterns);
+  }
+
+  /**
+   * Si las puertas con {@code autoApprove} pueden aprobarse solas en este repositorio (AU-C). Viene
+   * apagado.
+   */
+  void configureAutoMerge(boolean on) {
+    this.autoMerge = on;
   }
 
   private static List<String> clean(List<String> values) {
@@ -246,6 +258,10 @@ public class CodeRepository {
 
   public List<String> getRiskPatterns() {
     return riskPatterns;
+  }
+
+  public boolean isAutoMerge() {
+    return autoMerge;
   }
 
   public Instant getCreatedAt() {

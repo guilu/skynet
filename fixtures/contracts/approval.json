@@ -105,7 +105,8 @@
       "requestChanges" : "plan recibe tu comentario y la puerta vuelve a preguntar con lo corregido."
     },
     "changesRequested" : null,
-    "pullRequest" : null
+    "pullRequest" : null,
+    "autoApprove" : null
   },
   "decisions" : [ {
     "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a11",

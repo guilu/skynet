@@ -8,7 +8,9 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -141,6 +143,35 @@ class RunRisks {
               raised,
               now));
     }
+  }
+
+  /**
+   * El nivel de lo que han cambiado los agentes de {@code runId} en el worktree {@code workspaceId}
+   * (AU-C): el máximo de lo que midió el runner al terminar cada uno. Vacío si alguno terminó bien
+   * sin medida (aún no ha llegado o no se midió) o si no hay ninguno: sin saberlo, se trata como si
+   * pudiera ser cualquiera.
+   */
+  Optional<Integer> workspaceTier(UUID runId, UUID workspaceId) {
+    List<Integer> tiers =
+        jdbc.sql(
+                """
+                SELECT (SELECT CAST(x.metadata -> 'risk' ->> 'tier' AS integer) FROM artifact x
+                        WHERE x.agent_run_id = a.id AND x.type = 'GIT_CHANGES'
+                          AND x.verification_run_id IS NULL
+                        ORDER BY x.created_at DESC LIMIT 1) AS tier
+                FROM agent_run a JOIN stage_run s ON s.id = a.stage_run_id
+                WHERE s.workflow_run_id = :run AND a.workspace_id = :workspace
+                  AND a.role IS NULL AND a.status = 'COMPLETED'
+                  AND a.provider NOT IN ('command', 'git-push', 'verification')
+                """)
+            .param("run", runId)
+            .param("workspace", workspaceId)
+            .query((rs, n) -> rs.getObject("tier", Integer.class))
+            .list();
+    if (tiers.isEmpty() || tiers.contains(null)) {
+      return Optional.empty();
+    }
+    return tiers.stream().max(Integer::compare);
   }
 
   /** El nivel de cada fase de {@code stageRunIds} que ya lo tiene. */

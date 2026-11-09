@@ -8,6 +8,18 @@ import { formatScore, LENS_LABEL } from './stageNotes'
  * hallazgos que refutaron los escépticos salen tachados, con el motivo (VA-C).
  */
 export function StageJudge({ judge }: { judge: Judge }) {
+  if (judge.status === 'SKIPPED') {
+    return (
+      <section className="stage-judge small" aria-label="Juez de la fase">
+        <p className="stage-judge-head">
+          <strong>Sin juez</strong>
+          <span className="muted">
+            {' · '}nivel {judge.risk ?? 0}: juzga desde el nivel {judge.minRisk ?? 1}
+          </span>
+        </p>
+      </section>
+    )
+  }
   const done = judge.judgements.filter((j) => j.status === 'DONE')
   const criteria = [...new Set(done.flatMap((j) => j.criteria.map((c) => c.id)))]
   return (

@@ -84,6 +84,7 @@ public class Approvals {
   private final ApplicationEventPublisher publisher;
   private final ObjectProvider<RunService> runs;
   private final ObjectProvider<DeltaJudges> deltas;
+  private final AutoApprovals autoApprovals;
   private final TimeSource time;
 
   Approvals(
@@ -98,6 +99,7 @@ public class Approvals {
       ApplicationEventPublisher publisher,
       ObjectProvider<RunService> runs,
       ObjectProvider<DeltaJudges> deltas,
+      AutoApprovals autoApprovals,
       TimeSource time) {
     this.jdbc = jdbc;
     this.json = json;
@@ -110,6 +112,7 @@ public class Approvals {
     this.publisher = publisher;
     this.runs = runs;
     this.deltas = deltas;
+    this.autoApprovals = autoApprovals;
     this.time = time;
   }
 
@@ -144,6 +147,12 @@ public class Approvals {
             run, stage, published, workItem, repository, projects.get(workItem.getProjectId()));
     evidence.put(
         "changesRequested", round == 1 ? null : changesRequested(stage.getId(), round - 1));
+    // Con autoApprove (AU-C), la primera vez se mira si se aprueba sola; si no, dice por qué.
+    AutoApprovals.Check auto =
+        gate.approval().autoApprove() == null || round > 1
+            ? null
+            : autoApprovals.check(run, gate, repository, castMap(evidence.get("pullRequest")), now);
+    evidence.put("autoApprove", auto == null ? null : auto.toMap());
     UUID id = UUID.randomUUID();
     jdbc.sql(
             "INSERT INTO approval_request (id, workflow_run_id, stage_run_id, round, action, risk,"
@@ -165,9 +174,35 @@ public class Approvals {
     payload.put("round", round);
     payload.put("action", action);
     payload.put("risk", risk);
+    if (auto != null) {
+      payload.put("autoApprove", auto.note());
+    }
     transitions.append("approval_request", id, "approval.requested", run.getId(), payload, now);
+    if (auto != null && auto.approved()) {
+      String comment = auto.comment();
+      close(id, APPROVED, now);
+      record(id, Action.APPROVE.name(), comment, AutoApprovals.ACTOR, now);
+      transitions.advanceStage(stage, StageStatus.SUCCEEDED, "approval-auto", now);
+      ApprovalSummary request = summary(id);
+      Map<String, Object> granted = new LinkedHashMap<>();
+      granted.put("approvalId", id);
+      granted.put("stageKey", stage.getStageKey());
+      granted.put("round", round);
+      granted.put("actor", AutoApprovals.ACTOR);
+      granted.put("comment", comment);
+      granted.put("auto", true);
+      transitions.append(
+          "approval_request", request.id(), "approval.granted", run.getId(), granted, now);
+      publisher.publishEvent(new WorkflowRunChanged(run.getId()));
+      return;
+    }
     publisher.publishEvent(
         new ApprovalRequested(id, run.getId(), stage.getStageKey(), round, action));
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> castMap(Object value) {
+    return value instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
   }
 
   /**
@@ -481,8 +516,15 @@ public class Approvals {
         summary.createdAt(),
         summary.decidedAt(),
         summary.correctionAgentRunId(),
-        json.readValue(evidence, new TypeReference<LinkedHashMap<String, Object>>() {}),
+        withAutoApprove(
+            json.readValue(evidence, new TypeReference<LinkedHashMap<String, Object>>() {})),
         decisions);
+  }
+
+  /** Las peticiones de antes de AU-C no tienen {@code autoApprove}: no se aprobaban solas. */
+  private static Map<String, Object> withAutoApprove(Map<String, Object> evidence) {
+    evidence.putIfAbsent("autoApprove", null);
+    return evidence;
   }
 
   /** La última petición de cada una de {@code stageRunIds} que la tenga, por fase. */

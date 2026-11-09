@@ -198,7 +198,9 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
         Number(payload.round) > 1 ? ` (ronda ${p('round')})` : ''
       }`
     case 'approval.granted':
-      return `${p('actor')} aprobó ${p('stageKey')}`
+      return payload.auto
+        ? `${p('stageKey')} se aprobó sola: riesgo bajo, CI en verde y juzgado`
+        : `${p('actor')} aprobó ${p('stageKey')}`
     case 'approval.rejected':
       return `${p('actor')} rechazó ${p('stageKey')}: ${truncate(p('comment'), 120)}`
     case 'approval.changes_requested':
@@ -268,6 +270,12 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `${p('stageKey')}: sin cambios desde el juicio en ${p('judgedSha').slice(0, 7)}`
     case 'stage.judge.delta.skipped':
       return `${p('stageKey')}: lo que cambió desde el juicio es de nivel 0, no se vuelve a juzgar`
+    case 'stage.judge.skipped':
+      return `${p('stageKey')}: ${p('note')}`
+    case 'stage.judge.delta.refute.started':
+      return `${p('stageKey')}: los escépticos revisan ${
+        Number(payload.findings) === 1 ? '1 hallazgo' : `${p('findings')} hallazgos`
+      } del juez del delta`
     case 'stage.judge.refute.started':
       return `${p('stageKey')}: ${
         Number(payload.skeptics) === 1 ? '1 escéptico' : `${p('skeptics')} escépticos`

@@ -1445,6 +1445,105 @@ class DefinitionParserTest {
   }
 
   @Test
+  void theJudgeAndTheGateFollowTheRiskOfTheChange() {
+    Parsed parsed =
+        parse(
+            """
+            id: segun-riesgo
+            agents:
+              juez:
+                provider: codex
+            stages:
+              - id: implementar
+                type: agent
+                prompt: Implementa
+              - id: juzgar
+                type: verification
+                dependsOn: [implementar]
+                judge:
+                  agents: [juez]
+                  minRisk: 1
+                  refute: 2
+                  refuteMinRisk: 2
+              - id: aprobar
+                type: human-approval
+                dependsOn: [juzgar]
+                action: Fusionar
+                autoApprove: true
+              - id: aprobar-poco
+                type: human-approval
+                dependsOn: [juzgar]
+                action: Fusionar
+                autoApprove: {maxRisk: 0, maxLines: 50}
+              - id: preguntar
+                type: human-approval
+                dependsOn: [juzgar]
+                action: Fusionar
+                autoApprove: false
+            """);
+    assertThat(messages(parsed, Severity.ERROR)).isEmpty();
+    JudgeSpec judge = parsed.definition().stage("juzgar").orElseThrow().judge();
+    assertThat(judge.minRisk()).isEqualTo(1);
+    assertThat(judge.refuteMinRisk()).isEqualTo(2);
+    assertThat(judge.skipsAt(0)).isTrue();
+    assertThat(judge.skipsAt(1)).isFalse();
+    assertThat(judge.skipsAt(null)).isFalse();
+    assertThat(judge.refutesAt(1)).isFalse();
+    assertThat(judge.refutesAt(2)).isTrue();
+    assertThat(judge.refutesAt(null)).isTrue();
+    assertThat(parsed.definition().stage("aprobar").orElseThrow().approval().autoApprove())
+        .isEqualTo(new StageDefinition.AutoApprove(1, 400));
+    assertThat(parsed.definition().stage("aprobar-poco").orElseThrow().approval().autoApprove())
+        .isEqualTo(new StageDefinition.AutoApprove(0, 50));
+    assertThat(parsed.definition().stage("preguntar").orElseThrow().approval().autoApprove())
+        .isNull();
+  }
+
+  @Test
+  void aWrongRiskSettingSaysWhy() {
+    Parsed parsed =
+        parse(
+            """
+            id: segun-riesgo-mal
+            agents:
+              juez:
+                provider: codex
+            stages:
+              - id: implementar
+                type: agent
+                prompt: Implementa
+                autoApprove: true
+              - id: juzgar
+                type: verification
+                dependsOn: [implementar]
+                judge:
+                  agents: [juez]
+                  minRisk: 3
+                  refuteMinRisk: 1
+              - id: aprobar
+                type: human-approval
+                dependsOn: [juzgar]
+                action: Fusionar
+                autoApprove: {maxRisk: 2, otra: 1}
+              - id: aprobar-texto
+                type: human-approval
+                dependsOn: [juzgar]
+                action: Fusionar
+                autoApprove: siempre
+            """);
+    assertThat(messages(parsed, Severity.ERROR))
+        .contains(
+            "`stages.juzgar.judge.minRisk` debe estar entre 0 y 2",
+            "`stages.aprobar.autoApprove.maxRisk` debe estar entre 0 y 1",
+            "`autoApprove` es `true` o `{maxRisk: 1, maxLines: 400}`: cuándo se aprueba sola la"
+                + " puerta",
+            "`autoApprove` solo vale en fases `type: human-approval`; esta es `agent`");
+    assertThat(messages(parsed, Severity.WARNING))
+        .contains(
+            "`refuteMinRisk` no se usa sin `refute`: pon cuántos escépticos, p. ej. `refute: 2`");
+  }
+
+  @Test
   void aGuideRunsAsAStageWithItsFixRounds() {
     Parsed parsed =
         parse(

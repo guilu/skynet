@@ -57,6 +57,10 @@ skynet:
     retention: ${SKYNET_WORKTREE_RETENTION:7d}
     # Cada cuánto se buscan worktrees que han pasado la retención.
     check-interval: ${SKYNET_WORKTREE_CHECK_INTERVAL:1h}
+  autonomy:
+    # Puertas con autoApprove que Skynet aprueba solo por repositorio y día (AU-C). Después,
+    # vuelven a preguntar.
+    max-merges-per-day: ${SKYNET_AUTONOMY_MAX_MERGES_PER_DAY:10}
   engine:
     # Evaluaciones del motor de workflows a la vez en este control plane.
     workers: ${SKYNET_ENGINE_WORKERS:2}
