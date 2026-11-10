@@ -606,6 +606,8 @@ class CiCheckIT extends IntegrationTest {
         UUID.fromString(implement.path("agentRunId").asString()),
         Map.of("risk", Map.of("tier", 0, "files", 1, "lines", 0, "base", "abc1234")));
     complete(runner, implement, Map.of());
+    // La comprobación de los criterios del repositorio pasa sola al recoger la orden de la PR.
+    green(runner, runId);
     awaitStage(runId, "juzgar", "SUCCEEDED");
     assertThat(eventTypes(runId))
         .contains("stage.judge.skipped")
@@ -616,7 +618,6 @@ class CiCheckIT extends IntegrationTest {
                 .query(String.class)
                 .single())
         .isEqualTo("SKIPPED");
-    green(runner, runId);
 
     awaitStage(runId, "aprobar", "SUCCEEDED");
     assertThat(jdbc.sql("SELECT comment FROM approval_decision").query(String.class).single())
@@ -980,7 +981,53 @@ class CiCheckIT extends IntegrationTest {
       this.token = token;
     }
 
+    /**
+     * Las órdenes pendientes. La comprobación de los criterios del repositorio que se protegen de
+     * oficio en un workflow con juez (ES-B) pasa sola: los tests que no la miran no la ven.
+     */
     List<JsonNode> claim() {
+      for (int i = 0; i < 5; i++) {
+        List<JsonNode> claimed = new ArrayList<>();
+        boolean answered = false;
+        for (JsonNode command : claimOnce()) {
+          if (onlyReviewCriteria(command)) {
+            passReviewCriteria(command);
+            answered = true;
+          } else {
+            claimed.add(command);
+          }
+        }
+        if (!claimed.isEmpty() || !answered) {
+          return claimed;
+        }
+      }
+      return List.of();
+    }
+
+    private boolean onlyReviewCriteria(JsonNode command) {
+      JsonNode checks = command.path("verify").path("checks");
+      return "VERIFY".equals(command.path("type").asString())
+          && command.path("verify").path("command").isNull()
+          && checks.size() == 1
+          && "protected".equals(checks.get(0).path("name").asString())
+          && checks.get(0).path("paths").toString().equals("[\".skynet/review.md\",\"REVIEW.md\"]");
+    }
+
+    private void passReviewCriteria(JsonNode verify) {
+      Events events = new Events(UUID.fromString(verify.path("agentRunId").asString()));
+      String id = verify.path("verify").path("verificationRunId").asString();
+      events.add(AgentEventType.VERIFICATION_STARTED, Map.of("verificationRunId", id));
+      events.add(
+          AgentEventType.VERIFICATION_COMPLETED,
+          Map.of(
+              "verificationRunId",
+              id,
+              "checks",
+              List.of(Map.of("name", "protected", "passed", true))));
+      send(events);
+    }
+
+    private List<JsonNode> claimOnce() {
       JsonNode commands =
           http.get()
               .uri("/api/runner/commands?waitSeconds=1")

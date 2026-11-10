@@ -72,6 +72,12 @@ public record StartAgent(
    */
   public static final String REVIEW_MARKER = "\n<!-- skynet:review -->\n";
 
+  /**
+   * Los ficheros de los criterios de revisión del repositorio (ES-B), en orden: gana el primero que
+   * exista. En un workflow con juez quedan protegidos, como un {@code rubricFile}.
+   */
+  public static final List<String> REVIEW_FILES = List.of(".skynet/review.md", "REVIEW.md");
+
   public static final String MEMORY_WRITE = "write";
 
   public StartAgent {

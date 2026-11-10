@@ -10,6 +10,7 @@ import dev.skynet.controlplane.definition.StageDefinition.WorkspaceMode;
 import dev.skynet.controlplane.project.AgentPolicy;
 import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.AgentProviderKind;
+import dev.skynet.protocol.runner.StartAgent;
 import dev.skynet.protocol.runner.VerificationCheck;
 import java.io.StringReader;
 import java.math.BigDecimal;
@@ -325,6 +326,9 @@ public final class DefinitionParser {
       if (stagesEntry != null) {
         List<String> all = new ArrayList<>(workflowProtected);
         rubricFiles(stagesEntry.value()).stream().filter(f -> !all.contains(f)).forEach(all::add);
+        if (hasJudge(stagesEntry.value())) {
+          StartAgent.REVIEW_FILES.stream().filter(f -> !all.contains(f)).forEach(all::add);
+        }
         workflowProtected = List.copyOf(all);
       }
       if (stagesEntry == null) {
@@ -419,6 +423,15 @@ public final class DefinitionParser {
         }
       }
       return files;
+    }
+
+    /**
+     * Si alguna fase tiene {@code judge}: entonces los criterios del repositorio (ES-B) quedan
+     * protegidos, para que ningún agente cambie cómo se le revisa.
+     */
+    private static boolean hasJudge(Node stages) {
+      return stages instanceof SequenceNode sequence
+          && sequence.getValue().stream().anyMatch(stage -> child(stage, "judge") != null);
     }
 
     /** El valor de la clave {@code key} de un objeto del YAML, o {@code null}. */

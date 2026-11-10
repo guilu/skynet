@@ -1303,9 +1303,27 @@ class DefinitionParserTest {
     assertThat(judge.threshold()).isEqualByComparingTo("3.5");
     assertThat(judge.fix()).isNull();
     assertThat(definition.stage("otra").orElseThrow().judge().criteria()).isEmpty();
-    // La rúbrica queda protegida en las fases de agente.
+    // La rúbrica y los criterios del repositorio (ES-B) quedan protegidos en las fases de agente.
     assertThat(definition.stage("implementar").orElseThrow().checks())
-        .contains(VerificationCheck.withPaths("protected", List.of(".skynet/rubrica.md")));
+        .contains(
+            VerificationCheck.withPaths(
+                "protected", List.of(".skynet/rubrica.md", ".skynet/review.md", "REVIEW.md")));
+  }
+
+  @Test
+  void withoutAJudgeTheReviewCriteriaAreNotProtected() {
+    Parsed parsed =
+        parse(
+            """
+            id: sin-juez
+            stages:
+              - id: implementar
+                type: agent
+                prompt: Implementa
+            """);
+    assertThat(messages(parsed, Severity.ERROR)).isEmpty();
+    assertThat(parsed.definition().stage("implementar").orElseThrow().checks())
+        .noneMatch(c -> c.name().equals("protected"));
   }
 
   @Test
