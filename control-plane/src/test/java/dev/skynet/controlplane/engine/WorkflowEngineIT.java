@@ -2082,6 +2082,25 @@ class WorkflowEngineIT extends IntegrationTest {
         "Desenlace desconocido");
     assertThat(eventTypes(runId)).contains("finding.outcome.set");
 
+    // RH-C: el ruido del juez. De tres hallazgos, uno refutado (ruido) y uno corregido (acierto).
+    JsonNode judges = get("/api/factory/judges?days=7");
+    assertThat(judges).hasSize(1);
+    JsonNode juez = judges.get(0);
+    assertThat(juez.path("judge").asString()).isEqualTo("juez");
+    assertThat(juez.path("lens").asString()).isEqualTo("correctness");
+    assertThat(juez.path("findings").asInt()).isEqualTo(3);
+    assertThat(juez.path("refuted").asInt()).isEqualTo(1);
+    assertThat(juez.path("fixed").asInt()).isEqualTo(1);
+    assertThat(juez.path("parked").asInt()).isEqualTo(1);
+    assertThat(juez.path("noise").asDouble()).isEqualTo(0.333);
+    assertThat(juez.path("hits").asDouble()).isEqualTo(0.333);
+    assertThat(juez.path("fewData").asBoolean()).isTrue();
+    assertThat(juez.path("noisy")).hasSize(1);
+    assertThat(juez.path("noisy").get(0).path("outcomeReason").asString())
+        .isEqualTo("Redondea hacia cero a propósito");
+    assertThat(juez.path("noisy").get(0).path("runId").asString()).isEqualTo(runId);
+    assertBadRequest(() -> get("/api/factory/judges?days=0"), "`days` va de 1 a 365");
+
     // Otra ejecución que dice lo mismo apunta a la primera vez que salió.
     complete(runner, runner.claim().getFirst(), "/w/eng/entregar");
     String second = launch(definitionId, Map.of()).path("id").asString();

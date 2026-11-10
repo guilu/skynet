@@ -1076,6 +1076,41 @@ export interface JudgeFinding {
 export type FindingOutcome =
   'abierto' | 'refutado' | 'corregido' | 'aparcado' | 'aceptado' | 'irrelevante'
 
+/** Un hallazgo con ruido (refutado o que no aplicaba) de un juez, en Fábrica › Jueces (RH-C). */
+export interface JudgeSample {
+  id: string
+  runId: string
+  file: string | null
+  line: number | null
+  text: string
+  outcome: FindingOutcome
+  outcomeBy: string | null
+  outcomeReason: string | null
+  createdAt: string
+}
+
+/** Ruido y acierto de un juez con su lente, en un proveedor y un modelo (RH-C). */
+export interface JudgeStatsRow {
+  provider: string | null
+  model: string | null
+  judge: string
+  lens: string | null
+  findings: number
+  refuted: number
+  irrelevant: number
+  fixed: number
+  accepted: number
+  parked: number
+  open: number
+  /** (refutados + no aplica) / hallazgos, de 0 a 1. */
+  noise: number
+  /** corregidos / hallazgos, de 0 a 1. */
+  hits: number
+  /** Menos de 10 hallazgos: la cifra dice poco. */
+  fewData: boolean
+  noisy: JudgeSample[]
+}
+
 /** Un hallazgo del registro (RH-A), con su desenlace. */
 export interface FindingView {
   id: string
@@ -2165,6 +2200,7 @@ export const api = {
   merges: (runId: string) => request<MergeView[]>('GET', `/api/workflow-runs/${runId}/merges`),
   findings: (runId: string) =>
     request<FindingView[]>('GET', `/api/workflow-runs/${runId}/findings`),
+  judgeStats: (days: number) => request<JudgeStatsRow[]>('GET', `/api/factory/judges?days=${days}`),
   decideFinding: (id: string, outcome: 'aceptado' | 'irrelevante' | 'abierto', reason?: string) =>
     request<FindingView>('POST', `/api/findings/${id}/outcome`, { outcome, reason }),
   listRuns: (query: {

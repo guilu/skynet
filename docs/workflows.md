@@ -496,6 +496,13 @@ stages:
 - **Duplicados entre jueces:** los hallazgos que bloquean y dicen lo mismo en una ronda se refutan una sola vez, y lo que digan los escépticos vale para todos.
 - **Lo que vuelve:** si un hallazgo sale otra vez después de una ronda de corrección, el informe para el que corrige lo marca en «Lo que vuelve»: «⚠ ya se señaló en la ronda 1 y sigue».
 
+**Ruido por juez** (RH-C). **Fábrica → Jueces** cuenta, con el registro de hallazgos, cómo se porta cada juez con su lente, por proveedor y modelo, en los últimos 7, 30 o 90 días:
+
+- **Ruido:** (refutados + que no aplican) / hallazgos. Lo que tumbó un escéptico o una persona dijo que no aplicaba.
+- **Acierto:** corregidos / hallazgos. Lo que el agente corrigió porque el juez lo vio.
+- La tabla va de más a menos ruido. Con menos de 10 hallazgos dice «pocos datos». Al elegir una fila salen sus últimos 5 hallazgos refutados o que no aplicaban, con el motivo y el enlace a su ejecución.
+- Una fila del registro es un hallazgo aunque saliera en varias rondas (`repeats`). Los del delta de AU-B cuentan con su juez.
+
 **Fusionar la PR.** Una fase `type: github-merge` fusiona la PR de la ejecución, normalmente detrás de su `github-check` y de una puerta que lo aprueba (EN-C):
 
 ```yaml
@@ -730,6 +737,7 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `POST` | `/api/approvals/{id}/decisions` | Decide (`{action: APPROVE \| REJECT \| REQUEST_CHANGES \| COMMENT, comment}`) |
 | `GET` | `/api/workflow-runs/{id}/findings` | El registro de hallazgos de la ejecución, con su desenlace (RH-A) |
 | `POST` | `/api/findings/{id}/outcome` | Decide qué es un hallazgo (`{outcome: aceptado \| irrelevante \| abierto, reason}`); `abierto` lo deshace y, si la fase ya terminó, lo deja `aparcado` |
+| `GET` | `/api/factory/judges?days=30` | Ruido y acierto de cada juez por proveedor, modelo y lente, con sus últimos hallazgos refutados o que no aplican (RH-C); `days` de 1 a 365 |
 
 Cada problema lleva `severity` (`ERROR`, `UNSUPPORTED` o `WARNING`), `path` (p. ej. `stages.fix.dependsOn[0]`), `line`, `column` y `message`.
 

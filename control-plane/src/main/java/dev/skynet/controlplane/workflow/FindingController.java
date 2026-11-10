@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** El registro de hallazgos de los jueces (RH-A): lo que encontraron y qué pasó con ello. */
@@ -15,9 +16,17 @@ import org.springframework.web.bind.annotation.RestController;
 class FindingController {
 
   private final Findings findings;
+  private final JudgeStats judges;
 
-  FindingController(Findings findings) {
+  FindingController(Findings findings, JudgeStats judges) {
     this.findings = findings;
+    this.judges = judges;
+  }
+
+  /** Ruido y acierto de cada juez en los últimos {@code days} días (RH-C). */
+  @GetMapping("/api/factory/judges")
+  List<JudgeStats.JudgeRow> judges(@RequestParam(defaultValue = "30") int days) {
+    return judges.since(days);
   }
 
   @GetMapping("/api/workflow-runs/{id}/findings")
