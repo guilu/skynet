@@ -340,7 +340,7 @@ stages:
   - Lo reciben también los escépticos (VA-C) y los jueces del delta (AU-B). Vale con `rubric`, con `rubricFile` y con la rúbrica de siempre.
   - Lo lee el runner del worktree al arrancar el juez: hasta 8 KB (si es más largo, se corta y el juez lo sabe). Un enlace simbólico o un fichero vacío no cuentan.
   - En la web, la línea del worktree del juez dice «Worktree listo en la rama …, con los criterios de `REVIEW.md`».
-  - No queda protegido: un agente del workflow puede cambiarlo, y el juez lee el que haya en el worktree. Para que no se toque, ponlo en `protected`.
+  - **Queda protegido:** en un workflow con alguna fase `judge`, `.skynet/review.md` y `REVIEW.md` se suman a `protected` en todas sus fases de agente, como un `rubricFile`, para que ningún agente cambie cómo se le revisa. Crearlo, cambiarlo o borrarlo hace fallar la fase («Ha cambiado una ruta protegida: `REVIEW.md`»). Se cambia a mano o con un workflow sin juez.
 - `threshold`: la media ponderada mínima, de 1 a 5 (3.5 por defecto).
 - `fix` y `maxRounds` (de la fase, como en `github-check`): la fase `agent` que corrige, que tiene que ser una de las que van antes (la que dejó el worktree que se juzga), y cuántas rondas de corrección como mucho (2 por defecto). Sin `fix`, suspender hace fallar la fase.
 - **Qué recibe el juez:** la tarea (clave, título y descripción), el commit desde el que mirar el cambio (`git diff <commit>` en su copia), el resultado de las comprobaciones de la ronda con sus avisos (p. ej. «Hay menos aserciones en …»), la rúbrica, el umbral y su lente. **No recibe nada de lo que dijo el agente que hizo el cambio**, ni su resumen ni su salida estructurada: si el juez lee «he añadido tests para todos los casos», tiende a creérselo.

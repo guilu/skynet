@@ -20,11 +20,24 @@ public abstract class IntegrationTest {
   /** Fin del bloque de memoria que precede al prompt de una sesión nueva (ME-C). */
   protected static final String MEMORY_BLOCK_END = "</memoria-del-proyecto>\n\n";
 
-  /** El prompt de la fase de una orden de arranque, sin el bloque de memoria que lo precede. */
+  /**
+   * El aviso de las rutas protegidas cuando solo son los criterios del repositorio, que se protegen
+   * de oficio en un workflow con juez (ES-B).
+   */
+  protected static final String REVIEW_NOTE =
+      "Rutas protegidas: no cambies, borres ni muevas nada en `.skynet/review.md`, `REVIEW.md`. Si"
+          + " la tarea parece pedirlo, dilo en tu respuesta en lugar de hacerlo: Skynet rechaza"
+          + " cualquier cambio en ellas.\n\n";
+
+  /**
+   * El prompt de la fase de una orden de arranque, sin el bloque de memoria que lo precede ni el
+   * aviso de los criterios del repositorio ({@link #REVIEW_NOTE}).
+   */
   protected static String taskPrompt(JsonNode start) {
     String prompt = start.path("prompt").asString();
     int end = prompt.indexOf(MEMORY_BLOCK_END);
-    return end < 0 ? prompt : prompt.substring(end + MEMORY_BLOCK_END.length());
+    String task = end < 0 ? prompt : prompt.substring(end + MEMORY_BLOCK_END.length());
+    return task.startsWith(REVIEW_NOTE) ? task.substring(REVIEW_NOTE.length()) : task;
   }
 
   @Autowired protected JdbcClient jdbc;

@@ -19,7 +19,7 @@ import java.util.List;
 final class RepositoryReview {
 
   /** En este orden: el primero que exista. */
-  static final List<String> FILES = List.of(".skynet/review.md", "REVIEW.md");
+  static final List<String> FILES = StartAgent.REVIEW_FILES;
 
   /** Lo que se pasa del fichero; si es más largo, se corta y se dice. */
   static final int MAX_BYTES = 8 * 1024;
