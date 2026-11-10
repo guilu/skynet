@@ -174,6 +174,26 @@ class AgentExecutorTest {
   }
 
   @Test
+  void aJudgeGetsTheRepositorysReviewCriteriaAndTheWorkspaceSaysWhichFile() throws Exception {
+    Files.writeString(repo.resolve("REVIEW.md"), "No señales los nombres.\n");
+    TestRepos.git(repo, "add", ".");
+    TestRepos.git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "r");
+    UUID id = UUID.randomUUID();
+    RunnerCommand command = TestAgents.start(id, repo.toString(), null);
+    StartAgent judge =
+        command.start().withPrompt("Juzga." + StartAgent.REVIEW_MARKER + "Devuelve la salida.");
+    executor("01-simple-text")
+        .start(
+            new RunnerCommand(
+                command.id(), command.type(), id, command.createdAt(), judge, null, null));
+
+    awaitExit(id);
+    NormalizedEvent ready = eventsOf(id).getFirst();
+    assertThat(ready.type()).isEqualTo(AgentEventType.WORKSPACE_READY);
+    assertThat(ready.payload()).containsEntry("review", "REVIEW.md");
+  }
+
+  @Test
   void aCodexAgentRunsInAWorktreeAndItsSessionCanBeResumed() throws Exception {
     UUID first = UUID.randomUUID();
     codexExecutor("02-tools")

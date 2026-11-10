@@ -64,6 +64,14 @@ public record StartAgent(
     RiskRequest risk) {
 
   public static final String MEMORY_READ = "read";
+
+  /**
+   * Dónde van los criterios de revisión del repositorio en el prompt de un juez o un escéptico
+   * (ES-B). Ocupa una línea entera; el runner la cambia por {@code .skynet/review.md} o {@code
+   * REVIEW.md} del worktree, si hay alguno, o la quita.
+   */
+  public static final String REVIEW_MARKER = "\n<!-- skynet:review -->\n";
+
   public static final String MEMORY_WRITE = "write";
 
   public StartAgent {
@@ -319,6 +327,31 @@ public record StartAgent(
         workspace,
         command,
         schema,
+        provider,
+        memory,
+        push,
+        protectedPaths,
+        risk);
+  }
+
+  /** La misma invocación con otro prompt (el runner pone los criterios del repositorio, ES-B). */
+  public StartAgent withPrompt(String other) {
+    return new StartAgent(
+        workflowRunId,
+        workItemKey,
+        repositoryPath,
+        baseBranch,
+        sessionId,
+        other,
+        allowedTools,
+        permissionMode,
+        model,
+        limits,
+        resume,
+        environment,
+        workspace,
+        command,
+        outputSchema,
         provider,
         memory,
         push,

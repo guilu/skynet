@@ -3,6 +3,7 @@ package dev.skynet.controlplane.workflow;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.skynet.controlplane.definition.JudgeSpec;
+import dev.skynet.protocol.runner.StartAgent;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -136,5 +137,21 @@ class JudgePromptTest {
         .contains("Si dudas")
         .doesNotContain("rúbrica")
         .doesNotContain("tests-intact");
+  }
+
+  @Test
+  void judgesSkepticsAndTheDeltaLeaveRoomForTheRepositorysCriteriaUnderTheRubric() {
+    String judge = JudgePrompt.build(CONTEXT, SPEC, SPEC.agents().getFirst());
+    assertThat(judge.indexOf(StartAgent.REVIEW_MARKER))
+        .isGreaterThan(judge.indexOf("## La rúbrica"))
+        .isLessThan(judge.indexOf("## Los hallazgos"));
+    assertThat(JudgePrompt.delta(CONTEXT, SPEC, SPEC.agents().getFirst(), 1))
+        .contains(StartAgent.REVIEW_MARKER);
+    String skeptic =
+        JudgePrompt.refutation(
+            CONTEXT, new JudgeVerdicts.Finding("src/Calc.java", 12, "blocking", "Divide", "juez"));
+    assertThat(skeptic.indexOf(StartAgent.REVIEW_MARKER))
+        .isGreaterThan(skeptic.indexOf("## El cambio"))
+        .isLessThan(skeptic.indexOf("## Qué contestar"));
   }
 }

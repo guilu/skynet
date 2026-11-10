@@ -42,6 +42,15 @@ describe('describeEvent', () => {
     )
   })
 
+  it('dice si el juez lleva los criterios del repositorio (ES-B)', () => {
+    expect(describeEvent('agent.workspace.ready', { branch: 'skynet/tkm-1' })).toBe(
+      'Worktree listo en la rama skynet/tkm-1',
+    )
+    expect(
+      describeEvent('agent.workspace.ready', { branch: 'skynet/tkm-1', review: 'REVIEW.md' }),
+    ).toBe('Worktree listo en la rama skynet/tkm-1, con los criterios de REVIEW.md')
+  })
+
   it('dice cuántos hallazgos ya vistos se descartan (RH-B)', () => {
     expect(
       describeEvent('stage.judge.findings.filtered', { stageKey: 'juzgar', discarded: 2 }),
