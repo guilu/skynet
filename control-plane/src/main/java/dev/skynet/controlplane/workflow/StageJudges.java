@@ -251,6 +251,9 @@ class StageJudges {
       return;
     }
     String schema = JudgeVerdicts.outputSchema(spec.rubricFile() != null);
+    // Lo ya visto (RH-B): lo de las rondas anteriores y lo que se marcó en el repositorio.
+    List<String> already = findings.seenLines(stage.getId(), SEEN_LIMIT);
+    String previousHead = round > 1 ? previousHead(stage.getId(), round - 1) : null;
     List<Map<String, Object>> launched = new ArrayList<>();
     for (JudgeSpec.Judge judge : spec.agents()) {
       AgentDefinition agent = workflow.agent(judge.agent()).orElseThrow();
@@ -263,7 +266,9 @@ class StageJudges {
                   source.baseCommit(),
                   seen,
                   round,
-                  agent.prompt()),
+                  agent.prompt(),
+                  already,
+                  previousHead),
               spec,
               judge);
       EffectivePolicy policy =
@@ -534,7 +539,7 @@ class StageJudges {
       Instant now) {
     JudgeSpec spec = judgeDefinition.judge();
     int budget = JudgeSpec.MAX_AGENT_CALLS - calls(stage.getId());
-    List<JudgeVerdicts.Target> targets = JudgeVerdicts.targets(verdicts, spec.refute(), budget);
+    List<JudgeVerdicts.Target> targets = JudgeVerdicts.cap(heads(verdicts), spec.refute(), budget);
     if (targets.isEmpty()) {
       return 0;
     }
@@ -679,6 +684,7 @@ class StageJudges {
     AgentLimits limits = launchLimits(run);
     String schema = JudgeVerdicts.outputSchema(spec.rubricFile() != null);
     List<JudgeSpec.Judge> panel = tier >= 2 ? spec.agents() : spec.agents().subList(0, 1);
+    List<String> already = findings.seenLines(judgeStage.getId(), SEEN_LIMIT);
     List<Map<String, Object>> launched = new ArrayList<>();
     for (JudgeSpec.Judge judge : panel) {
       AgentDefinition agent = workflow.agent(judge.agent()).orElseThrow();
@@ -691,7 +697,9 @@ class StageJudges {
                   judgedSha,
                   List.of(),
                   1,
-                  agent.prompt()),
+                  agent.prompt(),
+                  already,
+                  null),
               spec,
               judge,
               tier);
@@ -770,6 +778,8 @@ class StageJudges {
       saveVerdict(row, verdict, now);
       verdicts.add(verdict);
     }
+    StageRun stage = stageRuns.findById(stageRunId).orElseThrow();
+    verdicts = discardKnown(stage, 1, rows, verdicts, spec, now);
     return Optional.of(new DeltaOutcome(JudgeVerdicts.aggregate(verdicts), verdicts, false, null));
   }
 
@@ -849,6 +859,7 @@ class StageJudges {
       saveVerdict(row, verdict, now);
       verdicts.add(verdict);
     }
+    verdicts = discardKnown(stage, state.round(), rows, verdicts, spec, now);
     Integer tier = riskOf(stage.getId());
     if (spec.refute() > 0 && !spec.refutesAt(tier)) {
       refuteNote(
@@ -861,9 +872,9 @@ class StageJudges {
           now);
     }
     if (spec.refutesAt(tier)) {
-      List<JudgeVerdicts.Target> all = JudgeVerdicts.blockingTargets(verdicts);
+      List<JudgeVerdicts.Target> all = heads(verdicts);
       int budget = JudgeSpec.MAX_AGENT_CALLS - calls(stage.getId());
-      List<JudgeVerdicts.Target> targets = JudgeVerdicts.targets(verdicts, spec.refute(), budget);
+      List<JudgeVerdicts.Target> targets = JudgeVerdicts.cap(all, spec.refute(), budget);
       String note =
           JudgeVerdicts.trimmed(
               targets.size(),
@@ -948,25 +959,39 @@ class StageJudges {
       Map<Integer, List<JudgeVerdicts.Refutation>> byFinding,
       Instant now) {
     List<VerdictRow> verdictRows = verdictRows(stageRunId, round);
+    // Lo guardado al cerrar los jueces, con lo que ya se descartó por visto (RH-B): así los
+    // hallazgos que se refutan son los mismos, en el mismo orden, que cuando se lanzaron.
     List<Verdict> verdicts = new ArrayList<>();
     for (VerdictRow row : verdictRows) {
-      AgentRun judge = agentRuns.findById(row.agentRunId()).orElseThrow();
       verdicts.add(
-          JudgeVerdicts.verdict(
-              row.judge(), row.lens(), spec, json.readTree(judge.getStructuredOutput())));
+          JudgeVerdicts.saved(
+              row.judge(),
+              row.lens(),
+              json.readTree(row.criteria()),
+              json.readTree(row.findings()),
+              row.summary(),
+              spec));
     }
-    List<JudgeVerdicts.Target> targets = JudgeVerdicts.blockingTargets(verdicts);
+    List<List<JudgeVerdicts.Target>> groups =
+        findings.groups(JudgeVerdicts.blockingTargets(verdicts));
     Map<Integer, Map<Integer, JudgeVerdicts.Finding>> decided = new LinkedHashMap<>();
     for (Map.Entry<Integer, List<JudgeVerdicts.Refutation>> entry : byFinding.entrySet()) {
-      if (entry.getKey() >= targets.size()) {
+      if (entry.getKey() >= groups.size()) {
         continue;
       }
-      JudgeVerdicts.Target target = targets.get(entry.getKey());
-      JudgeVerdicts.Finding finding =
-          JudgeVerdicts.decide(target.finding(), entry.getValue(), spec.refute());
-      decided
-          .computeIfAbsent(target.verdict(), k -> new LinkedHashMap<>())
-          .put(target.index(), finding);
+      List<JudgeVerdicts.Target> group = groups.get(entry.getKey());
+      JudgeVerdicts.Finding head =
+          JudgeVerdicts.decide(group.getFirst().finding(), entry.getValue(), spec.refute());
+      // Lo que dicen otros jueces con las mismas palabras corre la misma suerte.
+      for (JudgeVerdicts.Target target : group) {
+        decided
+            .computeIfAbsent(target.verdict(), k -> new LinkedHashMap<>())
+            .put(
+                target.index(),
+                target
+                    .finding()
+                    .withRefutation(Boolean.TRUE.equals(head.refuted()), head.refutation()));
+      }
     }
     List<Verdict> after = new ArrayList<>();
     for (int i = 0; i < verdicts.size(); i++) {
@@ -976,6 +1001,65 @@ class StageJudges {
       after.add(verdict);
     }
     return after;
+  }
+
+  /**
+   * Descarta lo ya visto (RH-B) en los veredictos de la ronda y guarda los que cambian. Devuelve
+   * los veredictos con los que sigue la ronda.
+   */
+  private List<Verdict> discardKnown(
+      StageRun stage,
+      int round,
+      List<VerdictRow> rows,
+      List<Verdict> verdicts,
+      JudgeSpec spec,
+      Instant now) {
+    Findings.Filtered filtered = findings.discardKnown(stage.getId(), verdicts, spec);
+    if (filtered.total() == 0) {
+      return verdicts;
+    }
+    for (int i = 0; i < verdicts.size(); i++) {
+      if (filtered.verdicts().get(i) != verdicts.get(i)) {
+        saveVerdict(rows.get(i), filtered.verdicts().get(i), now);
+      }
+    }
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("stageKey", stage.getStageKey());
+    payload.put("round", round);
+    payload.put("discarded", filtered.total());
+    payload.put("outcomes", filtered.discarded());
+    transitions.append(
+        "stage_run",
+        stage.getId(),
+        "stage.judge.findings.filtered",
+        stage.getWorkflowRunId(),
+        payload,
+        now);
+    return filtered.verdicts();
+  }
+
+  /**
+   * Los hallazgos que bloquean que se refutan, uno por grupo de los que dicen lo mismo (RH-B), en
+   * el orden de los jueces.
+   */
+  private List<JudgeVerdicts.Target> heads(List<Verdict> verdicts) {
+    return findings.groups(JudgeVerdicts.blockingTargets(verdicts)).stream()
+        .map(List::getFirst)
+        .toList();
+  }
+
+  /** Cuántas líneas de lo ya visto recibe el juez, como mucho (RH-B). */
+  static final int SEEN_LIMIT = 30;
+
+  /** El commit que vio un juez de la ronda {@code round}, o {@code null}. */
+  private String previousHead(UUID stageRunId, int round) {
+    return jdbc.sql(
+            "SELECT head_sha FROM stage_verdict WHERE stage_run_id = ? AND round = ? AND head_sha"
+                + " IS NOT NULL ORDER BY created_at LIMIT 1")
+        .params(stageRunId, round)
+        .query(String.class)
+        .optional()
+        .orElse(null);
   }
 
   /** El veredicto de la ronda con los de sus jueces: la fase pasa o la ronda suspende. */
@@ -1016,6 +1100,7 @@ class StageJudges {
       transitions.advanceStage(stage, StageStatus.SUCCEEDED, "judge-passed", now);
       return;
     }
+    List<String> returning = findings.returning(stage.getId(), round);
     roundFailed(
         stage,
         definition,
@@ -1024,7 +1109,12 @@ class StageJudges {
         "El juez de la fase `"
             + stage.getStageKey()
             + "` ha suspendido el cambio.\n\n"
-            + JudgeVerdicts.report(verdicts, aggregate),
+            + JudgeVerdicts.report(verdicts, aggregate)
+            + (returning.isEmpty()
+                ? ""
+                : "\n\n## Lo que vuelve\n\nSe corrigió en una ronda anterior y el juez lo vuelve a"
+                    + " ver: míralo con más cuidado.\n\n"
+                    + String.join("\n", returning)),
         now);
   }
 
@@ -1610,6 +1700,9 @@ class StageJudges {
       if (f.refuted() != null) {
         one.put("refuted", f.refuted());
         one.put("refutation", f.refutation());
+      }
+      if (f.known() != null) {
+        one.put("known", f.known());
       }
       out.add(one);
     }

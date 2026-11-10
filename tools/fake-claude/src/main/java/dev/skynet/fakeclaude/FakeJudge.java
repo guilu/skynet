@@ -22,7 +22,8 @@ import tools.jackson.databind.json.JsonMapper;
  *   <li>Con el testigo, suspende con un 2 en cada criterio y un hallazgo que bloquea, y borra el
  *       testigo, así que la ronda siguiente aprueba. El testigo puede decir el hallazgo: {@code
  *       <fichero>[:<línea>] <texto>}; vacío, uno genérico. Con {@code !} delante, las notas son un
- *       5 y solo bloquea el hallazgo (para probar los escépticos).
+ *       5 y solo bloquea el hallazgo (para probar los escépticos). Con {@code =} delante (antes del
+ *       {@code !}, si lo lleva), no lo borra: el mismo hallazgo sale en cada ronda.
  * </ul>
  *
  * <p>Se activa sin reiniciar el runner: basta con crear el fichero. Con varios jueces a la vez,
@@ -59,7 +60,12 @@ final class FakeJudge {
     Path file = cwd.resolve(marker);
     boolean fail = Files.isRegularFile(file);
     String scripted = fail ? Files.readString(file, StandardCharsets.UTF_8).strip() : "";
-    if (fail) {
+    // Con «=» delante, el testigo no se borra: el mismo hallazgo sale en cada ronda (RH-B).
+    boolean keep = scripted.startsWith("=");
+    if (keep) {
+      scripted = scripted.substring(1).strip();
+    }
+    if (fail && !keep) {
       Files.delete(file);
     }
     // Con «!» delante, las notas son buenas y solo bloquea el hallazgo (para los escépticos).

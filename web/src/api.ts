@@ -1062,6 +1062,11 @@ export interface JudgeFinding {
   refuted?: boolean | null
   /** Por qué lo refutaron (o no). */
   refutation?: string | null
+  /**
+   * Si se descartó por ya visto (RH-B), el desenlace con el que coincidió: refutado en una ronda
+   * anterior, o intencionado o que no aplica según una persona.
+   */
+  known?: 'refutado' | 'aceptado' | 'irrelevante' | null
 }
 
 /**

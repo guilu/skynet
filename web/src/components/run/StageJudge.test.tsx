@@ -99,6 +99,36 @@ describe('StageJudge', () => {
     expect(screen.getByText(/No se pudo refutar: Pasa con -0,5/)).toBeInTheDocument()
   })
 
+  it('enseña lo descartado por ya visto con lo que se decidió entonces (RH-B)', () => {
+    render(
+      <StageJudge
+        judge={{
+          ...judge,
+          findings: [
+            {
+              file: 'src/Api.java',
+              line: null,
+              severity: 'blocking',
+              text: 'Falta validar la entrada',
+              judge: 'juez',
+              refuted: true,
+              refutation: 'Ya se marcó como intencionado (diego): se valida en el proxy',
+              known: 'aceptado',
+            },
+          ],
+        }}
+      />,
+    )
+    expect(screen.getByText('Ya visto')).toBeInTheDocument()
+    expect(screen.getByText(/Falta validar la entrada/).closest('del')).not.toBeNull()
+    expect(
+      screen.getByText('Ya se marcó como intencionado (diego): se valida en el proxy', {
+        exact: false,
+      }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Refutado:/)).toBeNull()
+  })
+
   it('dice que la fase pasó sin juez por el nivel del cambio (AU-C)', () => {
     render(
       <StageJudge

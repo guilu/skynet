@@ -1,5 +1,6 @@
 package dev.skynet.controlplane.workflow;
 
+import dev.skynet.controlplane.definition.JudgeSpec;
 import dev.skynet.controlplane.shared.InvalidRequestException;
 import dev.skynet.controlplane.shared.NotFoundException;
 import dev.skynet.controlplane.shared.TimeSource;
@@ -287,7 +288,7 @@ class Findings {
         .param("text", finding.text())
         .param("words", array(words))
         .param("fingerprint", fingerprint(words))
-        .param("outcome", refuted ? REFUTED : OPEN)
+        .param("outcome", refuted ? outcomeOf(finding) : OPEN)
         .param("by", refuted ? ACTOR : null)
         .param("reason", refuted ? finding.refutation() : null)
         .param("at", refuted ? Timestamp.from(now) : null)
@@ -335,7 +336,7 @@ class Findings {
         .param("text", finding.text() == null ? "" : finding.text())
         .param("words", array(words))
         .param("fingerprint", fingerprint(words))
-        .param("outcome", refuted ? REFUTED : OPEN)
+        .param("outcome", refuted ? outcomeOf(finding) : OPEN)
         .param("by", refuted ? ACTOR : null)
         .param("reason", refuted ? finding.refutation() : null)
         .param("at", refuted ? Timestamp.from(now) : null)
@@ -364,6 +365,205 @@ class Findings {
         .map(k -> k.firstSeenId() == null ? k.id() : k.firstSeenId())
         .findFirst()
         .orElse(null);
+  }
+
+  /** El desenlace de un hallazgo descartado: el de lo que ya se había visto, o refutado. */
+  private static String outcomeOf(Finding finding) {
+    return finding.known() == null ? REFUTED : finding.known();
+  }
+
+  // ---- No repetir lo ya visto (RH-B) ------------------------------------------------------------
+
+  /** Lo que ya se vio, con lo que hace falta para descartarlo y contarlo. */
+  private record Seen(
+      String file,
+      List<String> words,
+      String text,
+      String outcome,
+      String by,
+      String reason,
+      int round,
+      boolean thisStage) {}
+
+  private List<Seen> seen(UUID stageRunId, Set<String> outcomes, boolean otherStages) {
+    UUID repositoryId =
+        jdbc.sql(
+                "SELECT w.repository_id FROM stage_run s JOIN workflow_run w ON w.id ="
+                    + " s.workflow_run_id WHERE s.id = ?")
+            .param(stageRunId)
+            .query(UUID.class)
+            .optional()
+            .orElse(null);
+    return jdbc.sql(
+            """
+            SELECT file, words, text, outcome, outcome_by, outcome_reason, round,
+              stage_run_id = :stage AS this_stage
+            FROM finding
+            WHERE outcome IN (:outcomes)
+              AND (stage_run_id = :stage
+                   OR (:others AND repository_id = CAST(:repository AS uuid) AND outcome IN (:human)))
+            ORDER BY (stage_run_id = :stage) DESC, updated_at DESC
+            LIMIT 200
+            """)
+        .param("stage", stageRunId)
+        .param("outcomes", outcomes)
+        .param("others", otherStages && repositoryId != null)
+        .param("repository", repositoryId)
+        .param("human", Set.of(ACCEPTED, IRRELEVANT))
+        .query(
+            (rs, n) ->
+                new Seen(
+                    rs.getString("file"),
+                    words(rs.getArray("words")),
+                    rs.getString("text"),
+                    rs.getString("outcome"),
+                    rs.getString("outcome_by"),
+                    rs.getString("outcome_reason"),
+                    rs.getInt("round"),
+                    rs.getBoolean("this_stage")))
+        .list();
+  }
+
+  /**
+   * Lo que se descartó por ya visto en una ronda: los veredictos con esos hallazgos descartados y
+   * cuántos de cada desenlace.
+   */
+  record Filtered(List<Verdict> verdicts, Map<String, Integer> discarded) {
+
+    int total() {
+      return discarded.values().stream().mapToInt(Integer::intValue).sum();
+    }
+  }
+
+  /**
+   * Descarta antes de los escépticos lo que coincide con algo ya visto (RH-B): lo refutado en una
+   * ronda anterior de la fase y lo que una persona marcó como intencionado o que no aplica en el
+   * repositorio. Compara el fichero y las palabras, sin la lente: da igual qué juez lo diga.
+   */
+  Filtered discardKnown(UUID stageRunId, List<Verdict> verdicts, JudgeSpec spec) {
+    List<Seen> known = seen(stageRunId, Set.of(REFUTED, ACCEPTED, IRRELEVANT), true);
+    Map<String, Integer> discarded = new LinkedHashMap<>();
+    if (known.isEmpty()) {
+      return new Filtered(verdicts, discarded);
+    }
+    List<Verdict> out = new ArrayList<>();
+    for (Verdict verdict : verdicts) {
+      Map<Integer, Finding> decided = new HashMap<>();
+      List<Finding> list = verdict.findings();
+      for (int i = 0; i < list.size(); i++) {
+        Finding finding = list.get(i);
+        if (finding.discarded()) {
+          continue;
+        }
+        List<String> words = words(finding.text());
+        Seen match =
+            known.stream()
+                .filter(k -> same(finding.file(), k.file()))
+                .filter(k -> similarity(words, k.words()) >= similarity)
+                .findFirst()
+                .orElse(null);
+        if (match != null) {
+          decided.put(i, finding.withKnown(match.outcome(), because(match)));
+          discarded.merge(match.outcome(), 1, Integer::sum);
+        }
+      }
+      out.add(decided.isEmpty() ? verdict : JudgeVerdicts.refuted(verdict, decided, spec));
+    }
+    return new Filtered(out, discarded);
+  }
+
+  private static String because(Seen seen) {
+    String reason = blank(seen.reason()) ? "" : ": " + seen.reason();
+    return switch (seen.outcome()) {
+      case ACCEPTED -> "Ya se marcó como intencionado (" + seen.by() + ")" + reason;
+      case IRRELEVANT -> "Ya se marcó como que no aplica (" + seen.by() + ")" + reason;
+      default -> "Ya se refutó en la ronda " + seen.round() + reason;
+    };
+  }
+
+  /**
+   * Agrupa los hallazgos que bloquean que dicen lo mismo (RH-B): mismo fichero y palabras
+   * parecidas, sea cual sea el juez. Cada grupo, en el orden de su primer hallazgo, se refuta una
+   * sola vez.
+   */
+  List<List<JudgeVerdicts.Target>> groups(List<JudgeVerdicts.Target> targets) {
+    List<List<JudgeVerdicts.Target>> groups = new ArrayList<>();
+    List<List<String>> heads = new ArrayList<>();
+    for (JudgeVerdicts.Target target : targets) {
+      List<String> words = words(target.finding().text());
+      int at = -1;
+      for (int g = 0; g < groups.size() && at < 0; g++) {
+        Finding head = groups.get(g).getFirst().finding();
+        if (same(target.finding().file(), head.file())
+            && similarity(words, heads.get(g)) >= similarity) {
+          at = g;
+        }
+      }
+      if (at < 0) {
+        groups.add(new ArrayList<>(List.of(target)));
+        heads.add(words);
+      } else {
+        groups.get(at).add(target);
+      }
+    }
+    return groups;
+  }
+
+  /** Lo que se le dice al juez de lo ya visto: como mucho {@code limit} líneas. */
+  List<String> seenLines(UUID stageRunId, int limit) {
+    List<String> lines = new ArrayList<>();
+    for (Seen seen :
+        seen(stageRunId, Set.of(OPEN, REFUTED, FIXED, PARKED, ACCEPTED, IRRELEVANT), true)) {
+      if (lines.size() >= limit) {
+        break;
+      }
+      String where = blank(seen.file()) ? "" : "`" + seen.file() + "`: ";
+      String what =
+          switch (seen.outcome()) {
+            case OPEN, PARKED -> "sin corregir";
+            case FIXED -> "corregido";
+            case REFUTED -> "refutado, no es un problema real";
+            case ACCEPTED -> "intencionado, no lo señales";
+            default -> "no aplica, no lo señales";
+          };
+      String when = seen.thisStage() ? "ronda " + seen.round() : "otra ejecución";
+      String line = "- " + where + seen.text() + " (" + when + ": " + what + ")";
+      // Dos jueces que dijeron lo mismo son una sola línea.
+      if (!lines.contains(line)) {
+        lines.add(line);
+      }
+    }
+    return lines;
+  }
+
+  /**
+   * Lo que volvió a salir en la ronda {@code round} después de una corrección (RH-B), para el
+   * informe del que corrige: una línea por hallazgo.
+   */
+  List<String> returning(UUID stageRunId, int round) {
+    return jdbc
+        .sql(
+            "SELECT file, line, text, round - repeats AS first_round FROM finding WHERE"
+                + " stage_run_id = ? AND round = ? AND repeats > 0 AND outcome = ? ORDER BY"
+                + " created_at")
+        .params(stageRunId, round, OPEN)
+        .query(
+            (rs, n) -> {
+              String file = rs.getString("file");
+              Integer line = (Integer) rs.getObject("line");
+              String where =
+                  blank(file) ? "" : "`" + (line == null ? file : file + ":" + line) + "`: ";
+              return "- ⚠ "
+                  + where
+                  + rs.getString("text")
+                  + " (ya se señaló en la ronda "
+                  + Math.max(1, rs.getInt("first_round"))
+                  + " y sigue)";
+            })
+        .list()
+        .stream()
+        .distinct()
+        .toList();
   }
 
   /** Un literal de array de Postgres: las palabras solo llevan letras de la a a la z. */

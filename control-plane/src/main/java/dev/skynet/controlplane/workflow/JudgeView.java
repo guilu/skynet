@@ -89,6 +89,7 @@ public record JudgeView(
   /**
    * Un hallazgo: {@code severity} es {@code blocking} o {@code minor}. {@code refuted} es si lo
    * refutaron los escépticos (VA-C), o {@code null} si no se intentó; {@code refutation}, por qué.
+   * {@code known}, si se descartó por ya visto (RH-B): el desenlace con el que coincidió.
    */
   public record Issue(
       String file,
@@ -97,5 +98,6 @@ public record JudgeView(
       String text,
       String judge,
       Boolean refuted,
-      String refutation) {}
+      String refutation,
+      String known) {}
 }

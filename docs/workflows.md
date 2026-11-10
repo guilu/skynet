@@ -488,6 +488,14 @@ stages:
   - `aceptado` (es real, pero intencionado) e `irrelevante` (el juez se equivocó): los pone una persona con «Es intencionado» o «No aplica» en la fase, y se deshacen con «Deshacer».
 - Un `aceptado` vale para todo el repositorio. Las fases de juez y de CI enseñan su **Registro de hallazgos**, y la decisión queda en **Actividad** (`finding.outcome.set`). El registro se guarda siempre; lo de antes de RH-A no se rellena.
 
+**No repetir lo ya visto** (RH-B). Con el registro de RH-A, el juez deja de repetir lo que ya se decidió:
+
+- **El juez recibe lo ya visto.** Su prompt lleva «Lo que ya se ha señalado», hasta 30 líneas: lo de las rondas anteriores de la fase, con su desenlace, y lo que una persona marcó como intencionado o que no aplica en el repositorio. Va con la orden de no repetir lo refutado, lo intencionado ni lo que no aplica, y de volver a mirar lo que sigue sin corregir. Los jueces del delta (AU-B) también lo reciben.
+- **Desde la ronda 2, primero el delta:** «Mira primero `git diff <commit de la ronda anterior>`: es lo que se corrigió». Después puntúa el cambio entero, como siempre.
+- **Se descarta antes de los escépticos.** Lo que coincide (mismo fichero y palabras parecidas, sin mirar la lente) con algo refutado en una ronda anterior de la fase, o marcado como intencionado o que no aplica en el repositorio, sale como «Ya visto» con lo que se decidió entonces. Deja de bloquear y no gasta escépticos: `stage.judge.findings.filtered`.
+- **Duplicados entre jueces:** los hallazgos que bloquean y dicen lo mismo en una ronda se refutan una sola vez, y lo que digan los escépticos vale para todos.
+- **Lo que vuelve:** si un hallazgo sale otra vez después de una ronda de corrección, el informe para el que corrige lo marca en «Lo que vuelve»: «⚠ ya se señaló en la ronda 1 y sigue».
+
 **Fusionar la PR.** Una fase `type: github-merge` fusiona la PR de la ejecución, normalmente detrás de su `github-check` y de una puerta que lo aprueba (EN-C):
 
 ```yaml

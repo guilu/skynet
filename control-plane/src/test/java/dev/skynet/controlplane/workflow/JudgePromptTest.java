@@ -59,8 +59,43 @@ class JudgePromptTest {
     assertThat(JudgePrompt.Context.class.getRecordComponents())
         .extracting(c -> c.getName())
         .containsExactly(
-            "workItemKey", "title", "description", "baseCommit", "checks", "round", "extra");
+            "workItemKey",
+            "title",
+            "description",
+            "baseCommit",
+            "checks",
+            "round",
+            "extra",
+            "seen",
+            "previousHead");
     assertThat(prompt).doesNotContain("summary\":").doesNotContain("Declarado por el agente");
+  }
+
+  @Test
+  void whatWasAlreadySaidGoesWithItsOutcomeAndTheDeltaOfTheLastRound() {
+    JudgePrompt.Context context =
+        new JudgePrompt.Context(
+            "ENG-1",
+            "Arreglar la división",
+            null,
+            "abc1234",
+            List.of(),
+            2,
+            null,
+            List.of(
+                "- `src/Calc.java`: Divide entre cero (ronda 1: refutado, no es un problema real)"),
+            "def5678");
+    String prompt = JudgePrompt.build(context, SPEC, SPEC.agents().getFirst());
+    assertThat(prompt)
+        .contains("Es la ronda 2")
+        .contains("Mira primero `git diff def5678`: es lo que se corrigió desde la ronda anterior.")
+        .contains("## Lo que ya se ha señalado")
+        .contains("No vuelvas a señalar lo refutado, lo intencionado ni lo que no aplica")
+        .contains(
+            "- `src/Calc.java`: Divide entre cero (ronda 1: refutado, no es un problema real)");
+    assertThat(JudgePrompt.build(CONTEXT, SPEC, SPEC.agents().getFirst()))
+        .doesNotContain("Lo que ya se ha señalado")
+        .doesNotContain("Mira primero");
   }
 
   @Test

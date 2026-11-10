@@ -56,6 +56,8 @@ final class JudgeVerdicts {
    * @param judge el juez que lo encontró
    * @param refuted si los escépticos lo refutaron (VA-C); {@code null} si no se intentó
    * @param refutation por qué: lo que dijo el primer escéptico que lo refutó (o que no)
+   * @param known si se descartó por ya visto (RH-B), el desenlace con el que coincidió; si no,
+   *     {@code null}
    */
   record Finding(
       String file,
@@ -64,10 +66,22 @@ final class JudgeVerdicts {
       String text,
       String judge,
       Boolean refuted,
-      String refutation) {
+      String refutation,
+      String known) {
 
     Finding(String file, Integer line, String severity, String text, String judge) {
-      this(file, line, severity, text, judge, null, null);
+      this(file, line, severity, text, judge, null, null, null);
+    }
+
+    Finding(
+        String file,
+        Integer line,
+        String severity,
+        String text,
+        String judge,
+        Boolean refuted,
+        String refutation) {
+      this(file, line, severity, text, judge, refuted, refutation, null);
     }
 
     /** Si bloquea: es {@code blocking} y no lo han refutado. */
@@ -81,7 +95,15 @@ final class JudgeVerdicts {
     }
 
     Finding withRefutation(boolean refuted, String refutation) {
-      return new Finding(file, line, severity, text, judge, refuted, refutation);
+      return new Finding(file, line, severity, text, judge, refuted, refutation, known);
+    }
+
+    /**
+     * Ya se había visto (RH-B): coincide con uno {@code outcome} (refutado, aceptado o
+     * irrelevante), así que se descarta antes de los escépticos con {@code reason}.
+     */
+    Finding withKnown(String outcome, String reason) {
+      return new Finding(file, line, severity, text, judge, true, reason, outcome);
     }
 
     /** {@code fichero:línea}, {@code fichero} o {@code null}. */
@@ -225,6 +247,44 @@ final class JudgeVerdicts {
     return judged(judge, lens, criteria, findings, text(output.path("summary")), spec);
   }
 
+  /**
+   * El veredicto de un juez tal como se guardó en {@code stage_verdict} (con lo que se descartó por
+   * ya visto, RH-B): sus notas y sus hallazgos, leídos otra vez.
+   */
+  static Verdict saved(
+      String judge,
+      String lens,
+      JsonNode criteria,
+      JsonNode findings,
+      String summary,
+      JudgeSpec spec) {
+    List<CriterionScore> scores = new ArrayList<>();
+    for (JsonNode c : criteria) {
+      scores.add(
+          new CriterionScore(
+              text(c.path("id")),
+              c.path("score").asInt(),
+              text(c.path("reason")),
+              c.path("weight").asInt(1),
+              c.path("required").asBoolean(false)));
+    }
+    List<Finding> list = new ArrayList<>();
+    for (JsonNode f : findings) {
+      JsonNode refuted = f.path("refuted");
+      list.add(
+          new Finding(
+              text(f.path("file")),
+              f.path("line").isNumber() ? f.path("line").asInt() : null,
+              text(f.path("severity")),
+              text(f.path("text")),
+              text(f.path("judge")),
+              refuted.isBoolean() ? refuted.asBoolean() : null,
+              text(f.path("refutation")),
+              text(f.path("known"))));
+    }
+    return judged(judge, lens, scores, list, summary, spec);
+  }
+
   /** El veredicto de un juez con sus notas ya leídas. */
   static Verdict judged(
       String judge,
@@ -330,7 +390,14 @@ final class JudgeVerdicts {
    * refute} escépticos cada uno.
    */
   static List<Target> targets(List<Verdict> verdicts, int refute, int budget) {
-    List<Target> all = blockingTargets(verdicts);
+    return cap(blockingTargets(verdicts), refute, budget);
+  }
+
+  /**
+   * Los primeros de {@code all} que se refutan: como mucho {@link JudgeSpec#MAX_REFUTED_FINDINGS} y
+   * los que quepan en {@code budget} llamadas con {@code refute} escépticos cada uno.
+   */
+  static List<Target> cap(List<Target> all, int refute, int budget) {
     int fit = refute <= 0 ? 0 : Math.max(0, budget) / refute;
     return all.subList(0, Math.min(all.size(), Math.min(JudgeSpec.MAX_REFUTED_FINDINGS, fit)));
   }

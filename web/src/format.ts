@@ -270,6 +270,12 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `${p('stageKey')}: sin cambios desde el juicio en ${p('judgedSha').slice(0, 7)}`
     case 'stage.judge.delta.skipped':
       return `${p('stageKey')}: lo que cambió desde el juicio es de nivel 0, no se vuelve a juzgar`
+    case 'stage.judge.findings.filtered':
+      return `${p('stageKey')}: ${
+        Number(payload.discarded) === 1
+          ? 'se descarta 1 hallazgo ya visto'
+          : `se descartan ${p('discarded')} hallazgos ya vistos`
+      } antes de los escépticos`
     case 'finding.outcome.set': {
       const where = payload.file ? ` en \`${p('file')}\`` : ''
       const what =

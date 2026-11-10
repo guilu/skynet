@@ -53,6 +53,8 @@ final class JudgePrompt {
    * @param checks lo que comprobó Skynet en esta ronda
    * @param round la ronda, desde 1
    * @param extra las indicaciones del propio agente juez, o {@code null}
+   * @param seen lo que ya se ha señalado (RH-B), una línea por hallazgo con su desenlace
+   * @param previousHead el commit que vio el juez en la ronda anterior, o {@code null}
    */
   record Context(
       String workItemKey,
@@ -61,7 +63,21 @@ final class JudgePrompt {
       String baseCommit,
       List<Check> checks,
       int round,
-      String extra) {}
+      String extra,
+      List<String> seen,
+      String previousHead) {
+
+    Context(
+        String workItemKey,
+        String title,
+        String description,
+        String baseCommit,
+        List<Check> checks,
+        int round,
+        String extra) {
+      this(workItemKey, title, description, baseCommit, checks, round, extra, List.of(), null);
+    }
+  }
 
   private JudgePrompt() {}
 
@@ -149,7 +165,23 @@ final class JudgePrompt {
           .append(context.round())
           .append(
               ": el agente ha corregido lo que se encontró en la anterior. Juzga cómo está"
-                  + " ahora.\n");
+                  + " ahora.");
+      if (context.previousHead() != null) {
+        out.append(" Mira primero `git diff ")
+            .append(context.previousHead())
+            .append("`: es lo que se corrigió desde la ronda anterior. Después puntúa el cambio")
+            .append(" entero, como siempre.");
+      }
+      out.append('\n');
+    }
+    if (context.seen() != null && !context.seen().isEmpty()) {
+      out.append("\n## Lo que ya se ha señalado\n\n");
+      out.append(
+          "Esto ya lo dijo un juez, con lo que pasó después. No vuelvas a señalar lo refutado, lo"
+              + " intencionado ni lo que no aplica, salvo que el código haya cambiado y ahora sí sea"
+              + " un problema. Lo que sigue sin corregir, compruébalo: si sigue ahí, señálalo otra"
+              + " vez.\n\n");
+      context.seen().forEach(line -> out.append(line).append('\n'));
     }
     out.append("\n## Lo que ya ha comprobado Skynet\n\n");
     if (context.checks().isEmpty()) {
