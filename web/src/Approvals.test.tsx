@@ -68,6 +68,11 @@ describe('Aprobaciones', () => {
     expect(screen.getByRole('region', { name: 'Historial' })).toHaveTextContent(
       '¿Cubre los precios en euros?',
     )
+    // ES-C: los supuestos de la ejecución, aparte y con su fase.
+    const assumptions = screen.getByRole('region', { name: 'Supuestos para revisar (1)' })
+    expect(within(assumptions).getByRole('list', { name: 'Supuestos' })).toHaveTextContent(
+      'Los precios del CSV vienen en euros plan',
+    )
   })
 
   it('rechazar y pedir cambios exigen un comentario', async () => {

@@ -695,6 +695,7 @@ public class RunSteps {
             workItem.getTitle(),
             workItem.getDescription(),
             evidence(run, definition, stage.getStageKey()),
+            RunAssumptions.of(jdbc, run.getId()),
             costOf(run.getId()),
             publicUrl,
             run.getId(),

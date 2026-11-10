@@ -524,7 +524,37 @@ public record StageDefinition(
     if (outputSchemaPath != null) {
       return JsonMapper.shared().writeValueAsString(Map.of("$ref", outputSchemaPath));
     }
-    return outputSchema == null ? null : JsonMapper.shared().writeValueAsString(outputSchema);
+    return outputSchema == null
+        ? null
+        : JsonMapper.shared().writeValueAsString(withAssumptions(outputSchema));
+  }
+
+  /** La propiedad reservada de los supuestos (ES-C): lo que el agente supuso sin comprobarlo. */
+  public static final String ASSUMPTIONS = "assumptions";
+
+  /**
+   * El schema con {@link #ASSUMPTIONS} entre sus propiedades, si no la declara: una lista de textos
+   * que el agente puede dejar vacía. Skynet los junta y los pone en la PR (ES-C).
+   */
+  static Map<String, Object> withAssumptions(Map<String, Object> schema) {
+    if (!(schema.get("properties") instanceof Map<?, ?> properties)
+        || properties.containsKey(ASSUMPTIONS)) {
+      return schema;
+    }
+    Map<String, Object> withIt = new java.util.LinkedHashMap<>();
+    properties.forEach((k, v) -> withIt.put(String.valueOf(k), v));
+    withIt.put(
+        ASSUMPTIONS,
+        Map.of(
+            "type",
+            "array",
+            "items",
+            Map.of("type", "string"),
+            "description",
+            "Lo que has supuesto sin poder comprobarlo, una frase cada uno; vacío si nada"));
+    Map<String, Object> copy = new java.util.LinkedHashMap<>(schema);
+    copy.put("properties", withIt);
+    return copy;
   }
 
   /** Una fase sin hijos. */

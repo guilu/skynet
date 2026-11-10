@@ -2979,7 +2979,17 @@ class WorkflowEngineIT extends IntegrationTest {
     Runner runner = register("laptop");
     String runId = launch(definitionId, Map.of()).path("id").asString();
     JsonNode plan = runner.claim().getFirst();
-    complete(runner, plan, "/w/eng/plan", Map.of("summary", "Hacer X"));
+    // ES-C: la salida de la fase pide también lo que el agente supuso sin comprobarlo.
+    assertThat(plan.path("start").path("outputSchema").asString()).contains("\"assumptions\"");
+    complete(
+        runner,
+        plan,
+        "/w/eng/plan",
+        Map.of(
+            "summary",
+            "Hacer X",
+            "assumptions",
+            List.of("El límite es por usuario", " ", "Sin caché")));
 
     // La puerta espera con su petición; implement no arranca.
     assertThat(stageStatuses(runId))
@@ -3018,6 +3028,15 @@ class WorkflowEngineIT extends IntegrationTest {
     assertThat(evidence.path("consequences").path("reject").asString())
         .isEqualTo("La ejecución falla y se cancelan implement, tests.");
     assertThat(evidence.path("origin").path("workflow").path("key").asString()).isEqualTo("puerta");
+    // Los supuestos de la ejecución, en la puerta, en su API y en Actividad; no paran nada.
+    assertThat(evidence.path("assumptions")).hasSize(2);
+    assertThat(evidence.path("assumptions").get(0).path("stageKey").asString()).isEqualTo("plan");
+    assertThat(evidence.path("assumptions").get(0).path("text").asString())
+        .isEqualTo("El límite es por usuario");
+    JsonNode assumptions = get("/api/workflow-runs/" + runId + "/assumptions");
+    assertThat(assumptions).hasSize(2);
+    assertThat(assumptions.get(1).path("text").asString()).isEqualTo("Sin caché");
+    assertThat(eventTypes(runId)).contains("run.assumptions.collected");
 
     // Comentar no decide; un worker que vuelve a evaluar la ejecución (un reinicio) tampoco.
     JsonNode commented =

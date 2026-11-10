@@ -105,6 +105,10 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `Condición de ${p('stageKey')}: ${p('condition')} es ${
         payload.result ? 'verdadera' : 'falsa'
       }`
+    case 'run.assumptions.collected':
+      return `${p('stageKey')} supuso ${
+        Number(payload.count) === 1 ? '1 cosa' : `${p('count')} cosas`
+      } sin poder comprobarlo`
     case 'run.resumed':
       return `${p('actor')} reintentó la fase ${p('stageKey')} (intento ${p('attempt')})`
     case 'stage.retry.scheduled':

@@ -157,6 +157,11 @@ stages:
 ```
 
 - **Salida estructurada:** un agente con `output`, o en una fase con `outputSchema`, se lanza pidiendo esa salida (`--json-schema` en Claude Code) y lo que devuelve se guarda en la invocación (`structuredOutput`). Si termina bien pero no la devuelve, la invocación falla.
+- **Supuestos** (ES-C): `assumptions` es una propiedad reservada de la salida, una lista de textos con lo que el agente supuso sin poder comprobarlo (p. ej. «he supuesto que el límite es por usuario»). Si la fase tiene `outputSchema` en línea y no la declara, Skynet la añade sola; con `output` de agente o un schema en fichero, hay que declararla. Skynet junta los del último intento de cada fase, sin repetir y como mucho 30 (cada uno cortado en 400 caracteres), y los enseña:
+  - en la descripción de la PR, en «## Supuestos para revisar», con la fase de cada uno;
+  - en la puerta (`evidence.assumptions`), en una sección aparte;
+  - en la ejecución de la web, en la tarjeta «Supuestos para revisar».
+  - Cada fase que deja alguno emite `run.assumptions.collected` («spec supuso 2 cosas sin poder comprobarlo»). Los supuestos no paran nada, tampoco la autoaprobación de AU-C: son para revisarlos después.
 - **Qué se puede leer** (solo de fases de las que depende, directa o indirectamente):
   - `<fase>.status`: el estado de la fase, p. ej. `review.status == 'SUCCEEDED'`.
   - `<fase>.exitCode`: el código de salida de una fase `command`.
@@ -749,6 +754,7 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `GET` | `/api/approvals?status=&projectId=&risk=` | Las peticiones de aprobación: primero las pendientes (las de más riesgo y las más antiguas), luego las decididas. `status` admite varios separados por comas (`PENDING`, `APPROVED`, `REJECTED`, `CHANGES_REQUESTED`, `CANCELLED`, `EXPIRED`) |
 | `GET` | `/api/approvals/{id}` | Una petición con su evidencia y sus decisiones |
 | `POST` | `/api/approvals/{id}/decisions` | Decide (`{action: APPROVE \| REJECT \| REQUEST_CHANGES \| COMMENT, comment}`) |
+| `GET` | `/api/workflow-runs/{id}/assumptions` | Los supuestos de la ejecución, `[{stageKey, text}]` (ES-C) |
 | `GET` | `/api/workflow-runs/{id}/findings` | El registro de hallazgos de la ejecución, con su desenlace (RH-A) |
 | `POST` | `/api/findings/{id}/outcome` | Decide qué es un hallazgo (`{outcome: aceptado \| irrelevante \| abierto, reason}`); `abierto` lo deshace y, si la fase ya terminó, lo deja `aparcado` |
 | `GET` | `/api/factory/judges?days=30` | Ruido y acierto de cada juez por proveedor, modelo y lente, con sus últimos hallazgos refutados o que no aplican (RH-C); `days` de 1 a 365 |

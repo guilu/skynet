@@ -218,8 +218,9 @@ public class AgentEventIngestion {
       }
       case RESULT -> {
         if (p.get("structuredOutput") != null) {
-          agent.recordStructuredOutput(
-              JsonMapper.shared().writeValueAsString(p.get("structuredOutput")));
+          String output = JsonMapper.shared().writeValueAsString(p.get("structuredOutput"));
+          agent.recordStructuredOutput(output);
+          assumptions(stage, output, now);
         }
         agent.recordResult(
             string(p, "subtype"),
@@ -364,5 +365,20 @@ public class AgentEventIngestion {
   /** Solo las ventanas que conoce Skynet ({@code five_hour} y {@code seven_day}). */
   private static String window(String window) {
     return "five_hour".equals(window) || "seven_day".equals(window) ? window : null;
+  }
+
+  /** Lo que el agente supuso sin comprobarlo (ES-C) queda en Actividad; no para nada. */
+  private void assumptions(StageRun stage, String output, Instant now) {
+    List<String> texts = RunAssumptions.parse(output);
+    if (stage == null || texts.isEmpty()) {
+      return;
+    }
+    transitions.append(
+        "workflow_run",
+        stage.getWorkflowRunId(),
+        "run.assumptions.collected",
+        stage.getWorkflowRunId(),
+        Map.of("stageKey", stage.getStageKey(), "count", texts.size(), "assumptions", texts),
+        now);
   }
 }

@@ -455,6 +455,9 @@ class ContractIT extends IntegrationTest {
       evidence.put("changesRequested", null);
       evidence.put("pullRequest", null);
       evidence.put("autoApprove", null);
+      evidence.put(
+          "assumptions",
+          List.of(Map.of("stageKey", "plan", "text", "Los precios del CSV vienen en euros")));
       return new ApprovalView(
           APPROVAL,
           RUN,

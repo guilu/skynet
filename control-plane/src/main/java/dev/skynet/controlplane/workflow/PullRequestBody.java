@@ -48,6 +48,34 @@ final class PullRequestBody {
       String publicUrl,
       UUID runId,
       String closes) {
+    return of(
+        intro,
+        workItemKey,
+        workItemTitle,
+        workItemDescription,
+        stages,
+        List.of(),
+        costUsd,
+        publicUrl,
+        runId,
+        closes);
+  }
+
+  /**
+   * La descripción, con los supuestos de la ejecución (ES-C) en «Supuestos para revisar» detrás de
+   * las evidencias: lo que los agentes supusieron sin poder comprobarlo.
+   */
+  static String of(
+      String intro,
+      String workItemKey,
+      String workItemTitle,
+      String workItemDescription,
+      List<StageLine> stages,
+      List<RunAssumptions.Assumption> assumptions,
+      BigDecimal costUsd,
+      String publicUrl,
+      UUID runId,
+      String closes) {
     StringBuilder body = new StringBuilder();
     if (intro != null && !intro.isBlank()) {
       body.append(intro.strip()).append("\n\n");
@@ -85,6 +113,17 @@ final class PullRequestBody {
               .append(cut(stage.details().strip(), MAX_DETAILS))
               .append("\n\n</details>\n");
         }
+      }
+    }
+    if (!assumptions.isEmpty()) {
+      body.append("\n## Supuestos para revisar\n\nLo que los agentes supusieron sin poder")
+          .append(" comprobarlo. No ha parado nada: míralo antes de fusionar.\n\n");
+      for (RunAssumptions.Assumption a : assumptions) {
+        body.append("- ")
+            .append(oneLine(a.text()))
+            .append(" (`")
+            .append(a.stageKey())
+            .append("`)\n");
       }
     }
     if (costUsd != null) {
