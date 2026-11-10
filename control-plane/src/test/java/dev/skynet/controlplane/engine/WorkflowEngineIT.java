@@ -1961,6 +1961,163 @@ class WorkflowEngineIT extends IntegrationTest {
   }
 
   @Test
+  void findingsKeepTheirFingerprintAndOutcomeAcrossRounds() {
+    String definitionId =
+        publish(
+            JUDGED
+                .replace("id: juzgada", "id: registrada")
+                .replace("      rubric:\n", "      refute: 1\n      rubric:\n"));
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    verified(runner, runner.claim().getFirst(), true);
+    complete(
+        runner,
+        runner.claim().getFirst(),
+        "/w/eng/juez",
+        verdict(
+            5,
+            5,
+            List.of(
+                Map.of(
+                    "file",
+                    "src/Calc.java",
+                    "line",
+                    12,
+                    "severity",
+                    "blocking",
+                    "text",
+                    "Divide entre cero sin comprobarlo"),
+                Map.of(
+                    "file",
+                    "src/Calc.java",
+                    "line",
+                    20,
+                    "severity",
+                    "blocking",
+                    "text",
+                    "Redondea mal los negativos"),
+                Map.of(
+                    "file",
+                    "README.md",
+                    "line",
+                    1,
+                    "severity",
+                    "minor",
+                    "text",
+                    "Falta un ejemplo de uso"))));
+    // Un escéptico por hallazgo que bloquea: tumba el de redondear.
+    List<JsonNode> skeptics = new ArrayList<>();
+    await(
+        () -> {
+          skeptics.addAll(runner.claim());
+          return skeptics.size() >= 2;
+        });
+    for (JsonNode skeptic : skeptics) {
+      boolean refutes = taskPrompt(skeptic.path("start")).contains("Redondea");
+      complete(
+          runner,
+          skeptic,
+          "/w/eng/juez",
+          Map.of("refuted", refutes, "reason", refutes ? "Redondea hacia cero a propósito" : "No"));
+    }
+    JsonNode fix = runner.claim().getFirst();
+    assertThat(fix.path("type").asString()).isEqualTo("RESUME");
+
+    // Tras la ronda 1: dos abiertos y uno refutado.
+    JsonNode first = get("/api/workflow-runs/" + runId + "/findings");
+    assertThat(first).hasSize(3);
+    assertThat(first.findValuesAsString("outcome"))
+        .containsExactlyInAnyOrder("abierto", "refutado", "abierto");
+    complete(runner, fix, "/w/eng/implement");
+
+    // La ronda 2 repite el de dividir con otra línea y una palabra más, y ya no dice lo del README.
+    verified(runner, awaitCommand(runner), true);
+    complete(
+        runner,
+        runner.claim().getFirst(),
+        "/w/eng/juez",
+        verdict(
+            5,
+            5,
+            List.of(
+                Map.of(
+                    "file",
+                    "src/Calc.java",
+                    "line",
+                    14,
+                    "severity",
+                    "minor",
+                    "text",
+                    "Divide entre cero sin comprobarlo antes"))));
+    assertThat(stageStatuses(runId)).containsEntry("juzgar", "SUCCEEDED");
+
+    JsonNode findings = get("/api/workflow-runs/" + runId + "/findings");
+    assertThat(findings).hasSize(3);
+    JsonNode divide = byFile(findings, "src/Calc.java", "Divide");
+    assertThat(divide.path("outcome").asString()).isEqualTo("aparcado");
+    assertThat(divide.path("repeats").asInt()).isEqualTo(1);
+    assertThat(divide.path("round").asInt()).isEqualTo(2);
+    assertThat(divide.path("line").asInt()).isEqualTo(14);
+    assertThat(divide.path("lens").asString()).isEqualTo("correctness");
+    assertThat(divide.path("stageKey").asString()).isEqualTo("juzgar");
+    JsonNode round = byFile(findings, "src/Calc.java", "Redondea");
+    assertThat(round.path("outcome").asString()).isEqualTo("refutado");
+    assertThat(round.path("outcomeReason").asString()).isEqualTo("Redondea hacia cero a propósito");
+    JsonNode readme = byFile(findings, "README.md", "Falta");
+    assertThat(readme.path("outcome").asString()).isEqualTo("corregido");
+    assertThat(readme.path("outcomeBy").asString()).isEqualTo("skynet");
+
+    // Una persona dice que es intencionado, y luego lo deshace: vuelve a aparcado.
+    String id = divide.path("id").asString();
+    JsonNode accepted =
+        post("/api/findings/" + id + "/outcome", Map.of("outcome", "aceptado", "reason", "Adrede"));
+    assertThat(accepted.path("outcome").asString()).isEqualTo("aceptado");
+    assertThat(accepted.path("outcomeBy").asString()).isNotBlank().isNotEqualTo("skynet");
+    assertThat(accepted.path("outcomeReason").asString()).isEqualTo("Adrede");
+    JsonNode undone = post("/api/findings/" + id + "/outcome", Map.of("outcome", "abierto"));
+    assertThat(undone.path("outcome").asString()).isEqualTo("aparcado");
+    assertBadRequest(
+        () -> post("/api/findings/" + id + "/outcome", Map.of("outcome", "corregido")),
+        "Desenlace desconocido");
+    assertThat(eventTypes(runId)).contains("finding.outcome.set");
+
+    // Otra ejecución que dice lo mismo apunta a la primera vez que salió.
+    complete(runner, runner.claim().getFirst(), "/w/eng/entregar");
+    String second = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    verified(runner, runner.claim().getFirst(), true);
+    complete(
+        runner,
+        runner.claim().getFirst(),
+        "/w/eng/juez",
+        verdict(
+            5,
+            5,
+            List.of(
+                Map.of(
+                    "file",
+                    "src/Calc.java",
+                    "severity",
+                    "minor",
+                    "text",
+                    "Divide entre cero sin comprobarlo"))));
+    JsonNode again = get("/api/workflow-runs/" + second + "/findings").get(0);
+    assertThat(again.path("firstSeenId").asString()).isEqualTo(id);
+    assertThat(again.path("firstSeenRunId").asString()).isEqualTo(runId);
+  }
+
+  private static JsonNode byFile(JsonNode findings, String file, String text) {
+    for (JsonNode finding : findings) {
+      if (file.equals(finding.path("file").asString())
+          && finding.path("text").asString().contains(text)) {
+        return finding;
+      }
+    }
+    throw new AssertionError("No hay hallazgo en " + file + " con «" + text + "»: " + findings);
+  }
+
+  @Test
   void whenSkepticsRefuteEveryBlockingFindingTheJudgePassesWithoutAFix() {
     String definitionId =
         publish(

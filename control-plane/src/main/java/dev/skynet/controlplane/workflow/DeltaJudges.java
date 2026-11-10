@@ -49,6 +49,7 @@ class DeltaJudges {
   private final WorkflowDefinitions definitions;
   private final Workspaces workspaces;
   private final StageJudges judges;
+  private final Findings findings;
   private final RunTransitions transitions;
   private final ObjectMapper json;
 
@@ -60,6 +61,7 @@ class DeltaJudges {
       WorkflowDefinitions definitions,
       Workspaces workspaces,
       StageJudges judges,
+      Findings findings,
       RunTransitions transitions,
       ObjectMapper json) {
     this.jdbc = jdbc;
@@ -69,6 +71,7 @@ class DeltaJudges {
     this.definitions = definitions;
     this.workspaces = workspaces;
     this.judges = judges;
+    this.findings = findings;
     this.transitions = transitions;
     this.json = json;
   }
@@ -180,6 +183,9 @@ class DeltaJudges {
             + JudgeVerdicts.format(aggregate.score())
             + " / 5)";
     update(stage.getId(), aggregate.passed() ? PASSED : FAILED, aggregate, null, now);
+    // Lo que encontraron los jueces del delta (RH-A): nadie lo corrige después, así que se aparca.
+    findings.record(stage.getId(), 1, Findings.DELTA, outcome.verdicts(), now);
+    findings.park(stage.getId(), now);
     payload.put("score", aggregate.score());
     payload.put("passed", aggregate.passed());
     payload.put("approvals", aggregate.approvals());

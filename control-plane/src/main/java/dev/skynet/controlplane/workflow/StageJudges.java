@@ -79,6 +79,7 @@ class StageJudges {
   private final QuotaWaits quotaWaits;
   private final ObjectProvider<RunService> runs;
   private final RunRisks risks;
+  private final Findings findings;
   private final ApplicationEventPublisher publisher;
   private final ObjectMapper json;
   private final TimeSource time;
@@ -98,6 +99,7 @@ class StageJudges {
       QuotaWaits quotaWaits,
       ObjectProvider<RunService> runs,
       RunRisks risks,
+      Findings findings,
       ApplicationEventPublisher publisher,
       ObjectMapper json,
       TimeSource time) {
@@ -115,6 +117,7 @@ class StageJudges {
     this.quotaWaits = quotaWaits;
     this.runs = runs;
     this.risks = risks;
+    this.findings = findings;
     this.publisher = publisher;
     this.json = json;
     this.time = time;
@@ -1005,7 +1008,9 @@ class StageJudges {
     payload.put("refuted", aggregate.findings().stream().filter(Finding::discarded).count());
     transitions.append(
         "stage_run", stage.getId(), "stage.judge.verdict", stage.getWorkflowRunId(), payload, now);
+    findings.record(stage.getId(), round, Findings.JUDGE, verdicts, now);
     if (aggregate.passed()) {
+      findings.park(stage.getId(), now);
       status(stage.getId(), PASSED, round, null, now);
       recordJudged(stage, round, now);
       transitions.advanceStage(stage, StageStatus.SUCCEEDED, "judge-passed", now);
@@ -1625,6 +1630,7 @@ class StageJudges {
 
   /** La fase falla con {@code error}, que queda en el estado y en {@code stage.judge.failed}. */
   private void fail(StageRun stage, State state, String error, Instant now) {
+    findings.park(stage.getId(), now);
     status(stage.getId(), FAILED, state.round(), error, now);
     transitions.append(
         "stage_run",

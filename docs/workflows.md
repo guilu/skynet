@@ -476,6 +476,18 @@ stages:
 - Si se cumple, decide el actor `skynet` con un comentario que lista lo que se cumplió, y la fusión sigue sin esperar (`approval.granted` con `auto: true`; no avisa de que hay algo pendiente). Si falla una sola, pregunta como siempre y la puerta dice por qué: «No se aprueba sola: nivel 2: `db/migration/V2__x.sql` (ruta)». En la página de la aprobación sale cada condición con ✓ o ✗ (`evidence.autoApprove`).
 - Las tres fases `aprobar-fusion` de los workflows iniciales llevan `autoApprove: {maxRisk: 1, maxLines: 400}` y sus `juzgar`, `minRisk: 1` y `refuteMinRisk: 2`. `scripts/seed-workflows.sh --actualizar` publica las versiones nuevas. Mientras el interruptor del repositorio esté apagado, la fusión pregunta como antes; lo que sí cambia con esas versiones es que un cambio de solo documentación pasa sin juez y los escépticos solo corren en el nivel 2.
 
+**Registro de hallazgos** (RH-A). Cada hallazgo de un juez (el de la fase o el del delta de AU-B) queda en el registro con su **huella** y su **desenlace**. No cambia lo que ve el juez ni lo que bloquea: solo registra.
+
+- **La huella:** el repositorio, el fichero, la lente y las palabras del texto (en minúsculas, sin tildes, sin números, sin lo que va entre comillas invertidas y sin palabras vacías). La línea no cuenta, porque se mueve. Dos hallazgos son el mismo si coinciden el fichero y la lente y sus palabras se parecen al menos `SKYNET_FINDINGS_SIMILARITY` (Jaccard, 0,5 por defecto).
+- **Dentro de una fase**, el mismo hallazgo en rondas seguidas es una sola fila: `repeats` cuenta las veces que volvió. **Entre ejecuciones**, `firstSeenId` apunta a la primera vez que salió en el repositorio.
+- **Los desenlaces:**
+  - `abierto`: al salir del juez;
+  - `refutado`: lo tumbó un escéptico (VA-C);
+  - `corregido`: hubo una ronda de corrección y la siguiente ya no lo señala;
+  - `aparcado`: la fase terminó (bien, o sin rondas que gastar) y seguía abierto;
+  - `aceptado` (es real, pero intencionado) e `irrelevante` (el juez se equivocó): los pone una persona con «Es intencionado» o «No aplica» en la fase, y se deshacen con «Deshacer».
+- Un `aceptado` vale para todo el repositorio. Las fases de juez y de CI enseñan su **Registro de hallazgos**, y la decisión queda en **Actividad** (`finding.outcome.set`). El registro se guarda siempre; lo de antes de RH-A no se rellena.
+
 **Fusionar la PR.** Una fase `type: github-merge` fusiona la PR de la ejecución, normalmente detrás de su `github-check` y de una puerta que lo aprueba (EN-C):
 
 ```yaml
@@ -708,6 +720,8 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `GET` | `/api/approvals?status=&projectId=&risk=` | Las peticiones de aprobación: primero las pendientes (las de más riesgo y las más antiguas), luego las decididas. `status` admite varios separados por comas (`PENDING`, `APPROVED`, `REJECTED`, `CHANGES_REQUESTED`, `CANCELLED`, `EXPIRED`) |
 | `GET` | `/api/approvals/{id}` | Una petición con su evidencia y sus decisiones |
 | `POST` | `/api/approvals/{id}/decisions` | Decide (`{action: APPROVE \| REJECT \| REQUEST_CHANGES \| COMMENT, comment}`) |
+| `GET` | `/api/workflow-runs/{id}/findings` | El registro de hallazgos de la ejecución, con su desenlace (RH-A) |
+| `POST` | `/api/findings/{id}/outcome` | Decide qué es un hallazgo (`{outcome: aceptado \| irrelevante \| abierto, reason}`); `abierto` lo deshace y, si la fase ya terminó, lo deja `aparcado` |
 
 Cada problema lleva `severity` (`ERROR`, `UNSUPPORTED` o `WARNING`), `path` (p. ej. `stages.fix.dependsOn[0]`), `line`, `column` y `message`.
 
