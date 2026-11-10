@@ -40,6 +40,7 @@ export const NAV_AREAS: NavArea[] = [
       { to: '/workflows', label: 'Workflows', icon: 'workflows' },
       { to: '/approvals', label: 'Aprobaciones', icon: 'approvals', pendingApprovals: true },
       { to: '/results', label: 'Resultados', icon: 'branch' },
+      { to: '/judges', label: 'Jueces', icon: 'verification' },
     ],
   },
   {

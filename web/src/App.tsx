@@ -15,6 +15,7 @@ import { ImportProjectPage } from './pages/ImportProjectPage'
 import { RunnersPage } from './pages/RunnersPage'
 import { UsagePage } from './pages/UsagePage'
 import { FactoryPage } from './pages/FactoryPage'
+import { JudgesPage } from './pages/JudgesPage'
 import { ResultsPage } from './pages/ResultsPage'
 import { ProvidersPage } from './pages/ProvidersPage'
 import { MaintenancePage } from './pages/MaintenancePage'
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="/workflows/:key" element={<WorkflowPage />} />
             <Route path="/runs" element={<FactoryPage />} />
             <Route path="/results" element={<ResultsPage />} />
+            <Route path="/judges" element={<JudgesPage />} />
             <Route
               path="/runs/:runId"
               element={
