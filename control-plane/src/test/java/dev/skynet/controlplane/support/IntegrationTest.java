@@ -91,13 +91,15 @@ public abstract class IntegrationTest {
     // en este orden: quota_snapshot va antes que quota_interval, en el mismo orden en que las
     // escribe
     // el latido de un runner que sigue vivo, para que no se bloqueen el uno al otro (deadlock).
+    // finding va al final: el motor lo lee y lo escribe después de stage_verdict y stage_judge
+    // (RH-A, RH-B), y si TRUNCATE lo bloqueara antes que ellas se cruzaría con él.
     // Si un worker de fondo del test anterior (webhooks, disparadores) aún tiene filas
     // bloqueadas en otro orden, TRUNCATE puede chocar con él: se reintenta.
     for (int attempt = 1; ; attempt++) {
       try {
         jdbc.sql(
-                "TRUNCATE trigger_deployment_fire, deployment_health_probe, deployment_health_check, deployment_status, deployment, trigger_launch, trigger_rule, github_merge, github_ci_wait, judged_delta, finding, stage_refutation, stage_verdict, stage_judge, github_pull_request, github_webhook_delivery, github_installation_repository, github_installation, memory_token, memory_access, memory_observation_revision, memory_observation, app_setting, quota_snapshot, agent_run_quota, quota_interval, event, approval_decision, approval_request, runner_command, artifact, verification_run, prompt, agent_run, workspace, runner_provider, runner_repository_catalog, runner, stage_run, workflow_job, workflow_run, work_item, repository,"
-                    + " project")
+                "TRUNCATE trigger_deployment_fire, deployment_health_probe, deployment_health_check, deployment_status, deployment, trigger_launch, trigger_rule, github_merge, github_ci_wait, judged_delta, stage_refutation, stage_verdict, stage_judge, github_pull_request, github_webhook_delivery, github_installation_repository, github_installation, memory_token, memory_access, memory_observation_revision, memory_observation, app_setting, quota_snapshot, agent_run_quota, quota_interval, event, approval_decision, approval_request, runner_command, artifact, verification_run, prompt, agent_run, workspace, runner_provider, runner_repository_catalog, runner, stage_run, workflow_job, workflow_run, work_item, repository,"
+                    + " project, finding")
             .update();
         break;
       } catch (org.springframework.dao.PessimisticLockingFailureException e) {
