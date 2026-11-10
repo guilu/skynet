@@ -99,9 +99,9 @@ test('importar, validar mientras se escribe, publicar, editar y descartar un wor
   await test.step('sale en la lista con su versión publicada', async () => {
     await page.goto('/workflows')
     await page.getByLabel('Buscar workflows').fill(key)
-    const row = page.getByRole('row').filter({ hasText: key })
-    await expect(row).toHaveCount(1)
-    await expect(row.getByText('v1')).toBeVisible()
+    const card = page.getByRole('listitem').filter({ hasText: key })
+    await expect(card).toHaveCount(1)
+    await expect(card.getByText('v1')).toBeVisible()
   })
 })
 

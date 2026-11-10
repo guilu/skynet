@@ -61,9 +61,9 @@ describe('Workflows', () => {
     renderAt('/workflows', <App />)
 
     const link = await screen.findByRole('link', { name: /revisar-y-corregir/ })
-    const row = link.closest('tr')!
-    expect(within(row).getByText('v1 · Publicada')).toBeInTheDocument()
-    expect(within(row).getByText('v2 · Borrador validado')).toBeInTheDocument()
+    const card = link.closest('li')!
+    expect(within(card).getByText('v1 · Publicada')).toBeInTheDocument()
+    expect(within(card).getByText('v2 · Borrador validado')).toBeInTheDocument()
   })
 
   it('un borrador con algo que aún no se ejecuta se guarda pero no se publica', async () => {
