@@ -130,7 +130,13 @@ agents:
 
       {{workItem.description}}
 
-      Escribe la propuesta en openspec/proposal.md (qué cambia, por qué y cómo se comprueba) y confírmala con un commit.
+      Escribe la propuesta en openspec/proposal.md con estas cinco secciones (\`##\`), todas con texto:
+      - Qué se podrá hacer: lo que el usuario podrá hacer y antes no.
+      - Qué resultado se obtiene: el resultado esperado, con un ejemplo o una referencia.
+      - Qué debe respetar: lo que no puede romper.
+      - Cómo se demuestra: los tests o los pasos que lo prueban.
+      - Fuera de alcance.
+      Confírmala con un commit.
       Devuelve un resumen de una o dos frases y los riesgos que veas.
     permissionMode: acceptEdits
   desarrollador:
@@ -148,6 +154,7 @@ stages:
         summary: {type: string}
         risks: {type: array, items: {type: string}}
     artifacts: [openspec/proposal.md]
+    checks: [spec]
   - id: plan
     type: agent
     agent: desarrollador

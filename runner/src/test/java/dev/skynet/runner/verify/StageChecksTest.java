@@ -34,6 +34,25 @@ class StageChecksTest {
   }
 
   @Test
+  void specLooksAtTheProposalByDefaultOrAtTheFileItIsGiven() throws Exception {
+    Files.createDirectories(repo.resolve("openspec"));
+    Files.writeString(repo.resolve("openspec/proposal.md"), "## Qué se podrá hacer\nExportar.\n");
+    List<Map<String, Object>> results =
+        run(
+            List.of(
+                VerificationCheck.withPaths("spec", List.of("openspec/proposal.md")),
+                VerificationCheck.withPaths("spec", List.of("docs/propuesta.md"))),
+            PASSING);
+    assertThat(results.get(0))
+        .containsEntry("name", "spec")
+        .containsEntry("target", "openspec/proposal.md")
+        .containsEntry("passed", false);
+    assertThat((String) results.get(0).get("reason"))
+        .startsWith("A la propuesta `openspec/proposal.md` le falta «Qué resultado se obtiene»");
+    assertThat(results.get(1)).containsEntry("reason", "`docs/propuesta.md` no existe");
+  }
+
+  @Test
   void withNothingChangedOnlyTheArtifactsThatExistPass() throws Exception {
     List<Map<String, Object>> results =
         run(

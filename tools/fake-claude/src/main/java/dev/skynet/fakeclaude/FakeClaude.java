@@ -112,6 +112,7 @@ public final class FakeClaude {
       }
     }
     touch(env.get("FAKE_CLAUDE_TOUCH"), cwd);
+    spec(env.get("FAKE_CLAUDE_SPEC"), inv.rest().isEmpty() ? "" : inv.rest().getLast(), cwd);
     String sessionId = inv.effectiveSessionId();
     Path sessionFile = sessionFile(env, cwd, sessionId);
     String quota = env.get("FAKE_CLAUDE_QUOTA");
@@ -315,6 +316,51 @@ public final class FakeClaude {
           java.nio.file.StandardOpenOption.CREATE,
           java.nio.file.StandardOpenOption.APPEND);
     }
+  }
+
+  /** La propuesta que escribe {@link #spec} si no hay testigo: tiene las cinco secciones. */
+  static final String COMPLETE_SPEC =
+      """
+      # Propuesta de fake-claude
+
+      ## Qué se podrá hacer
+      Lo que pide la tarea.
+
+      ## Qué resultado se obtiene
+      El que describe la tarea.
+
+      ## Qué debe respetar
+      Lo que ya funciona.
+
+      ## Cómo se demuestra
+      Con los tests del repositorio.
+
+      ## Fuera de alcance
+      Todo lo demás.
+      """;
+
+  /**
+   * {@code FAKE_CLAUDE_SPEC=<fichero>} (ES-A): si el prompt pide la propuesta (nombra {@code
+   * openspec/proposal.md} y «Fuera de alcance»), el agente la escribe. Si el fichero existe, con su
+   * contenido, y lo borra; si no, una propuesta completa ({@link #COMPLETE_SPEC}). Así el primer
+   * intento puede no pasar el check {@code spec} y el reintento sí.
+   */
+  static void spec(String marker, String prompt, Path cwd) throws IOException {
+    if (marker == null
+        || marker.isBlank()
+        || !prompt.contains("openspec/proposal.md")
+        || !prompt.contains("Fuera de alcance")) {
+      return;
+    }
+    Path source = cwd.resolve(marker);
+    String text = COMPLETE_SPEC;
+    if (Files.isRegularFile(source)) {
+      text = Files.readString(source, StandardCharsets.UTF_8);
+      Files.delete(source);
+    }
+    Path proposal = cwd.resolve("openspec/proposal.md");
+    Files.createDirectories(proposal.getParent());
+    Files.writeString(proposal, text, StandardCharsets.UTF_8);
   }
 
   /**

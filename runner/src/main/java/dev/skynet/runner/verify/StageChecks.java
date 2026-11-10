@@ -97,6 +97,13 @@ public final class StageChecks {
           reason = integrity.reason();
           warnings = integrity.warnings();
         }
+        case VerificationCheck.SPEC ->
+            reason =
+                SpecSections.check(
+                    worktree,
+                    check.paths().isEmpty()
+                        ? VerificationCheck.DEFAULT_SPEC
+                        : check.paths().getFirst());
         case VerificationCheck.PROTECTED ->
             reason =
                 protectedPaths(

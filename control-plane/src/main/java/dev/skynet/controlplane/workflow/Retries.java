@@ -173,6 +173,20 @@ record Retries(
     return verificationFailed(agent) ? AgentFailure.VERIFICATION : null;
   }
 
+  /**
+   * Las comprobaciones de la fase que no pasó {@code agent}, como «`spec`: A la propuesta … le
+   * falta …», para decírselas al intento siguiente (ES-A). Vacío si pasaron o no se sabe.
+   */
+  List<String> failedChecks(AgentRun agent) {
+    if (!verificationFailed(agent)) {
+      return List.of();
+    }
+    return verifications.get(agent.getId()).checks().stream()
+        .filter(c -> Boolean.FALSE.equals(c.passed()))
+        .map(c -> "`" + c.name() + "`" + (c.reason() == null ? "" : ": " + c.reason()))
+        .toList();
+  }
+
   private boolean verificationFailed(AgentRun agent) {
     VerificationResult result = verifications.get(agent.getId());
     return agent.getStatus() == AgentObservableStatus.COMPLETED

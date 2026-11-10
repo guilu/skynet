@@ -48,6 +48,23 @@ class FakeClaudeTest {
   }
 
   @Test
+  void specWritesTheMarkerOnceAndThenACompleteProposal(@TempDir Path cwd) throws Exception {
+    String prompt = "Escribe openspec/proposal.md con … Fuera de alcance.";
+    Files.writeString(cwd.resolve("propuesta"), "## Qué se podrá hacer\nAlgo.\n");
+    FakeClaude.spec("propuesta", prompt, cwd);
+    assertThat(Files.readString(cwd.resolve("openspec/proposal.md")))
+        .isEqualTo("## Qué se podrá hacer\nAlgo.\n");
+    assertThat(cwd.resolve("propuesta")).doesNotExist();
+    FakeClaude.spec("propuesta", prompt, cwd);
+    assertThat(Files.readString(cwd.resolve("openspec/proposal.md")))
+        .isEqualTo(FakeClaude.COMPLETE_SPEC);
+    Files.delete(cwd.resolve("openspec/proposal.md"));
+    FakeClaude.spec("propuesta", "Implementa la tarea", cwd);
+    FakeClaude.spec(null, prompt, cwd);
+    assertThat(cwd.resolve("openspec/proposal.md")).doesNotExist();
+  }
+
+  @Test
   void answersVersionLikeTheRealCli() throws Exception {
     var buffer = new ByteArrayOutputStream();
     var out = new PrintStream(buffer, true, StandardCharsets.UTF_8);

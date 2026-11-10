@@ -1505,13 +1505,30 @@ public final class DefinitionParser {
       if (item instanceof MappingNode mapping) {
         if (mapping.getValue().size() != 1
             || !(mapping.getValue().getFirst().getKeyNode() instanceof ScalarNode key)
-            || !key.getValue().equals(VerificationCheck.COMMAND)) {
+            || !(key.getValue().equals(VerificationCheck.COMMAND)
+                || key.getValue().equals(VerificationCheck.SPEC))) {
           error(
               item,
               path,
-              "Un check con datos solo puede ser `command: <comando>`. Admite: "
+              "Un check con datos solo puede ser `command: <comando>` o `spec: <fichero>`. Admite: "
                   + String.join(", ", catalog));
           return null;
+        }
+        if (key.getValue().equals(VerificationCheck.SPEC)) {
+          Node value = mapping.getValue().getFirst().getValueNode();
+          String file = scalarText(value, path + ".spec");
+          if (file == null) {
+            return null;
+          }
+          if (file.isBlank() || file.startsWith("/") || file.contains("..") || file.contains("*")) {
+            error(
+                value,
+                path + ".spec",
+                "`spec` es un fichero del repositorio, sin `*`, `..` ni `/` delante, p. ej."
+                    + " `spec: openspec/proposal.md`");
+            return null;
+          }
+          return VerificationCheck.withPaths(VerificationCheck.SPEC, List.of(file.strip()));
         }
         Node value = mapping.getValue().getFirst().getValueNode();
         String command = scalarText(value, path + ".command");
@@ -1554,6 +1571,9 @@ public final class DefinitionParser {
           return null;
         }
         return VerificationCheck.withPaths(name, scope);
+      }
+      if (name.equals(VerificationCheck.SPEC)) {
+        return VerificationCheck.withPaths(name, List.of(VerificationCheck.DEFAULT_SPEC));
       }
       return VerificationCheck.named(name);
     }

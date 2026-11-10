@@ -17,6 +17,7 @@ import java.util.Set;
  *   <li>{@code command}: {@code command} sale con 0.
  *   <li>{@code tests-intact} (VA-A): el cambio no borra, quita ni salta tests.
  *   <li>{@code protected} (VA-A): ningún fichero cambiado cae en los globs de {@code paths}.
+ *   <li>{@code spec} (ES-A): la propuesta de {@code paths} tiene las cinco secciones con texto.
  * </ul>
  *
  * @param name tipo de comprobación
@@ -34,12 +35,16 @@ public record VerificationCheck(String name, String command, List<String> paths)
   public static final String COMMAND = "command";
   public static final String TESTS_INTACT = "tests-intact";
   public static final String PROTECTED = "protected";
+  public static final String SPEC = "spec";
+
+  /** El fichero de la propuesta que mira {@code spec} si no se dice otro (ES-A). */
+  public static final String DEFAULT_SPEC = "openspec/proposal.md";
 
   /** Los tipos que se escriben por su nombre en {@code checks}. */
-  public static final List<String> NAMED = List.of(TESTS, DIFF, COMMIT, SCOPE, TESTS_INTACT);
+  public static final List<String> NAMED = List.of(TESTS, DIFF, COMMIT, SCOPE, TESTS_INTACT, SPEC);
 
   private static final Set<String> NAMES =
-      Set.of(ARTIFACTS, TESTS, DIFF, COMMIT, SCOPE, COMMAND, TESTS_INTACT, PROTECTED);
+      Set.of(ARTIFACTS, TESTS, DIFF, COMMIT, SCOPE, COMMAND, TESTS_INTACT, PROTECTED, SPEC);
 
   public VerificationCheck {
     Objects.requireNonNull(name, "name");

@@ -1432,6 +1432,42 @@ class WorkflowEngineIT extends IntegrationTest {
   }
 
   @Test
+  void aRetryAfterFailedChecksIsToldWhatDidNotPass() {
+    String definitionId =
+        publish(
+            """
+            id: con-spec
+            stages:
+              - id: spec
+                type: agent
+                prompt: Especifica
+                checks: [spec]
+                retry: {maxAttempts: 2, on: [verification], delay: 1s}
+            """);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    JsonNode first = runner.claim().getFirst();
+    assertThat(taskPrompt(first.path("start"))).doesNotContain("Nota:");
+    complete(runner, first, "/w/eng/spec");
+    JsonNode verify = runner.claim().getFirst();
+    assertThat(verify.path("verify").path("checks").get(0).path("name").asString())
+        .isEqualTo("spec");
+    assertThat(verify.path("verify").path("checks").get(0).path("paths").get(0).asString())
+        .isEqualTo("openspec/proposal.md");
+    verified(runner, verify, false);
+
+    // El segundo intento sabe qué no pasó.
+    JsonNode second = awaitCommand(runner);
+    assertThat(taskPrompt(second.path("start")))
+        .contains(
+            "Nota: un intento anterior de esta tarea no pasó estas comprobaciones de la fase."
+                + " Hazlo de nuevo teniéndolas en cuenta:\n- `spec`: no pasa");
+    complete(runner, second, "/w/eng/spec");
+    verified(runner, runner.claim().getFirst(), true);
+    assertThat(get("/api/workflow-runs/" + runId).path("status").asString()).isEqualTo("SUCCEEDED");
+  }
+
+  @Test
   void aStageThatTimesOutWithoutRetryFailsTheRun() {
     String definitionId =
         publish(TIMED.replace("    retry: {maxAttempts: 2, on: [timeout], delay: 1s}\n", ""));
