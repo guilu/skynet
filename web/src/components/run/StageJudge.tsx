@@ -5,7 +5,8 @@ import { formatScore, LENS_LABEL } from './stageNotes'
 /**
  * El juez de una fase `verification` (VA-B): la nota de la fase, la de cada criterio por juez y lo
  * que encontraron, con su fichero. Mientras se corrige, el veredicto de la ronda anterior. Los
- * hallazgos que refutaron los escépticos salen tachados, con el motivo (VA-C).
+ * hallazgos que refutaron los escépticos salen tachados, con el motivo (VA-C), y los que se
+ * descartaron por ya vistos, como «Ya visto» con lo que se decidió entonces (RH-B).
  */
 export function StageJudge({ judge }: { judge: Judge }) {
   if (judge.status === 'SKIPPED') {
@@ -109,7 +110,13 @@ export function StageJudge({ judge }: { judge: Judge }) {
           {judge.findings.map((f, i) => (
             <li key={i} className={cn(f.severity, f.refuted && 'refuted')}>
               <span className="stage-judge-severity">
-                {f.refuted ? 'Refutado' : f.severity === 'blocking' ? 'Bloquea' : 'Menor'}
+                {f.known
+                  ? 'Ya visto'
+                  : f.refuted
+                    ? 'Refutado'
+                    : f.severity === 'blocking'
+                      ? 'Bloquea'
+                      : 'Menor'}
               </span>{' '}
               {f.refuted ? (
                 <del>
@@ -124,7 +131,7 @@ export function StageJudge({ judge }: { judge: Judge }) {
               {f.refutation && (
                 <span className="muted stage-judge-reason">
                   {' '}
-                  {f.refuted ? 'Refutado: ' : 'No se pudo refutar: '}
+                  {f.known ? '' : f.refuted ? 'Refutado: ' : 'No se pudo refutar: '}
                   {f.refutation}
                 </span>
               )}

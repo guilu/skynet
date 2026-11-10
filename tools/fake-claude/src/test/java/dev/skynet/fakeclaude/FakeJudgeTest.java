@@ -7,6 +7,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -58,6 +59,21 @@ class FakeJudgeTest {
     assertThat(failed.path("criteria").get(0).path("score").asInt()).isEqualTo(5);
     assertThat(failed.path("findings").get(0).path("text").asString())
         .isEqualTo("add() no trata los negativos");
+  }
+
+  @Test
+  void withAnEqualsSignTheMarkerStaysAndTheFindingComesBack(@TempDir Path dir) throws Exception {
+    Files.writeString(dir.resolve("suspende"), "=!calc.py:2 add() no trata los negativos");
+
+    JsonNode first = verdict(dir, PROMPT);
+    JsonNode second = verdict(dir, PROMPT);
+
+    assertThat(Files.exists(dir.resolve("suspende"))).isTrue();
+    for (JsonNode failed : List.of(first, second)) {
+      assertThat(failed.path("criteria").get(0).path("score").asInt()).isEqualTo(5);
+      assertThat(failed.path("findings").get(0).path("text").asString())
+          .isEqualTo("add() no trata los negativos");
+    }
   }
 
   @Test

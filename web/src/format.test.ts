@@ -42,6 +42,15 @@ describe('describeEvent', () => {
     )
   })
 
+  it('dice cuántos hallazgos ya vistos se descartan (RH-B)', () => {
+    expect(
+      describeEvent('stage.judge.findings.filtered', { stageKey: 'juzgar', discarded: 2 }),
+    ).toBe('juzgar: se descartan 2 hallazgos ya vistos antes de los escépticos')
+    expect(
+      describeEvent('stage.judge.findings.filtered', { stageKey: 'juzgar', discarded: 1 }),
+    ).toBe('juzgar: se descarta 1 hallazgo ya visto antes de los escépticos')
+  })
+
   it('dice quién decidió el desenlace de un hallazgo (RH-A)', () => {
     expect(
       describeEvent('finding.outcome.set', {

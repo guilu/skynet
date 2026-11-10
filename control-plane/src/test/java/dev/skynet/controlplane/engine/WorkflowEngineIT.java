@@ -2107,6 +2107,169 @@ class WorkflowEngineIT extends IntegrationTest {
     assertThat(again.path("firstSeenRunId").asString()).isEqualTo(runId);
   }
 
+  /** Dos jueces y un escéptico por hallazgo (RH-B). */
+  private static final String PANEL =
+      JUDGED
+          .replace("id: juzgada", "id: sin-repetir")
+          .replace(
+              "  juez:\n    model: otro-modelo\n",
+              "  juez:\n    model: otro-modelo\n  revisor:\n    model: otro-modelo\n")
+          .replace(
+              "agents: [{agent: juez, lens: correctness}]",
+              "agents: [{agent: juez, lens: correctness}, {agent: revisor, lens: security}]")
+          .replace("      rubric:\n", "      refute: 1\n      rubric:\n");
+
+  private static Map<String, Object> blocking(String file, String text) {
+    return Map.of("file", file, "severity", "blocking", "text", text);
+  }
+
+  @Test
+  void duplicatesAreRefutedOnceAndWhatWasRefutedIsNotRefutedAgain() {
+    String definitionId = publish(PANEL);
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    verified(runner, runner.claim().getFirst(), true);
+    List<JsonNode> judges = new ArrayList<>();
+    await(
+        () -> {
+          judges.addAll(runner.claim());
+          return judges.size() >= 2;
+        });
+    // Los dos dicen lo de dividir con casi las mismas palabras; el segundo, además, otra cosa.
+    complete(
+        runner,
+        judges.get(0),
+        "/w/eng/juez",
+        verdict(5, 5, List.of(blocking("src/Calc.java", "Divide entre cero sin comprobarlo"))));
+    complete(
+        runner,
+        judges.get(1),
+        "/w/eng/juez",
+        verdict(
+            5,
+            5,
+            List.of(
+                blocking("src/Calc.java", "Divide entre cero sin comprobarlo nunca"),
+                blocking("src/Api.java", "Falta validar la entrada"))));
+
+    // Un escéptico por grupo: dos, no tres.
+    List<JsonNode> skeptics = new ArrayList<>();
+    await(
+        () -> {
+          skeptics.addAll(runner.claim());
+          return skeptics.size() >= 2;
+        });
+    assertThat(runner.claim()).isEmpty();
+    assertThat(skeptics).hasSize(2);
+    for (JsonNode skeptic : skeptics) {
+      boolean refutes = taskPrompt(skeptic.path("start")).contains("Divide");
+      complete(
+          runner,
+          skeptic,
+          "/w/eng/juez",
+          Map.of("refuted", refutes, "reason", refutes ? "Ya se comprueba arriba" : "Es verdad"));
+    }
+    // Lo de dividir cae para los dos jueces; lo de la entrada va al que corrige.
+    JsonNode fix = runner.claim().getFirst();
+    assertThat(taskPrompt(fix.path("start")))
+        .contains("Falta validar la entrada")
+        .doesNotContain("Divide entre cero");
+    JsonNode first = get("/api/workflow-runs/" + runId + "/findings");
+    assertThat(byFile(first, "src/Calc.java", "comprobarlo nunca").path("outcome").asString())
+        .isEqualTo("refutado");
+    assertThat(byFile(first, "src/Calc.java", "comprobarlo").path("outcome").asString())
+        .isEqualTo("refutado");
+    complete(runner, fix, "/w/eng/implement");
+
+    // Ronda 2: los jueces reciben lo ya visto y el delta; uno repite lo refutado.
+    verified(runner, awaitCommand(runner), true);
+    List<JsonNode> again = new ArrayList<>();
+    await(
+        () -> {
+          again.addAll(runner.claim());
+          return again.size() >= 2;
+        });
+    String prompt = taskPrompt(again.get(0).path("start"));
+    assertThat(prompt)
+        .contains("Mira primero `git diff ")
+        .contains("## Lo que ya se ha señalado")
+        .contains("- `src/Calc.java`: Divide entre cero sin comprobarlo (ronda 1: refutado")
+        .contains("- `src/Api.java`: Falta validar la entrada (ronda 1: sin corregir)");
+    complete(
+        runner,
+        again.get(0),
+        "/w/eng/juez",
+        verdict(5, 5, List.of(blocking("src/Calc.java", "Divide entre cero sin comprobarlo"))));
+    complete(
+        runner,
+        again.get(1),
+        "/w/eng/juez",
+        verdict(5, 5, List.of(blocking("src/Api.java", "Falta validar la entrada"))));
+
+    // Lo refutado se descarta sin escépticos; solo se refuta lo de la entrada.
+    JsonNode skeptic = runner.claim().getFirst();
+    assertThat(taskPrompt(skeptic.path("start"))).contains("Falta validar la entrada");
+    assertThat(runner.claim()).isEmpty();
+    complete(runner, skeptic, "/w/eng/juez", Map.of("refuted", false, "reason", "Es verdad"));
+
+    // Vuelve a corregir, y el informe dice que lo de la entrada vuelve.
+    JsonNode second = runner.claim().getFirst();
+    assertThat(taskPrompt(second.path("start")))
+        .contains("## Lo que vuelve")
+        .contains(
+            "- ⚠ `src/Api.java`: Falta validar la entrada (ya se señaló en la ronda 1 y sigue)")
+        .doesNotContain("Divide entre cero");
+    JsonNode judge = stageOf(get("/api/workflow-runs/" + runId), "juzgar").path("judge");
+    JsonNode known = judge.path("findings").get(1);
+    assertThat(known.path("text").asString()).isEqualTo("Divide entre cero sin comprobarlo");
+    assertThat(known.path("known").asString()).isEqualTo("refutado");
+    assertThat(known.path("refutation").asString()).startsWith("Ya se refutó en la ronda 1");
+    assertThat(eventTypes(runId)).contains("stage.judge.findings.filtered");
+    JsonNode findings = get("/api/workflow-runs/" + runId + "/findings");
+    assertThat(byFile(findings, "src/Api.java", "Falta").path("repeats").asInt()).isEqualTo(1);
+  }
+
+  @Test
+  void aFindingMarkedAsIntendedIsNotReportedAgain() {
+    String definitionId = publish(JUDGED.replace("id: juzgada", "id: intencionada"));
+    Runner runner = register("laptop");
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    verified(runner, runner.claim().getFirst(), true);
+    complete(
+        runner,
+        runner.claim().getFirst(),
+        "/w/eng/juez",
+        verdict(5, 5, List.of(blocking("src/Api.java", "Falta validar la entrada"))));
+    JsonNode fix = runner.claim().getFirst();
+
+    // Mientras corrige, una persona dice que es intencionado.
+    String id = get("/api/workflow-runs/" + runId + "/findings").get(0).path("id").asString();
+    post(
+        "/api/findings/" + id + "/outcome",
+        Map.of("outcome", "aceptado", "reason", "Se valida en el proxy"));
+    complete(runner, fix, "/w/eng/implement");
+    verified(runner, awaitCommand(runner), true);
+    JsonNode second = runner.claim().getFirst();
+    assertThat(taskPrompt(second.path("start")))
+        .contains(
+            "- `src/Api.java`: Falta validar la entrada (ronda 1: intencionado, no lo señales)");
+    // El juez lo repite igual: se descarta y la fase pasa.
+    complete(
+        runner,
+        second,
+        "/w/eng/juez",
+        verdict(5, 5, List.of(blocking("src/Api.java", "Falta validar la entrada"))));
+    assertThat(stageStatuses(runId)).containsEntry("juzgar", "SUCCEEDED");
+    JsonNode judge = stageOf(get("/api/workflow-runs/" + runId), "juzgar").path("judge");
+    assertThat(judge.path("findings").get(0).path("refutation").asString())
+        .startsWith("Ya se marcó como intencionado (")
+        .endsWith("): Se valida en el proxy");
+    JsonNode findings = get("/api/workflow-runs/" + runId + "/findings");
+    assertThat(findings.findValuesAsString("outcome")).containsExactly("aceptado", "aceptado");
+  }
+
   private static JsonNode byFile(JsonNode findings, String file, String text) {
     for (JsonNode finding : findings) {
       if (file.equals(finding.path("file").asString())
