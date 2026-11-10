@@ -2,6 +2,7 @@ package dev.skynet.controlplane.workflow;
 
 import dev.skynet.controlplane.definition.JudgeSpec;
 import dev.skynet.controlplane.definition.JudgeSpec.Criterion;
+import dev.skynet.protocol.runner.StartAgent;
 import java.util.List;
 import java.util.Map;
 
@@ -107,6 +108,7 @@ final class JudgePrompt {
       out.append("Míralo con `git diff` y `git log`. ");
     }
     out.append("Lee el código que haga falta, los tests incluidos.\n");
+    out.append(StartAgent.REVIEW_MARKER);
     out.append(
         "\n## Qué contestar\n\nRefútalo (`refuted: true`) solo si puedes demostrar con el código"
             + " que no pasa: el caso ya está tratado, no se puede dar, el fichero no es el que dice o"
@@ -229,6 +231,7 @@ final class JudgePrompt {
             + " o más, sin ningún criterio obligatorio por debajo de "
             + JudgeSpec.REQUIRED_MINIMUM
             + " y sin nada que bloquee.\n");
+    out.append(StartAgent.REVIEW_MARKER);
     out.append("\n## Los hallazgos\n\n");
     out.append(
         "Apunta cada problema concreto con su fichero, la línea si la sabes, su gravedad"

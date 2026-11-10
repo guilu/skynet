@@ -403,6 +403,19 @@ public final class AgentExecutor implements AutoCloseable {
     if (workspace.snapshot() != null) {
       ready.put("snapshot", workspace.snapshot());
     }
+    RepositoryReview.Expanded review = new RepositoryReview.Expanded(start.prompt(), null);
+    if (start.command() == null && start.push() == null) {
+      try {
+        review = RepositoryReview.expand(start.prompt(), workspace.path());
+      } catch (IOException e) {
+        LOG.warning(() -> "Invocación " + id + ": no se leyeron los criterios de revisión: " + e);
+        review =
+            new RepositoryReview.Expanded(RepositoryReview.withoutMarker(start.prompt()), null);
+      }
+      if (review.file() != null) {
+        ready.put("review", review.file());
+      }
+    }
     emit(id, AgentEventType.WORKSPACE_READY, ready);
     if (start.command() != null) {
       runCommand(id, start, execution, workspace);
@@ -415,7 +428,9 @@ public final class AgentExecutor implements AutoCloseable {
     StartAgent resolved;
     try {
       resolved =
-          start.withOutputSchema(StructuredOutput.resolve(start.outputSchema(), workspace.path()));
+          start
+              .withPrompt(review.prompt())
+              .withOutputSchema(StructuredOutput.resolve(start.outputSchema(), workspace.path()));
     } catch (IllegalArgumentException | IOException e) {
       finish(
           id,

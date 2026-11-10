@@ -138,7 +138,9 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
     case 'agent.spawned':
       return `Agente ${p('provider')} en cola`
     case 'agent.workspace.ready':
-      return `Worktree listo en la rama ${p('branch')}`
+      return payload.review
+        ? `Worktree listo en la rama ${p('branch')}, con los criterios de ${p('review')}`
+        : `Worktree listo en la rama ${p('branch')}`
     case 'agent.workspace.cleanup.requested':
       return `Eliminación del worktree pedida (${
         payload.trigger === 'retention' ? 'retención' : 'desde la web'
