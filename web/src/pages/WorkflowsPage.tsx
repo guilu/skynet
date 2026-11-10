@@ -1,81 +1,64 @@
 import { useQuery } from '@tanstack/react-query'
 import { Plus, Workflow } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api, type WorkflowSummary } from '../api'
 import { ArchiveMenu, ArchivedToggle } from '../components/archive/Archive'
 import { ErrorMessage } from '../components/ErrorMessage'
-import { DataTable, EmptyState, type Column } from '../components/list/DataTable'
+import { EmptyState } from '../components/list/DataTable'
 import { ListToolbar, SearchField } from '../components/list/Toolbar'
 import { Button } from '../components/ui/Button'
 import { TableSkeleton } from '../components/ui/Skeleton'
 import { VersionPill } from '../components/workflow/status'
 import { formatDateTime } from '../format'
+import { cn } from '../lib/cn'
 
 /** Workflow implícito de la Fase 1, que no se archiva. */
 export const ADHOC = 'adhoc'
 
-/** Columnas de la tabla; «Trabajos» cuenta los pendientes que usan cada workflow (FS-F). */
-const columns = (inUse: Map<string, number>): Column<WorkflowSummary>[] => [
-  {
-    id: 'workflow',
-    header: 'Workflow',
-    hideable: false,
-    cell: (w) => (
-      <Link to={`/workflows/${encodeURIComponent(w.key)}`} className="row-link">
-        <span className="key">{w.key}</span> {w.name ?? ''}
-      </Link>
-    ),
-  },
-  { id: 'description', header: 'Descripción', cell: (w) => w.description ?? '—' },
-  {
-    id: 'work',
-    header: 'Trabajos',
-    cell: (w) => {
-      const n = inUse.get(w.key) ?? 0
-      return n > 0 ? (
-        `${n} ${n === 1 ? 'pendiente' : 'pendientes'}`
-      ) : (
-        <span className="muted">—</span>
-      )
-    },
-  },
-  {
-    id: 'published',
-    header: 'Publicada',
-    cell: (w) =>
-      w.published ? (
-        <VersionPill version={w.published} />
-      ) : (
-        <span className="muted">Sin publicar</span>
-      ),
-  },
-  {
-    id: 'draft',
-    header: 'Borrador',
-    cell: (w) => (w.draft ? <VersionPill version={w.draft} /> : '—'),
-  },
-  {
-    id: 'updated',
-    header: 'Actualizado',
-    cell: (w) => formatDateTime((w.draft ?? w.published)?.updatedAt ?? w.createdAt),
-  },
-  {
-    id: 'actions',
-    header: 'Acciones',
-    hiddenHeader: true,
-    hideable: false,
-    cell: (w) =>
-      w.key === ADHOC ? null : (
-        <ArchiveMenu
-          size="sm"
-          target={{ kind: 'workflow', id: w.key }}
-          name={w.name ?? w.key}
-          archivedAt={w.archivedAt}
-        />
-      ),
-  },
-]
+/**
+ * Tarjeta de un workflow: clave y nombre (enlace a su página), descripción, versión publicada y
+ * borrador, y al pie los trabajos pendientes que lo usan (FS-F) y la última actualización.
+ */
+function WorkflowCard({ workflow: w, pending }: { workflow: WorkflowSummary; pending: number }) {
+  return (
+    <li className={cn('wf-card', w.archivedAt && 'row-archived')}>
+      <div className="wf-card-head">
+        <Link to={`/workflows/${encodeURIComponent(w.key)}`} className="wf-card-link">
+          <span className="key">{w.key}</span>
+          {w.name && <span className="wf-card-name">{w.name}</span>}
+        </Link>
+        {w.key !== ADHOC && (
+          <ArchiveMenu
+            size="sm"
+            target={{ kind: 'workflow', id: w.key }}
+            name={w.name ?? w.key}
+            archivedAt={w.archivedAt}
+          />
+        )}
+      </div>
+      <p className="wf-card-desc">{w.description ?? 'Sin descripción.'}</p>
+      <div className="wf-card-versions">
+        {w.published ? (
+          <VersionPill version={w.published} />
+        ) : (
+          <span className="muted small">Sin publicar</span>
+        )}
+        {w.draft && <VersionPill version={w.draft} />}
+      </div>
+      <dl className="wf-card-meta">
+        <div>
+          <dt>Trabajos</dt>
+          <dd>{pending > 0 ? `${pending} ${pending === 1 ? 'pendiente' : 'pendientes'}` : '—'}</dd>
+        </div>
+        <div>
+          <dt>Actualizado</dt>
+          <dd>{formatDateTime((w.draft ?? w.published)?.updatedAt ?? w.createdAt)}</dd>
+        </div>
+      </dl>
+    </li>
+  )
+}
 
 const matches = (w: WorkflowSummary, text: string) =>
   `${w.key} ${w.name ?? ''} ${w.description ?? ''}`.toLowerCase().includes(text.toLowerCase())
@@ -140,11 +123,9 @@ export function WorkflowsPage() {
       <ErrorMessage error={workflows.error} />
       {workflows.isPending && <TableSkeleton label="los workflows" columns={4} />}
       {workflows.data && (
-        <DataTable
-          label="Workflows"
-          columns={columns(inUse)}
+        <WorkflowList
           rows={workflows.data.filter((w) => !q || matches(w, q))}
-          rowKey={(w) => w.id}
+          inUse={inUse}
           empty={
             <EmptyState
               icon={Workflow}
@@ -162,5 +143,24 @@ export function WorkflowsPage() {
         />
       )}
     </>
+  )
+}
+
+function WorkflowList({
+  rows,
+  inUse,
+  empty,
+}: {
+  rows: WorkflowSummary[]
+  inUse: Map<string, number>
+  empty: ReactNode
+}) {
+  if (rows.length === 0) return <>{empty}</>
+  return (
+    <ul className="wf-cards" aria-label="Workflows">
+      {rows.map((w) => (
+        <WorkflowCard key={w.id} workflow={w} pending={inUse.get(w.key) ?? 0} />
+      ))}
+    </ul>
   )
 }
