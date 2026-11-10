@@ -27,6 +27,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     await page.goto('/projects')
     await login(page)
     await expect(page.getByRole('heading', { level: 1, name: 'Proyectos' })).toBeVisible()
+    await page.getByRole('button', { name: 'Nuevo proyecto' }).click()
     await page.getByLabel('Clave').fill(key)
     await page.getByLabel('Nombre').fill('E2E')
     await page.getByRole('button', { name: 'Crear proyecto' }).click()
