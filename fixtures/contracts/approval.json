@@ -106,7 +106,11 @@
     },
     "changesRequested" : null,
     "pullRequest" : null,
-    "autoApprove" : null
+    "autoApprove" : null,
+    "assumptions" : [ {
+      "stageKey" : "plan",
+      "text" : "Los precios del CSV vienen en euros"
+    } ]
   },
   "decisions" : [ {
     "id" : "0b6a3c1e-5f0e-4a8e-9a43-1c2d3e4f5a11",

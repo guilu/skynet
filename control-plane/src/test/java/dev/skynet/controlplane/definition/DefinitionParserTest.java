@@ -904,6 +904,11 @@ class DefinitionParserTest {
         .containsExactly(
             java.util.Map.entry("summary", "string"), java.util.Map.entry("risks", "array"));
     assertThat(spec.outputSchemaJson()).contains("\"summary\"").doesNotContain("borrador");
+    // ES-C: la salida pide también los supuestos, aunque el schema no los declare.
+    assertThat(spec.outputSchemaJson())
+        .contains("\"assumptions\":{")
+        .contains("\"items\":{\"type\":\"string\"}");
+    assertThat(AgentDefinition.fieldsOf(spec.outputSchema())).doesNotContainKey("assumptions");
     StageDefinition externo = parsed.definition().stage("externo").orElseThrow();
     assertThat(externo.outputSchemaPath()).isEqualTo("schemas/externo.json");
     assertThat(externo.outputSchemaJson()).isEqualTo("{\"$ref\":\"schemas/externo.json\"}");

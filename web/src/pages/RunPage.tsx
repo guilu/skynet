@@ -5,6 +5,8 @@ import { useParams } from 'react-router'
 import { api, type Run } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { eventsOfAgent, toolCallsOf, type ToolCall } from '../components/run/agentEvents'
+import { AssumptionsCard } from '../components/run/Assumptions'
+import { assumptionsKey } from '../components/run/assumptionsKey'
 import { Conversation } from '../components/run/Conversation'
 import { PullRequestCard } from '../components/run/PullRequestCard'
 import { hasPullRequestStages, pullRequestKey } from '../components/run/pullRequest'
@@ -58,6 +60,9 @@ export function RunPage() {
     // La PR, su CI y su fusión van aparte: se releen con sus eventos.
     if (event.type.includes('.github.')) {
       void queryClient.invalidateQueries({ queryKey: pullRequestKey(runId) })
+    }
+    if (event.type === 'run.assumptions.collected') {
+      void queryClient.invalidateQueries({ queryKey: assumptionsKey(runId) })
     }
     // Verificaciones y artefactos van aparte de la vista de la ejecución: se releen sus listas.
     if (event.aggregateType === 'verification_run' || event.aggregateType === 'artifact') {
@@ -219,6 +224,7 @@ export function RunPage() {
           />
           <RunBand run={run.data} now={now} gesture={celebrating ? 'hop' : null} />
           {hasPullRequestStages(run.data) && <PullRequestCard run={run.data} />}
+          <AssumptionsCard runId={run.data.id} />
           {celebrating && <Celebration />}
           {narrow ? (
             <div className="run-mobile">

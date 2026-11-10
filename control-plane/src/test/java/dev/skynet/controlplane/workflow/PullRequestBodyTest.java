@@ -59,4 +59,31 @@ class PullRequestBodyTest {
                 + " tests\n\n</details>");
     assertThat(body.split("<details>", -1)).hasSize(2);
   }
+
+  @Test
+  void theRunsAssumptionsGoInTheirOwnSectionWithTheirStage() {
+    String body =
+        PullRequestBody.of(
+            null,
+            "DEMO-1",
+            "Resta",
+            null,
+            List.of(),
+            List.of(
+                new RunAssumptions.Assumption("spec", "El límite es por usuario"),
+                new RunAssumptions.Assumption("implementar", "La API acepta | en el nombre")),
+            null,
+            null,
+            UUID.randomUUID(),
+            null);
+    assertThat(body)
+        .contains("## Supuestos para revisar")
+        .contains("No ha parado nada")
+        .contains("- El límite es por usuario (`spec`)")
+        .contains("(`implementar`)");
+    assertThat(
+            PullRequestBody.of(
+                null, "DEMO-1", "Resta", null, List.of(), null, null, UUID.randomUUID(), null))
+        .doesNotContain("Supuestos");
+  }
 }

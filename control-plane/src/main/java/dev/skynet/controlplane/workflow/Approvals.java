@@ -524,6 +524,8 @@ public class Approvals {
   /** Las peticiones de antes de AU-C no tienen {@code autoApprove}: no se aprobaban solas. */
   private static Map<String, Object> withAutoApprove(Map<String, Object> evidence) {
     evidence.putIfAbsent("autoApprove", null);
+    // Ni las de antes de ES-C tienen supuestos.
+    evidence.putIfAbsent("assumptions", List.of());
     return evidence;
   }
 
@@ -690,6 +692,8 @@ public class Approvals {
             .filter(p -> p.type() != StageType.HUMAN_APPROVAL && p.type() != StageType.CONDITIONAL)
             .toList());
     evidence.put("consequences", consequences);
+    // ES-C: lo que los agentes supusieron, para revisarlo antes de aprobar. No para nada.
+    evidence.put("assumptions", RunAssumptions.of(jdbc, run.getId()));
     evidence.put(
         "pullRequest",
         unlocked.stream().anyMatch(s -> s.type() == StageType.GITHUB_MERGE)

@@ -21,7 +21,7 @@ agents:
       - Qué debe respetar: lo que no puede romper.
       - Cómo se demuestra: los tests o los pasos que lo prueban.
       - Fuera de alcance.
-      Devuelve un resumen de una o dos frases y los riesgos que veas.
+      Devuelve un resumen de una o dos frases y los riesgos que veas. En `assumptions`, lo que hayas supuesto sin poder comprobarlo, una frase cada uno.
   arquitecto:
     model: ${CLAUDE_FUERTE}
     fallback:
@@ -74,6 +74,7 @@ stages:
       Riesgos: {{stages.spec.output.risks}}
 
       Escribe las tareas en openspec/tasks.md, en orden y cada una con cómo se comprueba, y confirma la propuesta y el plan con un commit. No implementes nada todavía.
+      En `assumptions`, lo que hayas supuesto sin poder comprobarlo, una frase cada uno.
     outputSchema:
       type: object
       properties:

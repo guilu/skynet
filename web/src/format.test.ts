@@ -16,6 +16,12 @@ describe('describeEvent', () => {
     expect(describeEvent('run.risk.raised', { from: 1, to: 2, stageKey: 'corregir' })).toBe(
       'Riesgo de la ejecución: de 1 a 2 por corregir',
     )
+    expect(describeEvent('run.assumptions.collected', { stageKey: 'spec', count: 2 })).toBe(
+      'spec supuso 2 cosas sin poder comprobarlo',
+    )
+    expect(describeEvent('run.assumptions.collected', { stageKey: 'spec', count: 1 })).toBe(
+      'spec supuso 1 cosa sin poder comprobarlo',
+    )
   })
 
   it('describes the delta after the judge (AU-B)', () => {

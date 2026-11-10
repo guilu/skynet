@@ -579,6 +579,14 @@ export interface ApprovalEvidence {
   pullRequest: ApprovalPullRequest | null
   /** Si la puerta tiene `autoApprove` (AU-C): si se aprobó sola y cada condición. */
   autoApprove: AutoApproveCheck | null
+  /** Lo que los agentes de la ejecución supusieron sin comprobarlo (ES-C); no para nada. */
+  assumptions?: Assumption[]
+}
+
+/** Un supuesto de un agente (ES-C), con la fase que lo dejó. */
+export interface Assumption {
+  stageKey: string
+  text: string
 }
 
 /** Lo que miró Skynet para aprobar sola una puerta de fusión (AU-C). */
@@ -2206,6 +2214,8 @@ export const api = {
   ciChecks: (runId: string) =>
     request<CiCheckView[]>('GET', `/api/workflow-runs/${runId}/ci-checks`),
   merges: (runId: string) => request<MergeView[]>('GET', `/api/workflow-runs/${runId}/merges`),
+  assumptions: (runId: string) =>
+    request<Assumption[]>('GET', `/api/workflow-runs/${runId}/assumptions`),
   findings: (runId: string) =>
     request<FindingView[]>('GET', `/api/workflow-runs/${runId}/findings`),
   judgeStats: (days: number) => request<JudgeStatsRow[]>('GET', `/api/factory/judges?days=${days}`),

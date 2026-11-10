@@ -17,6 +17,7 @@ agents:
 
       Si existe docs/skynet/mapa-{{project.slug}}.md (el mapa del repositorio que deja «Conocer un repositorio»), léelo primero.
       No cambies nada. Devuelve un resumen de cómo está organizado lo que toca la tarea, los ficheros que habrá que cambiar y los riesgos.
+      En `assumptions`, lo que hayas supuesto sin poder comprobarlo, una frase cada uno.
   desarrollador:
     model: ${CLAUDE_GENERAL}
     fallback:

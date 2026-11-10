@@ -20,6 +20,7 @@ import { DecisionPanel } from '../components/approval/DecisionPanel'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { SkynySays } from '../components/companion/SkynySays'
 import { JsonView } from '../components/run/JsonView'
+import { AssumptionList } from '../components/run/Assumptions'
 import { CiChecksList } from '../components/run/PullRequestCard'
 import { StatusBadge } from '../components/StatusBadge'
 import { Pill } from '../components/ui/Pill'
@@ -156,6 +157,17 @@ export function ApprovalPage() {
       {a.evidence.autoApprove && <AutoApproveEvidence check={a.evidence.autoApprove} />}
 
       {a.evidence.pullRequest && <MergeEvidence pr={a.evidence.pullRequest} />}
+
+      {a.evidence.assumptions && a.evidence.assumptions.length > 0 && (
+        <section className="card" aria-labelledby="assumptions-title">
+          <h2 id="assumptions-title">Supuestos para revisar ({a.evidence.assumptions.length})</h2>
+          <p className="muted small">
+            Lo que los agentes supusieron sin poder comprobarlo. No paran la puerta: decide tú si
+            valen.
+          </p>
+          <AssumptionList assumptions={a.evidence.assumptions} />
+        </section>
+      )}
 
       <section className="card" aria-labelledby="evidence-title">
         <h2 id="evidence-title">Lo que dejaron sus dependencias</h2>
