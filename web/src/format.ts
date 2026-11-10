@@ -270,6 +270,16 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `${p('stageKey')}: sin cambios desde el juicio en ${p('judgedSha').slice(0, 7)}`
     case 'stage.judge.delta.skipped':
       return `${p('stageKey')}: lo que cambió desde el juicio es de nivel 0, no se vuelve a juzgar`
+    case 'finding.outcome.set': {
+      const where = payload.file ? ` en \`${p('file')}\`` : ''
+      const what =
+        payload.outcome === 'aceptado'
+          ? 'marcó como intencionado'
+          : payload.outcome === 'irrelevante'
+            ? 'marcó como que no aplica'
+            : 'deshizo el desenlace de'
+      return `${p('actor')} ${what} un hallazgo${where}`
+    }
     case 'stage.judge.skipped':
       return `${p('stageKey')}: ${p('note')}`
     case 'stage.judge.delta.refute.started':

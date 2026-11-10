@@ -14,6 +14,7 @@ import { RiskPill } from './RiskPill'
 import { StageRetry } from './StageRetry'
 import { StageGuide } from './StageGuide'
 import { StageJudge } from './StageJudge'
+import { StageFindings } from './StageFindings'
 import { ACTIVE, stageActivity, stepState, WAITING } from './stageState'
 import {
   attemptOf,
@@ -215,6 +216,9 @@ export function RunProgress({
               ) : (
                 <StageJudge judge={open.judge} />
               ))}
+            {((open.judge && !open.judge.guide) || open.type === 'github-check') && (
+              <StageFindings key={open.id} runId={run.id} stage={open} />
+            )}
             {earlier.length > 0 && (
               <EarlierAttempts
                 attempts={earlier}

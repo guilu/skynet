@@ -1064,6 +1064,43 @@ export interface JudgeFinding {
   refutation?: string | null
 }
 
+/**
+ * El desenlace de un hallazgo (RH-A): lo pone el motor (abierto, refutado, corregido, aparcado) o
+ * una persona (aceptado: es real pero intencionado; irrelevante: el juez se equivocó).
+ */
+export type FindingOutcome =
+  'abierto' | 'refutado' | 'corregido' | 'aparcado' | 'aceptado' | 'irrelevante'
+
+/** Un hallazgo del registro (RH-A), con su desenlace. */
+export interface FindingView {
+  id: string
+  runId: string
+  stageRunId: string
+  stageKey: string
+  round: number
+  /** judge: el juez de la fase; delta: los jueces de lo corregido para la CI (AU-B). */
+  source: 'judge' | 'delta'
+  judge: string
+  lens: string | null
+  provider: string | null
+  model: string | null
+  file: string | null
+  line: number | null
+  severity: 'blocking' | 'minor'
+  text: string
+  outcome: FindingOutcome
+  /** `skynet` o quien lo decidió; null mientras está abierto. */
+  outcomeBy: string | null
+  outcomeReason: string | null
+  outcomeAt: string | null
+  /** Las veces que volvió a salir en rondas siguientes de la misma fase. */
+  repeats: number
+  /** La primera vez que salió en el repositorio, en otra fase. */
+  firstSeenId: string | null
+  firstSeenRunId: string | null
+  createdAt: string
+}
+
 /** El juez de una fase en una ejecución: en qué ronda va y el veredicto de la última ronda. */
 export interface StageJudge {
   /** SKIPPED: el cambio no llegó a `minRisk` y la fase pasó sin juez (AU-C). */
@@ -2121,6 +2158,10 @@ export const api = {
   ciChecks: (runId: string) =>
     request<CiCheckView[]>('GET', `/api/workflow-runs/${runId}/ci-checks`),
   merges: (runId: string) => request<MergeView[]>('GET', `/api/workflow-runs/${runId}/merges`),
+  findings: (runId: string) =>
+    request<FindingView[]>('GET', `/api/workflow-runs/${runId}/findings`),
+  decideFinding: (id: string, outcome: 'aceptado' | 'irrelevante' | 'abierto', reason?: string) =>
+    request<FindingView>('POST', `/api/findings/${id}/outcome`, { outcome, reason }),
   listRuns: (query: {
     status?: RunStatus[]
     projectId?: string

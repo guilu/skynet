@@ -57,6 +57,10 @@ skynet:
     retention: ${SKYNET_WORKTREE_RETENTION:7d}
     # Cada cuánto se buscan worktrees que han pasado la retención.
     check-interval: ${SKYNET_WORKTREE_CHECK_INTERVAL:1h}
+  findings:
+    # Lo que se parecen las palabras de dos hallazgos del mismo fichero y lente para contar como el
+    # mismo (RH-A), de 0 a 1.
+    similarity: ${SKYNET_FINDINGS_SIMILARITY:0.5}
   autonomy:
     # Puertas con autoApprove que Skynet aprueba solo por repositorio y día (AU-C). Después,
     # vuelven a preguntar.

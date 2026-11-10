@@ -42,6 +42,22 @@ describe('describeEvent', () => {
     )
   })
 
+  it('dice quién decidió el desenlace de un hallazgo (RH-A)', () => {
+    expect(
+      describeEvent('finding.outcome.set', {
+        actor: 'diego',
+        outcome: 'aceptado',
+        file: 'src/Calc.java',
+      }),
+    ).toBe('diego marcó como intencionado un hallazgo en `src/Calc.java`')
+    expect(describeEvent('finding.outcome.set', { actor: 'diego', outcome: 'irrelevante' })).toBe(
+      'diego marcó como que no aplica un hallazgo',
+    )
+    expect(describeEvent('finding.outcome.set', { actor: 'diego', outcome: 'aparcado' })).toBe(
+      'diego deshizo el desenlace de un hallazgo',
+    )
+  })
+
   it('dice cuándo se omite el juez y cuándo se aprueba sola la puerta (AU-C)', () => {
     expect(
       describeEvent('stage.judge.skipped', {

@@ -3499,6 +3499,48 @@
     margin: 0 0 var(--space-1);
   }
 
+  /* El registro de hallazgos de una fase (RH-A): cada uno con su desenlace. */
+  .stage-findings {
+    margin: 0 0 var(--space-2);
+  }
+
+  .stage-findings-list {
+    display: grid;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .finding-outcome {
+    font-weight: 600;
+  }
+
+  .finding-outcome.abierto,
+  .finding-outcome.aparcado {
+    color: var(--bad-ink);
+  }
+
+  .stage-finding.refutado,
+  .stage-finding.irrelevante,
+  .stage-finding.corregido,
+  .stage-finding.aceptado {
+    color: var(--muted);
+  }
+
+  .finding-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    align-items: center;
+    margin-left: var(--space-2);
+  }
+
+  .finding-reason {
+    min-width: 0;
+    max-width: 16rem;
+  }
+
   /* La guía de pruebas como fase (VA-D): los pasos por sección, con su evidencia plegada. */
   .stage-guide-title {
     margin: var(--space-1) 0 2px;
