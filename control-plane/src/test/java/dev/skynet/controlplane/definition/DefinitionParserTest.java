@@ -1078,6 +1078,38 @@ class DefinitionParserTest {
   }
 
   @Test
+  void specChecksTheProposalOrTheFileItNames() {
+    Parsed parsed =
+        parse(
+            """
+            id: con-spec
+            stages:
+              - id: spec
+                type: agent
+                prompt: Especifica
+                checks: [spec]
+              - id: otra
+                type: agent
+                prompt: Especifica otra
+                dependsOn: [spec]
+                checks: [{spec: docs/propuesta.md}]
+              - id: mal
+                type: agent
+                prompt: Mal
+                dependsOn: [otra]
+                checks: [{spec: "../fuera.md"}]
+            """);
+    assertThat(parsed.definition().stage("spec").orElseThrow().checks())
+        .contains(VerificationCheck.withPaths("spec", List.of("openspec/proposal.md")));
+    assertThat(parsed.definition().stage("otra").orElseThrow().checks())
+        .contains(VerificationCheck.withPaths("spec", List.of("docs/propuesta.md")));
+    assertThat(messages(parsed, Severity.ERROR))
+        .containsExactly(
+            "`spec` es un fichero del repositorio, sin `*`, `..` ni `/` delante, p. ej."
+                + " `spec: openspec/proposal.md`");
+  }
+
+  @Test
   void theRiskAtTheRootAddsLevelTwoPathsAndPatterns() {
     Parsed parsed =
         parse(
@@ -1732,11 +1764,11 @@ class DefinitionParserTest {
         .containsExactly(
             "`../fuera.md` tiene que ser una ruta dentro del repositorio, p. ej. `docs/**`",
             "Check `test` desconocido; ¿quisiste decir `tests`?. Admite: tests, diff, commit,"
-                + " scope, tests-intact, command: <comando>",
+                + " scope, tests-intact, spec, command: <comando>",
             "El check `scope` necesita la lista `scope` con los ficheros que se pueden cambiar,"
                 + " p. ej. `scope: [src/**, docs/**]`",
-            "Un check con datos solo puede ser `command: <comando>`. Admite: tests, diff, commit,"
-                + " scope, tests-intact, command: <comando>",
+            "Un check con datos solo puede ser `command: <comando>` o `spec: <fichero>`. Admite:"
+                + " tests, diff, commit, scope, tests-intact, spec, command: <comando>",
             "Los comandos no admiten variables `{{...}}`: un dato de entrada podría colar otro"
                 + " comando. Escríbelo tal cual",
             "`checks` debe ser una lista, p. ej. `checks: [tests, diff]`",

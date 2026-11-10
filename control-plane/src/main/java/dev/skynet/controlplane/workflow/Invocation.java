@@ -170,6 +170,26 @@ record Invocation(
         replacing);
   }
 
+  /** La misma invocación con {@code note} detrás del prompt; un comando no lleva prompt. */
+  Invocation withNote(String note) {
+    if (prompt == null || command != null) {
+      return this;
+    }
+    return new Invocation(
+        kind,
+        parent,
+        sessionId,
+        prompt + note,
+        policy,
+        workspaceId,
+        resume,
+        workspace,
+        runnerId,
+        command,
+        push,
+        replacing);
+  }
+
   /**
    * La misma invocación con la política de su proveedor de reserva, sustituyendo a {@code
    * replacing} (CQ-B).

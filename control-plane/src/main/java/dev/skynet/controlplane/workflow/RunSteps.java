@@ -825,7 +825,19 @@ public class RunSteps {
         snapshot == null || rerunUpstream(snapshot, stageKey, definition)
             ? null
             : snapshot.getBaseSnapshot();
-    return invocation.retrying(previous, restore);
+    Invocation next = invocation.retrying(previous, restore);
+    List<String> failed = previous == null ? List.of() : retries.failedChecks(previous);
+    return failed.isEmpty() ? next : next.withNote(checksNote(failed));
+  }
+
+  /**
+   * Lo que se añade al prompt del intento que sigue a uno que no pasó las comprobaciones de la fase
+   * (ES-A): cuáles y por qué, para que no repita el mismo fallo.
+   */
+  static String checksNote(List<String> failed) {
+    return "\n\nNota: un intento anterior de esta tarea no pasó estas comprobaciones de la fase."
+        + " Hazlo de nuevo teniéndolas en cuenta:\n- "
+        + String.join("\n- ", failed);
   }
 
   /** Lo que se le dice a un agente que reanuda su sesión tras quedarse sin cuota (CQ-A). */

@@ -1202,7 +1202,15 @@ export interface StageJudge {
 /** Una comprobación de fase: `artifacts`, `tests`, `diff`, `commit`, `scope` o `command`. */
 export interface VerificationCheck {
   name:
-    'artifacts' | 'tests' | 'tests-intact' | 'diff' | 'commit' | 'scope' | 'protected' | 'command'
+    | 'artifacts'
+    | 'tests'
+    | 'tests-intact'
+    | 'diff'
+    | 'commit'
+    | 'scope'
+    | 'protected'
+    | 'command'
+    | 'spec'
   /** El comando de `command`. */
   command: string | null
   /** Los globs de `artifacts` y `scope`. */

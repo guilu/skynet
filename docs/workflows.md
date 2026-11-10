@@ -233,6 +233,14 @@ stages:
     - se añade una forma de saltarlos: `@Disabled`, `@Ignore`, `assumeTrue(false)`, `.skip`, `.only`, `xit`, `fit`, `@pytest.mark.skip`, `pytest.skip()`, `t.Skip()`.
 
     Si solo baja el número de aserciones de un fichero de tests, **avisa sin fallar** («Hay menos aserciones en `…` (de 3 a 2)»). Reconoce los tests de Java y Kotlin (`src/*test*/`, `*Test.java`, `*IT.kt`…), JavaScript y TypeScript (`*.test.ts`, `*.spec.js`, `__tests__/`, `tests/`, `e2e/`), Python (`test_*.py`, `*_test.py`, `tests/`) y Go (`*_test.go`). Una fase que de verdad tiene que quitar tests (p. ej. al borrar un módulo con los suyos) lleva `allowTestRemoval: true`, que quita `tests-intact` de su `tests`.
+  - `spec` (ES-A): la propuesta dice lo que hace falta para juzgarla. Mira `openspec/proposal.md`, u otro fichero con `{spec: docs/propuesta.md}`, y exige cinco secciones de Markdown (`##` o más), cada una con texto:
+    - **Qué se podrá hacer**: lo que el usuario podrá hacer y antes no;
+    - **Qué resultado se obtiene**: el resultado esperado, contra un ejemplo o una referencia;
+    - **Qué debe respetar**: lo que no puede romper;
+    - **Cómo se demuestra**: los tests o los pasos que lo prueban;
+    - **Fuera de alcance**.
+
+    Los títulos se reconocen por sus palabras, sin tildes ni mayúsculas y también en inglés: «Qué podrá hacer el usuario», «4. Cómo se comprueba» u «Out of scope» valen. Un guion, «TODO» o «pendiente» no cuentan como texto, y lo que va en bloques de código o comentarios HTML no cuenta. Si falta algo, falla con lo que falta y, con `retry: {on: [verification]}`, el intento siguiente lo recibe en su prompt: «A la propuesta `openspec/proposal.md` le falta «Cómo se demuestra»; está vacía «Fuera de alcance»».
 - **Rutas protegidas** (VA-A): `protected` es una lista de globs que **ningún agente puede cambiar**, borrar ni mover:
   - en la raíz del workflow vale para todas sus fases `agent` y `parallel`; en una fase, se suma a lo de la raíz;
   - en la ficha del repositorio (**Configurar verificación → Rutas protegidas**, `PUT /api/projects/{id}/repositories/{rid}/verification` con `protectedPaths`) vale para todas las fases `agent` y `parallel` de cualquier workflow en ese repositorio, sin tocar el YAML;
@@ -592,6 +600,7 @@ Las plantillas `especificar-planificar-implementar`, `implementar-tarea` y `corr
   | `quota` | la cuenta del proveedor se quedó sin su ventana de 5 h o semanal | no: espera a que se renueve (ver «Sin cuota») |
 
   Cancelar no es un fallo y nunca se reintenta.
+- Si el intento falló porque no pasaron sus comprobaciones (`verification`), el agente del siguiente recibe detrás de su prompt cuáles y por qué (ES-A): «Nota: un intento anterior de esta tarea no pasó estas comprobaciones de la fase…», con una línea por check, p. ej. «`spec`: A la propuesta `openspec/proposal.md` le falta «Cómo se demuestra»».
 - Cada intento es una fase nueva de la misma ejecución (`attempt` 2, 3…) con agentes nuevos y sesión nueva. El intento que falló se queda como estaba, con sus agentes, sus logs y su coste.
 - Mientras espera su hora, el intento nuevo está `PENDING` con `notBefore`, y el evento `stage.retry.scheduled` dice qué intento es, por qué falló el anterior y cuándo arranca. Las demás fases siguen a lo suyo. Si otra fase falla sin reintentos, el fail-fast cancela también el intento que espera; cancelar la ejecución, también.
 - El intento nuevo parte del worktree tal como lo encontró el que falló: al arrancar cada agente, el runner guarda una foto del worktree (`refs/skynet/snapshots/<agente>`, con lo confirmado y lo que no) y, antes del reintento, lo deja como en esa foto. Lo que dejó el intento fallido se sigue viendo en sus artefactos y su diff.
