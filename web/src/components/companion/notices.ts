@@ -14,6 +14,7 @@ export const COMPANION_EVENT_TYPES = [
   'agent.status.changed',
   'agent.rate_limit',
   'approval.*',
+  'lesson.proposed',
 ]
 
 export type NoticeKind =
@@ -103,6 +104,17 @@ export function noticeFor(
         action: 'Revisar',
       }
     }
+    case 'lesson.proposed':
+      // Lo que se repite en los hallazgos de un repositorio (AP-B): decides tú si se aplica.
+      return {
+        ...base,
+        kind: 'success',
+        title: 'He aprendido algo',
+        body:
+          p.kind === 'prevenir'
+            ? `${String(p.repository ?? '')}: los jueces han pedido \`${String(p.category ?? '')}\` en ${String(p.runs ?? '')} ejecuciones`
+            : `${String(p.repository ?? '')}: se ha dado por bueno \`${String(p.category ?? '')}\` en ${String(p.runs ?? '')} ejecuciones`,
+      }
     case 'workflow.started':
     case 'run.resumed':
       return {

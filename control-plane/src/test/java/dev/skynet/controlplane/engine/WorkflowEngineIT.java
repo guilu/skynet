@@ -2172,6 +2172,155 @@ class WorkflowEngineIT extends IntegrationTest {
     assertThat(again.path("firstSeenRunId").asString()).isEqualTo(runId);
   }
 
+  @Test
+  void theSameClassInTwoRunsProposesALessonThatCanBeAppliedOrDismissed() {
+    String definitionId = publish(JUDGED.replace("id: juzgada", "id: aprendida"));
+    Runner runner = register("laptop");
+
+    // Dos ejecuciones: el juez pide el caso de la lista vacía (en ficheros distintos), se corrige,
+    // y deja un comentario de estilo que una persona da por bueno.
+    String first = judgedRun(runner, definitionId, "src/Parse.java", "Nombre poco claro");
+    assertThat(get("/api/projects/" + projectId + "/lessons")).isEmpty();
+    String second = judgedRun(runner, definitionId, "src/Export.java", "El nombre no se entiende");
+
+    JsonNode lessons = get("/api/projects/" + projectId + "/lessons?status=propuesta");
+    assertThat(lessons).hasSize(2);
+    JsonNode prevent = byKind(lessons, "prevenir");
+    assertThat(prevent.path("category").asString()).isEqualTo("caso-limite");
+    assertThat(prevent.path("runs").asInt()).isEqualTo(2);
+    assertThat(prevent.path("findings").asInt()).isEqualTo(2);
+    assertThat(prevent.path("repositoryName").asString()).isEqualTo("demo");
+    assertThat(prevent.path("suggestedText").asString())
+        .startsWith("En este repositorio, los jueces han tenido que pedir en 2 ejecuciones:")
+        .contains("*caso-limite*")
+        .contains("- `src/Export.java`: No trata la lista vacía")
+        .contains("- `src/Parse.java`: No trata la lista vacía");
+    JsonNode dontFlag = byKind(lessons, "no-senalar");
+    assertThat(dontFlag.path("category").asString()).isEqualTo("estilo");
+    assertThat(dontFlag.path("suggestedText").asString())
+        .startsWith("No señales como fallo")
+        .contains("El nombre no se entiende");
+    assertThat(eventTypes(second)).contains("lesson.proposed");
+    assertThat(eventTypes(first)).doesNotContain("lesson.proposed");
+
+    // El detalle lleva los hallazgos con su ejecución.
+    String preventId = prevent.path("id").asString();
+    JsonNode detail = get("/api/lessons/" + preventId);
+    assertThat(detail.path("findings").findValuesAsString("runId"))
+        .containsExactlyInAnyOrder(first, second);
+    assertThat(detail.path("findings").findValuesAsString("outcome")).containsOnly("corregido");
+
+    // Aplicar `prevenir` la fija en la memoria del repositorio, con el texto editado.
+    JsonNode applied =
+        post(
+            "/api/lessons/" + preventId + "/apply",
+            Map.of("text", "Prueba siempre la lista vacía"));
+    assertThat(applied.path("status").asString()).isEqualTo("aplicada");
+    assertThat(applied.path("appliedText").asString()).isEqualTo("Prueba siempre la lista vacía");
+    assertThat(applied.path("decidedBy").asString()).isNotBlank();
+    JsonNode observation = get("/api/memory/" + applied.path("observationId").asString());
+    assertThat(observation.path("kind").asString()).isEqualTo("CONSTRAINT");
+    assertThat(observation.path("pinned").asBoolean()).isTrue();
+    assertThat(observation.path("origin").asString()).isEqualTo("HUMAN");
+    assertThat(observation.path("topicKey").asString()).isEqualTo("leccion/caso-limite");
+    assertThat(observation.path("repositoryId").asString()).isEqualTo(repositoryId);
+    assertThat(observation.path("what").asString()).isEqualTo("Prueba siempre la lista vacía");
+    assertConflict(() -> post("/api/lessons/" + preventId + "/apply", Map.of()));
+
+    // Descartar pide un motivo.
+    String dontFlagId = dontFlag.path("id").asString();
+    assertBadRequest(
+        () -> post("/api/lessons/" + dontFlagId + "/dismiss", Map.of("reason", " ")),
+        "Falta `reason`");
+    JsonNode dismissed =
+        post("/api/lessons/" + dontFlagId + "/dismiss", Map.of("reason", "Sí queremos verlo"));
+    assertThat(dismissed.path("status").asString()).isEqualTo("descartada");
+    assertThat(dismissed.path("reason").asString()).isEqualTo("Sí queremos verlo");
+    assertThat(get("/api/projects/" + projectId + "/lessons?status=propuesta")).isEmpty();
+    assertBadRequest(
+        () -> get("/api/projects/" + projectId + "/lessons?status=magia"), "Estado desconocido");
+
+    // Una ejecución más no la vuelve a proponer; hacen falta tres nuevas.
+    judgedRun(runner, definitionId, "src/Load.java", "Variable con nombre raro");
+    judgedRun(runner, definitionId, "src/Save.java", "Nombre de método confuso");
+    assertThat(get("/api/lessons/" + dontFlagId).path("lesson").path("status").asString())
+        .isEqualTo("descartada");
+    String fifth = judgedRun(runner, definitionId, "src/Show.java", "Nombre demasiado corto");
+    JsonNode again = get("/api/lessons/" + dontFlagId).path("lesson");
+    assertThat(again.path("status").asString()).isEqualTo("propuesta");
+    assertThat(again.path("runs").asInt()).isEqualTo(5);
+    assertThat(again.path("reason").isString()).isFalse();
+    assertThat(eventTypes(fifth)).contains("lesson.proposed");
+    // La aplicada suma pruebas, pero sigue aplicada.
+    JsonNode kept = get("/api/lessons/" + preventId).path("lesson");
+    assertThat(kept.path("status").asString()).isEqualTo("aplicada");
+    assertThat(kept.path("runs").asInt()).isEqualTo(5);
+  }
+
+  /**
+   * Una ejecución juzgada: la ronda 1 suspende por un caso límite en {@code file}, se corrige, y la
+   * ronda 2 aprueba con un comentario de estilo que una persona marca como intencionado.
+   */
+  private String judgedRun(Runner runner, String definitionId, String file, String style) {
+    String runId = launch(definitionId, Map.of()).path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    verified(runner, runner.claim().getFirst(), true);
+    complete(
+        runner,
+        runner.claim().getFirst(),
+        "/w/eng/juez",
+        verdict(
+            2,
+            5,
+            List.of(
+                Map.of(
+                    "file",
+                    file,
+                    "line",
+                    3,
+                    "severity",
+                    "blocking",
+                    "category",
+                    "caso-limite",
+                    "text",
+                    "No trata la lista vacía"))));
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    verified(runner, awaitCommand(runner), true);
+    complete(
+        runner,
+        runner.claim().getFirst(),
+        "/w/eng/juez",
+        verdict(
+            5,
+            5,
+            List.of(
+                Map.of(
+                    "file",
+                    "src/Util.java",
+                    "severity",
+                    "minor",
+                    "category",
+                    "estilo",
+                    "text",
+                    style))));
+    assertThat(stageStatuses(runId)).containsEntry("juzgar", "SUCCEEDED");
+    complete(runner, runner.claim().getFirst(), "/w/eng/entregar");
+    JsonNode parked = byFile(get("/api/workflow-runs/" + runId + "/findings"), "src/Util.java", "");
+    post(
+        "/api/findings/" + parked.path("id").asString() + "/outcome",
+        Map.of("outcome", "aceptado"));
+    return runId;
+  }
+
+  private static JsonNode byKind(JsonNode lessons, String kind) {
+    for (JsonNode lesson : lessons) {
+      if (lesson.path("kind").asString().equals(kind)) {
+        return lesson;
+      }
+    }
+    throw new AssertionError("No hay lección " + kind + " en " + lessons);
+  }
+
   /** Dos jueces y un escéptico por hallazgo (RH-B). */
   private static final String PANEL =
       JUDGED

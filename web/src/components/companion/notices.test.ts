@@ -97,6 +97,24 @@ describe('noticeFor', () => {
     })
   })
 
+  it('avisa de una lección propuesta (AP-B)', () => {
+    const n = noticeFor(
+      event('lesson.proposed', {
+        kind: 'prevenir',
+        category: 'caso-limite',
+        runs: 2,
+        repository: 'demo-repo',
+      }),
+      run,
+    )
+    expect(n).toMatchObject({
+      kind: 'success',
+      title: 'He aprendido algo',
+      body: 'demo-repo: los jueces han pedido `caso-limite` en 2 ejecuciones',
+      href: `/runs/${run.id}`,
+    })
+  })
+
   it('sin la ejecución usa el principio de su id', () => {
     expect(noticeFor(event('workflow.started'), null)?.runKey).toBe(run.id.slice(0, 8))
   })

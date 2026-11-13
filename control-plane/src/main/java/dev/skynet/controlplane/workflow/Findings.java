@@ -79,16 +79,19 @@ class Findings {
   private final JdbcClient jdbc;
   private final RunTransitions transitions;
   private final TimeSource time;
+  private final Lessons lessons;
   private final double similarity;
 
   Findings(
       JdbcClient jdbc,
       RunTransitions transitions,
       TimeSource time,
+      Lessons lessons,
       @Value("${skynet.findings.similarity:0.5}") double similarity) {
     this.jdbc = jdbc;
     this.transitions = transitions;
     this.time = time;
+    this.lessons = lessons;
     this.similarity = similarity;
   }
 
@@ -242,6 +245,8 @@ class Findings {
             .update();
       }
     }
+    // Lo corregido y lo refutado cuentan para las lecciones (AP-B).
+    lessons.consider(context.repositoryId(), context.runId(), now);
   }
 
   /** La fase ha terminado: lo que sigue abierto queda aparcado. */
@@ -668,6 +673,14 @@ class Findings {
     payload.put("reason", reason == null || reason.isBlank() ? null : reason.strip());
     payload.put("actor", actor);
     transitions.append("finding", id, "finding.outcome.set", current.runId(), payload, now);
+    if (!next.equals(current.outcome())) {
+      UUID repositoryId =
+          jdbc.sql("SELECT repository_id FROM finding WHERE id = ?")
+              .param(id)
+              .query(UUID.class)
+              .single();
+      lessons.consider(repositoryId, current.runId(), now);
+    }
     return jdbc.sql(SELECT + " WHERE f.id = ?").param(id).query(Findings::view).single();
   }
 
