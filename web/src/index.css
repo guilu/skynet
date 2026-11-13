@@ -2122,34 +2122,21 @@
   .login-hero {
     display: grid;
     align-content: center;
-    justify-items: start;
+    justify-items: center;
     gap: var(--space-4);
     padding: 40px 32px;
     background: var(--primary-soft);
     border-right: var(--border-w) solid var(--border);
   }
 
-  .login-tagline {
-    margin: 0;
-    font-family: var(--font-display);
-    font-weight: 600;
-    font-size: 1.6rem;
-    line-height: 1.15;
-    color: var(--primary-ink);
-  }
-
   .login-states {
-    display: grid;
-    gap: 10px;
-    justify-items: start;
-  }
-
-  .login-states li:nth-child(2) {
-    margin-left: 22px;
-  }
-
-  .login-states li:nth-child(3) {
-    margin-left: 44px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
 
   .login-form {
@@ -2209,10 +2196,6 @@
       border-right: none;
       border-bottom: var(--border-w) solid var(--border);
       padding: 24px;
-    }
-
-    .login-states {
-      display: none;
     }
 
     .login-form {
