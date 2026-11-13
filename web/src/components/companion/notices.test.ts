@@ -97,6 +97,18 @@ describe('noticeFor', () => {
     })
   })
 
+  it('avisa de un revert de lo que aprobó el juez, pero no de uno marcado a mano (EV-A)', () => {
+    expect(noticeFor(event('run.escaped', { origin: 'revert-pr', number: 12 }), run)).toMatchObject(
+      {
+        kind: 'error',
+        title: `Se ha revertido ${run.workItemKey}`,
+        body: 'La PR #12 se revirtió en la rama por defecto: escape del juez',
+        href: `/runs/${run.id}`,
+      },
+    )
+    expect(noticeFor(event('run.escaped', { origin: 'manual' }), run)).toBeNull()
+  })
+
   it('avisa de una lección propuesta (AP-B)', () => {
     const n = noticeFor(
       event('lesson.proposed', {

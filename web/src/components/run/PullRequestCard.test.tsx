@@ -1,6 +1,6 @@
-import { screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { CiCheckView, MergeView, PullRequestView, Run } from '../../api'
+import type { CiCheckView, EscapeView, MergeView, PullRequestView, Run } from '../../api'
 import { mockFetch, renderAt } from '../../test/render'
 import { PullRequestCard } from './PullRequestCard'
 
@@ -98,5 +98,78 @@ describe('La tarjeta de la PR', () => {
     const card = await screen.findByRole('region', { name: 'Pull request' })
     expect(card).toHaveTextContent('No se fusionó')
     expect(card).toHaveTextContent('La CI ya no está en verde: falló en lint')
+  })
+
+  it('enseña el revert de una PR fusionada y deja quitarlo (EV-A)', async () => {
+    const escape: EscapeView = {
+      id: 'e1',
+      runId: 'r1',
+      workItemKey: 'ENG-1',
+      workItemTitle: 'Arreglar add()',
+      repositoryId: 'repo',
+      repositoryName: 'demo-repo',
+      pullRequestNumber: 12,
+      pullRequestUrl: pr.url,
+      mergedSha: 'e'.repeat(40),
+      origin: 'revert-pr',
+      seenRef: '#13',
+      seenUrl: 'https://github.com/guilu/demo-repo/pull/13',
+      note: null,
+      createdBy: 'skynet',
+      createdAt: '2026-11-13T10:00:00Z',
+    }
+    const fetch = vi.fn(
+      mockFetch({
+        '/api/workflow-runs/r1/pull-requests': [{ ...pr, status: 'MERGED' }],
+        '/api/workflow-runs/r1/ci-checks': [],
+        '/api/workflow-runs/r1/merges': [],
+        '/api/workflow-runs/r1/escapes': [escape],
+        'DELETE /api/escapes/e1': {},
+      }),
+    )
+    vi.stubGlobal('fetch', fetch)
+    renderAt('/', <PullRequestCard run={run} />)
+
+    const band = await screen.findByRole('status', { name: 'Escape del juez' })
+    expect(band).toHaveTextContent('Se revirtió en main con la PR #13')
+    expect(band).toHaveTextContent('visto por Skynet')
+    expect(within(band).getByRole('link', { name: 'PR #13' })).toHaveAttribute(
+      'href',
+      escape.seenUrl,
+    )
+    fireEvent.click(within(band).getByRole('button', { name: 'No fue un fallo del juez' }))
+    await waitFor(() =>
+      expect(
+        fetch.mock.calls.some(
+          ([url, init]) => String(url).endsWith('/api/escapes/e1') && init?.method === 'DELETE',
+        ),
+      ).toBe(true),
+    )
+  })
+
+  it('una PR fusionada sin escape se puede marcar con una nota', async () => {
+    const fetch = vi.fn(
+      mockFetch({
+        '/api/workflow-runs/r1/pull-requests': [{ ...pr, status: 'MERGED' }],
+        '/api/workflow-runs/r1/ci-checks': [],
+        '/api/workflow-runs/r1/merges': [],
+        '/api/workflow-runs/r1/escapes': [],
+        'POST /api/workflow-runs/r1/escapes': {},
+      }),
+    )
+    vi.stubGlobal('fetch', fetch)
+    renderAt('/', <PullRequestCard run={run} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Marcar como escape' }))
+    fireEvent.change(screen.getByLabelText('Qué se escapó'), {
+      target: { value: 'Rompió la exportación' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => {
+      const call = fetch.mock.calls.find(
+        ([url, init]) => String(url).endsWith('/r1/escapes') && init?.method === 'POST',
+      )
+      expect(call && JSON.parse(String(call[1]?.body))).toEqual({ note: 'Rompió la exportación' })
+    })
   })
 })

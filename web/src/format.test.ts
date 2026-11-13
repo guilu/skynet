@@ -95,6 +95,26 @@ describe('describeEvent', () => {
     )
   })
 
+  it('cuenta los escapes del juez (EV-A)', () => {
+    expect(describeEvent('run.escaped', { origin: 'revert-pr', number: 12, seenRef: '#13' })).toBe(
+      'Se revirtió la PR #12 en la rama por defecto con la PR #13: escape del juez',
+    )
+    expect(
+      describeEvent('run.escaped', { origin: 'revert-push', number: 12, seenRef: 'a1b2c3d' }),
+    ).toBe('Se revirtió la PR #12 en la rama por defecto con el commit a1b2c3d: escape del juez')
+    expect(
+      describeEvent('run.escaped', {
+        origin: 'manual',
+        number: 12,
+        actor: 'diego',
+        note: 'Rompió la exportación',
+      }),
+    ).toBe('diego marcó que a la PR #12 se le escapó un fallo: Rompió la exportación')
+    expect(describeEvent('run.escape.removed', { actor: 'diego' })).toBe(
+      'diego dijo que no fue un fallo del juez y quitó el escape',
+    )
+  })
+
   it('cuenta las lecciones propuestas, aplicadas y descartadas (AP-B)', () => {
     expect(
       describeEvent('lesson.proposed', {

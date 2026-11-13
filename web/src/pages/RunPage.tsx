@@ -58,7 +58,7 @@ export function RunPage() {
   // Cada evento se aplica a la vista en caché; solo se relee lo que el evento no trae.
   const { events, state } = useEventStream({ workflowRunId: runId }, (event) => {
     // La PR, su CI y su fusión van aparte: se releen con sus eventos.
-    if (event.type.includes('.github.')) {
+    if (event.type.includes('.github.') || event.type.startsWith('run.escape')) {
       void queryClient.invalidateQueries({ queryKey: pullRequestKey(runId) })
     }
     if (event.type === 'run.assumptions.collected') {

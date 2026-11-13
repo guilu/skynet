@@ -15,6 +15,7 @@ export const COMPANION_EVENT_TYPES = [
   'agent.rate_limit',
   'approval.*',
   'lesson.proposed',
+  'run.escaped',
 ]
 
 export type NoticeKind =
@@ -104,6 +105,18 @@ export function noticeFor(
         action: 'Revisar',
       }
     }
+    case 'run.escaped':
+      // Algo que aprobó el juez se revirtió en la rama por defecto (EV-A). A mano no avisa: lo hiciste tú.
+      if (p.origin === 'manual') return null
+      return {
+        ...base,
+        kind: 'error',
+        title: `Se ha revertido ${runKey}`,
+        body:
+          p.number != null
+            ? `La PR #${String(p.number)} se revirtió en la rama por defecto: escape del juez`
+            : 'Se revirtió en la rama por defecto: escape del juez',
+      }
     case 'lesson.proposed':
       // Lo que se repite en los hallazgos de un repositorio (AP-B): decides tú si se aplica.
       return {

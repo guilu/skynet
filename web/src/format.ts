@@ -302,6 +302,17 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
             : 'deshizo el desenlace de'
       return `${p('actor')} ${what} un hallazgo${where}`
     }
+    case 'run.escaped': {
+      const pr = payload.number != null ? `la PR #${p('number')}` : 'la PR'
+      if (payload.origin === 'manual') {
+        return `${p('actor')} marcó que a ${pr} se le escapó un fallo${payload.note ? `: ${p('note')}` : ''}`
+      }
+      return payload.origin === 'revert-pr'
+        ? `Se revirtió ${pr} en la rama por defecto con la PR ${p('seenRef')}: escape del juez`
+        : `Se revirtió ${pr} en la rama por defecto con el commit ${p('seenRef')}: escape del juez`
+    }
+    case 'run.escape.removed':
+      return `${p('actor')} dijo que no fue un fallo del juez y quitó el escape`
     case 'lesson.proposed': {
       const what =
         payload.kind === 'prevenir'

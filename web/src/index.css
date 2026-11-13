@@ -10317,3 +10317,21 @@
 .lesson-kind.prevenir {
   color: var(--ok-ink);
 }
+
+/* Escape del juez (EV-A): lo aprobado que luego se revirtió. */
+.escape-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: var(--bad-soft);
+  color: var(--bad-ink);
+}
+
+.escape-band p {
+  margin: 0;
+  flex: 1 1 16rem;
+}
