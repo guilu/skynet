@@ -312,11 +312,12 @@ class Findings {
     jdbc.sql(
             """
             INSERT INTO finding (id, repository_id, workflow_run_id, stage_run_id, round, source,
-              judge, lens, agent_run_id, provider, model, file, line, severity, text, words,
-              fingerprint, outcome, outcome_by, outcome_reason, outcome_at, first_seen_id,
+              judge, lens, agent_run_id, provider, model, file, line, severity, category, text,
+              words, fingerprint, outcome, outcome_by, outcome_reason, outcome_at, first_seen_id,
               created_at, updated_at)
             VALUES (:id, :repository, :run, :stage, :round, :source, :judge, :lens, :agent,
-              :provider, :model, :file, :line, :severity, :text, CAST(:words AS text[]),
+              :provider, :model, :file, :line, :severity, :category, :text,
+              CAST(:words AS text[]),
               :fingerprint, :outcome, :by, :reason, :at, :firstSeen, :now, :now)
             """)
         .param("id", UUID.randomUUID())
@@ -333,6 +334,7 @@ class Findings {
         .param("file", blank(finding.file()) ? null : finding.file())
         .param("line", finding.line())
         .param("severity", finding.severity())
+        .param("category", finding.categoryOrOther())
         .param("text", finding.text() == null ? "" : finding.text())
         .param("words", array(words))
         .param("fingerprint", fingerprint(words))
@@ -672,7 +674,8 @@ class Findings {
   private static final String SELECT =
       """
       SELECT f.id, f.workflow_run_id, f.stage_run_id, s.stage_key, f.round, f.source, f.judge,
-        f.lens, f.provider, f.model, f.file, f.line, f.severity, f.text, f.outcome, f.outcome_by,
+        f.lens, f.provider, f.model, f.file, f.line, f.severity, f.category, f.text, f.outcome,
+        f.outcome_by,
         f.outcome_reason, f.outcome_at, f.repeats, f.first_seen_id, o.workflow_run_id AS
         first_seen_run_id, f.created_at
       FROM finding f
@@ -695,6 +698,7 @@ class Findings {
       String file,
       Integer line,
       String severity,
+      String category,
       String text,
       String outcome,
       String outcomeBy,
@@ -721,6 +725,7 @@ class Findings {
         rs.getString("file"),
         (Integer) rs.getObject("line"),
         rs.getString("severity"),
+        rs.getString("category"),
         rs.getString("text"),
         rs.getString("outcome"),
         rs.getString("outcome_by"),

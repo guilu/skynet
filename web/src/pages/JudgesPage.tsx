@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { Scale } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
-import { api, type JudgeLens, type JudgeStatsRow } from '../api'
+import { api, type FindingCategory, type JudgeLens, type JudgeStatsRow } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { DataTable, EmptyState, type Column } from '../components/list/DataTable'
 import { FilterChips, ListToolbar, type ChipOption } from '../components/list/Toolbar'
-import { OUTCOME_LABEL } from '../components/run/findingFormat'
+import { CATEGORY_LABEL, OUTCOME_LABEL } from '../components/run/findingFormat'
 import { LENS_LABEL } from '../components/run/stageNotes'
 import { Button } from '../components/ui/Button'
 import { Pill } from '../components/ui/Pill'
@@ -36,21 +36,27 @@ function lensOf(r: JudgeStatsRow): string {
  * Fábrica › Jueces (RH-C): el ruido y el acierto de cada juez, por proveedor, modelo y lente, en
  * los últimos 7, 30 o 90 días. Ruido es lo que tumbó un escéptico o una persona dijo que no
  * aplicaba; acierto, lo que el agente corrigió. Al elegir una fila salen sus últimos hallazgos con
- * ruido. El periodo y la fila van en la URL (`?days=`, `?judge=`).
+ * ruido. Se puede mirar una sola clase de hallazgo (AP-A). El periodo, la clase y la fila van en
+ * la URL (`?days=`, `?category=`, `?judge=`).
  */
 export function JudgesPage() {
   const [params, setParams] = useSearchParams()
   const asked = params.get('days')
   const days = PERIODS.some((p) => p.value === asked) ? Number(asked) : 30
   const chosen = params.get('judge')
+  const askedCategory = params.get('category')
+  const category =
+    askedCategory && askedCategory in CATEGORY_LABEL ? (askedCategory as FindingCategory) : null
   const stats = useQuery({
-    queryKey: ['factory', 'judges', days],
-    queryFn: () => api.judgeStats(days),
+    queryKey: ['factory', 'judges', days, category],
+    queryFn: () => api.judgeStats(days, category ?? undefined),
   })
-  const set = (next: { days?: number; judge?: string | null }) => {
+  const set = (next: { days?: number; judge?: string | null; category?: string | null }) => {
     const p = new URLSearchParams()
     const d = next.days ?? days
     if (d !== 30) p.set('days', String(d))
+    const c = next.category === undefined ? category : next.category
+    if (c) p.set('category', c)
     const j = next.judge === undefined ? chosen : next.judge
     if (j) p.set('judge', j)
     setParams(p, { replace: true })
@@ -127,6 +133,20 @@ export function JudgesPage() {
             if (picked) set({ days: Number(picked) })
           }}
         />
+        <label className="inline-field">
+          Clase{' '}
+          <select
+            value={category ?? ''}
+            onChange={(e) => set({ category: e.target.value || null, judge: null })}
+          >
+            <option value="">Todas</option>
+            {(Object.keys(CATEGORY_LABEL) as FindingCategory[]).map((c) => (
+              <option key={c} value={c}>
+                {CATEGORY_LABEL[c]}
+              </option>
+            ))}
+          </select>
+        </label>
       </ListToolbar>
       <ErrorMessage error={stats.error} />
       {stats.isPending && <TableSkeleton label="los jueces" />}

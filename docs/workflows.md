@@ -521,6 +521,29 @@ stages:
 - La tabla va de más a menos ruido. Con menos de 10 hallazgos dice «pocos datos». Al elegir una fila salen sus últimos 5 hallazgos refutados o que no aplicaban, con el motivo y el enlace a su ejecución.
 - Una fila del registro es un hallazgo aunque saliera en varias rondas (`repeats`). Los del delta de AU-B cuentan con su juez.
 
+**La clase de cada hallazgo** (AP-A). Además de su gravedad, el juez dice la clase de cada hallazgo (`category`), de una lista cerrada que su prompt explica en una línea cada una. La lista es cerrada para poder contar lo que se repite en un repositorio:
+
+- `tests`: falta un test o el que hay no prueba lo que dice;
+- `caso-limite`: vacío, nulo, cero, desbordes, el primer y el último elemento;
+- `errores`: una excepción o un error que no se trata o se trata mal;
+- `entradas`: una entrada sin validar o un fallo de seguridad con ella;
+- `secretos`: una contraseña, un token o una clave expuestos o mal guardados;
+- `concurrencia`: carreras, bloqueos, estado compartido;
+- `rendimiento`: trabajo de más, consultas repetidas, algo que no escala;
+- `api`: un contrato que cambia o deja de ser compatible;
+- `datos`: migraciones, esquema, consultas a la base de datos;
+- `alcance`: cambia lo que la tarea no pedía, o le falta lo que pedía;
+- `estilo`: nombres, formato, duplicación;
+- `documentacion`: documentación que falta o que ya no es verdad;
+- `otro`: nada de lo anterior.
+
+Más detalles:
+
+- Si el juez no dice la clase, o dice una que no es de la lista (sin contar mayúsculas, espacios ni `_`), el hallazgo queda en `otro`. El veredicto no se rechaza.
+- La clase queda en el registro (`category`). Los hallazgos de antes de AP-A quedan en `otro`.
+- El registro de la fase la enseña delante de cada hallazgo, salvo `otro`.
+- **Fábrica → Jueces** puede mirar una sola clase (`?category=caso-limite`).
+
 **Fusionar la PR.** Una fase `type: github-merge` fusiona la PR de la ejecución, normalmente detrás de su `github-check` y de una puerta que lo aprueba (EN-C):
 
 ```yaml
@@ -757,7 +780,7 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `GET` | `/api/workflow-runs/{id}/assumptions` | Los supuestos de la ejecución, `[{stageKey, text}]` (ES-C) |
 | `GET` | `/api/workflow-runs/{id}/findings` | El registro de hallazgos de la ejecución, con su desenlace (RH-A) |
 | `POST` | `/api/findings/{id}/outcome` | Decide qué es un hallazgo (`{outcome: aceptado \| irrelevante \| abierto, reason}`); `abierto` lo deshace y, si la fase ya terminó, lo deja `aparcado` |
-| `GET` | `/api/factory/judges?days=30` | Ruido y acierto de cada juez por proveedor, modelo y lente, con sus últimos hallazgos refutados o que no aplican (RH-C); `days` de 1 a 365 |
+| `GET` | `/api/factory/judges?days=30` | Ruido y acierto de cada juez por proveedor, modelo y lente, con sus últimos hallazgos refutados o que no aplican (RH-C); `days` de 1 a 365; `category` (AP-A) mira una sola clase |
 
 Cada problema lleva `severity` (`ERROR`, `UNSUPPORTED` o `WARNING`), `path` (p. ej. `stages.fix.dependsOn[0]`), `line`, `column` y `message`.
 

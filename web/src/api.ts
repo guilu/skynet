@@ -1059,11 +1059,29 @@ export interface GuideStep {
   evidence: string | null
 }
 
+/** La clase de un hallazgo (AP-A): una lista cerrada, para contar lo que se repite. */
+export type FindingCategory =
+  | 'tests'
+  | 'caso-limite'
+  | 'errores'
+  | 'entradas'
+  | 'secretos'
+  | 'concurrencia'
+  | 'rendimiento'
+  | 'api'
+  | 'datos'
+  | 'alcance'
+  | 'estilo'
+  | 'documentacion'
+  | 'otro'
+
 /** Un hallazgo de un juez. */
 export interface JudgeFinding {
   file: string | null
   line: number | null
   severity: 'blocking' | 'minor'
+  /** Su clase (AP-A); ausente en los veredictos de antes. */
+  category?: FindingCategory
   text: string
   judge: string
   /** Si lo refutaron los escépticos (VA-C); null o ausente si no se intentó. */
@@ -1135,6 +1153,8 @@ export interface FindingView {
   file: string | null
   line: number | null
   severity: 'blocking' | 'minor'
+  /** Su clase, de la lista que dice el juez (AP-A); `otro` si no dijo ninguna. */
+  category: FindingCategory
   text: string
   outcome: FindingOutcome
   /** `skynet` o quien lo decidió; null mientras está abierto. */
@@ -2218,7 +2238,11 @@ export const api = {
     request<Assumption[]>('GET', `/api/workflow-runs/${runId}/assumptions`),
   findings: (runId: string) =>
     request<FindingView[]>('GET', `/api/workflow-runs/${runId}/findings`),
-  judgeStats: (days: number) => request<JudgeStatsRow[]>('GET', `/api/factory/judges?days=${days}`),
+  judgeStats: (days: number, category?: FindingCategory) =>
+    request<JudgeStatsRow[]>(
+      'GET',
+      `/api/factory/judges?days=${days}${category ? `&category=${category}` : ''}`,
+    ),
   decideFinding: (id: string, outcome: 'aceptado' | 'irrelevante' | 'abierto', reason?: string) =>
     request<FindingView>('POST', `/api/findings/${id}/outcome`, { outcome, reason }),
   listRuns: (query: {

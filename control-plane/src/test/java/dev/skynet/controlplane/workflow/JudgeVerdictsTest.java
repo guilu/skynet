@@ -302,6 +302,36 @@ class JudgeVerdictsTest {
         .isEqualTo("[\"id\",\"score\",\"reason\",\"weight\",\"required\"]");
   }
 
+  @Test
+  void eachFindingHasACategoryFromTheListAndAnUnknownOneIsOther() {
+    JsonNode finding =
+        JsonMapper.shared()
+            .readTree(JudgeVerdicts.outputSchema(false))
+            .path("properties")
+            .path("findings")
+            .path("items");
+    assertThat(finding.path("required").toString()).contains("\"category\"");
+    assertThat(finding.path("properties").path("category").path("enum").toString())
+        .startsWith("[\"tests\",\"caso-limite\",")
+        .endsWith("\"documentacion\",\"otro\"]");
+
+    Map<String, Object> edge = new java.util.LinkedHashMap<>(finding("a.py", 1, "blocking", "x"));
+    edge.put("category", " Caso_Limite ");
+    Map<String, Object> unknown = new java.util.LinkedHashMap<>(finding("b.py", 2, "minor", "y"));
+    unknown.put("category", "magia");
+    Verdict verdict =
+        JudgeVerdicts.verdict(
+            "juez",
+            null,
+            SPEC,
+            output(
+                Map.of("resuelve", 5, "tests", 5, "alcance", 5),
+                List.of(edge, unknown, finding("c.py", 3, "minor", "z"))));
+    assertThat(verdict.findings())
+        .extracting(JudgeVerdicts.Finding::categoryOrOther)
+        .containsExactly("caso-limite", "otro", "otro");
+  }
+
   private static Verdict verdict(Map<String, Integer> scores) {
     return JudgeVerdicts.verdict("juez", null, SPEC, output(scores, List.of()));
   }

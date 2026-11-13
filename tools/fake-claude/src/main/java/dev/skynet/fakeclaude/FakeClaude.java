@@ -56,7 +56,8 @@ import tools.jackson.databind.node.ObjectNode;
  *       activa sin reiniciar el runner.
  *   <li>{@code FAKE_CLAUDE_JUDGE}: ruta de un fichero testigo (VA-B). Con la salida estructurada de
  *       un juez de Skynet, aprueba si no existe y, si existe, suspende con un hallazgo que bloquea
- *       (el que diga el fichero) y lo borra ({@link FakeJudge}).
+ *       (el que diga el fichero, con su clase delante entre corchetes si se quiere: {@code
+ *       [caso-limite] src/X.java:3 texto}) y lo borra ({@link FakeJudge}).
  *   <li>{@code FAKE_CLAUDE_REFUTE}: ruta de otro testigo (VA-C). Con la salida de un escéptico,
  *       refuta el hallazgo si el fichero existe y su texto está en el prompt (vacío, cualquiera).
  *   <li>{@code FAKE_CLAUDE_GUIDE}: ruta de otro testigo (VA-D). Con la salida de una guía de

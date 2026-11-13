@@ -40,6 +40,9 @@ final class FakeJudge {
   private static final Pattern CRITERION =
       Pattern.compile("(?m)^- `([a-z][a-z0-9_-]*)` \\(peso (\\d+)");
 
+  /** {@code [clase] } delante del hallazgo (AP-A): su clase; sin ella, {@code tests}. */
+  private static final Pattern CATEGORY = Pattern.compile("^\\[([a-z-]+)\\]\\s*(.*)$");
+
   /** {@code src/X.java:12 texto} o {@code src/X.java texto}. */
   private static final Pattern FINDING = Pattern.compile("^(\\S+?)(?::(\\d+))?\\s+(.+)$");
 
@@ -84,6 +87,12 @@ final class FakeJudge {
     }
     List<Map<String, Object>> findings = new ArrayList<>();
     if (fail) {
+      String category = "tests";
+      Matcher c = CATEGORY.matcher(scripted);
+      if (c.matches()) {
+        category = c.group(1);
+        scripted = c.group(2).strip();
+      }
       Map<String, Object> finding = new LinkedHashMap<>();
       Matcher f = FINDING.matcher(scripted);
       if (!scripted.isEmpty() && f.matches() && (f.group(1).contains("/") || f.group(2) != null)) {
@@ -97,6 +106,9 @@ final class FakeJudge {
         finding.put("severity", "blocking");
         finding.put(
             "text", scripted.isEmpty() ? "Falta un test para el caso que pide la tarea" : scripted);
+      }
+      if (schema.contains("\"category\"")) {
+        finding.put("category", category);
       }
       findings.add(finding);
     }

@@ -59,6 +59,43 @@ final class JudgeVerdicts {
    * @param known si se descartó por ya visto (RH-B), el desenlace con el que coincidió; si no,
    *     {@code null}
    */
+  /** La clase de un hallazgo que no es de la lista (AP-A). */
+  static final String OTHER = "otro";
+
+  /**
+   * Las clases de hallazgo (AP-A), con lo que se le explica al juez de cada una. Es una lista
+   * cerrada para poder contar lo que se repite en un repositorio.
+   */
+  static final Map<String, String> CATEGORIES = categories();
+
+  private static Map<String, String> categories() {
+    Map<String, String> c = new LinkedHashMap<>();
+    c.put("tests", "falta un test o el que hay no prueba lo que dice");
+    c.put("caso-limite", "vacío, nulo, cero, desbordes o el primer y el último elemento");
+    c.put("errores", "una excepción o un error que no se trata o se trata mal");
+    c.put("entradas", "una entrada sin validar o un fallo de seguridad con ella");
+    c.put("secretos", "una contraseña, un token o una clave expuestos o mal guardados");
+    c.put("concurrencia", "carreras, bloqueos o estado compartido");
+    c.put("rendimiento", "trabajo de más, consultas repetidas o algo que no escala");
+    c.put("api", "un contrato que cambia o deja de ser compatible");
+    c.put("datos", "migraciones, esquema o consultas a la base de datos");
+    c.put("alcance", "cambia lo que la tarea no pedía, o le falta lo que pedía");
+    c.put("estilo", "nombres, formato o duplicación");
+    c.put("documentacion", "documentación que falta o que ya no es verdad");
+    c.put(OTHER, "nada de lo anterior");
+    return java.util.Collections.unmodifiableMap(c);
+  }
+
+  /** {@code category} si es de la lista, sin mayúsculas ni espacios; si no, {@link #OTHER}. */
+  static String category(String category) {
+    if (category == null) {
+      return OTHER;
+    }
+    String c =
+        category.strip().toLowerCase(java.util.Locale.ROOT).replace('_', '-').replace(' ', '-');
+    return CATEGORIES.containsKey(c) ? c : OTHER;
+  }
+
   record Finding(
       String file,
       Integer line,
@@ -67,10 +104,23 @@ final class JudgeVerdicts {
       String judge,
       Boolean refuted,
       String refutation,
-      String known) {
+      String known,
+      String category) {
 
     Finding(String file, Integer line, String severity, String text, String judge) {
-      this(file, line, severity, text, judge, null, null, null);
+      this(file, line, severity, text, judge, null, null, null, null);
+    }
+
+    Finding(
+        String file,
+        Integer line,
+        String severity,
+        String text,
+        String judge,
+        Boolean refuted,
+        String refutation,
+        String known) {
+      this(file, line, severity, text, judge, refuted, refutation, known, null);
     }
 
     Finding(
@@ -95,7 +145,17 @@ final class JudgeVerdicts {
     }
 
     Finding withRefutation(boolean refuted, String refutation) {
-      return new Finding(file, line, severity, text, judge, refuted, refutation, known);
+      return new Finding(file, line, severity, text, judge, refuted, refutation, known, category);
+    }
+
+    /** El mismo hallazgo con su clase (AP-A), ya normalizada con {@link #category(String)}. */
+    Finding withCategory(String category) {
+      return new Finding(file, line, severity, text, judge, refuted, refutation, known, category);
+    }
+
+    /** Su clase (AP-A); {@code otro} si el juez no dijo ninguna de la lista. */
+    String categoryOrOther() {
+      return JudgeVerdicts.category(category);
     }
 
     /**
@@ -103,7 +163,7 @@ final class JudgeVerdicts {
      * irrelevante), así que se descarta antes de los escépticos con {@code reason}.
      */
     Finding withKnown(String outcome, String reason) {
-      return new Finding(file, line, severity, text, judge, true, reason, outcome);
+      return new Finding(file, line, severity, text, judge, true, reason, outcome, category);
     }
 
     /** {@code fichero:línea}, {@code fichero} o {@code null}. */
@@ -173,11 +233,13 @@ final class JudgeVerdicts {
     Map<String, Object> finding = new LinkedHashMap<>();
     finding.put("type", "object");
     finding.put("additionalProperties", false);
-    finding.put("required", List.of("file", "line", "severity", "text"));
+    finding.put("required", List.of("file", "line", "severity", "category", "text"));
     Map<String, Object> findingProperties = new LinkedHashMap<>();
     findingProperties.put("file", Map.of("type", "string"));
     findingProperties.put("line", Map.of("type", List.of("integer", "null")));
     findingProperties.put("severity", Map.of("type", "string", "enum", List.of(BLOCKING, MINOR)));
+    findingProperties.put(
+        "category", Map.of("type", "string", "enum", List.copyOf(CATEGORIES.keySet())));
     findingProperties.put("text", Map.of("type", "string"));
     finding.put("properties", findingProperties);
     Map<String, Object> criterion = new LinkedHashMap<>();
@@ -242,7 +304,9 @@ final class JudgeVerdicts {
       }
       String severity = MINOR.equals(text(item.path("severity"))) ? MINOR : BLOCKING;
       Integer line = item.path("line").isNumber() ? item.path("line").asInt() : null;
-      findings.add(new Finding(text(item.path("file")), line, severity, text, judge));
+      findings.add(
+          new Finding(text(item.path("file")), line, severity, text, judge)
+              .withCategory(category(text(item.path("category")))));
     }
     return judged(judge, lens, criteria, findings, text(output.path("summary")), spec);
   }
@@ -280,7 +344,8 @@ final class JudgeVerdicts {
               text(f.path("judge")),
               refuted.isBoolean() ? refuted.asBoolean() : null,
               text(f.path("refutation")),
-              text(f.path("known"))));
+              text(f.path("known")),
+              text(f.path("category"))));
     }
     return judged(judge, lens, scores, list, summary, spec);
   }

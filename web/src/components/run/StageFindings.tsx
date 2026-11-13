@@ -6,7 +6,7 @@ import { cn } from '../../lib/cn'
 import { ErrorMessage } from '../ErrorMessage'
 import { Button } from '../ui/Button'
 import { LENS_LABEL } from './stageNotes'
-import { OUTCOME_LABEL, summary } from './findingFormat'
+import { CATEGORY_LABEL, OUTCOME_LABEL, summary } from './findingFormat'
 
 /**
  * El registro de hallazgos de una fase (RH-A): cada hallazgo de sus jueces con su desenlace. Lo
@@ -53,6 +53,9 @@ function FindingRow({ finding: f, runId }: { finding: FindingView; runId: string
   return (
     <li className={cn('stage-finding', f.outcome)}>
       <span className={cn('finding-outcome', f.outcome)}>{OUTCOME_LABEL[f.outcome]}</span>{' '}
+      {f.category !== 'otro' && (
+        <span className="tag finding-category">{CATEGORY_LABEL[f.category]}</span>
+      )}{' '}
       {location(f) && <code>{location(f)}</code>} {f.text}{' '}
       <span className="muted">
         ({f.judge}

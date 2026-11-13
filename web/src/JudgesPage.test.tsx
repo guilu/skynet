@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { JudgeStatsRow } from './api'
 import App from './App'
@@ -97,5 +97,22 @@ describe('Fábrica › Jueces (RH-C)', () => {
     fireEvent.click(screen.getByRole('button', { name: '7 días' }))
     expect(await screen.findByText('Ningún hallazgo en 7 días.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '7 días' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('mira una sola clase de hallazgo (AP-A)', async () => {
+    stubApi({
+      '/api/factory/judges?days=30': [noisy, quiet],
+      '/api/factory/judges?days=30&category=caso-limite': [quiet],
+    })
+    renderAt('/judges', <App />)
+    const table = await screen.findByRole('table', { name: 'Jueces' })
+    expect(within(table).getAllByRole('row')).toHaveLength(3)
+    fireEvent.change(screen.getByLabelText('Clase'), { target: { value: 'caso-limite' } })
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('table', { name: 'Jueces' })).getAllByRole('row'),
+      ).toHaveLength(2),
+    )
+    expect(screen.getByLabelText('Clase')).toHaveValue('caso-limite')
   })
 })
