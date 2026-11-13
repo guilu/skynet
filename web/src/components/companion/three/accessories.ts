@@ -6,16 +6,17 @@ import {
   Color,
   CylinderGeometry,
   DoubleSide,
+  ExtrudeGeometry,
   Group,
   LatheGeometry,
   Mesh,
   MeshBasicMaterial,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
+  Path,
   PlaneGeometry,
+  Shape,
   SphereGeometry,
-  TorusGeometry,
-  TubeGeometry,
   Vector2,
   Vector3,
   type Material,
@@ -32,20 +33,40 @@ export interface AccessoryColors {
 }
 
 /** Dónde agarra la lupa la mano derecha (antes del gesto de Revisando). */
-export const GRIP_AT = new Vector3(0.96, -0.42, 0.4)
+export const GRIP_AT = new Vector3(1.06, -0.42, 0.4)
 /** Donde van los marcadores pequeños (pausa, «?», sin conexión), arriba a la derecha. */
 export const MARKER_AT = new Vector3(0.89, 0.48, 0.34)
+/**
+ * Accesorios que Skyny sostiene en alto con la mano derecha (estudio v2), con su tamaño: el «?»
+ * de Te necesita, la pausa y la señal tachada de Sin conexión.
+ */
+export const HAND_SYMBOLS: Partial<Record<Accessory, number>> = {
+  alert: 0.52,
+  pause: 1,
+  offline: 1.25,
+}
+
+/** Un símbolo plano (sin bisel) con el grosor `depth`, centrado en z. */
+const flatSymbol = (shape: Shape, depth: number, material: Material) =>
+  new Mesh(
+    new ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 48 }).translate(
+      0,
+      0,
+      -depth / 2,
+    ),
+    material,
+  )
 /** Posición de partida de cada línea de velocidad. */
 export const SPEED_X = -1.35
 
-/** Plástico satinado, como el del cuerpo, en otro color. */
+/** Plástico como el del cuerpo (acabado del estudio v2), en otro color. */
 const plastic = (color: string | number) =>
   new MeshPhysicalMaterial({
     color: new Color(color),
-    roughness: 0.22,
-    metalness: 0.03,
-    clearcoat: 0.5,
-    clearcoatRoughness: 0.15,
+    roughness: 0.38,
+    metalness: 0,
+    clearcoat: 0.22,
+    clearcoatRoughness: 0.3,
   })
 
 /**
@@ -132,9 +153,11 @@ export function buildAccessory(type: Accessory | null, colors: AccessoryColors):
     case 'offline': {
       const material = plastic(0x64748b)
       const marker = new Group()
-      const slash = new Mesh(new CylinderGeometry(0.029, 0.029, 0.28, 16), material)
-      slash.rotation.z = Math.PI / 4
-      marker.add(new Mesh(new TorusGeometry(0.14, 0.029, 16, 48), material), slash)
+      const ring = new Shape().absarc(0, 0, 0.166, 0, Math.PI * 2, false)
+      ring.holes.push(new Path().absarc(0, 0, 0.114, 0, Math.PI * 2, true))
+      const slash = new Mesh(new BoxGeometry(0.263, 0.05, 0.038), material)
+      slash.rotation.z = -Math.PI / 4
+      marker.add(flatSymbol(ring, 0.034, material), slash)
       marker.position.copy(MARKER_AT)
       group.add(marker)
       break
@@ -159,7 +182,7 @@ export function buildAccessory(type: Accessory | null, colors: AccessoryColors):
       break
     }
     case 'pause': {
-      const material = plastic(0xcbd5e1)
+      const material = plastic(0x64748b)
       const marker = new Group()
       for (const x of [-0.065, 0.065]) {
         const bar = new Mesh(new BoxGeometry(0.073, 0.27, 0.065), material)
@@ -171,8 +194,10 @@ export function buildAccessory(type: Accessory | null, colors: AccessoryColors):
       break
     }
     case 'alert': {
+      // El «?» como silueta plana: el gancho se contornea a lo largo de la curva y se cierra
+      // con medias lunas; el punto, aparte.
       const material = plastic(colors.body)
-      const hook = new CatmullRomCurve3(
+      const curve = new CatmullRomCurve3(
         [
           [-0.24, 0.23],
           [-0.18, 0.41],
@@ -183,17 +208,37 @@ export function buildAccessory(type: Accessory | null, colors: AccessoryColors):
           [0, -0.12],
         ].map(([x, y]) => new Vector3(x, y, 0)),
       )
+      const radius = 0.075
+      const samples = Array.from({ length: 49 }, (_, i) => {
+        const point = curve.getPoint(i / 48)
+        const tangent = curve.getTangent(i / 48)
+        return { point, angle: Math.atan2(tangent.y, tangent.x) + Math.PI / 2 }
+      })
+      const edge = ({ point, angle }: (typeof samples)[number], side: number): [number, number] => [
+        point.x + side * radius * Math.cos(angle),
+        point.y + side * radius * Math.sin(angle),
+      ]
+      const hook = new Shape()
+      hook.moveTo(...edge(samples[0], 1))
+      for (const sample of samples.slice(1)) hook.lineTo(...edge(sample, 1))
+      const end = samples[samples.length - 1]
+      hook.absarc(end.point.x, end.point.y, radius, end.angle, end.angle - Math.PI, true)
+      for (const sample of samples.slice(0, -1).reverse()) hook.lineTo(...edge(sample, -1))
+      const start = samples[0]
+      hook.absarc(
+        start.point.x,
+        start.point.y,
+        radius,
+        start.angle - Math.PI,
+        start.angle - 2 * Math.PI,
+        true,
+      )
+      hook.closePath()
       const marker = new Group()
-      marker.add(new Mesh(new TubeGeometry(hook, 40, 0.075, 12), material))
-      for (const [x, y, r] of [
-        [-0.24, 0.23, 0.075],
-        [0, -0.12, 0.075],
-        [0, -0.34, 0.09],
-      ]) {
-        const dot = new Mesh(new SphereGeometry(r, 16, 12), material)
-        dot.position.set(x, y, 0)
-        marker.add(dot)
-      }
+      marker.add(
+        flatSymbol(hook, 0.065, material),
+        flatSymbol(new Shape().absarc(0, -0.34, 0.09, 0, Math.PI * 2, false), 0.065, material),
+      )
       marker.position.copy(MARKER_AT)
       group.add(marker)
       break

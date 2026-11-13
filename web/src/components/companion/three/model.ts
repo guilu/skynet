@@ -10,28 +10,30 @@ import {
   CylinderGeometry,
   DirectionalLight,
   DoubleSide,
+  ExtrudeGeometry,
   Float32BufferAttribute,
   Group,
-  LatheGeometry,
   Mesh,
   MeshBasicMaterial,
   MeshPhysicalMaterial,
+  Path,
   PlaneGeometry,
   PMREMGenerator,
   Scene,
+  Shape,
   SphereGeometry,
   SRGBColorSpace,
   Vector2,
   Vector3,
   type WebGLRenderer,
 } from 'three'
-import { BANDS, BAND_NEXUS, BODY_RADIUS, deform, surfaceAt, type Vec3 } from './body'
+import { BANDS, BODY_RADIUS, deform, rearShellZ, surfaceAt, type Vec3 } from './body'
 
-/** La cabeza y las manos (izquierda y derecha), en reposo. */
-export const HEAD: Vec3 = [0, 0.78, 0]
+/** La cabeza (oculta desde el estudio v2; de ahí sale el confeti) y las manos, en reposo. */
+export const HEAD: Vec3 = [0, 0.9, 0]
 export const HANDS: [Vec3, Vec3] = [
-  [-0.78, -0.42, 0.12],
-  [0.78, -0.42, 0.12],
+  [-0.88, -0.42, 0.12],
+  [0.88, -0.42, 0.12],
 ]
 /** Altura del suelo y del cuerpo en reposo. */
 export const FLOOR_Y = -0.92
@@ -42,10 +44,14 @@ export interface SkynyModel {
   root: Group
   head: Mesh
   hands: [Mesh, Mesh]
+  /** La pantalla, para saber dónde cae la cara en el lienzo (la mirada que sigue al puntero). */
+  screen: Mesh
   floor: Mesh<PlaneGeometry, MeshBasicMaterial>
   materials: {
     body: MeshPhysicalMaterial
     band: MeshPhysicalMaterial
+    /** Carcasa de la cara y hebilla: el acabado de las bandas, algo más oscuro y satinado. */
+    hardware: MeshPhysicalMaterial
     node: MeshPhysicalMaterial
     bezel: MeshPhysicalMaterial
   }
@@ -90,70 +96,70 @@ export function studioLights(scene: Scene) {
 
 /** Monta a Skyny; `screen` es la textura de la pantalla donde se pintan los ojos. */
 export function buildSkyny(screen: CanvasTexture): SkynyModel {
+  // Acabados del estudio v2: plástico mate con poco barniz y metal plano en el bisel.
+  const band = new MeshPhysicalMaterial({
+    roughness: 0.78,
+    metalness: 0,
+    clearcoat: 0,
+    clearcoatRoughness: 0.5,
+    side: DoubleSide,
+  })
   const materials = {
     body: new MeshPhysicalMaterial({
-      roughness: 0.22,
-      metalness: 0.03,
-      clearcoat: 0.5,
-      clearcoatRoughness: 0.15,
+      roughness: 0.38,
+      metalness: 0,
+      clearcoat: 0.22,
+      clearcoatRoughness: 0.3,
     }),
-    band: new MeshPhysicalMaterial({
-      roughness: 0.55,
-      metalness: 0.12,
-      clearcoat: 0.25,
-      clearcoatRoughness: 0.2,
+    band,
+    hardware: new MeshPhysicalMaterial({
+      roughness: 0.42,
+      metalness: 0.08,
+      clearcoat: 0.18,
+      clearcoatRoughness: 0.32,
       side: DoubleSide,
     }),
     node: new MeshPhysicalMaterial({
-      roughness: 0.1,
-      metalness: 0.02,
-      clearcoat: 0.95,
-      clearcoatRoughness: 0.08,
+      roughness: 0.38,
+      metalness: 0,
+      clearcoat: 0.2,
+      clearcoatRoughness: 0.3,
     }),
     bezel: new MeshPhysicalMaterial({
-      color: 0xdce3ed,
-      roughness: 0.26,
-      metalness: 0.78,
-      clearcoat: 0.95,
-      clearcoatRoughness: 0.06,
+      color: 0xc7cbd1,
+      roughness: 0.32,
+      metalness: 1,
+      clearcoat: 0,
+      side: DoubleSide,
     }),
   }
   const root = new Group()
   root.position.y = REST_Y
 
-  // Cuerpo y bandas, que se juntan en una Y en la espalda.
+  // Cuerpo y bandas, que acaban en la hebilla triangular de la espalda.
   root.add(new Mesh(bodyGeometry(), materials.body))
   for (const path of BANDS) root.add(new Mesh(bandGeometry(path, 0.2, 0.012), materials.band))
-  const nexus = new Mesh(new CylinderGeometry(0.12, 0.13, 0.06, 24), materials.band)
-  nexus.rotation.x = Math.PI / 2
-  nexus.position.set(BAND_NEXUS[0], BAND_NEXUS[1], BAND_NEXUS[2] - 0.02)
-  root.add(nexus)
+  root.add(new Mesh(buckleGeometry(), materials.hardware))
 
-  // Cara: carcasa oscura, bisel metálico y pantalla OLED.
+  // Cara: carcasa oscura, bisel metálico plano y pantalla OLED.
   const face = new Group()
   face.position.set(0, -0.04, 0.5)
   face.rotation.x = -0.14
   const housing = new Mesh(
     new CylinderGeometry(0.438, 0.32, 0.3, 96).rotateX(Math.PI / 2),
-    materials.band,
+    materials.hardware,
   )
   housing.position.z = -0.17
+  const ring = new Shape().absarc(0, 0, 0.44, 0, Math.PI * 2, false)
+  ring.holes.push(new Path().absarc(0, 0, 0.375, 0, Math.PI * 2, true))
   const bezel = new Mesh(
-    new LatheGeometry(
-      [
-        [0.375, -0.024],
-        [0.375, 0.01],
-        [0.383, 0.026],
-        [0.42, 0.03],
-        [0.438, 0.016],
-        [0.44, -0.022],
-        [0.375, -0.024],
-      ].map(([x, y]) => new Vector2(x, y)),
-      96,
+    new ExtrudeGeometry(ring, { depth: 0.042, bevelEnabled: false, curveSegments: 64 }).translate(
+      0,
+      0,
+      -0.024,
     ),
     materials.bezel,
   )
-  bezel.rotation.x = Math.PI / 2
   bezel.position.z = 0.02
   const backing = new Mesh(new CircleGeometry(0.39, 64), new MeshBasicMaterial({ color: 0x050913 }))
   backing.position.z = -0.01
@@ -165,10 +171,11 @@ export function buildSkyny(screen: CanvasTexture): SkynyModel {
   face.add(housing, bezel, backing, display)
   root.add(face)
 
-  // Nodos: la cabeza y las dos manos.
+  // Nodos: las dos manos. La cabeza sigue ahí (de ella sale el confeti), pero no se ve.
   const sphere = new SphereGeometry(0.33, 40, 40)
   const head = new Mesh(sphere, materials.node)
   head.position.set(...HEAD)
+  head.visible = false
   const hand = (at: Vec3) => {
     const mesh = new Mesh(sphere, materials.node)
     mesh.position.set(...at)
@@ -184,7 +191,7 @@ export function buildSkyny(screen: CanvasTexture): SkynyModel {
   floor.rotation.x = -Math.PI / 2
   floor.position.y = FLOOR_Y
 
-  return { root, head, hands, floor, materials }
+  return { root, head, hands, screen: display, floor, materials }
 }
 
 /** La sombra del suelo (o, en oscuro, un resplandor suave del color de los ojos). */
@@ -247,20 +254,103 @@ function bandGeometry(path: Vec3[], width: number, clearance: number) {
   const vertices: number[] = []
   const indices: number[] = []
   const point = new Vector3()
+  const center = new Vector3()
   const side = new Vector3()
   for (let i = 0; i <= segments; i++) {
     const u = i / segments
     curve.getPoint(u, point)
     side.crossVectors(curve.getTangent(u), point.clone().normalize()).normalize()
+    // El ancho se mide sobre la cáscara, no sobre la curva guía (que va a distinta profundidad).
+    center.set(...surfaceAt([point.x, point.y, point.z], clearance))
     for (let j = 0; j <= across; j++) {
-      const p = point.clone().addScaledVector(side, (j / across - 0.5) * width)
-      vertices.push(...surfaceAt([p.x, p.y, p.z], clearance))
+      const p = center.clone().addScaledVector(side, (j / across - 0.5) * width)
+      vertices.push(...(j === across / 2 ? center.toArray() : surfaceAt(p.toArray(), clearance)))
       if (i < segments && j < across) {
         const k = i * (across + 1) + j
         const next = k + across + 1
         indices.push(k, k + 1, next, k + 1, next + 1, next)
       }
     }
+  }
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3))
+  geometry.setIndex(indices)
+  geometry.computeVertexNormals()
+  return geometry
+}
+
+/** Esquinas redondeadas de un triángulo, recortando `trim` de cada lado (la del estudio v2). */
+function roundedTriangle<T extends Path>(path: T, corners: Vector2[], trim: number): T {
+  const toward = (from: Vector2, to: Vector2) => from.clone().lerp(to, trim / from.distanceTo(to))
+  const start = toward(corners[0], corners[2])
+  path.moveTo(start.x, start.y)
+  corners.forEach((corner, i) => {
+    const incoming = toward(corner, corners[(i + 2) % 3])
+    const outgoing = toward(corner, corners[(i + 1) % 3])
+    if (i > 0) path.lineTo(incoming.x, incoming.y)
+    path.quadraticCurveTo(corner.x, corner.y, outgoing.x, outgoing.y)
+  })
+  path.closePath()
+  return path
+}
+
+/**
+ * La hebilla de la espalda: un marco triangular abierto, extruido y doblado sobre la cáscara.
+ * Las tapas se subdividen antes de doblarlas para que no salgan facetas.
+ */
+function buckleGeometry() {
+  const outline = roundedTriangle(
+    new Shape(),
+    [new Vector2(0, 0.24), new Vector2(-0.225, -0.163), new Vector2(0.225, -0.163)],
+    0.058,
+  )
+  outline.holes.push(
+    roundedTriangle(
+      new Path(),
+      [new Vector2(0, 0.142), new Vector2(0.136, -0.103), new Vector2(-0.136, -0.103)],
+      0.028,
+    ),
+  )
+  const flat = new ExtrudeGeometry(outline, {
+    depth: 0.038,
+    bevelEnabled: true,
+    bevelSize: 0.009,
+    bevelThickness: 0.009,
+    bevelSegments: 4,
+    curveSegments: 12,
+    steps: 1,
+  })
+  let points = Array.from(flat.attributes.position.array)
+  flat.dispose()
+  for (let pass = 0; pass < 2; pass++) {
+    const next: number[] = []
+    const mid = (a: number[], b: number[]) => a.map((v, i) => (v + b[i]) / 2)
+    for (let i = 0; i < points.length; i += 9) {
+      const a = points.slice(i, i + 3)
+      const b = points.slice(i + 3, i + 6)
+      const c = points.slice(i + 6, i + 9)
+      const ab = mid(a, b)
+      const bc = mid(b, c)
+      const ca = mid(c, a)
+      next.push(...a, ...ab, ...ca, ...ab, ...b, ...bc, ...ca, ...bc, ...c, ...ab, ...bc, ...ca)
+    }
+    points = next
+  }
+  // Cada vértice se apoya en la espalda, a la profundidad de la cáscara en su (x, y).
+  const shell = new Map<string, number>()
+  const weld = new Map<string, number>()
+  const vertices: number[] = []
+  const indices: number[] = []
+  for (let i = 0; i < points.length; i += 3) {
+    const [x, y, depth] = points.slice(i, i + 3)
+    const xy = `${Math.round(x * 1e6)},${Math.round(y * 1e6)}`
+    if (!shell.has(xy)) shell.set(xy, rearShellZ(x, y))
+    const key = `${xy},${Math.round(depth * 1e6)}`
+    if (!weld.has(key)) {
+      weld.set(key, vertices.length / 3)
+      vertices.push(x, y, shell.get(xy)! - 0.032 + depth)
+    }
+    indices.push(weld.get(key)!)
   }
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3))
