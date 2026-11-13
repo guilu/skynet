@@ -1,6 +1,6 @@
 # Skyny 3D
 
-Skyny en 3D (hito TD) está hecho con [three.js](https://threejs.org/). Desde TD-A sale en el login y, desde SV-B, en la banda «Qué pasa ahora» de cada ejecución; el resto de la web sigue con el Skyny 2D (`Companion.tsx`, ver [`../companion.md`](../companion.md)).
+Skyny en 3D (hito TD) está hecho con [three.js](https://threejs.org/). Desde TD-A sale en el login; desde SV-B, en la banda «Qué pasa ahora» de cada ejecución, y desde SV-C, en el saludo de Inicio. El resto de la web sigue con el Skyny 2D (`Companion.tsx`, ver [`../companion.md`](../companion.md)).
 
 ## Skyny en vivo (SV-B)
 
@@ -13,6 +13,8 @@ Skyny en 3D (hito TD) está hecho con [three.js](https://threejs.org/). Desde TD
 - con movimiento reducido, sin WebGL 2, mientras carga three o si el 3D falla, enseña el `fallback` (el Skyny 2D). Por eso las capturas de la galería visual, que van con movimiento reducido, siguen en 2D.
 
 En la ejecución (`RunBand`), Skyny mide 120 px. `runLive.ts` decide qué cuenta: con varias fases, por cuál va (2/4); en un reintento de la fase, «REINTENTO 1/2» (con su política de reintentos) o «INTENTO 3» (si se reintentó a mano). Cada página tiene como mucho un Skyny 3D: cada uno es un contexto WebGL.
+
+En Inicio (SV-C), el saludo «Hola, soy Skyny» (`CompanionHello`) es el **único Skyny** de la página: el que asomaba junto al título con su bocadillo se ha quitado. Usa el estado global del companion (`useCompanion().expression`), mide 140 px (96 px en el móvil, centrado encima del texto) y, como está por debajo de 160 px, escribe los letreros cortos. Al pulsarlo dice una frase, como antes.
 
 Desde TD-B, **el estudio donde se diseña está dentro del repo** y usa el mismo código que la app. No hay que portar nada: lo que se cambia en el estudio es lo que sale en la web. En SV-A se trajo todo lo del estudio v2 (`skyny-v2.0.html`, hecho con Codex fuera del repo) y ese HTML suelto se retira: a partir de aquí, Codex y Claude trabajan sobre estos ficheros (ver [`AGENTS.md`](../../AGENTS.md)).
 

@@ -3,22 +3,39 @@ import { CirclePlay, ListChecks, ShieldCheck } from 'lucide-react'
 import { Link } from 'react-router'
 import { cn } from '../../lib/cn'
 import { api, type ApprovalSummary } from '../../api'
+import { useMediaQuery } from '../../useMediaQuery'
 import { useNow } from '../../useNow'
 import { Companion } from './Companion'
 import { useCompanion } from './context'
 import { usePoke } from './gesture'
 import { helloText, successStreak } from './peek'
+import { SkynyLive } from './SkynyLive'
 
 /** Cuántas ejecuciones recientes mira para la racha. */
 const STREAK_RUNS = 20
 
+/** Skyny 3D en la banda (SV-C): más pequeño en el móvil, donde va encima del texto. */
+const SIZE_3D = 140
+const SIZE_3D_NARROW = 96
+const SIZE_2D = 80
+
 /**
- * Tarjeta de saludo del Dashboard: la mascota cuenta qué hay en marcha y qué te espera, con atajos
+ * Tarjeta de saludo de Inicio: la mascota cuenta qué hay en marcha y qué te espera, con atajos
  * a lo que ya existe (revisar la aprobación, lanzar un workflow, ver la última ejecución). El
  * saludo cambia con la hora y cuenta la racha sin fallos; al pulsar a Skyny dice una frase (SY-C).
+ * Desde SV-C es el único Skyny de Inicio: en 3D (con el 2D de respaldo) y con el estado global
+ * del companion, así que escribe en su pantalla lo que pasa en todo el espacio de trabajo.
  */
-export function CompanionHello({ approvals }: { approvals: ApprovalSummary[] }) {
-  const { activeRuns, gesture } = useCompanion()
+export function CompanionHello({
+  approvals,
+  sweat,
+}: {
+  approvals: ApprovalSummary[]
+  /** Alguna cuota aprieta: en 2D, Skyny suda. */
+  sweat?: boolean
+}) {
+  const { activeRuns, expression, gesture } = useCompanion()
+  const narrow = useMediaQuery('(max-width: 720px)')
   const latest = activeRuns[0]
   const now = useNow(true, 60_000)
   const recent = useQuery({
@@ -36,11 +53,18 @@ export function CompanionHello({ approvals }: { approvals: ApprovalSummary[] }) 
         aria-label="Hablar con Skyny"
         onClick={poked.poke}
       >
-        <Companion
-          state={approvals.length > 0 ? 'waiting' : 'calm'}
-          size={80}
-          gesture={poked.gesture ?? gesture}
-          look
+        <SkynyLive
+          state={expression}
+          size={narrow ? SIZE_3D_NARROW : SIZE_3D}
+          fallback={
+            <Companion
+              state={expression}
+              size={SIZE_2D}
+              gesture={poked.gesture ?? gesture}
+              sweat={sweat}
+              look
+            />
+          }
         />
       </button>
       <div className="companion-hello-text">
