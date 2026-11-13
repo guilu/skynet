@@ -141,10 +141,20 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `La fase ${p('stageKey')} no pudo arrancar: ${p('error')}`
     case 'agent.spawned':
       return `Agente ${p('provider')} en cola`
-    case 'agent.workspace.ready':
-      return payload.review
-        ? `Worktree listo en la rama ${p('branch')}, con los criterios de ${p('review')}`
+    case 'agent.workspace.ready': {
+      const learned = Number(payload.learned ?? 0)
+      const parts = [
+        payload.review ? `los criterios de ${p('review')}` : null,
+        learned > 0
+          ? learned === 1
+            ? '1 criterio aprendido'
+            : `${learned} criterios aprendidos`
+          : null,
+      ].filter(Boolean)
+      return parts.length
+        ? `Worktree listo en la rama ${p('branch')}, con ${parts.join(' y ')}`
         : `Worktree listo en la rama ${p('branch')}`
+    }
     case 'agent.workspace.cleanup.requested':
       return `Eliminación del worktree pedida (${
         payload.trigger === 'retention' ? 'retención' : 'desde la web'
@@ -303,6 +313,8 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `${p('actor')} aplicó la lección \`${p('category')}\` de ${p('repository')}${
         payload.kind === 'prevenir' ? ' en la memoria' : ' en los criterios del juez'
       }`
+    case 'lesson.disabled':
+      return `${p('actor')} desactivó la lección \`${p('category')}\` de ${p('repository')}: ${p('reason')}`
     case 'lesson.dismissed':
       return `${p('actor')} descartó la lección \`${p('category')}\` de ${p('repository')}: ${p('reason')}`
     case 'stage.judge.skipped':

@@ -310,11 +310,7 @@ class Lessons {
   @Transactional(readOnly = true)
   List<LessonView> ofProject(UUID projectId, String status) {
     projects.get(projectId);
-    String wanted = status == null || status.isBlank() ? null : status.strip();
-    if (wanted != null && !STATUSES.contains(wanted)) {
-      throw new InvalidRequestException(
-          "Estado desconocido: " + status + ". Admite: propuesta, aplicada o descartada");
-    }
+    String wanted = status(status);
     return jdbc.sql(
             SELECT
                 + " WHERE l.project_id = :project AND (CAST(:status AS text) IS NULL OR l.status ="
@@ -418,7 +414,9 @@ class Lessons {
   }
 
   /**
-   * Descarta una lección propuesta: no vuelve hasta que haya {@link #AFTER_DISMISSAL} casos nuevos.
+   * Descarta una lección propuesta, o desactiva una aplicada (AP-C): no vuelve hasta que haya
+   * {@link #AFTER_DISMISSAL} casos nuevos. Desactivar una {@link #PREVENT} archiva su restricción
+   * de la memoria; una {@link #DONT_FLAG} deja de llegar al juez.
    */
   @Transactional
   LessonView dismiss(UUID id, String reason, String actor) {
@@ -426,7 +424,13 @@ class Lessons {
       throw new InvalidRequestException("Falta `reason`: por qué no vale esta lección");
     }
     LessonView lesson = lock(id);
-    requireProposed(lesson);
+    if (DISMISSED.equals(lesson.status())) {
+      throw new ConflictException("La lección ya está descartada");
+    }
+    boolean applied = APPLIED.equals(lesson.status());
+    if (applied && lesson.observationId() != null) {
+      memory.archive(lesson.observationId(), actor);
+    }
     Instant now = time.now();
     jdbc.sql(
             """
@@ -442,8 +446,47 @@ class Lessons {
         .update();
     Map<String, Object> payload = event(lesson, actor);
     payload.put("reason", reason.strip());
-    transitions.append("lesson", id, "lesson.dismissed", null, payload, now);
+    transitions.append(
+        "lesson", id, applied ? "lesson.disabled" : "lesson.dismissed", null, payload, now);
     return view(id);
+  }
+
+  /**
+   * Los criterios aprendidos del repositorio (AP-C): el texto de sus lecciones {@link #DONT_FLAG}
+   * aplicadas, de la más antigua a la más reciente.
+   */
+  List<String> learned(UUID repositoryId) {
+    if (repositoryId == null) {
+      return List.of();
+    }
+    return jdbc.sql(
+            "SELECT applied_text FROM lesson WHERE repository_id = ? AND kind = ? AND status = ?"
+                + " AND applied_text IS NOT NULL ORDER BY decided_at, id")
+        .params(repositoryId, DONT_FLAG, APPLIED)
+        .query(String.class)
+        .list();
+  }
+
+  /** Las lecciones de todos los proyectos activos, para Fábrica → Lecciones (AP-C). */
+  @Transactional(readOnly = true)
+  List<LessonView> all(String status) {
+    String wanted = status(status);
+    return jdbc.sql(
+            SELECT
+                + " WHERE p.archived_at IS NULL AND r.archived_at IS NULL AND (CAST(:status AS"
+                + " text) IS NULL OR l.status = :status) ORDER BY l.updated_at DESC, l.id")
+        .param("status", wanted)
+        .query(Lessons::view)
+        .list();
+  }
+
+  private static String status(String status) {
+    String wanted = status == null || status.isBlank() ? null : status.strip();
+    if (wanted != null && !STATUSES.contains(wanted)) {
+      throw new InvalidRequestException(
+          "Estado desconocido: " + status + ". Admite: propuesta, aplicada o descartada");
+    }
+    return wanted;
   }
 
   private LessonView lock(UUID id) {
@@ -486,18 +529,21 @@ class Lessons {
 
   private static final String SELECT =
       """
-      SELECT l.id, l.project_id, l.repository_id, r.name AS repository_name, l.category, l.kind,
+      SELECT l.id, l.project_id, p.name AS project_name, l.repository_id,
+        r.name AS repository_name, l.category, l.kind,
         l.status, l.suggested_text, l.applied_text, l.runs,
         (SELECT count(*) FROM lesson_finding lf WHERE lf.lesson_id = l.id) AS findings,
         l.observation_id, l.decided_by, l.decided_at, l.reason, l.created_at, l.updated_at
       FROM lesson l
       JOIN repository r ON r.id = l.repository_id
+      JOIN project p ON p.id = l.project_id
       """;
 
   /** Una lección, como la ve la web. */
   record LessonView(
       UUID id,
       UUID projectId,
+      String projectName,
       UUID repositoryId,
       String repositoryName,
       String category,
@@ -538,6 +584,7 @@ class Lessons {
     return new LessonView(
         rs.getObject("id", UUID.class),
         rs.getObject("project_id", UUID.class),
+        rs.getString("project_name"),
         rs.getObject("repository_id", UUID.class),
         rs.getString("repository_name"),
         rs.getString("category"),

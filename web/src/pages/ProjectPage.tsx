@@ -34,6 +34,7 @@ import {
   RegisterRepositoryForm,
   VerificationForm,
 } from '../components/project/RepositoryForms'
+import { RepositoryLessons } from '../components/project/RepositoryLessons'
 import { RepositoryTriggers } from '../components/project/RepositoryTriggers'
 import { HealthCheckSection } from '../components/deployment/HealthCheckSection'
 import { ProjectDeployments } from '../components/deployment/ProjectDeployments'
@@ -407,6 +408,8 @@ function RepositoryCard({
       <RepositoryTriggers repository={r} editable={editable} />
 
       <HealthCheckSection repository={r} editable={editable} />
+
+      <RepositoryLessons repository={r} />
 
       <section className="repo-section" aria-label={`Política de agentes de ${r.name}`}>
         <div className="repo-section-head">

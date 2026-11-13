@@ -111,7 +111,8 @@ describe('noticeFor', () => {
       kind: 'success',
       title: 'He aprendido algo',
       body: 'demo-repo: los jueces han pedido `caso-limite` en 2 ejecuciones',
-      href: `/runs/${run.id}`,
+      href: '/lessons',
+      action: 'Revisar',
     })
   })
 

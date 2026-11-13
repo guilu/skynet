@@ -556,7 +556,14 @@ Más detalles:
 - El texto lo escribe una plantilla, sin LLM: lo que se repite y hasta 3 hallazgos de ejemplo. Se puede editar al aplicarla.
 - Skynet no aplica nada solo. Al aplicar una `prevenir`, crea una observación `CONSTRAINT` fijada en la memoria del repositorio, con origen HUMAN y el tema `leccion/{clase}`: aplicarla otra vez es una versión nueva, no un duplicado. Una `no-senalar` aplicada queda como criterio aprendido del repositorio; AP-C la lleva al prompt del juez.
 - Descartar pide un motivo. Una lección descartada no se vuelve a proponer hasta que haya casos en **3 ejecuciones nuevas** después del descarte.
-- Eventos: `lesson.proposed` (en Actividad y como aviso de Skyny), `lesson.applied` y `lesson.dismissed`.
+- Eventos: `lesson.proposed` (en Actividad y como aviso de Skyny), `lesson.applied`, `lesson.dismissed` y, al desactivar una aplicada (AP-C), `lesson.disabled`.
+
+**Lecciones en la web y criterios aprendidos** (AP-C):
+
+- **Fábrica → Lecciones** (`/lessons`) enseña las lecciones por proyecto y repositorio, en tres pestañas: propuestas, aplicadas y descartadas (`?status=`). Cada una lleva su clase, su tipo, en cuántas ejecuciones salió, sus hallazgos con enlace a su ejecución y su texto, que se edita mientras está propuesta. Los botones son **Aplicar** (en la memoria o en los criterios del juez, según el tipo), **Descartar** (pide un motivo) y **Copiar para REVIEW.md**, para quien prefiera tenerla versionada en el repositorio. El aviso de Skyny lleva aquí.
+- **La ficha del repositorio** enseña sus lecciones aplicadas. **Desactivar** una pide un motivo y la deja descartada: si es `prevenir`, archiva su restricción de la memoria. Vuelve a proponerse con casos en 3 ejecuciones nuevas, como una descartada.
+- **Criterios aprendidos en el juez.** El texto de las lecciones `no-senalar` aplicadas del repositorio entra en el prompt del juez, en «## Lo aprendido en este repositorio», justo debajo de los criterios de `REVIEW.md`. Vale también para los escépticos y los jueces del delta. El juez sigue sin ver la memoria: solo recibe estos criterios.
+- La línea del worktree del juez lo dice: «Worktree listo en la rama …, con los criterios de REVIEW.md y 2 criterios aprendidos».
 
 **Fusionar la PR.** Una fase `type: github-merge` fusiona la PR de la ejecución, normalmente detrás de su `github-check` y de una puerta que lo aprueba (EN-C):
 
@@ -798,7 +805,8 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `GET` | `/api/projects/{id}/lessons?status=` | Las lecciones del proyecto, de la más reciente a la más antigua (AP-B); `status`: `propuesta`, `aplicada` o `descartada` |
 | `GET` | `/api/lessons/{id}` | Una lección (`lesson`) con los hallazgos que la justifican y su ejecución (`findings`) |
 | `POST` | `/api/lessons/{id}/apply` | Aplica una lección propuesta (`{text}`, opcional: si falta, el propuesto); 409 si ya está decidida |
-| `POST` | `/api/lessons/{id}/dismiss` | Descarta una lección propuesta (`{reason}`, obligatorio); 409 si ya está decidida |
+| `GET` | `/api/factory/lessons?status=` | Las lecciones de todos los proyectos activos, para Fábrica → Lecciones (AP-C) |
+| `POST` | `/api/lessons/{id}/dismiss` | Descarta una lección propuesta o desactiva una aplicada (`{reason}`, obligatorio; AP-C); al desactivar una `prevenir`, archiva su restricción; 409 si ya está descartada |
 
 Cada problema lleva `severity` (`ERROR`, `UNSUPPORTED` o `WARNING`), `path` (p. ej. `stages.fix.dependsOn[0]`), `line`, `column` y `message`.
 

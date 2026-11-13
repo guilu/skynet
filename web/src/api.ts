@@ -1169,6 +1169,58 @@ export interface FindingView {
   createdAt: string
 }
 
+/** Una lección (AP-B): lo que se repite en los hallazgos de un repositorio, como regla propuesta. */
+export type LessonKind = 'prevenir' | 'no-senalar'
+export type LessonStatus = 'propuesta' | 'aplicada' | 'descartada'
+
+export interface Lesson {
+  id: string
+  projectId: string
+  projectName: string
+  repositoryId: string
+  repositoryName: string
+  category: FindingCategory
+  kind: LessonKind
+  status: LessonStatus
+  /** El texto de la plantilla, con ejemplos. */
+  suggestedText: string
+  /** El que se aplicó (editado o no); se queda al desactivarla. */
+  appliedText: string | null
+  /** Ejecuciones distintas con casos. */
+  runs: number
+  findings: number
+  /** La restricción de la memoria, si es `prevenir` y se aplicó. */
+  observationId: string | null
+  decidedBy: string | null
+  decidedAt: string | null
+  reason: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** Un hallazgo que justifica una lección, con su ejecución. */
+export interface LessonFinding {
+  id: string
+  runId: string
+  workItemId: string
+  stageKey: string
+  round: number
+  judge: string
+  file: string | null
+  line: number | null
+  severity: 'blocking' | 'minor'
+  text: string
+  outcome: FindingOutcome
+  outcomeBy: string | null
+  outcomeReason: string | null
+  outcomeAt: string
+}
+
+export interface LessonDetail {
+  lesson: Lesson
+  findings: LessonFinding[]
+}
+
 /** El juez de una fase en una ejecución: en qué ronda va y el veredicto de la última ronda. */
 export interface StageJudge {
   /** SKIPPED: el cambio no llegó a `minRisk` y la fase pasó sin juez (AU-C). */
@@ -2243,6 +2295,18 @@ export const api = {
       'GET',
       `/api/factory/judges?days=${days}${category ? `&category=${category}` : ''}`,
     ),
+  lessons: (status?: LessonStatus) =>
+    request<Lesson[]>('GET', `/api/factory/lessons${status ? `?status=${status}` : ''}`),
+  projectLessons: (projectId: string, status?: LessonStatus) =>
+    request<Lesson[]>(
+      'GET',
+      `/api/projects/${projectId}/lessons${status ? `?status=${status}` : ''}`,
+    ),
+  lesson: (id: string) => request<LessonDetail>('GET', `/api/lessons/${id}`),
+  applyLesson: (id: string, text: string) =>
+    request<Lesson>('POST', `/api/lessons/${id}/apply`, { text }),
+  dismissLesson: (id: string, reason: string) =>
+    request<Lesson>('POST', `/api/lessons/${id}/dismiss`, { reason }),
   decideFinding: (id: string, outcome: 'aceptado' | 'irrelevante' | 'abierto', reason?: string) =>
     request<FindingView>('POST', `/api/findings/${id}/outcome`, { outcome, reason }),
   listRuns: (query: {

@@ -55,6 +55,19 @@ describe('describeEvent', () => {
     expect(
       describeEvent('agent.workspace.ready', { branch: 'skynet/tkm-1', review: 'REVIEW.md' }),
     ).toBe('Worktree listo en la rama skynet/tkm-1, con los criterios de REVIEW.md')
+    // AP-C: los criterios aprendidos del repositorio.
+    expect(
+      describeEvent('agent.workspace.ready', {
+        branch: 'skynet/tkm-1',
+        review: 'REVIEW.md',
+        learned: 2,
+      }),
+    ).toBe(
+      'Worktree listo en la rama skynet/tkm-1, con los criterios de REVIEW.md y 2 criterios aprendidos',
+    )
+    expect(describeEvent('agent.workspace.ready', { branch: 'skynet/tkm-1', learned: 1 })).toBe(
+      'Worktree listo en la rama skynet/tkm-1, con 1 criterio aprendido',
+    )
   })
 
   it('dice cuántos hallazgos ya vistos se descartan (RH-B)', () => {
@@ -110,6 +123,14 @@ describe('describeEvent', () => {
         repository: 'demo-repo',
       }),
     ).toBe('diego aplicó la lección `caso-limite` de demo-repo en la memoria')
+    expect(
+      describeEvent('lesson.disabled', {
+        actor: 'diego',
+        category: 'estilo',
+        repository: 'demo-repo',
+        reason: 'Ya no aplica',
+      }),
+    ).toBe('diego desactivó la lección `estilo` de demo-repo: Ya no aplica')
     expect(
       describeEvent('lesson.dismissed', {
         actor: 'diego',

@@ -110,6 +110,8 @@ export function noticeFor(
         ...base,
         kind: 'success',
         title: 'He aprendido algo',
+        href: '/lessons',
+        action: 'Revisar',
         body:
           p.kind === 'prevenir'
             ? `${String(p.repository ?? '')}: los jueces han pedido \`${String(p.category ?? '')}\` en ${String(p.runs ?? '')} ejecuciones`

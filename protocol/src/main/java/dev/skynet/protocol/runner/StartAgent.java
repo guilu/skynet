@@ -78,6 +78,14 @@ public record StartAgent(
    */
   public static final List<String> REVIEW_FILES = List.of(".skynet/review.md", "REVIEW.md");
 
+  /**
+   * Cuántos criterios aprendidos lleva el prompt de un juez o un escéptico (AP-C), en una línea
+   * entera: {@code <!-- skynet:learned N -->}. El runner la quita y lo dice al tener el worktree.
+   */
+  public static String learnedMarker(int count) {
+    return "\n<!-- skynet:learned " + count + " -->\n";
+  }
+
   public static final String MEMORY_WRITE = "write";
 
   public StartAgent {

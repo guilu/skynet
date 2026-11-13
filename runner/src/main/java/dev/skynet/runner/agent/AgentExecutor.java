@@ -415,6 +415,14 @@ public final class AgentExecutor implements AutoCloseable {
       if (review.file() != null) {
         ready.put("review", review.file());
       }
+      // Los criterios aprendidos del repositorio (AP-C) ya vienen en el prompt: solo se cuentan.
+      int learned = RepositoryReview.learned(review.prompt());
+      if (learned > 0) {
+        ready.put("learned", learned);
+      }
+      review =
+          new RepositoryReview.Expanded(
+              RepositoryReview.withoutLearned(review.prompt()), review.file());
     }
     emit(id, AgentEventType.WORKSPACE_READY, ready);
     if (start.command() != null) {
