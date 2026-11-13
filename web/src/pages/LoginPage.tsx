@@ -8,7 +8,8 @@ import { Button } from '../components/ui/Button'
 import { Pill } from '../components/ui/Pill'
 
 /**
- * Entrada a la web con el usuario único del control plane. Skyny (en 3D desde TD-A) sigue con los
+ * Entrada a la web con el usuario único del control plane. Casi sin texto: Skyny centrado en su
+ * panel con tres estados de muestra, y el formulario. Skyny (en 3D desde TD-A) sigue con los
  * ojos lo que haces, se tapa los ojos mientras escribes la contraseña y mira de reojo si la
  * muestras (SY-C).
  */
@@ -37,7 +38,6 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
       <div className="login-card">
         <section className="login-hero" aria-hidden="true">
           <LoginSkyny pose={reveal ? 'peek' : secret ? 'cover' : undefined} />
-          <p className="login-tagline">Tus agentes, a la vista.</p>
           <ul className="login-states">
             <li>
               <Pill tone="active">Pensando</Pill>
@@ -52,10 +52,9 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
         </section>
         <section className="login-form">
           <h1 ref={heading} tabIndex={-1}>
-            Skynet
+            Hola de nuevo
           </h1>
-          <p className="brand-tagline">Agentes · Flujos · Ejecuciones</p>
-          <p className="muted">Entra con el usuario del control plane.</p>
+          <p className="muted">Entra para ver en qué andan tus agentes.</p>
           <form className="form" onSubmit={submit}>
             <label>
               Usuario
