@@ -2040,6 +2040,8 @@ class WorkflowEngineIT extends IntegrationTest {
                     1,
                     "severity",
                     "minor",
+                    "category",
+                    "documentacion",
                     "text",
                     "Falta un ejemplo de uso"))));
     // Un escéptico por hallazgo que bloquea: tumba el de redondear.
@@ -2103,6 +2105,9 @@ class WorkflowEngineIT extends IntegrationTest {
     JsonNode readme = byFile(findings, "README.md", "Falta");
     assertThat(readme.path("outcome").asString()).isEqualTo("corregido");
     assertThat(readme.path("outcomeBy").asString()).isEqualTo("skynet");
+    // AP-A: la clase que dijo el juez; sin ella, `otro`.
+    assertThat(readme.path("category").asString()).isEqualTo("documentacion");
+    assertThat(divide.path("category").asString()).isEqualTo("otro");
 
     // Una persona dice que es intencionado, y luego lo deshace: vuelve a aparcado.
     String id = divide.path("id").asString();
@@ -2136,6 +2141,11 @@ class WorkflowEngineIT extends IntegrationTest {
         .isEqualTo("Redondea hacia cero a propósito");
     assertThat(juez.path("noisy").get(0).path("runId").asString()).isEqualTo(runId);
     assertBadRequest(() -> get("/api/factory/judges?days=0"), "`days` va de 1 a 365");
+    JsonNode docs = get("/api/factory/judges?days=7&category=documentacion");
+    assertThat(docs.get(0).path("findings").asInt()).isEqualTo(1);
+    assertThat(docs.get(0).path("fixed").asInt()).isEqualTo(1);
+    assertBadRequest(
+        () -> get("/api/factory/judges?days=7&category=magia"), "Clase desconocida: magia");
 
     // Otra ejecución que dice lo mismo apunta a la primera vez que salió.
     complete(runner, runner.claim().getFirst(), "/w/eng/entregar");

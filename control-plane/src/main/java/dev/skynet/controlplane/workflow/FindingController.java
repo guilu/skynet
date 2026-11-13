@@ -25,8 +25,10 @@ class FindingController {
 
   /** Ruido y acierto de cada juez en los últimos {@code days} días (RH-C). */
   @GetMapping("/api/factory/judges")
-  List<JudgeStats.JudgeRow> judges(@RequestParam(defaultValue = "30") int days) {
-    return judges.since(days);
+  List<JudgeStats.JudgeRow> judges(
+      @RequestParam(defaultValue = "30") int days,
+      @RequestParam(required = false) String category) {
+    return judges.since(days, category == null || category.isBlank() ? null : category);
   }
 
   @GetMapping("/api/workflow-runs/{id}/findings")

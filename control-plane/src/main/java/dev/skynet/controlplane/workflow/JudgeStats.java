@@ -73,8 +73,20 @@ class JudgeStats {
   private record Key(String provider, String model, String judge, String lens) {}
 
   List<JudgeRow> since(int days) {
+    return since(days, null);
+  }
+
+  /** Lo mismo, solo con los hallazgos de la clase {@code category} (AP-A); {@code null}: todos. */
+  List<JudgeRow> since(int days, String category) {
     if (days < 1 || days > MAX_DAYS) {
       throw new InvalidRequestException("`days` va de 1 a " + MAX_DAYS + ", no " + days);
+    }
+    if (category != null && !JudgeVerdicts.CATEGORIES.containsKey(category)) {
+      throw new InvalidRequestException(
+          "Clase desconocida: "
+              + category
+              + ". Admite: "
+              + String.join(", ", JudgeVerdicts.CATEGORIES.keySet()));
     }
     Timestamp from = Timestamp.from(time.now().minus(Duration.ofDays(days)));
     Map<Key, List<Sample>> samples = new HashMap<>();
@@ -87,9 +99,11 @@ class JudgeStats {
                                    ORDER BY f.created_at DESC, f.id) AS n
               FROM finding f
               WHERE f.created_at >= :from AND f.outcome IN ('refutado', 'irrelevante')
+                AND (CAST(:category AS text) IS NULL OR f.category = :category)
             ) s WHERE s.n <= :samples ORDER BY s.created_at DESC, s.id
             """)
         .param("from", from)
+        .param("category", category)
         .param("samples", SAMPLES)
         .query(
             (rs, n) -> {
@@ -109,9 +123,11 @@ class JudgeStats {
                   count(*) FILTER (WHERE f.outcome = 'abierto') AS open
                 FROM finding f
                 WHERE f.created_at >= :from
+                  AND (CAST(:category AS text) IS NULL OR f.category = :category)
                 GROUP BY f.provider, f.model, f.judge, f.lens
                 """)
             .param("from", from)
+            .param("category", category)
             .query((rs, n) -> row(rs, samples.getOrDefault(key(rs), List.of())))
             .list();
     return rows.stream()

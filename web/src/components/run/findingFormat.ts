@@ -1,4 +1,21 @@
-import type { FindingOutcome, FindingView } from '../../api'
+import type { FindingCategory, FindingOutcome, FindingView } from '../../api'
+
+/** Cómo se lee cada clase de hallazgo (AP-A), en el orden de la lista del juez. */
+export const CATEGORY_LABEL: Record<FindingCategory, string> = {
+  tests: 'Tests',
+  'caso-limite': 'Caso límite',
+  errores: 'Errores',
+  entradas: 'Entradas',
+  secretos: 'Secretos',
+  concurrencia: 'Concurrencia',
+  rendimiento: 'Rendimiento',
+  api: 'API',
+  datos: 'Datos',
+  alcance: 'Alcance',
+  estilo: 'Estilo',
+  documentacion: 'Documentación',
+  otro: 'Otro',
+}
 
 /** Cómo se lee cada desenlace de un hallazgo (RH-A). */
 export const OUTCOME_LABEL: Record<FindingOutcome, string> = {

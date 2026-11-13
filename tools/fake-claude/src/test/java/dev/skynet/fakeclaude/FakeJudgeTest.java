@@ -144,4 +144,35 @@ class FakeJudgeTest {
     return JsonMapper.shared()
         .readTree(FakeJudge.verdict(env, "FAKE_CODEX_JUDGE", SCHEMA, prompt, dir));
   }
+
+  @Test
+  void theFindingTakesItsCategoryWhenTheSchemaAsksForIt(@TempDir Path dir) throws Exception {
+    String schema =
+        "{\"properties\":{\"criteria\":{},\"findings\":{\"items\":{\"properties\":"
+            + "{\"category\":{}}}},\"summary\":{}}}";
+    Map<String, String> env = Map.of("FAKE_CLAUDE_JUDGE", dir.resolve("suspende").toString());
+    Files.writeString(dir.resolve("suspende"), "![caso-limite] calc.py:2 add() con la lista vacía");
+
+    JsonNode finding =
+        JsonMapper.shared()
+            .readTree(FakeJudge.verdict(env, "FAKE_CLAUDE_JUDGE", schema, PROMPT, dir))
+            .path("findings")
+            .get(0);
+    assertThat(finding.path("category").asString()).isEqualTo("caso-limite");
+    assertThat(finding.path("file").asString()).isEqualTo("calc.py");
+    assertThat(finding.path("text").asString()).isEqualTo("add() con la lista vacía");
+
+    // Sin clase en el testigo, `tests`; y sin `category` en el schema, no la pone.
+    Files.writeString(dir.resolve("suspende"), "calc.py:2 add() sin test");
+    assertThat(
+            JsonMapper.shared()
+                .readTree(FakeJudge.verdict(env, "FAKE_CLAUDE_JUDGE", schema, PROMPT, dir))
+                .path("findings")
+                .get(0)
+                .path("category")
+                .asString())
+        .isEqualTo("tests");
+    Files.writeString(dir.resolve("suspende"), "[datos] calc.py:2 add()");
+    assertThat(verdict(dir, PROMPT).path("findings").get(0).has("category")).isFalse();
+  }
 }

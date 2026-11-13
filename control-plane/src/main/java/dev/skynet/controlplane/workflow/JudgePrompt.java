@@ -237,6 +237,9 @@ final class JudgePrompt {
         "Apunta cada problema concreto con su fichero, la línea si la sabes, su gravedad"
             + " (`blocking` si hay que arreglarlo antes de fusionar, `minor` si no) y por qué. Si no"
             + " hay ninguno, deja la lista vacía. No inventes problemas para justificar una nota.\n");
+    out.append("\nY su clase (`category`), una de estas:\n\n");
+    JudgeVerdicts.CATEGORIES.forEach(
+        (id, text) -> out.append("- `").append(id).append("`: ").append(text).append('\n'));
     if (context.extra() != null && !context.extra().isBlank()) {
       out.append("\n## Indicaciones\n\n").append(context.extra().strip()).append('\n');
     }

@@ -49,6 +49,10 @@ class JudgePromptTest {
         .contains("- `resuelve` (peso 3, obligatorio): Resuelve la tarea tal y como se pidió")
         .contains("- `alcance` (peso 1): No cambia nada que la tarea no pida")
         .contains("media ponderada de 3,5 o más")
+        // AP-A: la clase de cada hallazgo, de la lista.
+        .contains("Y su clase (`category`), una de estas:")
+        .contains("- `caso-limite`: vacío, nulo, cero")
+        .contains("- `otro`: nada de lo anterior")
         .doesNotContain("Es la ronda");
   }
 

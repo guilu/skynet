@@ -1695,6 +1695,7 @@ class StageJudges {
       one.put("file", f.file());
       one.put("line", f.line());
       one.put("severity", f.severity());
+      one.put("category", f.categoryOrOther());
       one.put("text", f.text());
       one.put("judge", f.judge());
       if (f.refuted() != null) {

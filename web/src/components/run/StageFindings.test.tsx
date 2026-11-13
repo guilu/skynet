@@ -21,6 +21,7 @@ const base: FindingView = {
   file: 'src/Calc.java',
   line: 14,
   severity: 'minor',
+  category: 'caso-limite',
   text: 'Divide entre cero sin comprobarlo',
   outcome: 'aparcado',
   outcomeBy: 'skynet',
@@ -38,6 +39,7 @@ const findings: FindingView[] = [
     ...base,
     id: 'f2',
     round: 1,
+    category: 'otro',
     text: 'Redondea mal los negativos',
     outcome: 'refutado',
     outcomeReason: 'Redondea hacia cero a propósito',
@@ -57,7 +59,11 @@ describe('El registro de hallazgos', () => {
 
     const section = await screen.findByRole('region', { name: 'Registro de hallazgos' })
     expect(section).toHaveTextContent('2 hallazgos: 1 refutado, 1 aparcado')
-    expect(section).toHaveTextContent('Aparcado src/Calc.java:14 Divide entre cero sin comprobarlo')
+    // La clase va delante (AP-A); `otro` no se enseña.
+    expect(section).toHaveTextContent(
+      'Aparcado Caso límite src/Calc.java:14 Divide entre cero sin comprobarlo',
+    )
+    expect(section).toHaveTextContent('Refutado src/Calc.java:14 Redondea mal')
     expect(section).toHaveTextContent('(juez · corrección · ronda 2)')
     expect(section).toHaveTextContent('salió 2 veces')
     expect(
