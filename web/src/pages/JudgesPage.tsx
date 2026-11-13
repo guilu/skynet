@@ -1,7 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { Scale } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
-import { api, type FindingCategory, type JudgeLens, type JudgeStatsRow } from '../api'
+import {
+  api,
+  type FindingCategory,
+  type JudgeEscapeSample,
+  type JudgeLens,
+  type JudgeStatsRow,
+} from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { DataTable, EmptyState, type Column } from '../components/list/DataTable'
 import { FilterChips, ListToolbar, type ChipOption } from '../components/list/Toolbar'
@@ -37,7 +43,8 @@ function lensOf(r: JudgeStatsRow): string {
  * los últimos 7, 30 o 90 días. Ruido es lo que tumbó un escéptico o una persona dijo que no
  * aplicaba; acierto, lo que el agente corrigió. Al elegir una fila salen sus últimos hallazgos con
  * ruido. Se puede mirar una sola clase de hallazgo (AP-A). El periodo, la clase y la fila van en
- * la URL (`?days=`, `?category=`, `?judge=`).
+ * la URL (`?days=`, `?category=`, `?judge=`). EV-B: qué pasó con lo que aprobó (se quedó, escapes y
+ * rechazos) y, al elegirlo, su calibración por nota.
  */
 export function JudgesPage() {
   const [params, setParams] = useSearchParams()
@@ -103,6 +110,37 @@ export function JudgesPage() {
     },
     { id: 'hits', header: 'Acierto', numeric: true, cell: (r) => percent(r.hits) },
     {
+      id: 'kept',
+      header: 'Se quedó',
+      numeric: true,
+      cell: (r) =>
+        r.judged === 0 ? (
+          <span className="muted">—</span>
+        ) : (
+          <>
+            {r.kept} de {r.judged}
+            {r.fewOutcomes && (
+              <>
+                {' '}
+                <Pill tone="neutral">pocos datos</Pill>
+              </>
+            )}
+          </>
+        ),
+    },
+    {
+      id: 'escaped',
+      header: 'Escapes',
+      numeric: true,
+      cell: (r) => (r.escaped > 0 ? <Pill tone="bad">{r.escaped}</Pill> : r.escaped),
+    },
+    {
+      id: 'rejected',
+      header: 'Rechazos',
+      numeric: true,
+      cell: (r) => (r.rejected > 0 ? <Pill tone="warn">{r.rejected}</Pill> : r.rejected),
+    },
+    {
       id: 'detail',
       header: 'Desenlaces',
       cardWide: true,
@@ -120,8 +158,9 @@ export function JudgesPage() {
     <>
       <h1>Jueces</h1>
       <p className="muted">
-        Ruido: lo que tumbó un escéptico o no aplicaba. Acierto: lo que el agente corrigió. Con
-        menos de 10 hallazgos, pocos datos.
+        Ruido: lo que tumbó un escéptico o no aplicaba. Acierto: lo que el agente corrigió. De lo
+        que aprobó: se quedó si se fusionó y no se revirtió, escape si se revirtió o se marcó, y
+        rechazo si alguien lo rechazó después. Con menos de 10, pocos datos.
       </p>
       <ListToolbar>
         <FilterChips
@@ -165,9 +204,80 @@ export function JudgesPage() {
           }
         />
       )}
+      {selected && <Calibration row={selected} days={days} />}
       {selected && <NoisyFindings row={selected} days={days} />}
     </>
   )
+}
+
+/**
+ * La calibración de un juez (EV-B): lo que aprobó por tramo de nota y cuánto se quedó. Si un 4,8
+ * se revierte igual que un 4,1, la nota no dice nada. Y los últimos escapes, con su ejecución.
+ */
+function Calibration({ row, days }: { row: JudgeStatsRow; days: number }) {
+  const title = `Calibración de ${row.judge} · ${lensOf(row)}`
+  return (
+    <section className="judge-noise" aria-label={title}>
+      <h2>{title}</h2>
+      {row.judged === 0 ? (
+        <p className="muted">Nada de lo que aprobó en {days} días tiene desenlace todavía.</p>
+      ) : (
+        <table className="judge-calibration small" aria-label="Por nota">
+          <thead>
+            <tr>
+              <th scope="col">Nota</th>
+              <th scope="col">Aprobados</th>
+              <th scope="col">Se quedó</th>
+              <th scope="col">Escapes</th>
+              <th scope="col">Rechazos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {row.calibration.map((b) => (
+              <tr key={b.label}>
+                <th scope="row">{b.label}</th>
+                <td>{b.judged}</td>
+                <td>{b.judged === 0 ? '—' : `${b.kept} (${percent(b.keptRatio)})`}</td>
+                <td>{b.escaped}</td>
+                <td>{b.rejected}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {row.escapes.length > 0 && (
+        <>
+          <h3>Últimos escapes</h3>
+          <ul className="stage-findings-list small">
+            {row.escapes.map((e) => (
+              <li key={e.runId}>
+                <Link to={`/runs/${e.runId}`}>
+                  {e.pullRequestNumber != null ? `PR #${e.pullRequestNumber}` : 'Ejecución'}
+                </Link>
+                {e.score != null && <span className="muted"> · nota {formatScore(e.score)}</span>}
+                {' · '}
+                {ESCAPE_HOW[e.origin]}
+                {e.seenRef && <> {e.seenRef}</>}
+                {e.note && <span className="muted"> · {e.note}</span>}
+                <span className="muted"> · {formatDateTime(e.createdAt)}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  )
+}
+
+const ESCAPE_HOW: Record<JudgeEscapeSample['origin'], string> = {
+  'revert-pr': 'revertida con la PR',
+  'revert-push': 'revertida con el commit',
+  manual: 'marcada a mano',
+}
+
+/** «4,8». */
+function formatScore(score: number): string {
+  return score.toLocaleString('es-ES', { maximumFractionDigits: 2 })
 }
 
 function NoisyFindings({ row, days }: { row: JudgeStatsRow; days: number }) {

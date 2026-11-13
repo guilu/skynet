@@ -596,6 +596,96 @@ class MergeIT extends IntegrationTest {
   }
 
   @Test
+  void theJudgesAreCalibratedWithWhatHappenedToWhatTheyApproved() throws Exception {
+    String runId = untilApproval();
+    // Dos jueces aprobaron el cambio (EV-B): uno con 4,8 y otro con 4,1; un tercero suspendió.
+    verdict(runId, "juez", 4.8, true);
+    verdict(runId, "segundo", 4.1, true);
+    verdict(runId, "estricto", 2.0, false);
+    // Sin desenlace todavía: la PR está abierta.
+    assertThat(judge("juez").path("judged").asInt()).isZero();
+
+    approve(get("/api/approvals?status=PENDING").get(0));
+    merges.mergePending();
+    JsonNode kept = judge("juez");
+    assertThat(kept.path("judged").asInt()).isEqualTo(1);
+    assertThat(kept.path("kept").asInt()).isEqualTo(1);
+    assertThat(kept.path("fewOutcomes").asBoolean()).isTrue();
+    JsonNode high = kept.path("calibration").get(2);
+    assertThat(high.path("label").asString()).isEqualTo("≥ 4,5");
+    assertThat(high.path("kept").asInt()).isEqualTo(1);
+    assertThat(high.path("keptRatio").asDouble()).isEqualTo(1.0);
+    assertThat(judge("segundo").path("calibration").get(1).path("label").asString())
+        .isEqualTo("4–4,5");
+    assertThat(judge("segundo").path("calibration").get(1).path("kept").asInt()).isEqualTo(1);
+    // El que suspendió no aprobó nada.
+    assertThat(judge("estricto").path("judged").asInt()).isZero();
+
+    // Se revierte: lo que aprobó se le escapó.
+    publisher.publishEvent(
+        new GitHubPullRequestClosed(
+            UUID.fromString(repositoryId),
+            13,
+            true,
+            "f".repeat(40),
+            "guilu/demo-repo",
+            "Revert \"Arreglar add()\"",
+            "Reverts guilu/demo-repo#12",
+            "https://github.com/guilu/demo-repo/pull/13"));
+    JsonNode escape = awaitEscape(runId);
+    JsonNode escaped = judge("juez");
+    assertThat(escaped.path("kept").asInt()).isZero();
+    assertThat(escaped.path("escaped").asInt()).isEqualTo(1);
+    assertThat(escaped.path("calibration").get(2).path("escaped").asInt()).isEqualTo(1);
+    assertThat(escaped.path("calibration").get(2).path("keptRatio").asDouble()).isZero();
+    assertThat(escaped.path("escapes")).hasSize(1);
+    assertThat(escaped.path("escapes").get(0).path("runId").asString()).isEqualTo(runId);
+    assertThat(escaped.path("escapes").get(0).path("seenRef").asString()).isEqualTo("#13");
+    assertThat(escaped.path("escapes").get(0).path("score").asDouble()).isEqualTo(4.8);
+
+    // Sin el escape, y con alguien que pidió cambios después del juez: rechazado.
+    http.delete().uri("/api/escapes/" + escape.path("id").asString()).retrieve().toBodilessEntity();
+    jdbc.sql(
+            """
+            INSERT INTO approval_decision (id, approval_request_id, action, comment, actor,
+              created_at)
+            SELECT gen_random_uuid(), id, 'REQUEST_CHANGES', 'Así no', 'admin', now()
+            FROM approval_request WHERE workflow_run_id = ? LIMIT 1
+            """)
+        .param(UUID.fromString(runId))
+        .update();
+    JsonNode rejected = judge("juez");
+    assertThat(rejected.path("rejected").asInt()).isEqualTo(1);
+    assertThat(rejected.path("escaped").asInt()).isZero();
+    assertThat(rejected.path("kept").asInt()).isZero();
+  }
+
+  /** El veredicto de un juez en la primera fase de la ejecución, de hace una hora. */
+  private void verdict(String runId, String judge, double score, boolean passed) {
+    jdbc.sql(
+            """
+            INSERT INTO stage_verdict (id, stage_run_id, workflow_run_id, round, judge, lens,
+              agent_run_id, status, score, passed, created_at, updated_at)
+            SELECT gen_random_uuid(), s.id, s.workflow_run_id, 1, ?, NULL, a.id, 'DONE', ?, ?,
+              now() - interval '1 hour', now() - interval '1 hour'
+            FROM stage_run s JOIN agent_run a ON a.stage_run_id = s.id
+            WHERE s.workflow_run_id = ? LIMIT 1
+            """)
+        .param(judge)
+        .param(score)
+        .param(passed)
+        .param(UUID.fromString(runId))
+        .update();
+  }
+
+  private JsonNode judge(String name) {
+    for (JsonNode row : get("/api/factory/judges?days=7")) {
+      if (row.path("judge").asString().equals(name)) return row;
+    }
+    throw new AssertionError("Sin fila para el juez " + name);
+  }
+
+  @Test
   void aRunThatMergedNothingCannotHaveAnEscape() {
     String runId = untilApproval();
     assertConflict("/api/workflow-runs/" + runId + "/escapes", Map.of());

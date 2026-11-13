@@ -1155,6 +1155,45 @@ export interface JudgeStatsRow {
   /** Menos de 10 hallazgos: la cifra dice poco. */
   fewData: boolean
   noisy: JudgeSample[]
+  /** EV-B: cambios que aprobó y ya tienen desenlace. */
+  judged: number
+  /** Su PR se fusionó y no se revirtió. */
+  kept: number
+  /** Se revirtió o alguien dijo que se le escapó un fallo (EV-A). */
+  escaped: number
+  /** Alguien lo rechazó o pidió cambios en una puerta después del juez. */
+  rejected: number
+  /** La PR se cerró sin fusionar. */
+  closed: number
+  /** Menos de 10 desenlaces. */
+  fewOutcomes: boolean
+  /** Los desenlaces por tramo de nota: por debajo de 4, de 4 a 4,5 y de 4,5 en adelante. */
+  calibration: JudgeBand[]
+  /** Los últimos cambios que aprobó y se le escaparon. */
+  escapes: JudgeEscapeSample[]
+}
+
+export interface JudgeBand {
+  label: string
+  from: number
+  to: number | null
+  judged: number
+  kept: number
+  escaped: number
+  rejected: number
+  closed: number
+  /** kept / judged, de 0 a 1. */
+  keptRatio: number
+}
+
+export interface JudgeEscapeSample {
+  runId: string
+  pullRequestNumber: number | null
+  origin: EscapeView['origin']
+  seenRef: string | null
+  note: string | null
+  score: number | null
+  createdAt: string
 }
 
 /** Un hallazgo del registro (RH-A), con su desenlace. */
