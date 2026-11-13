@@ -93,6 +93,13 @@ body {
   outline: none;
 }
 
+.st-canvas-compact {
+  inset: auto 16px 16px auto;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
 .st-badge,
 .st-hint {
   position: absolute;
@@ -164,6 +171,26 @@ body {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.7rem;
   color: var(--muted);
+}
+
+.st-demos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.st-demos button {
+  justify-content: center;
+}
+
+.st-demos button:first-child {
+  grid-column: 1 / -1;
+}
+
+.st-states button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .st-swatch {

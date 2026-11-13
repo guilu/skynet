@@ -12,6 +12,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "preview": "vite preview",
+    "studio:export": "node scripts/studio-export.mjs",
     "e2e": "playwright test",
     "screenshots": "../scripts/screenshots.sh",
     "screenshots:map": "node visual/build-map.ts",

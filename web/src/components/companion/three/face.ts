@@ -23,15 +23,49 @@ export interface FaceColors {
   core: string
 }
 
+let openEyes: HTMLCanvasElement | null = null
+
 /**
  * Pinta la cara: fondo oscuro con reflejo curvo y los ojos, movidos `gaze` píxeles (x, y) hacia
  * donde mira Skyny. `tint` es el color propio de los ojos de algunos estados (Error, Pausa…).
+ * Con `wink` < 1, el guiño de Pensando está a medias: el ojo izquierdo pasa de abierto a cerrado
+ * (el derecho, que no cambia, se queda tal cual).
  */
 export function drawFace(
   ctx: CanvasRenderingContext2D,
   eyes: FaceEyes,
   colors: FaceColors,
   gaze: [number, number] = [0, 0],
+  tint?: string,
+  wink = 1,
+) {
+  if (eyes !== 'wink' || wink >= 1) {
+    paintFace(ctx, eyes, colors, gaze, tint)
+    return
+  }
+  if (!openEyes) {
+    openEyes = document.createElement('canvas')
+    openEyes.width = FACE_PX
+    openEyes.height = FACE_PX
+  }
+  paintFace(ctx, 'pills', colors, gaze, tint)
+  const buffer = openEyes.getContext('2d')!
+  buffer.clearRect(0, 0, FACE_PX, FACE_PX)
+  buffer.drawImage(ctx.canvas, 0, 0)
+  paintFace(ctx, 'wink', colors, gaze, tint)
+  const split = FACE_PX / 2 + gaze[0]
+  ctx.save()
+  ctx.drawImage(openEyes, split, 0, FACE_PX - split, FACE_PX, split, 0, FACE_PX - split, FACE_PX)
+  ctx.globalAlpha = 1 - Math.max(0, wink)
+  ctx.drawImage(openEyes, 0, 0, split, FACE_PX, 0, 0, split, FACE_PX)
+  ctx.restore()
+}
+
+function paintFace(
+  ctx: CanvasRenderingContext2D,
+  eyes: FaceEyes,
+  colors: FaceColors,
+  gaze: [number, number],
   tint?: string,
 ) {
   const c = FACE_PX / 2

@@ -50,9 +50,32 @@ export function surfaceAt(direction: Vec3, clearance = 0): Vec3 {
   return [d[0] * (r + clearance), d[1] * (r + clearance), d[2] * (r + clearance)]
 }
 
-/** Recorridos de las tres bandas: nacen en la cara y se juntan en una Y en la espalda. */
-export const BAND_NEXUS: Vec3 = [0, 0.04, -0.36]
+/** Busca la cáscara trasera: la `z` donde un rayo que va de atrás hacia delante por (x, y) entra en el
+ * cuerpo. El estudio lo hacía con un raycaster contra la malla; aquí, por bisección. */
+export function rearShellZ(x: number, y: number): number {
+  const inside = (z: number) => {
+    const p: Vec3 = [x, y, z]
+    return length(p) <= length(surfaceAt(p))
+  }
+  let out = -1.2
+  let into = 0
+  if (!inside(into)) throw new Error(`(${x}, ${y}) no cae sobre la espalda de Skyny`)
+  for (let i = 0; i < 40; i++) {
+    const mid = (out + into) / 2
+    if (inside(mid)) into = mid
+    else out = mid
+  }
+  return (out + into) / 2
+}
 
+/** Los tres bordes de la hebilla de la espalda, donde acaba cada banda (abajo, derecha, izquierda). */
+export const BUCKLE_EDGES: [Vec3, Vec3, Vec3] = [
+  [0, -0.145, -0.54],
+  [0.108, 0.044, -0.53],
+  [-0.108, 0.044, -0.53],
+]
+
+/** Recorridos de las tres bandas: nacen en la cara y acaba cada una en su borde de la hebilla. */
 export const BANDS: Vec3[][] = [
   // Inferior: sube desde la base por la espalda.
   [
@@ -62,16 +85,16 @@ export const BANDS: Vec3[][] = [
     [0, -0.64, -0.16],
     [0, -0.46, -0.32],
     [0, -0.22, -0.36],
-    BAND_NEXUS,
+    BUCKLE_EDGES[0],
   ],
-  // Derecha y la izquierda, simétrica: por el hombro hacia el nexo.
-  ...[1, -1].map((s): Vec3[] => [
+  // Derecha y la izquierda, simétrica: por el hombro hacia la hebilla.
+  ...[1, -1].map((s, i): Vec3[] => [
     [s * 0.28, 0.22, 0.49],
     [s * 0.42, 0.29, 0.36],
     [s * 0.53, 0.32, 0.14],
-    [s * 0.49, 0.27, -0.14],
-    [s * 0.32, 0.16, -0.29],
-    [s * 0.16, 0.08, -0.35],
-    BAND_NEXUS,
+    [s * 0.49, 0.282, -0.14],
+    [s * 0.32, 0.176, -0.34],
+    [s * 0.23, 0.12, -0.45],
+    BUCKLE_EDGES[i + 1],
   ]),
 ]

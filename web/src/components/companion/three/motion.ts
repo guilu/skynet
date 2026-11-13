@@ -43,3 +43,31 @@ export const popIn = (ms: number) => {
   const u = clamp01(ms / 320)
   return 1 + 2.5 * (u - 1) ** 3 + 1.5 * (u - 1) ** 2
 }
+
+/** Lo que dura el fundido entre dos estados (colores y postura). */
+export const BLEND_MS = 300
+/** Fundido de un estado a otro: 0 → 1 en `BLEND_MS`. */
+export const blend = (ms: number) => smooth(ms / BLEND_MS)
+
+/** El accesorio que se va se desvanece en 220 ms (1 → 0). */
+export const accessoryFade = (ms: number) => 1 - smooth(ms / 220)
+
+/** La mano derecha sube a enseñar su símbolo (Te necesita, En pausa, Sin conexión): 0 → 1. */
+export const handLift = (ms: number) => 1 - (1 - clamp01(ms / 420)) ** 3
+
+/**
+ * En espera, cada 7,6 s Skyny mira un momento a la derecha (`gaze`, en píxeles de la pantalla) y
+ * parpadea un poco después.
+ */
+export function restLook(ms: number) {
+  const phase = ms % 7600
+  const look = phase >= 1800 && phase <= 3400 ? Math.sin((Math.PI * (phase - 1800)) / 1600) ** 2 : 0
+  return { gaze: Math.round(7 * look), blinking: phase >= 4900 && phase < 5040 }
+}
+
+/** Pensando, cada 9 s levanta la mirada hacia arriba a la izquierda, como quien piensa. */
+export function thinkingLook(ms: number): [number, number] {
+  const phase = ms % 9000
+  const k = phase >= 1800 && phase < 5000 ? Math.sin((Math.PI * (phase - 1800)) / 3200) ** 2 : 0
+  return [Math.round(-10 * k) || 0, Math.round(-6 * k) || 0]
+}
