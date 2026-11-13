@@ -82,6 +82,44 @@ describe('describeEvent', () => {
     )
   })
 
+  it('cuenta las lecciones propuestas, aplicadas y descartadas (AP-B)', () => {
+    expect(
+      describeEvent('lesson.proposed', {
+        kind: 'prevenir',
+        category: 'caso-limite',
+        runs: 2,
+        repository: 'demo-repo',
+      }),
+    ).toBe('Lección propuesta para demo-repo: los jueces han pedido `caso-limite` en 2 ejecuciones')
+    expect(
+      describeEvent('lesson.proposed', {
+        kind: 'no-senalar',
+        category: 'estilo',
+        runs: 5,
+        repository: 'demo-repo',
+        again: true,
+      }),
+    ).toBe(
+      'Lección propuesta de nuevo para demo-repo: se ha dado por bueno `estilo` en 5 ejecuciones',
+    )
+    expect(
+      describeEvent('lesson.applied', {
+        actor: 'diego',
+        kind: 'prevenir',
+        category: 'caso-limite',
+        repository: 'demo-repo',
+      }),
+    ).toBe('diego aplicó la lección `caso-limite` de demo-repo en la memoria')
+    expect(
+      describeEvent('lesson.dismissed', {
+        actor: 'diego',
+        category: 'estilo',
+        repository: 'demo-repo',
+        reason: 'Sí queremos verlo',
+      }),
+    ).toBe('diego descartó la lección `estilo` de demo-repo: Sí queremos verlo')
+  })
+
   it('dice cuándo se omite el juez y cuándo se aprueba sola la puerta (AU-C)', () => {
     expect(
       describeEvent('stage.judge.skipped', {

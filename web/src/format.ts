@@ -292,6 +292,19 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
             : 'deshizo el desenlace de'
       return `${p('actor')} ${what} un hallazgo${where}`
     }
+    case 'lesson.proposed': {
+      const what =
+        payload.kind === 'prevenir'
+          ? `los jueces han pedido \`${p('category')}\` en ${p('runs')} ejecuciones`
+          : `se ha dado por bueno \`${p('category')}\` en ${p('runs')} ejecuciones`
+      return `Lección ${payload.again ? 'propuesta de nuevo' : 'propuesta'} para ${p('repository')}: ${what}`
+    }
+    case 'lesson.applied':
+      return `${p('actor')} aplicó la lección \`${p('category')}\` de ${p('repository')}${
+        payload.kind === 'prevenir' ? ' en la memoria' : ' en los criterios del juez'
+      }`
+    case 'lesson.dismissed':
+      return `${p('actor')} descartó la lección \`${p('category')}\` de ${p('repository')}: ${p('reason')}`
     case 'stage.judge.skipped':
       return `${p('stageKey')}: ${p('note')}`
     case 'stage.judge.delta.refute.started':

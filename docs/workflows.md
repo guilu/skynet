@@ -544,6 +544,20 @@ Más detalles:
 - El registro de la fase la enseña delante de cada hallazgo, salvo `otro`.
 - **Fábrica → Jueces** puede mirar una sola clase (`?category=caso-limite`).
 
+**Lecciones propuestas** (AP-B). Cuando algo se repite en los hallazgos de un repositorio, Skynet propone convertirlo en una regla. Cuenta por clase, no por fichero, y solo ejecuciones distintas: dos rondas de la misma ejecución cuentan como una. Los hallazgos de clase `otro` no cuentan.
+
+| Lo que se repite | Tipo | Qué propone |
+|---|---|---|
+| Hallazgos `corregido` de la misma clase en 2 ejecuciones | `prevenir` | Una restricción fijada en la memoria del repositorio, para que el agente la tenga en cuenta antes de empezar |
+| Hallazgos `aceptado`, `irrelevante` o `refutado` de la misma clase en 2 ejecuciones | `no-senalar` | Un criterio aprendido para el juez («No señales como fallo…») |
+
+- Skynet mira al guardar los hallazgos de una ronda y cuando una persona decide un desenlace.
+- Hay una sola lección por repositorio, clase y tipo. Si ya hay una, se le suman los hallazgos nuevos.
+- El texto lo escribe una plantilla, sin LLM: lo que se repite y hasta 3 hallazgos de ejemplo. Se puede editar al aplicarla.
+- Skynet no aplica nada solo. Al aplicar una `prevenir`, crea una observación `CONSTRAINT` fijada en la memoria del repositorio, con origen HUMAN y el tema `leccion/{clase}`: aplicarla otra vez es una versión nueva, no un duplicado. Una `no-senalar` aplicada queda como criterio aprendido del repositorio; AP-C la lleva al prompt del juez.
+- Descartar pide un motivo. Una lección descartada no se vuelve a proponer hasta que haya casos en **3 ejecuciones nuevas** después del descarte.
+- Eventos: `lesson.proposed` (en Actividad y como aviso de Skyny), `lesson.applied` y `lesson.dismissed`.
+
 **Fusionar la PR.** Una fase `type: github-merge` fusiona la PR de la ejecución, normalmente detrás de su `github-check` y de una puerta que lo aprueba (EN-C):
 
 ```yaml
@@ -781,6 +795,10 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `GET` | `/api/workflow-runs/{id}/findings` | El registro de hallazgos de la ejecución, con su desenlace (RH-A) |
 | `POST` | `/api/findings/{id}/outcome` | Decide qué es un hallazgo (`{outcome: aceptado \| irrelevante \| abierto, reason}`); `abierto` lo deshace y, si la fase ya terminó, lo deja `aparcado` |
 | `GET` | `/api/factory/judges?days=30` | Ruido y acierto de cada juez por proveedor, modelo y lente, con sus últimos hallazgos refutados o que no aplican (RH-C); `days` de 1 a 365; `category` (AP-A) mira una sola clase |
+| `GET` | `/api/projects/{id}/lessons?status=` | Las lecciones del proyecto, de la más reciente a la más antigua (AP-B); `status`: `propuesta`, `aplicada` o `descartada` |
+| `GET` | `/api/lessons/{id}` | Una lección (`lesson`) con los hallazgos que la justifican y su ejecución (`findings`) |
+| `POST` | `/api/lessons/{id}/apply` | Aplica una lección propuesta (`{text}`, opcional: si falta, el propuesto); 409 si ya está decidida |
+| `POST` | `/api/lessons/{id}/dismiss` | Descarta una lección propuesta (`{reason}`, obligatorio); 409 si ya está decidida |
 
 Cada problema lleva `severity` (`ERROR`, `UNSUPPORTED` o `WARNING`), `path` (p. ej. `stages.fix.dependsOn[0]`), `line`, `column` y `message`.
 
