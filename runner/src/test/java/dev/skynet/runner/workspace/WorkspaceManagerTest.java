@@ -43,7 +43,8 @@ class WorkspaceManagerTest {
     Path origin = TestRepos.create(dir.resolve("origin"));
     Files.writeString(origin.resolve("nuevo.txt"), "en el remoto\n");
     TestRepos.git(origin, "add", "nuevo.txt");
-    TestRepos.git(origin, "commit", "-q", "-m", "Nuevo");
+    TestRepos.git(
+        origin, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "Nuevo");
     String sha = TestRepos.git(origin, "rev-parse", "HEAD");
     TestRepos.git(origin, "checkout", "-q", "-b", "otra");
     TestRepos.git(origin, "branch", "-q", "-f", "main", "HEAD~1");
