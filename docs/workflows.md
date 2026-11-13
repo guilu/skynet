@@ -521,6 +521,15 @@ stages:
 - La tabla va de más a menos ruido. Con menos de 10 hallazgos dice «pocos datos». Al elegir una fila salen sus últimos 5 hallazgos refutados o que no aplicaban, con el motivo y el enlace a su ejecución.
 - Una fila del registro es un hallazgo aunque saliera en varias rondas (`repeats`). Los del delta de AU-B cuentan con su juez.
 
+**Calibración del juez** (EV-B). La misma tabla cuenta también qué pasó con lo que cada juez **aprobó**, con su veredicto de la última ronda de la fase:
+
+- **Se quedó:** la PR se fusionó y no tiene escape (EV-A).
+- **Escapes:** se revirtió en la rama por defecto o alguien lo marcó como escape.
+- **Rechazos:** después del juez, alguien dijo `REJECT` o `REQUEST_CHANGES` en una puerta.
+- Si la PR se cerró sin fusionar, cuenta como `cerrada`. Lo que aún no tiene desenlace (PR abierta, sin PR) no cuenta, y lo que el juez suspendió tampoco. Si una ejecución tiene escape y rechazo, cuenta como escape.
+- Con menos de 10 desenlaces, «pocos datos». Un juez que aprobó sin decir nada también tiene fila, con 0 hallazgos.
+- Al elegir una fila sale su **calibración**: lo que aprobó por tramo de nota (`< 4`, `4–4,5` y `≥ 4,5`) y cuánto se quedó en cada uno. Si un 4,8 se revierte igual que un 4,1, la nota no dice nada. Debajo, sus últimos 5 escapes con el enlace a la ejecución.
+
 **La clase de cada hallazgo** (AP-A). Además de su gravedad, el juez dice la clase de cada hallazgo (`category`), de una lista cerrada que su prompt explica en una línea cada una. La lista es cerrada para poder contar lo que se repite en un repositorio:
 
 - `tests`: falta un test o el que hay no prueba lo que dice;
@@ -810,7 +819,7 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `GET` | `/api/workflow-runs/{id}/assumptions` | Los supuestos de la ejecución, `[{stageKey, text}]` (ES-C) |
 | `GET` | `/api/workflow-runs/{id}/findings` | El registro de hallazgos de la ejecución, con su desenlace (RH-A) |
 | `POST` | `/api/findings/{id}/outcome` | Decide qué es un hallazgo (`{outcome: aceptado \| irrelevante \| abierto, reason}`); `abierto` lo deshace y, si la fase ya terminó, lo deja `aparcado` |
-| `GET` | `/api/factory/judges?days=30` | Ruido y acierto de cada juez por proveedor, modelo y lente, con sus últimos hallazgos refutados o que no aplican (RH-C); `days` de 1 a 365; `category` (AP-A) mira una sola clase |
+| `GET` | `/api/factory/judges?days=30` | Ruido y acierto de cada juez por proveedor, modelo y lente, con sus últimos hallazgos refutados o que no aplican (RH-C); `days` de 1 a 365; `category` (AP-A) mira una sola clase. EV-B añade `judged`, `kept`, `escaped`, `rejected`, `closed`, `fewOutcomes`, `calibration` (por tramo de nota) y `escapes` |
 | `GET` | `/api/workflow-runs/{id}/escapes` | El escape de la ejecución, si lo tiene (EV-A) |
 | `POST` | `/api/workflow-runs/{id}/escapes` | Marca a mano que se le escapó un fallo al juez (`{note}`, opcional); 409 si no fusionó ninguna PR o ya tiene escape |
 | `DELETE` | `/api/escapes/{id}` | Quita un escape: no fue un fallo del juez |

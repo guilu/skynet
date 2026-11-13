@@ -3513,6 +3513,25 @@
     margin-top: var(--space-4);
   }
 
+  /* EV-B: la calibración de un juez, lo que aprobó por tramo de nota. */
+  .judge-calibration {
+    border-collapse: collapse;
+    margin-bottom: var(--space-3);
+  }
+
+  .judge-calibration th,
+  .judge-calibration td {
+    padding: var(--space-1) var(--space-3);
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .judge-calibration th[scope='row'],
+  .judge-calibration thead th:first-child {
+    text-align: left;
+  }
+
   .stage-findings-list {
     display: grid;
     gap: var(--space-1);

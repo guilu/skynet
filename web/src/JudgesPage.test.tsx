@@ -32,6 +32,58 @@ const noisy: JudgeStatsRow = {
       createdAt: '2026-11-09T10:00:00Z',
     },
   ],
+  judged: 12,
+  kept: 9,
+  escaped: 2,
+  rejected: 1,
+  closed: 0,
+  fewOutcomes: false,
+  calibration: [
+    {
+      label: '< 4',
+      from: 0,
+      to: 4,
+      judged: 0,
+      kept: 0,
+      escaped: 0,
+      rejected: 0,
+      closed: 0,
+      keptRatio: 0,
+    },
+    {
+      label: '4–4,5',
+      from: 4,
+      to: 4.5,
+      judged: 4,
+      kept: 3,
+      escaped: 1,
+      rejected: 0,
+      closed: 0,
+      keptRatio: 0.75,
+    },
+    {
+      label: '≥ 4,5',
+      from: 4.5,
+      to: null,
+      judged: 8,
+      kept: 6,
+      escaped: 1,
+      rejected: 1,
+      closed: 0,
+      keptRatio: 0.75,
+    },
+  ],
+  escapes: [
+    {
+      runId: 'run-9',
+      pullRequestNumber: 12,
+      origin: 'revert-pr',
+      seenRef: '#13',
+      note: null,
+      score: 4.8,
+      createdAt: '2026-11-12T10:00:00Z',
+    },
+  ],
 }
 
 const quiet: JudgeStatsRow = {
@@ -50,6 +102,13 @@ const quiet: JudgeStatsRow = {
   hits: 1,
   fewData: true,
   noisy: [],
+  judged: 0,
+  kept: 0,
+  escaped: 0,
+  rejected: 0,
+  closed: 0,
+  fewOutcomes: true,
+  escapes: [],
 }
 
 function stubApi(routes: Record<string, unknown>) {
@@ -88,6 +147,30 @@ describe('Fábrica › Jueces (RH-C)', () => {
     expect(noise).toHaveTextContent('src/Calc.java:12')
     expect(noise).toHaveTextContent('Redondea hacia cero a propósito')
     expect(within(noise).getByRole('link')).toHaveAttribute('href', '/runs/run-7')
+  })
+
+  it('cuenta lo que pasó con lo que aprobó y lo calibra por nota (EV-B)', async () => {
+    stubApi({ '/api/factory/judges?days=30': [noisy, quiet] })
+    renderAt('/judges', <App />)
+    const table = await screen.findByRole('table', { name: 'Jueces' })
+    const rows = within(table).getAllByRole('row')
+    expect(rows[0]).toHaveTextContent('Se quedó')
+    expect(rows[0]).toHaveTextContent('Escapes')
+    expect(rows[0]).toHaveTextContent('Rechazos')
+    expect(rows[1]).toHaveTextContent('9 de 12')
+    expect(rows[2]).toHaveTextContent('—')
+
+    fireEvent.click(within(table).getByRole('button', { name: 'revisor · seguridad' }))
+    const panel = await screen.findByRole('region', { name: 'Calibración de revisor · seguridad' })
+    const bands = within(within(panel).getByRole('table', { name: 'Por nota' })).getAllByRole('row')
+    expect(bands[2]).toHaveTextContent('4–4,5')
+    expect(bands[2]).toHaveTextContent('3 (75 %)')
+    expect(bands[3]).toHaveTextContent('≥ 4,5')
+    expect(panel).toHaveTextContent('PR #12 · nota 4,8 · revertida con la PR #13')
+    expect(within(panel).getByRole('link', { name: 'PR #12' })).toHaveAttribute(
+      'href',
+      '/runs/run-9',
+    )
   })
 
   it('cambia de periodo y avisa cuando no hay hallazgos', async () => {
