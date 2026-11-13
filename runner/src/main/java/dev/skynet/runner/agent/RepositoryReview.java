@@ -10,6 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Los criterios de revisión del repositorio (ES-B): si el worktree tiene {@code .skynet/review.md}
@@ -64,6 +66,23 @@ final class RepositoryReview {
       return new Expanded(prompt.replace(StartAgent.REVIEW_MARKER, section), name);
     }
     return new Expanded(withoutMarker(prompt), null);
+  }
+
+  /** La línea que dice cuántos criterios aprendidos lleva el prompt (AP-C). */
+  private static final Pattern LEARNED = Pattern.compile("\n<!-- skynet:learned (\\d+) -->\n");
+
+  /** Cuántos criterios aprendidos lleva el prompt; 0 si no lleva la línea. */
+  static int learned(String prompt) {
+    if (prompt == null) {
+      return 0;
+    }
+    Matcher m = LEARNED.matcher(prompt);
+    return m.find() ? Integer.parseInt(m.group(1)) : 0;
+  }
+
+  /** El prompt sin la línea de los criterios aprendidos, que no es para el agente. */
+  static String withoutLearned(String prompt) {
+    return prompt == null ? null : LEARNED.matcher(prompt).replaceAll("");
   }
 
   /** El prompt sin el sitio de los criterios, cuando no hay ninguno. */

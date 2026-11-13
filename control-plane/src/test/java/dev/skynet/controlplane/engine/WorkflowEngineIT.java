@@ -2255,6 +2255,49 @@ class WorkflowEngineIT extends IntegrationTest {
     JsonNode kept = get("/api/lessons/" + preventId).path("lesson");
     assertThat(kept.path("status").asString()).isEqualTo("aplicada");
     assertThat(kept.path("runs").asInt()).isEqualTo(5);
+
+    // AP-C: aplicada, la «no señalar» llega al juez del repositorio como criterio aprendido.
+    post("/api/lessons/" + dontFlagId + "/apply", Map.of("text", "No señales los nombres cortos."));
+    JsonNode factory = get("/api/factory/lessons?status=aplicada");
+    assertThat(factory).hasSize(2);
+    assertThat(factory.findValuesAsString("projectName")).containsOnly("Motor");
+    assertThat(judgePrompt(runner, definitionId))
+        .contains(
+            "## Lo aprendido en este repositorio\n\nUna persona ha revisado hallazgos de otras"
+                + " ejecuciones")
+        .contains("\nNo señales los nombres cortos.\n")
+        .contains("<!-- skynet:learned 1 -->");
+
+    // Desactivar pide motivo; la `prevenir` archiva su restricción y la otra deja de llegar.
+    assertBadRequest(
+        () -> post("/api/lessons/" + preventId + "/dismiss", Map.of()), "Falta `reason`");
+    JsonNode disabled =
+        post("/api/lessons/" + preventId + "/dismiss", Map.of("reason", "Ya lo cubre la CI"));
+    assertThat(disabled.path("status").asString()).isEqualTo("descartada");
+    assertThat(disabled.path("appliedText").asString()).isEqualTo("Prueba siempre la lista vacía");
+    assertThat(
+            get("/api/memory/" + applied.path("observationId").asString())
+                .path("archivedAt")
+                .isString())
+        .isTrue();
+    assertConflict(
+        () -> post("/api/lessons/" + preventId + "/dismiss", Map.of("reason", "Otra vez")));
+    post("/api/lessons/" + dontFlagId + "/dismiss", Map.of("reason", "Ya no aplica"));
+    assertThat(judgePrompt(runner, definitionId))
+        .doesNotContain("Lo aprendido")
+        .doesNotContain("skynet:learned");
+  }
+
+  /** Lanza una ejecución, llega a su juez y devuelve su prompt; la ejecución acaba aprobada. */
+  private String judgePrompt(Runner runner, String definitionId) {
+    launch(definitionId, Map.of());
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    verified(runner, runner.claim().getFirst(), true);
+    JsonNode judge = runner.claim().getFirst();
+    String prompt = judge.path("start").path("prompt").asString();
+    complete(runner, judge, "/w/eng/juez", verdict(5, 5, List.of()));
+    complete(runner, runner.claim().getFirst(), "/w/eng/entregar");
+    return prompt;
   }
 
   /**

@@ -573,6 +573,11 @@ class Findings {
         .toList();
   }
 
+  /** Los criterios aprendidos del repositorio, para el prompt del juez (AP-C). */
+  List<String> learned(UUID repositoryId) {
+    return lessons.learned(repositoryId);
+  }
+
   /** Un literal de array de Postgres: las palabras solo llevan letras de la a a la z. */
   private static String array(List<String> words) {
     return "{" + String.join(",", words) + "}";

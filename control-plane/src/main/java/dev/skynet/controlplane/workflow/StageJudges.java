@@ -253,6 +253,8 @@ class StageJudges {
     String schema = JudgeVerdicts.outputSchema(spec.rubricFile() != null);
     // Lo ya visto (RH-B): lo de las rondas anteriores y lo que se marcó en el repositorio.
     List<String> already = findings.seenLines(stage.getId(), SEEN_LIMIT);
+    // Lo aprendido (AP-C): las lecciones «no señalar» aplicadas en el repositorio.
+    List<String> learned = findings.learned(repository.getId());
     String previousHead = round > 1 ? previousHead(stage.getId(), round - 1) : null;
     List<Map<String, Object>> launched = new ArrayList<>();
     for (JudgeSpec.Judge judge : spec.agents()) {
@@ -260,15 +262,16 @@ class StageJudges {
       String prompt =
           JudgePrompt.build(
               new JudgePrompt.Context(
-                  workItem.getKey(),
-                  workItem.getTitle(),
-                  workItem.getDescription(),
-                  source.baseCommit(),
-                  seen,
-                  round,
-                  agent.prompt(),
-                  already,
-                  previousHead),
+                      workItem.getKey(),
+                      workItem.getTitle(),
+                      workItem.getDescription(),
+                      source.baseCommit(),
+                      seen,
+                      round,
+                      agent.prompt(),
+                      already,
+                      previousHead)
+                  .withLearned(learned),
               spec,
               judge);
       EffectivePolicy policy =
@@ -479,13 +482,14 @@ class StageJudges {
     String schema = JudgeVerdicts.refutationSchema();
     JudgePrompt.Context context =
         new JudgePrompt.Context(
-            workItem.getKey(),
-            workItem.getTitle(),
-            workItem.getDescription(),
-            base,
-            List.of(),
-            round,
-            null);
+                workItem.getKey(),
+                workItem.getTitle(),
+                workItem.getDescription(),
+                base,
+                List.of(),
+                round,
+                null)
+            .withLearned(findings.learned(repository.getId()));
     for (int f = 0; f < targets.size(); f++) {
       JudgeVerdicts.Finding finding = targets.get(f).finding();
       String prompt = JudgePrompt.refutation(context, finding);
@@ -685,21 +689,23 @@ class StageJudges {
     String schema = JudgeVerdicts.outputSchema(spec.rubricFile() != null);
     List<JudgeSpec.Judge> panel = tier >= 2 ? spec.agents() : spec.agents().subList(0, 1);
     List<String> already = findings.seenLines(judgeStage.getId(), SEEN_LIMIT);
+    List<String> learned = findings.learned(repository.getId());
     List<Map<String, Object>> launched = new ArrayList<>();
     for (JudgeSpec.Judge judge : panel) {
       AgentDefinition agent = workflow.agent(judge.agent()).orElseThrow();
       String prompt =
           JudgePrompt.delta(
               new JudgePrompt.Context(
-                  workItem.getKey(),
-                  workItem.getTitle(),
-                  workItem.getDescription(),
-                  judgedSha,
-                  List.of(),
-                  1,
-                  agent.prompt(),
-                  already,
-                  null),
+                      workItem.getKey(),
+                      workItem.getTitle(),
+                      workItem.getDescription(),
+                      judgedSha,
+                      List.of(),
+                      1,
+                      agent.prompt(),
+                      already,
+                      null)
+                  .withLearned(learned),
               spec,
               judge,
               tier);

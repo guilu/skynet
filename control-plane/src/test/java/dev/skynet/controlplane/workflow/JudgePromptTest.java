@@ -72,7 +72,8 @@ class JudgePromptTest {
             "round",
             "extra",
             "seen",
-            "previousHead");
+            "previousHead",
+            "learned");
     assertThat(prompt).doesNotContain("summary\":").doesNotContain("Declarado por el agente");
   }
 
@@ -157,5 +158,28 @@ class JudgePromptTest {
     assertThat(skeptic.indexOf(StartAgent.REVIEW_MARKER))
         .isGreaterThan(skeptic.indexOf("## El cambio"))
         .isLessThan(skeptic.indexOf("## Qué contestar"));
+  }
+
+  @Test
+  void theLearnedCriteriaGoUnderTheRepositorysOwnForJudgesSkepticsAndTheDelta() {
+    JudgePrompt.Context learned =
+        CONTEXT.withLearned(List.of("No señales los logs verbosos.", "No pidas javadoc."));
+    String section =
+        "\n## Lo aprendido en este repositorio\n\nUna persona ha revisado hallazgos de otras"
+            + " ejecuciones de este repositorio y ha decidido que esto no es un fallo aquí. Tenlo en"
+            + " cuenta junto a la rúbrica:\n\nNo señales los logs verbosos.\n\nNo pidas javadoc.\n"
+            + StartAgent.learnedMarker(2);
+    String judge = JudgePrompt.build(learned, SPEC, SPEC.agents().getFirst());
+    assertThat(judge).contains(StartAgent.REVIEW_MARKER + section);
+    assertThat(judge.indexOf(section)).isLessThan(judge.indexOf("## Los hallazgos"));
+    assertThat(JudgePrompt.delta(learned, SPEC, SPEC.agents().getFirst(), 1)).contains(section);
+    String skeptic =
+        JudgePrompt.refutation(
+            learned, new JudgeVerdicts.Finding("src/Calc.java", 12, "blocking", "Divide", "juez"));
+    assertThat(skeptic.indexOf(section)).isLessThan(skeptic.indexOf("## Qué contestar"));
+    // Sin lecciones aplicadas, nada.
+    assertThat(JudgePrompt.build(CONTEXT, SPEC, SPEC.agents().getFirst()))
+        .doesNotContain("Lo aprendido")
+        .doesNotContain("skynet:learned");
   }
 }

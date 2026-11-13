@@ -26,6 +26,12 @@ class LessonController {
     return lessons.ofProject(id, status);
   }
 
+  /** Las lecciones de todos los proyectos activos (AP-C). */
+  @GetMapping("/api/factory/lessons")
+  List<Lessons.LessonView> all(@RequestParam(required = false) String status) {
+    return lessons.all(status);
+  }
+
   @GetMapping("/api/lessons/{id}")
   Lessons.LessonDetail detail(@PathVariable UUID id) {
     return lessons.detail(id);

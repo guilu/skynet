@@ -16,6 +16,7 @@ import { RunnersPage } from './pages/RunnersPage'
 import { UsagePage } from './pages/UsagePage'
 import { FactoryPage } from './pages/FactoryPage'
 import { JudgesPage } from './pages/JudgesPage'
+import { LessonsPage } from './pages/LessonsPage'
 import { ResultsPage } from './pages/ResultsPage'
 import { ProvidersPage } from './pages/ProvidersPage'
 import { MaintenancePage } from './pages/MaintenancePage'
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="/runs" element={<FactoryPage />} />
             <Route path="/results" element={<ResultsPage />} />
             <Route path="/judges" element={<JudgesPage />} />
+            <Route path="/lessons" element={<LessonsPage />} />
             <Route
               path="/runs/:runId"
               element={

@@ -59,4 +59,19 @@ class RepositoryReviewTest {
     assertThat(RepositoryReview.expand("Implementa", worktree))
         .isEqualTo(new RepositoryReview.Expanded("Implementa", null));
   }
+
+  @Test
+  void theLearnedLineSaysHowManyCriteriaThePromptCarriesAndIsRemoved() {
+    String prompt =
+        "Juzga\n\n## Lo aprendido en este repositorio\n\nNo señales A\n\nNo señales B\n"
+            + StartAgent.learnedMarker(2)
+            + "\n## Los hallazgos\n";
+    assertThat(RepositoryReview.learned(prompt)).isEqualTo(2);
+    assertThat(RepositoryReview.withoutLearned(prompt))
+        .isEqualTo(
+            "Juzga\n\n## Lo aprendido en este repositorio\n\nNo señales A\n\nNo señales B\n"
+                + "\n## Los hallazgos\n");
+    assertThat(RepositoryReview.learned("Implementa")).isZero();
+    assertThat(RepositoryReview.withoutLearned("Implementa")).isEqualTo("Implementa");
+  }
 }

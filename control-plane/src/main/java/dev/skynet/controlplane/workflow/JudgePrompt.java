@@ -66,7 +66,50 @@ final class JudgePrompt {
       int round,
       String extra,
       List<String> seen,
-      String previousHead) {
+      String previousHead,
+      List<String> learned) {
+
+    Context {
+      learned = learned == null ? List.of() : List.copyOf(learned);
+    }
+
+    Context(
+        String workItemKey,
+        String title,
+        String description,
+        String baseCommit,
+        List<Check> checks,
+        int round,
+        String extra,
+        List<String> seen,
+        String previousHead) {
+      this(
+          workItemKey,
+          title,
+          description,
+          baseCommit,
+          checks,
+          round,
+          extra,
+          seen,
+          previousHead,
+          List.of());
+    }
+
+    /** El mismo contexto con los criterios aprendidos del repositorio (AP-C). */
+    Context withLearned(List<String> criteria) {
+      return new Context(
+          workItemKey,
+          title,
+          description,
+          baseCommit,
+          checks,
+          round,
+          extra,
+          seen,
+          previousHead,
+          criteria);
+    }
 
     Context(
         String workItemKey,
@@ -76,11 +119,40 @@ final class JudgePrompt {
         List<Check> checks,
         int round,
         String extra) {
-      this(workItemKey, title, description, baseCommit, checks, round, extra, List.of(), null);
+      this(
+          workItemKey,
+          title,
+          description,
+          baseCommit,
+          checks,
+          round,
+          extra,
+          List.of(),
+          null,
+          List.of());
     }
   }
 
   private JudgePrompt() {}
+
+  /**
+   * Los criterios aprendidos del repositorio (AP-C): las lecciones «no señalar» que una persona
+   * aplicó. Van justo debajo de los de {@code REVIEW.md}, que el runner pone en el sitio de {@link
+   * StartAgent#REVIEW_MARKER}, con una línea que le dice al runner cuántos son.
+   */
+  static void learned(StringBuilder out, List<String> criteria) {
+    if (criteria.isEmpty()) {
+      return;
+    }
+    out.append("\n## Lo aprendido en este repositorio\n\n");
+    out.append(
+        "Una persona ha revisado hallazgos de otras ejecuciones de este repositorio y ha decidido"
+            + " que esto no es un fallo aquí. Tenlo en cuenta junto a la rúbrica:\n");
+    for (String criterion : criteria) {
+      out.append('\n').append(criterion.strip()).append('\n');
+    }
+    out.append(StartAgent.learnedMarker(criteria.size()));
+  }
 
   /**
    * El prompt de un escéptico (VA-C): solo el hallazgo, de dónde sale el cambio y el worktree. Ni
@@ -109,6 +181,7 @@ final class JudgePrompt {
     }
     out.append("Lee el código que haga falta, los tests incluidos.\n");
     out.append(StartAgent.REVIEW_MARKER);
+    learned(out, context.learned());
     out.append(
         "\n## Qué contestar\n\nRefútalo (`refuted: true`) solo si puedes demostrar con el código"
             + " que no pasa: el caso ya está tratado, no se puede dar, el fichero no es el que dice o"
@@ -232,6 +305,7 @@ final class JudgePrompt {
             + JudgeSpec.REQUIRED_MINIMUM
             + " y sin nada que bloquee.\n");
     out.append(StartAgent.REVIEW_MARKER);
+    learned(out, context.learned());
     out.append("\n## Los hallazgos\n\n");
     out.append(
         "Apunta cada problema concreto con su fichero, la línea si la sabes, su gravedad"
