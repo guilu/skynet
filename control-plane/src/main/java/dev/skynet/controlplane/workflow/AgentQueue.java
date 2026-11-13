@@ -235,7 +235,7 @@ class AgentQueue {
                 run.getId(),
                 workItem.getKey(),
                 repository.getLocalPath(),
-                repository.getDefaultBranch(),
+                invocation.baseRef() != null ? invocation.baseRef() : repository.getDefaultBranch(),
                 invocation.sessionId(),
                 sent,
                 policy.allowedTools(),

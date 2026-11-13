@@ -95,7 +95,8 @@ class RunEvaluator {
       if (locked.isEmpty()) {
         return skipIfBusy && steps.exists(runId) ? Outcome.RETRY_LATER : Outcome.DONE;
       }
-      if (locked.get().status().isTerminal()) {
+      if (locked.get().status().isTerminal() || locked.get().eval()) {
+        // Una ejecución de evaluación (EV-C) no sigue su workflow: la lleva Evals.
         return Outcome.DONE;
       }
       RunState state = locked.get();

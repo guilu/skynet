@@ -1865,6 +1865,139 @@ class WorkflowEngineIT extends IntegrationTest {
   }
 
   @Test
+  void aJudgedChangeIsRepeatedWithTwoJudgesInAnEvalRunOfItsOwn() {
+    String definitionId = publish(JUDGED.replace("id: juzgada", "id: evaluada"));
+    Runner runner = register("laptop");
+    JsonNode launched = launch(definitionId, Map.of());
+    String runId = launched.path("id").asString();
+    complete(runner, runner.claim().getFirst(), "/w/eng/implement");
+    verified(runner, runner.claim().getFirst(), true);
+    complete(runner, runner.claim().getFirst(), "/w/eng/juez", verdict(5, 5, List.of()));
+    complete(runner, runner.claim().getFirst(), "/w/eng/entregar");
+    String head = "c".repeat(40);
+    jdbc.sql("UPDATE stage_judge SET judged_sha = ? WHERE workflow_run_id = ?::uuid")
+        .param(head)
+        .param(runId)
+        .update();
+
+    // EV-C: la ejecución entra en el banco como control (un buen juez la aprueba).
+    JsonNode added =
+        post(
+            "/api/workflow-runs/" + runId + "/eval-case",
+            Map.of("expected", "debe-aprobar", "note", "Control"));
+    String caseId = added.path("id").asString();
+    assertThat(added.path("stageKey").asString()).isEqualTo("juzgar");
+    assertThat(added.path("baseSha").asString()).isEqualTo("abc1234");
+    assertThat(added.path("headSha").asString()).isEqualTo(head);
+    assertThat(added.path("fromEscape").asBoolean()).isFalse();
+    assertConflict(
+        () ->
+            post("/api/workflow-runs/" + runId + "/eval-case", Map.of("expected", "debe-aprobar")));
+    assertBadRequest(
+        () -> post("/api/workflow-runs/" + runId + "/eval-case", Map.of("expected", "quizá")),
+        "`expected`");
+    JsonNode options = get("/api/eval-cases/" + caseId + "/judges");
+    JsonNode juez = null;
+    for (JsonNode o : options) {
+      if (o.path("agent").asString().equals("juez")) juez = o;
+    }
+    assertThat(juez).isNotNull();
+    assertThat(juez.path("judge").asBoolean()).isTrue();
+    assertThat(juez.path("lens").asString()).isEqualTo("correctness");
+
+    // A/B: el mismo juez con su modelo y con otro.
+    JsonNode runs =
+        post(
+            "/api/eval-cases/" + caseId + "/runs",
+            Map.of(
+                "judges",
+                List.of(Map.of("agent", "juez"), Map.of("agent", "juez", "model", "modelo-b"))));
+    assertThat(runs).hasSize(2);
+    assertThat(runs.get(0).path("pairId").asString())
+        .isNotBlank()
+        .isEqualTo(runs.get(1).path("pairId").asString());
+    String evalRunId = runs.get(0).path("workflowRunId").asString();
+    assertThat(evalRunId)
+        .isNotEqualTo(runId)
+        .isEqualTo(runs.get(1).path("workflowRunId").asString());
+    List<JsonNode> commands = new ArrayList<>();
+    await(
+        () -> {
+          commands.addAll(runner.claim());
+          return commands.size() >= 2;
+        });
+    for (JsonNode command : commands) {
+      JsonNode start = command.path("start");
+      // Un worktree nuevo en el commit juzgado, en solo lectura, con el diff contra la base.
+      assertThat(start.path("baseBranch").asString()).isEqualTo(head);
+      assertThat(start.path("workspace").isMissingNode() || start.path("workspace").isNull())
+          .isTrue();
+      assertThat(start.path("permissionMode").asString()).isEqualTo("plan");
+      assertThat(taskPrompt(start)).contains("`git diff abc1234`");
+      boolean b = "modelo-b".equals(start.path("model").asString());
+      complete(
+          runner,
+          command,
+          "/w/eng/eval-" + (b ? "b" : "a"),
+          b
+              ? verdict(1, 1, List.of(Map.of("severity", "blocking", "text", "No resuelve nada")))
+              : verdict(5, 5, List.of()));
+    }
+
+    JsonNode bank = get("/api/factory/evals");
+    assertThat(bank.path("cases")).hasSize(1);
+    JsonNode repeated = bank.path("cases").get(0).path("runs");
+    assertThat(repeated).hasSize(2);
+    for (JsonNode r : repeated) {
+      assertThat(r.path("status").asString()).isEqualTo("DONE");
+      boolean b = "modelo-b".equals(r.path("model").asString());
+      assertThat(r.path("passed").asBoolean()).isEqualTo(!b);
+      assertThat(r.path("correct").asBoolean()).isEqualTo(!b);
+      assertThat(r.path("findings")).hasSize(b ? 1 : 0);
+    }
+    assertThat(bank.path("accuracy")).hasSize(2);
+    assertThat(bank.path("accuracy").get(0).path("ratio").asDouble()).isEqualTo(1.0);
+    assertThat(bank.path("accuracy").get(1).path("ratio").asDouble()).isZero();
+
+    // La ejecución de evaluación termina sola y no sale con las del trabajo.
+    await(
+        () -> get("/api/workflow-runs/" + evalRunId).path("status").asString().equals("SUCCEEDED"));
+    String workItemId = get("/api/workflow-runs/" + runId).path("workItemId").asString();
+    assertThat(get("/api/work-items/" + workItemId + "/runs").findValuesAsString("id"))
+        .contains(runId)
+        .doesNotContain(evalRunId);
+    assertThat(eventTypes(evalRunId)).contains("eval.started", "eval.judged");
+    assertThat(eventTypes(runId)).contains("eval.case.created");
+    assertThat(get("/api/workflow-runs/" + runId + "/eval-case")).hasSize(1);
+
+    http.delete().uri("/api/eval-cases/" + caseId).retrieve().toBodilessEntity();
+    assertThat(get("/api/factory/evals").path("cases")).isEmpty();
+
+    // Un escape (EV-A) entra solo en el banco, como algo que el juez debería haber suspendido.
+    jdbc.sql(
+            """
+            INSERT INTO github_pull_request (id, workflow_run_id, repository_id, stage_run_id,
+              agent_run_id, full_name, branch, base, title, body, status, head_sha, number, url,
+              merged_sha, created_at, updated_at)
+            SELECT gen_random_uuid(), r.id, r.repository_id, s.id, a.id, 'guilu/demo-repo',
+              'skynet/ev-c', 'main', 'Prueba', '', 'MERGED', ?, 77,
+              'https://github.com/guilu/demo-repo/pull/77', repeat('e', 40), now(), now()
+            FROM workflow_run r JOIN stage_run s ON s.workflow_run_id = r.id
+            JOIN agent_run a ON a.stage_run_id = s.id WHERE r.id = ?::uuid LIMIT 1
+            """)
+        .param("d".repeat(40))
+        .param(runId)
+        .update();
+    post("/api/workflow-runs/" + runId + "/escapes", Map.of("note", "Rompió la exportación"));
+    JsonNode fromEscape = get("/api/factory/evals").path("cases");
+    assertThat(fromEscape).hasSize(1);
+    assertThat(fromEscape.get(0).path("expected").asString()).isEqualTo("debe-suspender");
+    assertThat(fromEscape.get(0).path("fromEscape").asBoolean()).isTrue();
+    // La PR da el commit que se juzgó.
+    assertThat(fromEscape.get(0).path("headSha").asString()).isEqualTo("d".repeat(40));
+  }
+
+  @Test
   void aJudgeThatKeepsFailingFailsTheStageAfterItsRounds() {
     String definitionId = publish(JUDGED.replace("maxRounds: 2", "maxRounds: 1"));
     Runner runner = register("laptop");

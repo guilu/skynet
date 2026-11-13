@@ -147,6 +147,29 @@ describe('La tarjeta de la PR', () => {
     )
   })
 
+  it('una PR fusionada se añade al banco de evaluaciones como control (EV-C)', async () => {
+    const fetch = vi.fn(
+      mockFetch({
+        '/api/workflow-runs/r1/pull-requests': [{ ...pr, status: 'MERGED' }],
+        '/api/workflow-runs/r1/ci-checks': [],
+        '/api/workflow-runs/r1/merges': [],
+        '/api/workflow-runs/r1/escapes': [],
+        '/api/workflow-runs/r1/eval-case': [],
+        'POST /api/workflow-runs/r1/eval-case': {},
+      }),
+    )
+    vi.stubGlobal('fetch', fetch)
+    renderAt('/', <PullRequestCard run={run} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Añadir al banco como control' }))
+    await waitFor(() => {
+      const call = fetch.mock.calls.find(
+        ([url, init]) => String(url).endsWith('/r1/eval-case') && init?.method === 'POST',
+      )
+      expect(call && JSON.parse(String(call[1]?.body))).toEqual({ expected: 'debe-aprobar' })
+    })
+  })
+
   it('una PR fusionada sin escape se puede marcar con una nota', async () => {
     const fetch = vi.fn(
       mockFetch({

@@ -44,6 +44,8 @@ public class AgentRun {
   /** El agente que ejecuta la guía de pruebas de una fase {@code verification} (VA-D). */
   public static final String ROLE_GUIDE = "guide";
 
+  public static final String ROLE_EVAL = "eval";
+
   @Id private final UUID id;
   private final UUID stageRunId;
   private final UUID parentAgentRunId;
@@ -140,7 +142,7 @@ public class AgentRun {
 
   /**
    * Qué hace en su fase: {@code null} para el agente de siempre, {@link #ROLE_JUDGE} (VA-B), {@link
-   * #ROLE_SKEPTIC} (VA-C) o {@link #ROLE_GUIDE} (VA-D).
+   * #ROLE_SKEPTIC} (VA-C), {@link #ROLE_GUIDE} (VA-D) o {@link #ROLE_EVAL} (EV-C).
    */
   private String role;
 
@@ -702,6 +704,15 @@ public class AgentRun {
   /** La invocación ejecuta una guía de pruebas (VA-D). */
   void asGuide() {
     this.role = ROLE_GUIDE;
+  }
+
+  /** Es un juez que repite un caso del banco de evaluaciones (EV-C), fuera de un workflow. */
+  public boolean isEval() {
+    return ROLE_EVAL.equals(role);
+  }
+
+  void asEval() {
+    this.role = ROLE_EVAL;
   }
 
   public String getBaseCommit() {

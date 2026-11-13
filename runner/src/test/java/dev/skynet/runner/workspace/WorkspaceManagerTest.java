@@ -39,6 +39,41 @@ class WorkspaceManagerTest {
   }
 
   @Test
+  void createsAWorktreeFromACommitAndFetchesItWhenMissing() throws Exception {
+    Path origin = TestRepos.create(dir.resolve("origin"));
+    Files.writeString(origin.resolve("nuevo.txt"), "en el remoto\n");
+    TestRepos.git(origin, "add", "nuevo.txt");
+    TestRepos.git(origin, "commit", "-q", "-m", "Nuevo");
+    String sha = TestRepos.git(origin, "rev-parse", "HEAD");
+    TestRepos.git(origin, "checkout", "-q", "-b", "otra");
+    TestRepos.git(origin, "branch", "-q", "-f", "main", "HEAD~1");
+    // El commit solo queda en la rama `otra` del remoto; el clon no la trae.
+    Path clone = dir.resolve("clone");
+    TestRepos.git(
+        dir,
+        "clone",
+        "-q",
+        "--single-branch",
+        "--branch",
+        "main",
+        origin.toString(),
+        clone.toString());
+    assertThat(TestRepos.git(clone, "cat-file", "-t", "HEAD")).isEqualTo("commit");
+    WorkspaceManager manager = new WorkspaceManager(dir.resolve("workspaces"));
+
+    Workspace ws = manager.create(clone, sha, UUID.randomUUID(), "TKM-1", UUID.randomUUID());
+
+    assertThat(ws.baseCommit()).isEqualTo(sha);
+    assertThat(Files.readString(ws.path().resolve("nuevo.txt"))).contains("en el remoto");
+    assertThatThrownBy(
+            () ->
+                manager.create(
+                    clone, "b".repeat(40), UUID.randomUUID(), "TKM-1", UUID.randomUUID()))
+        .isInstanceOf(IOException.class)
+        .hasMessageContaining("no tiene el commit " + "b".repeat(40));
+  }
+
+  @Test
   void removeDeletesTheWorktreeButKeepsTheBranch() throws Exception {
     Path repo = TestRepos.create(dir.resolve("repo"));
     WorkspaceManager manager = new WorkspaceManager(dir.resolve("workspaces"));

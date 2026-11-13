@@ -42,6 +42,7 @@ export const NAV_AREAS: NavArea[] = [
       { to: '/results', label: 'Resultados', icon: 'branch' },
       { to: '/judges', label: 'Jueces', icon: 'verification' },
       { to: '/lessons', label: 'Lecciones', icon: 'memory' },
+      { to: '/evals', label: 'Evaluaciones', icon: 'circle-ok' },
     ],
   },
   {

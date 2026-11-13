@@ -65,7 +65,7 @@ public class RunSteps {
   private final RunQueue queue;
 
   /** Una ejecución bloqueada por el motor. */
-  public record RunState(UUID runId, UUID definitionId, WorkflowRunStatus status) {}
+  public record RunState(UUID runId, UUID definitionId, WorkflowRunStatus status, boolean eval) {}
 
   /**
    * Una fase de la ejecución: su último intento y si ya tiene agente.
@@ -222,7 +222,7 @@ public class RunSteps {
       return Optional.empty();
     }
     WorkflowRun run = workflowRuns.findById(runId).orElseThrow();
-    return Optional.of(new RunState(runId, run.getDefinitionId(), run.getStatus()));
+    return Optional.of(new RunState(runId, run.getDefinitionId(), run.getStatus(), run.isEval()));
   }
 
   /**

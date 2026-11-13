@@ -42,7 +42,7 @@ public class WorkspaceQueries {
           + " WHERE w.archived_at IS NULL AND p.archived_at IS NULL %s),"
           + " runs AS (SELECT r.id, r.work_item_id, r.status, r.created_at, r.definition_id"
           + " FROM workflow_run r JOIN items i ON i.id = r.work_item_id"
-          + " WHERE r.archived_at IS NULL)"
+          + " WHERE r.archived_at IS NULL AND r.purpose IS NULL)"
           + " SELECT i.*, repo.name AS repository_name,"
           + " (SELECT count(*) FROM runs WHERE runs.work_item_id = i.id) AS attempts,"
           + " (SELECT sum(a.cost_usd) FROM agent_run a JOIN stage_run s ON s.id = a.stage_run_id"
@@ -105,6 +105,7 @@ public class WorkspaceQueries {
                     + " (SELECT count(*) FROM workflow_run x JOIN work_item w"
                     + " ON w.id = x.work_item_id WHERE x.repository_id = r.id"
                     + " AND x.status IN ('PENDING', 'RUNNING') AND x.archived_at IS NULL"
+                    + " AND x.purpose IS NULL"
                     + " AND w.archived_at IS NULL) AS active_runs,"
                     + " (SELECT count(*) FROM github_pull_request g WHERE g.repository_id = r.id"
                     + " AND g.status = 'OPEN') AS open_prs,"
@@ -130,7 +131,8 @@ public class WorkspaceQueries {
     // Cifras del proyecto sobre sus ejecuciones no archivadas.
     String runs =
         "FROM workflow_run x JOIN work_item w ON w.id = x.work_item_id"
-            + " WHERE w.project_id = :project AND x.archived_at IS NULL AND w.archived_at IS NULL";
+            + " WHERE w.project_id = :project AND x.archived_at IS NULL AND w.archived_at IS NULL"
+            + " AND x.purpose IS NULL";
     Map<String, Object> totals =
         jdbc.sql(
                 "SELECT (SELECT count(*) "

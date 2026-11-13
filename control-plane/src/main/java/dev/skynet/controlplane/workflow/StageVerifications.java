@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 /**
@@ -39,6 +40,7 @@ class StageVerifications {
   private final RunTransitions transitions;
   private final ProjectService projects;
   private final StageJudges judges;
+  private final ApplicationEventPublisher publisher;
 
   StageVerifications(
       AgentRunRepository agentRuns,
@@ -50,7 +52,9 @@ class StageVerifications {
       VerificationService verificationService,
       RunTransitions transitions,
       ProjectService projects,
-      StageJudges judges) {
+      StageJudges judges,
+      ApplicationEventPublisher publisher) {
+    this.publisher = publisher;
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
     this.workflowRuns = workflowRuns;
@@ -74,6 +78,11 @@ class StageVerifications {
    * cierra la fase si ya puede.
    */
   void afterAgent(AgentRun agent, StageRun stage, Instant now) {
+    if (agent.isEval()) {
+      // Un juez del banco de evaluaciones (EV-C): lo recoge Evals, fuera del workflow.
+      publisher.publishEvent(new EvalAgentFinished(agent.getId(), now));
+      return;
+    }
     StageDefinition definition = definitionOf(stage);
     if (agent.isJudge() || agent.isSkeptic() || agent.isGuide()) {
       // Un juez, un escéptico o quien ejecuta la guía trabajan en una copia que no llega al

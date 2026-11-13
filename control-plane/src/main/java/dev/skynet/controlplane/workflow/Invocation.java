@@ -33,7 +33,8 @@ record Invocation(
     UUID runnerId,
     String command,
     PushBranch push,
-    Replacing replacing) {
+    Replacing replacing,
+    String baseRef) {
 
   /**
    * El proveedor al que sustituye una reserva (CQ-B).
@@ -43,6 +44,35 @@ record Invocation(
    * @param resetsAt cuándo se renueva, o {@code null} si no se sabe
    */
   record Replacing(String provider, String window, Instant resetsAt) {}
+
+  Invocation(
+      AgentRunKind kind,
+      AgentRun parent,
+      UUID sessionId,
+      String prompt,
+      EffectivePolicy policy,
+      UUID workspaceId,
+      ResumeFrom resume,
+      WorkspaceRef workspace,
+      UUID runnerId,
+      String command,
+      PushBranch push,
+      Replacing replacing) {
+    this(
+        kind,
+        parent,
+        sessionId,
+        prompt,
+        policy,
+        workspaceId,
+        resume,
+        workspace,
+        runnerId,
+        command,
+        push,
+        replacing,
+        null);
+  }
 
   Invocation(
       AgentRunKind kind,
@@ -115,6 +145,27 @@ record Invocation(
     return new Invocation(kind, parent, UUID.randomUUID(), prompt, policy, null, null, null, null);
   }
 
+  /**
+   * Sesión nueva en un worktree nuevo creado desde el commit {@code ref}, en cualquier runner
+   * (EV-C: repetir el juez de un cambio ya juzgado).
+   */
+  static Invocation freshAt(String prompt, EffectivePolicy policy, String ref) {
+    return new Invocation(
+        AgentRunKind.START,
+        null,
+        UUID.randomUUID(),
+        prompt,
+        policy,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        ref);
+  }
+
   /** Sesión nueva en el worktree {@code workspace}, en su runner. */
   static Invocation inWorkspace(String prompt, EffectivePolicy policy, WorkspaceView workspace) {
     return new Invocation(
@@ -167,7 +218,8 @@ record Invocation(
         runnerId,
         command,
         push,
-        replacing);
+        replacing,
+        baseRef);
   }
 
   /** La misma invocación con {@code note} detrás del prompt; un comando no lleva prompt. */
@@ -187,7 +239,8 @@ record Invocation(
         runnerId,
         command,
         push,
-        replacing);
+        replacing,
+        baseRef);
   }
 
   /**
@@ -207,7 +260,8 @@ record Invocation(
         runnerId,
         command,
         push,
-        replaced);
+        replaced,
+        baseRef);
   }
 
   /**

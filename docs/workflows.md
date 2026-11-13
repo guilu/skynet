@@ -530,6 +530,21 @@ stages:
 - Con menos de 10 desenlaces, «pocos datos». Un juez que aprobó sin decir nada también tiene fila, con 0 hallazgos.
 - Al elegir una fila sale su **calibración**: lo que aprobó por tramo de nota (`< 4`, `4–4,5` y `≥ 4,5`) y cuánto se quedó en cada uno. Si un 4,8 se revierte igual que un 4,1, la nota no dice nada. Debajo, sus últimos 5 escapes con el enlace a la ejecución.
 
+**Banco de evaluaciones** (EV-C). **Fábrica → Evaluaciones** guarda cambios ya juzgados para volver a juzgarlos con otro juez o con otro modelo, y ver si aciertan:
+
+- **Un caso** es una ejecución con juez: su repositorio, el commit que se juzgó (`head_sha`: el de su PR o, sin PR, el que vio el juez), la base del diff (`base_sha`), la tarea y la fase de juez, que da la rúbrica.
+- **Lo esperado:**
+  - `debe-suspender`: cada escape (EV-A) entra solo en el banco, como algo que el juez debería haber suspendido;
+  - `debe-aprobar`: un control que se añade a mano, desde la tarjeta de la PR fusionada («Añadir al banco como control») o con la API.
+- Hay un caso por ejecución.
+- **Repetir con…**: lanza el caso con uno o dos jueces (A/B), elegidos entre los agentes del workflow del caso, con otro modelo si se quiere.
+  - Cada repetición va en una **ejecución de evaluación** propia (`workflow_run.purpose = 'eval'`), con una sola fase: el motor no la planifica, termina cuando acaban sus jueces y no sale en las listas, el panel ni las métricas de los trabajos. Su página es la de siempre.
+  - Cada juez es una invocación como las de una fase `verification`: solo lectura (`plan`), sin memoria, con la salida estructurada y el prompt del juez (con lo aprendido, AP-C). Trabaja en un worktree **nuevo** creado desde `head_sha` y hace `git diff base_sha`. Si el repositorio del runner no tiene ese commit, lo trae de `origin`.
+  - No lleva escépticos: se mide al juez solo.
+  - Al terminar se guardan su nota, si aprueba, sus hallazgos y **si acertó**: si suspendió un `debe-suspender` o aprobó un `debe-aprobar`. Un juez que no da su veredicto cuenta como «sin veredicto».
+- **Coste:** cada repetición es una invocación real del modelo. Solo se lanza a mano, caso a caso o el banco entero de un repositorio, y antes de lanzar se dice cuántas invocaciones serán.
+- Arriba, el **acierto** de cada juez y modelo en el banco.
+
 **La clase de cada hallazgo** (AP-A). Además de su gravedad, el juez dice la clase de cada hallazgo (`category`), de una lista cerrada que su prompt explica en una línea cada una. La lista es cerrada para poder contar lo que se repite en un repositorio:
 
 - `tests`: falta un test o el que hay no prueba lo que dice;
@@ -824,6 +839,12 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `POST` | `/api/workflow-runs/{id}/escapes` | Marca a mano que se le escapó un fallo al juez (`{note}`, opcional); 409 si no fusionó ninguna PR o ya tiene escape |
 | `DELETE` | `/api/escapes/{id}` | Quita un escape: no fue un fallo del juez |
 | `GET` | `/api/factory/escapes?days=30` | Los escapes de los últimos días, del más reciente al más antiguo |
+| `GET` | `/api/factory/evals?repositoryId=` | El banco de evaluaciones (EV-C): los casos con sus repeticiones y el acierto de cada juez y modelo |
+| `GET`, `POST` | `/api/workflow-runs/{id}/eval-case` | El caso de la ejecución (lista vacía o con él); añadirla al banco con `{expected, note}` (`debe-suspender` o `debe-aprobar`) |
+| `GET`, `DELETE` | `/api/eval-cases/{id}` | Un caso; quitarlo del banco |
+| `GET` | `/api/eval-cases/{id}/judges` | Los agentes del workflow del caso que pueden juzgarlo |
+| `POST` | `/api/eval-cases/{id}/runs` | Repetir el caso con `{judges: [{agent, model?, provider?}]}`, uno o dos (A/B) |
+| `POST` | `/api/factory/evals/runs` | Repetir todos los casos de `{repositoryId}` con los mismos `judges` |
 | `GET` | `/api/projects/{id}/lessons?status=` | Las lecciones del proyecto, de la más reciente a la más antigua (AP-B); `status`: `propuesta`, `aplicada` o `descartada` |
 | `GET` | `/api/lessons/{id}` | Una lección (`lesson`) con los hallazgos que la justifican y su ejecución (`findings`) |
 | `POST` | `/api/lessons/{id}/apply` | Aplica una lección propuesta (`{text}`, opcional: si falta, el propuesto); 409 si ya está decidida |

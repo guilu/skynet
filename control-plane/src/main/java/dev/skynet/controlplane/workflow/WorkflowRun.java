@@ -25,6 +25,14 @@ public class WorkflowRun {
   private Instant startedAt;
   private Instant finishedAt;
 
+  /**
+   * Para qué es: {@code null} una ejecución de siempre, {@link #PURPOSE_EVAL} una de evaluación del
+   * juez (EV-C), que lleva solo sus jueces y no sale en las listas. Lo escribe el INSERT de Evals.
+   */
+  @ReadOnlyProperty private String purpose;
+
+  static final String PURPOSE_EVAL = "eval";
+
   /** Se pidió cancelarla y aún no ha terminado: «Cancelando» (W6-B). */
   private Instant cancelRequestedAt;
 
@@ -81,6 +89,11 @@ public class WorkflowRun {
 
   public UUID getId() {
     return id;
+  }
+
+  /** Es una ejecución de evaluación del juez (EV-C): el motor no la planifica. */
+  public boolean isEval() {
+    return PURPOSE_EVAL.equals(purpose);
   }
 
   public UUID getWorkItemId() {
