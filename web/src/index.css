@@ -3513,6 +3513,60 @@
     margin-top: var(--space-4);
   }
 
+  /* EV-C: el banco de evaluaciones. Un caso con sus repeticiones; las dos de un A/B, juntas. */
+  .eval-case {
+    display: grid;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+  }
+
+  .eval-case-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .eval-case-head h2 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .eval-pair {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: var(--space-2);
+  }
+
+  .eval-run {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .eval-run p {
+    margin: 0 0 var(--space-1);
+  }
+
+  .eval-repeat {
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .eval-repeat h3 {
+    margin: 0;
+    font-size: 0.95rem;
+  }
+
+  .eval-repeat-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
   /* EV-B: la calibración de un juez, lo que aprobó por tramo de nota. */
   .judge-calibration {
     border-collapse: collapse;

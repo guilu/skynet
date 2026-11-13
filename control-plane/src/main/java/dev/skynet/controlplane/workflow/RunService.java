@@ -1213,6 +1213,8 @@ public class RunService {
     return views(
         workflowRuns.findByWorkItemIdOrderByCreatedAtDesc(workItemId).stream()
             .filter(r -> archived.accepts(r.getArchivedAt()))
+            // Las de evaluación del juez (EV-C) salen en Fábrica › Evaluaciones, no aquí.
+            .filter(r -> !r.isEval())
             .toList());
   }
 
@@ -1394,6 +1396,7 @@ public class RunService {
         " FROM workflow_run r JOIN work_item w ON w.id = r.work_item_id"
             + " JOIN project p ON p.id = w.project_id"
             + " WHERE (CAST(:project AS uuid) IS NULL OR w.project_id = :project)"
+            + " AND r.purpose IS NULL"
             + archived.sql("r.archived_at", "w.archived_at", "p.archived_at")
             + " AND (CAST(:since AS timestamptz) IS NULL OR r.created_at >= :since)"
             + (statuses == null || statuses.isEmpty() ? "" : " AND r.status IN (:statuses)")
@@ -1451,7 +1454,7 @@ public class RunService {
             + " ON s.id = a.stage_run_id WHERE s.workflow_run_id = r.id) AS cost_usd"
             + " FROM workflow_run r JOIN work_item w ON w.id = r.work_item_id"
             + " JOIN project p ON p.id = w.project_id"
-            + " WHERE r.created_at >= :since AND r.created_at <= :until"
+            + " WHERE r.created_at >= :since AND r.created_at <= :until AND r.purpose IS NULL"
             + Archived.EXCLUDE.sql("r.archived_at", "w.archived_at", "p.archived_at")
             + ")";
     RunMetrics totals =

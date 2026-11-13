@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { GitMerge, GitPullRequest, Undo2 } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router'
 import {
   api,
   type EscapeView,
@@ -110,6 +111,7 @@ export function PullRequestCard({ run }: { run: Run }) {
       {pr.status === 'MERGED' && (
         <EscapeSection runId={run.id} escape={data.data?.escapes[0] ?? null} />
       )}
+      {pr.status === 'MERGED' && <EvalBankSection runId={run.id} />}
     </section>
   )
 }
@@ -191,6 +193,47 @@ function EscapeSection({ runId, escape }: { runId: string; escape: EscapeView | 
       <Button size="sm" variant="secondary" onClick={() => setMarking(true)}>
         Marcar como escape
       </Button>
+    </div>
+  )
+}
+
+/**
+ * El banco de evaluaciones (EV-C): si la ejecución ya es un caso, el enlace; si no, añadirla como
+ * control, algo que un buen juez debería aprobar. Un escape entra solo.
+ */
+function EvalBankSection({ runId }: { runId: string }) {
+  const queryClient = useQueryClient()
+  const key = ['eval-case', runId]
+  const current = useQuery({
+    queryKey: key,
+    queryFn: () => api.runEvalCase(runId).catch(() => null),
+  })
+  const add = useMutation({
+    mutationFn: () => api.addEvalCase(runId, 'debe-aprobar'),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: key }),
+  })
+  if (current.data == null) return null
+  const item = current.data[0]
+  return (
+    <div className="finding-actions small">
+      {item ? (
+        <span className="muted">
+          En el <Link to="/evals">banco de evaluaciones</Link>:{' '}
+          {item.expected === 'debe-suspender' ? 'debe suspender' : 'debe aprobar'}
+        </span>
+      ) : (
+        <>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => add.mutate()}
+            disabled={add.isPending}
+          >
+            Añadir al banco como control
+          </Button>
+          <ErrorMessage error={add.error} />
+        </>
+      )}
     </div>
   )
 }

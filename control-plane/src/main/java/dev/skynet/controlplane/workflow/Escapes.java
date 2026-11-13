@@ -56,9 +56,11 @@ class Escapes {
   private final JdbcClient jdbc;
   private final RunTransitions transitions;
   private final TimeSource time;
+  private final Evals evals;
 
-  Escapes(JdbcClient jdbc, RunTransitions transitions, TimeSource time) {
+  Escapes(JdbcClient jdbc, RunTransitions transitions, TimeSource time, Evals evals) {
     this.jdbc = jdbc;
+    this.evals = evals;
     this.transitions = transitions;
     this.time = time;
   }
@@ -217,6 +219,8 @@ class Escapes {
     payload.put("note", note);
     payload.put("actor", actor);
     transitions.append("workflow_run", merged.runId(), "run.escaped", merged.runId(), payload, now);
+    // Cada escape es un caso del banco que el juez debería haber suspendido (EV-C).
+    evals.fromEscape(id, merged.runId(), actor, now);
     return Optional.of(id);
   }
 

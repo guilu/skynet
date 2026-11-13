@@ -1196,6 +1196,86 @@ export interface JudgeEscapeSample {
   createdAt: string
 }
 
+/** Lo que debería decir un buen juez de un caso del banco (EV-C). */
+export type EvalExpected = 'debe-suspender' | 'debe-aprobar'
+
+/** Una repetición de un caso con un juez (EV-C). */
+export interface EvalRunView {
+  id: string
+  caseId: string
+  /** Las dos de un A/B lo comparten. */
+  pairId: string | null
+  judge: string
+  lens: string | null
+  provider: string | null
+  model: string | null
+  /** La ejecución de evaluación que la lleva. */
+  workflowRunId: string | null
+  agentRunId: string | null
+  status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED'
+  score: number | null
+  passed: boolean | null
+  /** Si dijo lo esperado. */
+  correct: boolean | null
+  findings: { file?: string | null; line?: number | null; severity: string; text: string }[]
+  summary: string | null
+  error: string | null
+  costUsd: number | null
+  createdAt: string
+}
+
+/** Un caso del banco de evaluaciones (EV-C): un cambio juzgado para volver a juzgarlo. */
+export interface EvalCase {
+  id: string
+  runId: string
+  repositoryId: string
+  repositoryName: string
+  workItemKey: string
+  title: string
+  stageKey: string
+  baseSha: string
+  headSha: string
+  expected: EvalExpected
+  fromEscape: boolean
+  note: string | null
+  createdBy: string
+  createdAt: string
+  runs: EvalRunView[]
+}
+
+/** Cuánto acierta un juez con un modelo en el banco. */
+export interface EvalAccuracy {
+  judge: string
+  provider: string | null
+  model: string | null
+  runs: number
+  correct: number
+  failed: number
+  ratio: number
+}
+
+export interface EvalBank {
+  cases: EvalCase[]
+  accuracy: EvalAccuracy[]
+}
+
+/** Un agente del workflow del caso que puede juzgarlo. */
+export interface EvalJudgeOption {
+  agent: string
+  lens: string | null
+  provider: string | null
+  model: string | null
+  /** Es uno de los jueces de la fase. */
+  judge: boolean
+}
+
+export interface EvalJudgeChoice {
+  agent: string
+  lens?: string | null
+  provider?: string | null
+  model?: string | null
+}
+
 /** Un hallazgo del registro (RH-A), con su desenlace. */
 export interface FindingView {
   id: string
@@ -2358,6 +2438,22 @@ export const api = {
       'GET',
       `/api/factory/judges?days=${days}${category ? `&category=${category}` : ''}`,
     ),
+  evalBank: (repositoryId?: string) =>
+    request<EvalBank>(
+      'GET',
+      `/api/factory/evals${repositoryId ? `?repositoryId=${repositoryId}` : ''}`,
+    ),
+  runEvalCase: (runId: string) =>
+    request<EvalCase[]>('GET', `/api/workflow-runs/${runId}/eval-case`),
+  addEvalCase: (runId: string, expected: EvalExpected, note?: string) =>
+    request<EvalCase>('POST', `/api/workflow-runs/${runId}/eval-case`, { expected, note }),
+  removeEvalCase: (id: string) => request<void>('DELETE', `/api/eval-cases/${id}`),
+  evalJudges: (caseId: string) =>
+    request<EvalJudgeOption[]>('GET', `/api/eval-cases/${caseId}/judges`),
+  repeatEvalCase: (caseId: string, judges: EvalJudgeChoice[]) =>
+    request<EvalRunView[]>('POST', `/api/eval-cases/${caseId}/runs`, { judges }),
+  repeatEvalBank: (repositoryId: string, judges: EvalJudgeChoice[]) =>
+    request<EvalRunView[]>('POST', '/api/factory/evals/runs', { repositoryId, judges }),
   lessons: (status?: LessonStatus) =>
     request<Lesson[]>('GET', `/api/factory/lessons${status ? `?status=${status}` : ''}`),
   projectLessons: (projectId: string, status?: LessonStatus) =>

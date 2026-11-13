@@ -43,6 +43,11 @@ public class WorkspaceManager {
     if (Files.exists(path)) {
       throw new IOException("El worktree ya existe: " + path);
     }
+    if (hasBase && SafeIds.isCommit(baseBranch) && baseBranch.length() == 40) {
+      // Un commit concreto (EV-C: repetir el juez de un cambio ya fusionado): si el repositorio
+      // del runner no lo tiene, se trae del remoto.
+      ensureCommit(repository, baseBranch);
+    }
     Files.createDirectories(path.getParent());
     String branch = branchName(workItemKey, agentRunId);
     List<String> add = new ArrayList<>(List.of("worktree", "add", "-b", branch, path.toString()));
@@ -52,6 +57,38 @@ public class WorkspaceManager {
     git(repository, add);
     String baseCommit = git(path, List.of("rev-parse", "HEAD")).trim();
     return new Workspace(path, branch, baseCommit);
+  }
+
+  /**
+   * Comprueba que el repositorio tiene el commit {@code sha} y, si no, lo pide a {@code origin}. Si
+   * tampoco está allí, falla diciéndolo.
+   */
+  static void ensureCommit(Path repository, String sha) throws IOException, InterruptedException {
+    if (hasCommit(repository, sha)) {
+      return;
+    }
+    try {
+      git(repository, List.of("fetch", "--no-tags", "origin", sha));
+    } catch (IOException e) {
+      throw new IOException(
+          "El repositorio del runner no tiene el commit "
+              + sha
+              + " y no se pudo traer: "
+              + e.getMessage(),
+          e);
+    }
+    if (!hasCommit(repository, sha)) {
+      throw new IOException("El repositorio del runner no tiene el commit " + sha);
+    }
+  }
+
+  private static boolean hasCommit(Path repository, String sha) throws InterruptedException {
+    try {
+      git(repository, List.of("cat-file", "-e", sha + "^{commit}"));
+      return true;
+    } catch (IOException e) {
+      return false;
+    }
   }
 
   /**
