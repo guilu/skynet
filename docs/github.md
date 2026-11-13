@@ -35,6 +35,7 @@ Con EN, un workflow entrega su trabajo como una PR: la fase `github-pr` sube la 
 4. **Eventos:**
    - Pull request
    - Pull request review
+   - Push (opcional, EV-A): para ver los reverts que llegan a la rama por defecto sin PR. No pide permisos nuevos. Sin él, los escapes se ven por la PR del revert o se marcan a mano.
    - Check suite
    - Check run
    - Status

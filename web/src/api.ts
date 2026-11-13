@@ -487,6 +487,26 @@ export interface PullRequestView {
   updatedAt: string
 }
 
+/** Un escape del juez (EV-A): lo que aprobó, se fusionó y luego se revirtió o se marcó a mano. */
+export interface EscapeView {
+  id: string
+  runId: string
+  workItemKey: string
+  workItemTitle: string
+  repositoryId: string
+  repositoryName: string
+  pullRequestNumber: number | null
+  pullRequestUrl: string | null
+  mergedSha: string | null
+  origin: 'revert-pr' | 'revert-push' | 'manual'
+  /** La PR del revert (`#13`) o el commit. */
+  seenRef: string | null
+  seenUrl: string | null
+  note: string | null
+  createdBy: string
+  createdAt: string
+}
+
 /** Un check de la CI de un commit, como lo resume Skynet. */
 export interface CiCheck {
   name: string
@@ -2285,6 +2305,10 @@ export const api = {
     request<PullRequestView[]>('GET', `/api/workflow-runs/${runId}/pull-requests`),
   ciChecks: (runId: string) =>
     request<CiCheckView[]>('GET', `/api/workflow-runs/${runId}/ci-checks`),
+  escapes: (runId: string) => request<EscapeView[]>('GET', `/api/workflow-runs/${runId}/escapes`),
+  markEscape: (runId: string, note: string) =>
+    request<EscapeView>('POST', `/api/workflow-runs/${runId}/escapes`, { note }),
+  removeEscape: (id: string) => request<void>('DELETE', `/api/escapes/${id}`),
   merges: (runId: string) => request<MergeView[]>('GET', `/api/workflow-runs/${runId}/merges`),
   assumptions: (runId: string) =>
     request<Assumption[]>('GET', `/api/workflow-runs/${runId}/assumptions`),

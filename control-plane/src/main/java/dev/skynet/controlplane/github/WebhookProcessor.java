@@ -8,6 +8,7 @@ import dev.skynet.controlplane.shared.PayloadRedactor;
 import dev.skynet.controlplane.shared.TimeSource;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -189,7 +190,29 @@ class WebhookProcessor {
                 repository,
                 pr.path("number").asLong(),
                 pr.path("merged").asBoolean(false),
-                pr.path("merge_commit_sha").asString(null)));
+                pr.path("merge_commit_sha").asString(null),
+                name.asString(),
+                pr.path("title").asString(""),
+                pr.path("body").asString(""),
+                pr.path("html_url").asString(null)));
+      }
+    }
+    // Un push a la rama por defecto (EV-A): sus commits, por si alguno revierte una PR de Skynet.
+    String defaultBranch = payload.path("repository").path("default_branch").asString("");
+    if ("push".equals(delivery.event())
+        && !defaultBranch.isEmpty()
+        && ("refs/heads/" + defaultBranch).equals(payload.path("ref").asString(""))
+        && payload.path("commits").isArray()) {
+      List<GitHubPushed.Commit> commits = new ArrayList<>();
+      for (JsonNode commit : payload.path("commits")) {
+        commits.add(
+            new GitHubPushed.Commit(
+                commit.path("id").asString(""),
+                commit.path("message").asString(""),
+                commit.path("url").asString(null)));
+      }
+      for (UUID repository : repositories) {
+        publisher.publishEvent(new GitHubPushed(repository, commits));
       }
     }
     String sha = checkedSha(delivery.event(), payload);

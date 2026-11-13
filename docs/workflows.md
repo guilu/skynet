@@ -565,6 +565,15 @@ Más detalles:
 - **Criterios aprendidos en el juez.** El texto de las lecciones `no-senalar` aplicadas del repositorio entra en el prompt del juez, en «## Lo aprendido en este repositorio», justo debajo de los criterios de `REVIEW.md`. Vale también para los escépticos y los jueces del delta. El juez sigue sin ver la memoria: solo recibe estos criterios.
 - La línea del worktree del juez lo dice: «Worktree listo en la rama …, con los criterios de REVIEW.md y 2 criterios aprendidos».
 
+**Escapes del juez** (EV-A). Un escape es un cambio que el juez aprobó y Skynet fusionó, y que luego se revirtió en la rama por defecto o una persona marcó porque se le escapó un fallo. Hay uno como mucho por ejecución: la PR del revert y el push que deja en la rama por defecto son el mismo.
+
+- **Una PR de revert fusionada:** el título empieza por `Revert "` y la descripción dice `Reverts owner/repo#N` (lo que escribe el botón «Revert» de GitHub), o nombra el commit de la fusión («This reverts commit …»). N tiene que ser una PR que fusionó Skynet.
+- **Un push a la rama por defecto** con un commit «This reverts commit {sha}» que coincide con lo que fusionó Skynet. Necesita el evento **Push** de la App, que es opcional (ver [github.md](github.md)).
+- **A mano:** en la tarjeta de la PR de la ejecución, **Marcar como escape**, con una nota. Solo si la ejecución fusionó una PR.
+- La tarjeta de la PR enseña la banda «Se revirtió en main», con el enlace al revert. **No fue un fallo del juez** lo quita, p. ej. si se revirtió por otro motivo.
+- Eventos: `run.escaped`, en Actividad y como aviso de Skyny salvo si es a mano, y `run.escape.removed`.
+- Skynet solo lo registra: no revierte nada. EV-B lo usará para medir al juez.
+
 **Fusionar la PR.** Una fase `type: github-merge` fusiona la PR de la ejecución, normalmente detrás de su `github-check` y de una puerta que lo aprueba (EN-C):
 
 ```yaml
@@ -802,6 +811,10 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `GET` | `/api/workflow-runs/{id}/findings` | El registro de hallazgos de la ejecución, con su desenlace (RH-A) |
 | `POST` | `/api/findings/{id}/outcome` | Decide qué es un hallazgo (`{outcome: aceptado \| irrelevante \| abierto, reason}`); `abierto` lo deshace y, si la fase ya terminó, lo deja `aparcado` |
 | `GET` | `/api/factory/judges?days=30` | Ruido y acierto de cada juez por proveedor, modelo y lente, con sus últimos hallazgos refutados o que no aplican (RH-C); `days` de 1 a 365; `category` (AP-A) mira una sola clase |
+| `GET` | `/api/workflow-runs/{id}/escapes` | El escape de la ejecución, si lo tiene (EV-A) |
+| `POST` | `/api/workflow-runs/{id}/escapes` | Marca a mano que se le escapó un fallo al juez (`{note}`, opcional); 409 si no fusionó ninguna PR o ya tiene escape |
+| `DELETE` | `/api/escapes/{id}` | Quita un escape: no fue un fallo del juez |
+| `GET` | `/api/factory/escapes?days=30` | Los escapes de los últimos días, del más reciente al más antiguo |
 | `GET` | `/api/projects/{id}/lessons?status=` | Las lecciones del proyecto, de la más reciente a la más antigua (AP-B); `status`: `propuesta`, `aplicada` o `descartada` |
 | `GET` | `/api/lessons/{id}` | Una lección (`lesson`) con los hallazgos que la justifican y su ejecución (`findings`) |
 | `POST` | `/api/lessons/{id}/apply` | Aplica una lección propuesta (`{text}`, opcional: si falta, el propuesto); 409 si ya está decidida |

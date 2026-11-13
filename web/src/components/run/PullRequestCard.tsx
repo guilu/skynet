@@ -1,7 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
-import { GitMerge, GitPullRequest } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { GitMerge, GitPullRequest, Undo2 } from 'lucide-react'
+import { useState } from 'react'
 import {
   api,
+  type EscapeView,
   type CiCheck,
   type CiCheckView,
   type MergeView,
@@ -10,7 +12,10 @@ import {
 } from '../../api'
 import { pullRequestKey } from './pullRequest'
 import type { StatusTone } from '../../format'
+import { ErrorMessage } from '../ErrorMessage'
+import { Button } from '../ui/Button'
 import { Pill } from '../ui/Pill'
+import { formatDateTime } from '../../format'
 
 /**
  * La PR de la ejecución (EN-C): su número con el enlace, la rama, el commit, la CI de ese commit
@@ -20,12 +25,14 @@ export function PullRequestCard({ run }: { run: Run }) {
   const data = useQuery({
     queryKey: pullRequestKey(run.id),
     queryFn: async () => {
-      const [pullRequests, ciChecks, merges] = await Promise.all([
+      const [pullRequests, ciChecks, merges, escapes] = await Promise.all([
         api.pullRequests(run.id),
         api.ciChecks(run.id),
         api.merges(run.id),
+        // Sin los escapes (EV-A), la tarjeta sigue: son un añadido.
+        api.escapes(run.id).catch((): EscapeView[] => []),
       ])
-      return { pullRequests, ciChecks, merges }
+      return { pullRequests, ciChecks, merges, escapes }
     },
   })
   const pr = data.data?.pullRequests[0]
@@ -100,8 +107,98 @@ export function PullRequestCard({ run }: { run: Run }) {
       {ci?.error && <p className="error small">{ci.error}</p>}
       {merge?.error && merge.status === 'FAILED' && <p className="error small">{merge.error}</p>}
       {ci && ci.checks.length > 0 && <CiChecksList checks={ci.checks} />}
+      {pr.status === 'MERGED' && (
+        <EscapeSection runId={run.id} escape={data.data?.escapes[0] ?? null} />
+      )}
     </section>
   )
+}
+
+/**
+ * Si al juez se le escapó algo (EV-A): la banda «Se revirtió en main» con el revert, o la nota de
+ * quien lo marcó, y quitarlo; sin escape, el botón para marcarlo con una nota.
+ */
+function EscapeSection({ runId, escape }: { runId: string; escape: EscapeView | null }) {
+  const queryClient = useQueryClient()
+  const [marking, setMarking] = useState(false)
+  const [note, setNote] = useState('')
+  const refresh = () => {
+    setMarking(false)
+    setNote('')
+    void queryClient.invalidateQueries({ queryKey: pullRequestKey(runId) })
+  }
+  const mark = useMutation({ mutationFn: () => api.markEscape(runId, note), onSuccess: refresh })
+  const remove = useMutation({
+    mutationFn: (id: string) => api.removeEscape(id),
+    onSuccess: refresh,
+  })
+  if (escape) {
+    return (
+      <div className="escape-band" role="status" aria-label="Escape del juez">
+        <Undo2 size={16} aria-hidden="true" />
+        <p className="small">
+          <strong>{ESCAPE_TITLE[escape.origin]}</strong>
+          {escape.seenRef && (
+            <>
+              {' '}
+              {escape.seenUrl ? (
+                <a href={escape.seenUrl} target="_blank" rel="noreferrer">
+                  {escape.origin === 'revert-pr' ? `PR ${escape.seenRef}` : escape.seenRef}
+                </a>
+              ) : (
+                <code>{escape.seenRef}</code>
+              )}
+            </>
+          )}
+          {escape.note && <> · {escape.note}</>}
+          <span className="muted">
+            {' '}
+            · {escape.createdBy === 'skynet' ? 'visto por Skynet' : escape.createdBy} el{' '}
+            {formatDateTime(escape.createdAt)}
+          </span>
+        </p>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => remove.mutate(escape.id)}
+          disabled={remove.isPending}
+        >
+          No fue un fallo del juez
+        </Button>
+        <ErrorMessage error={remove.error} />
+      </div>
+    )
+  }
+  return marking ? (
+    <div className="finding-actions" role="group" aria-label="Marcar como escape">
+      <input
+        className="finding-reason"
+        aria-label="Qué se escapó"
+        placeholder="Qué se escapó (opcional)"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+      />
+      <Button size="sm" onClick={() => mark.mutate()} disabled={mark.isPending}>
+        {mark.isPending ? 'Guardando…' : 'Guardar'}
+      </Button>
+      <Button size="sm" variant="secondary" onClick={() => setMarking(false)}>
+        Cancelar
+      </Button>
+      <ErrorMessage error={mark.error} />
+    </div>
+  ) : (
+    <div className="finding-actions">
+      <Button size="sm" variant="secondary" onClick={() => setMarking(true)}>
+        Marcar como escape
+      </Button>
+    </div>
+  )
+}
+
+const ESCAPE_TITLE: Record<EscapeView['origin'], string> = {
+  'revert-pr': 'Se revirtió en main con la',
+  'revert-push': 'Se revirtió en main con el commit',
+  manual: 'Se le escapó un fallo al juez',
 }
 
 /** Los checks de un commit, uno por línea: su estado con icono y texto, y el enlace. */

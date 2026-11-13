@@ -10,6 +10,10 @@ import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.runner.EventBatch;
 import dev.skynet.protocol.runner.RunnerRegistration;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -81,6 +85,9 @@ class MergeIT extends IntegrationTest {
   @Autowired private CiChecks ciChecks;
   @Autowired private PullRequestMerges merges;
   @Autowired private ApplicationEventPublisher publisher;
+
+  private static final tools.jackson.databind.ObjectMapper json =
+      tools.jackson.databind.json.JsonMapper.builder().build();
 
   private String repositoryId;
   private String workItemId;
@@ -499,6 +506,191 @@ class MergeIT extends IntegrationTest {
     EventBatch batch() {
       return new EventBatch(all);
     }
+  }
+
+  @Test
+  void aRevertInTheDefaultBranchIsAnEscapeOfTheJudge() throws Exception {
+    String runId = untilApproval();
+    approve(get("/api/approvals?status=PENDING").get(0));
+    merges.mergePending();
+    assertThat(get("/api/workflow-runs/" + runId + "/escapes")).isEmpty();
+
+    // La PR que abre el botón «Revert» de GitHub, fusionada (EV-A).
+    signed(
+        "pull_request",
+        "d-revert",
+        Map.of(
+            "action",
+            "closed",
+            "number",
+            13,
+            "pull_request",
+            Map.of(
+                "number",
+                13,
+                "merged",
+                true,
+                "merge_commit_sha",
+                "f".repeat(40),
+                "title",
+                "Revert \"Arreglar add()\"",
+                "body",
+                "Reverts guilu/demo-repo#12\n\nRompía la suma de negativos.",
+                "html_url",
+                "https://github.com/guilu/demo-repo/pull/13"),
+            "repository",
+            Map.of("full_name", "guilu/demo-repo", "default_branch", "main"),
+            "installation",
+            Map.of("id", 7)));
+    JsonNode escape = awaitEscape(runId);
+    assertThat(escape.path("origin").asString()).isEqualTo("revert-pr");
+    assertThat(escape.path("seenRef").asString()).isEqualTo("#13");
+    assertThat(escape.path("seenUrl").asString())
+        .isEqualTo("https://github.com/guilu/demo-repo/pull/13");
+    assertThat(escape.path("pullRequestNumber").asInt()).isEqualTo(12);
+    assertThat(escape.path("mergedSha").asString()).isEqualTo("e".repeat(40));
+    assertThat(escape.path("repositoryName").asString()).isEqualTo("demo-repo");
+    assertThat(escape.path("workItemTitle").asString()).isEqualTo("Arreglar add()");
+    assertThat(escape.path("createdBy").asString()).isEqualTo("skynet");
+    assertThat(eventTypes(runId)).containsOnlyOnce("run.escaped");
+
+    // El push que deja ese revert en main es el mismo escape.
+    String push = "a1b2c3d" + "0".repeat(33);
+    signed(
+        "push",
+        "d-push-1",
+        push(push, "Revert \"Arreglar add()\"\n\nThis reverts commit eeeeeee."));
+    awaitDelivery("d-push-1");
+    assertThat(get("/api/workflow-runs/" + runId + "/escapes")).hasSize(1);
+    assertThat(eventTypes(runId)).containsOnlyOnce("run.escaped");
+    // Uno a mano tampoco: ya lo tiene.
+    assertConflict("/api/workflow-runs/" + runId + "/escapes", Map.of("note", "Otra vez"));
+
+    // Se quita (no fue culpa del juez) y un push que lo revierte lo vuelve a crear.
+    http.delete().uri("/api/escapes/" + escape.path("id").asString()).retrieve().toBodilessEntity();
+    assertThat(get("/api/workflow-runs/" + runId + "/escapes")).isEmpty();
+    assertThat(eventTypes(runId)).contains("run.escape.removed");
+    signed("push", "d-push-2", push(push, "Revert\n\nThis reverts commit EEEEEEEEEE."));
+    JsonNode pushed = awaitEscape(runId);
+    assertThat(pushed.path("origin").asString()).isEqualTo("revert-push");
+    assertThat(pushed.path("seenRef").asString()).isEqualTo("a1b2c3d");
+    assertThat(pushed.path("seenUrl").asString())
+        .isEqualTo("https://github.com/guilu/demo-repo/commit/" + push);
+    // Un push a otra rama no cuenta.
+    http.delete().uri("/api/escapes/" + pushed.path("id").asString()).retrieve().toBodilessEntity();
+    Map<String, Object> other = new LinkedHashMap<>(push(push, "This reverts commit eeeeeee."));
+    other.put("ref", "refs/heads/otra");
+    signed("push", "d-push-3", other);
+    awaitDelivery("d-push-3");
+    assertThat(get("/api/workflow-runs/" + runId + "/escapes")).isEmpty();
+
+    // A mano, con una nota; y en la lista de la fábrica.
+    JsonNode manual =
+        post("/api/workflow-runs/" + runId + "/escapes", Map.of("note", "Rompió la exportación"));
+    assertThat(manual.path("origin").asString()).isEqualTo("manual");
+    assertThat(manual.path("note").asString()).isEqualTo("Rompió la exportación");
+    assertThat(manual.path("createdBy").asString()).isNotBlank().isNotEqualTo("skynet");
+    JsonNode factory = get("/api/factory/escapes?days=7");
+    assertThat(factory).hasSize(1);
+    assertThat(factory.get(0).path("runId").asString()).isEqualTo(runId);
+  }
+
+  @Test
+  void aRunThatMergedNothingCannotHaveAnEscape() {
+    String runId = untilApproval();
+    assertConflict("/api/workflow-runs/" + runId + "/escapes", Map.of());
+    // Una PR de revert de una PR que no es de Skynet no hace nada.
+    publisher.publishEvent(
+        new GitHubPullRequestClosed(
+            UUID.fromString(repositoryId),
+            14,
+            true,
+            "f".repeat(40),
+            "guilu/demo-repo",
+            "Revert \"Otra cosa\"",
+            "Reverts guilu/demo-repo#99",
+            null));
+    assertThat(get("/api/factory/escapes?days=7")).isEmpty();
+  }
+
+  private Map<String, Object> push(String sha, String message) {
+    return Map.of(
+        "ref",
+        "refs/heads/main",
+        "repository",
+        Map.of("full_name", "guilu/demo-repo", "default_branch", "main"),
+        "installation",
+        Map.of("id", 7),
+        "commits",
+        List.of(
+            Map.of(
+                "id",
+                sha,
+                "message",
+                message,
+                "url",
+                "https://github.com/guilu/demo-repo/commit/" + sha)));
+  }
+
+  /** Un webhook firmado, sin sesión, como llega de GitHub. */
+  private void signed(String event, String delivery, Object payload) throws Exception {
+    byte[] body = json.writeValueAsBytes(payload);
+    HttpRequest request =
+        HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/github/webhooks"))
+            .header("Content-Type", "application/json")
+            .header("X-GitHub-Event", event)
+            .header("X-GitHub-Delivery", delivery)
+            .header("X-Hub-Signature-256", WebhookSignature.sign("secreto-de-prueba", body))
+            .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+            .build();
+    HttpResponse<String> response =
+        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    assertThat(response.statusCode()).isLessThan(300);
+  }
+
+  private void awaitDelivery(String id) {
+    awaitValue(
+        () -> {
+          for (JsonNode d : get("/api/github/deliveries")) {
+            if (d.path("deliveryId").asString().equals(id)
+                && !d.path("status").asString().equals("PENDING")) {
+              return d;
+            }
+          }
+          return null;
+        },
+        "la entrega " + id);
+  }
+
+  private JsonNode awaitEscape(String runId) {
+    return awaitValue(
+        () -> {
+          JsonNode escapes = get("/api/workflow-runs/" + runId + "/escapes");
+          return escapes.isEmpty() ? null : escapes.get(0);
+        },
+        "el escape de " + runId);
+  }
+
+  private static <T> T awaitValue(java.util.function.Supplier<T> probe, String what) {
+    Instant deadline = Instant.now().plusSeconds(15);
+    while (Instant.now().isBefore(deadline)) {
+      T value = probe.get();
+      if (value != null) {
+        return value;
+      }
+      try {
+        Thread.sleep(50);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new AssertionError(e);
+      }
+    }
+    throw new AssertionError("No llegó " + what);
+  }
+
+  private void assertConflict(String path, Object body) {
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> post(path, body))
+        .isInstanceOf(org.springframework.web.client.HttpClientErrorException.Conflict.class);
   }
 
   private JsonNode post(String path, Object body) {
