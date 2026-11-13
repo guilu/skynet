@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BANDS, BODY_RADIUS, deform, surfaceAt, type Vec3 } from './body'
+import { BANDS, BODY_RADIUS, BUCKLE_EDGES, deform, rearShellZ, surfaceAt, type Vec3 } from './body'
 
 const unit = (v: Vec3): Vec3 => {
   const l = Math.hypot(...v)
@@ -34,5 +34,22 @@ describe('cuerpo de Skyny 3D', () => {
     // Volver a buscarlo desde su propia dirección da el mismo punto.
     const again = surfaceAt(on)
     on.forEach((n, i) => expect(again[i]).toBeCloseTo(n, 6))
+  })
+
+  it('cada banda acaba en su borde de la hebilla', () => {
+    BANDS.forEach((path, i) => expect(path.at(-1)).toEqual(BUCKLE_EDGES[i]))
+  })
+
+  it('la hebilla se apoya en la espalda: la cáscara trasera está sobre la superficie', () => {
+    for (const [x, y] of [
+      [0, 0],
+      [0.2, -0.1],
+      [-0.15, 0.2],
+    ]) {
+      const z = rearShellZ(x, y)
+      expect(z).toBeLessThan(0)
+      const on = surfaceAt([x, y, z])
+      expect(Math.hypot(...on)).toBeCloseTo(Math.hypot(x, y, z), 4)
+    }
   })
 })

@@ -10,6 +10,7 @@ import { applyCachedPalette } from '../appearance'
 import { COMPANION_STATES, type CompanionState } from '../components/companion/state'
 import { SkynyScene, type Pose3D } from '../components/companion/three/scene'
 import { EXPRESSIONS_3D } from '../components/companion/three/states'
+import { DEMOS, DemoRunner, type DemoKind } from '../components/companion/three/transitions'
 import { onThemeChange, readColors } from '../components/companion/three/tokens'
 import '../index.css'
 import './studio.css'
@@ -79,6 +80,14 @@ document.body.innerHTML = `
       </div>
       <aside class="st-states">
         <h2>Estados <span data-out="count"></span></h2>
+        <div class="st-demos">
+          <button type="button" data-action="compact" aria-pressed="false">Vista compacta</button>
+          ${Object.entries(DEMOS)
+            .map(([kind, d]) => `<button type="button" data-demo="${kind}">${d.label}</button>`)
+            .join('')}
+          <button type="button" data-action="cancel" disabled>Cancelar tarea</button>
+          <button type="button" data-action="retry" hidden>Reintentar</button>
+        </div>
         <ul></ul>
       </aside>
     </main>
@@ -90,6 +99,8 @@ const stage = $<HTMLDivElement>('.st-stage')
 const list = $<HTMLUListElement>('.st-states ul')
 
 const skyny = new SkynyScene(canvas, readColors(), { gestures: !reducedMotion })
+const demo = new DemoRunner(skyny)
+let compact = false
 skyny.camera.fov = 36
 skyny.camera.position.set(...VIEWS.frontal.pos)
 const controls = new OrbitControls(skyny.camera, canvas)
@@ -103,9 +114,16 @@ let looking = false
 let current: View = 'frontal'
 let pose = 0
 
+/** Vista compacta: Skyny a 180 px en la esquina, con letreros cortos (como iría en la web). */
+const COMPACT_PX = 180
 const fit = () => {
   const { width, height } = stage.getBoundingClientRect()
-  skyny.resize(Math.max(1, width), Math.max(1, height))
+  const w = compact ? Math.min(COMPACT_PX, width) : width
+  const h = compact ? Math.min(COMPACT_PX, height) : height
+  canvas.classList.toggle('st-canvas-compact', compact)
+  canvas.style.width = `${Math.max(1, w)}px`
+  canvas.style.height = `${Math.max(1, h)}px`
+  skyny.resize(Math.max(1, w), Math.max(1, h))
 }
 new ResizeObserver(fit).observe(stage)
 fit()
@@ -164,8 +182,12 @@ function setPose(i: number) {
 document.addEventListener('click', (e) => {
   const button = (e.target as Element).closest('button')
   if (!button) return
-  const { state, view: v, pose: p, action } = button.dataset
-  if (state) setState(state as CompanionState)
+  const { state, view: v, pose: p, action, demo: kind } = button.dataset
+  if (state) {
+    demo.stop()
+    setState(state as CompanionState)
+  }
+  if (kind) demo.toggle(kind as DemoKind)
   if (v) setView(v as View)
   if (p !== undefined) setPose(Number(p))
   const toggle = () => {
@@ -190,6 +212,22 @@ document.addEventListener('click', (e) => {
     case 'replay':
       skyny.setState(skyny.current)
       break
+    case 'compact':
+      compact = toggle()
+      skyny.setCompact(compact)
+      fit()
+      // En compacto, el encuadre de la web (el del login); al salir, la vista que había.
+      if (compact) {
+        skyny.camera.position.set(0, 0.12, 4.3)
+        controls.target.set(0, 0.1, 0)
+      } else setView(current)
+      break
+    case 'cancel':
+      demo.cancel()
+      break
+    case 'retry':
+      demo.retry()
+      break
     case 'theme': {
       const root = document.documentElement
       const dark =
@@ -206,6 +244,15 @@ document.addEventListener('click', (e) => {
     }
   }
 })
+
+// En reposo, Skyny sigue con los ojos al ratón cuando pasa cerca de la cara.
+canvas.addEventListener('pointermove', (e) => {
+  skyny.pointer(
+    e.pointerType === 'mouse' && e.buttons === 0 ? { x: e.clientX, y: e.clientY } : null,
+  )
+})
+for (const type of ['pointerleave', 'pointercancel', 'pointerdown'])
+  canvas.addEventListener(type, () => skyny.pointer(null))
 
 canvas.addEventListener('pointermove', (e) => {
   if (!looking) return
@@ -224,7 +271,25 @@ onThemeChange(() => {
 setView('frontal')
 setPose(0)
 setState(COMPANION_STATES.some((s) => s.state === initial) ? initial : 'calm')
-skyny.play(() => controls.update())
+// Los botones de la demo, al día con lo que hace Skyny; y la lista, con el estado al que llega.
+const cancelButton = $<HTMLButtonElement>('[data-action="cancel"]')
+const retryButton = $<HTMLButtonElement>('[data-action="retry"]')
+let shown: CompanionState = skyny.current
+skyny.play(() => {
+  controls.update()
+  demo.tick(performance.now())
+  cancelButton.disabled = !demo.canCancel
+  retryButton.hidden = !demo.waitingRetry
+  document.querySelectorAll<HTMLButtonElement>('[data-demo]').forEach((b) => {
+    const kind = b.dataset.demo as DemoKind
+    b.textContent = demo.kind === kind ? 'Detener demo' : DEMOS[kind].label
+    b.setAttribute('aria-pressed', String(demo.kind === kind))
+  })
+  if (skyny.current !== shown) {
+    shown = skyny.current
+    renderStates()
+  }
+})
 
 // Para depurar desde la consola del navegador.
-Object.assign(window, { skyny, controls })
+Object.assign(window, { skyny, controls, demo })

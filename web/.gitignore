@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Estudio de Skyny exportado (npm run studio:export)
+dist-studio
