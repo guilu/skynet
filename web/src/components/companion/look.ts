@@ -23,3 +23,6 @@ const round = (n: number) => Math.round(n * 10) / 10
 
 export const prefersReducedMotion = () =>
   window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false
+
+/** Hay WebGL 2 y no se pidió reducir el movimiento: se puede pintar Skyny en 3D. */
+export const can3D = () => typeof WebGL2RenderingContext !== 'undefined' && !prefersReducedMotion()
