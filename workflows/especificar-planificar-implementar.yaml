@@ -1,9 +1,10 @@
 id: especificar-planificar-implementar
 name: Especificar, planificar e implementar
-description: Antigravity especifica en openspec/proposal.md, Claude Code planifica, tú apruebas el plan, Claude Code implementa con los tests en verde y Codex lo juzga contra la propuesta aprobada; los escépticos descartan los falsos positivos y Claude Code corrige lo que bloquea de verdad.
+description: De la idea a la PR fusionada. Escribe la propuesta en openspec/proposal.md, la planifica, espera a que apruebes el plan, la implementa con los tests en verde y la juzga contra la propuesta.
 
 agents:
   analista:
+    description: Escribe la propuesta en openspec/proposal.md.
     provider: antigravity
     model: ${AGY_FUERTE}
     fallback:
@@ -23,13 +24,14 @@ agents:
       - Fuera de alcance.
       Devuelve un resumen de una o dos frases y los riesgos que veas. En `assumptions`, lo que hayas supuesto sin poder comprobarlo, una frase cada uno.
   arquitecto:
+    description: Convierte la propuesta en tareas, sin implementar.
     model: ${CLAUDE_FUERTE}
     fallback:
       provider: codex
       model: ${CODEX_FUERTE}
     permissionMode: acceptEdits
-    prompt: Planifica {{workItem.key}} a partir de openspec/proposal.md.
   desarrollador:
+    description: Implementa el plan con los tests en verde.
     model: ${CLAUDE_GENERAL}
     fallback:
       provider: codex
@@ -39,6 +41,7 @@ agents:
   # El juez de `juzgar` (VA-B, VA-C): en solo lectura, con la rúbrica y sin ver lo que dijo el
   # desarrollador. Su reserva nunca es Claude Code, que es quien implementa.
   revisor:
+    description: Juez que compara el cambio con la propuesta y el plan.
     provider: codex
     model: ${CODEX_FUERTE}
     fallback:
@@ -49,6 +52,7 @@ agents:
 
 stages:
   - id: spec
+    name: Especifica la propuesta
     type: agent
     agent: analista
     phase: spec
@@ -63,6 +67,7 @@ stages:
     checks: [spec]
     retry: {maxAttempts: 2, on: [verification]}
   - id: plan
+    name: Planifica las tareas
     type: agent
     agent: arquitecto
     dependsOn: [spec]
@@ -81,12 +86,15 @@ stages:
         summary: {type: string}
     artifacts: [openspec/tasks.md]
   - id: aprobar-plan
+    name: Apruebas el plan
     type: human-approval
     dependsOn: [plan]
+    phase: plan
     action: "Aprobar el plan de {{workItem.key}} (openspec/tasks.md): {{stages.plan.output.summary}}"
     risk: medium
     revise: plan
   - id: implementar
+    name: Implementa el plan
     type: agent
     agent: desarrollador
     dependsOn: [aprobar-plan]
@@ -96,6 +104,7 @@ stages:
   # hallazgo que bloquea pasa por dos escépticos; lo que sobrevive lo corrige implementar en su
   # sesión, y se vuelve a juzgar (como mucho 2 rondas).
   - id: juzgar
+    name: Juzga contra la propuesta
     type: verification
     dependsOn: [implementar]
     phase: review
@@ -116,17 +125,20 @@ stages:
   # Entrega por PR (EN): en un repositorio con la GitHub App sube la rama, abre la PR, espera la CI
   # (si falla, la corrige implementar), pide aprobar la fusión y fusiona. En uno local, se omiten.
   - id: pr
+    name: Abre la PR
     type: github-pr
     dependsOn: [juzgar]
     phase: deliver
     condition: repository.github
   - id: ci
+    name: Espera la CI
     type: github-check
     dependsOn: [pr]
     phase: deliver
     condition: repository.github
     fix: implementar
   - id: aprobar-fusion
+    name: Apruebas fusionar
     type: human-approval
     dependsOn: [ci]
     phase: deliver
@@ -137,6 +149,7 @@ stages:
     # líneas como mucho, con la CI en verde y juzgado.
     autoApprove: {maxRisk: 1, maxLines: 400}
   - id: fusionar
+    name: Fusiona la PR
     type: github-merge
     dependsOn: [aprobar-fusion]
     phase: deliver

@@ -1,6 +1,6 @@
 # Entrega por PR
 
-Con la GitHub App conectada ([`github.md`](github.md)), un workflow entrega su trabajo como una PR de GitHub y la lleva hasta la fusión (hito EN). Son cuatro fases, que las plantillas `especificar-planificar-implementar`, `implementar-tarea` y `corregir-bug` ya traen al final:
+Con la GitHub App conectada ([`github.md`](github.md)), un workflow entrega su trabajo como una PR de GitHub y la lleva hasta la fusión (hito EN). Son cuatro fases, que las plantillas `especificar-planificar-implementar`, `implementar-tarea`, `corregir-bug` y `conocer-repositorio` ya traen al final:
 
 ```yaml
   - id: pr                     # EN-A: sube la rama y abre la PR
