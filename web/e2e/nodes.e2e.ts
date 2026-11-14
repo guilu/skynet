@@ -104,15 +104,13 @@ test(
       await expect(
         page.locator('.monaco-editor').getByText('id: revision-en-paralelo'),
       ).toBeVisible()
-      const stages = page
-        .getByRole('region', { name: 'Qué define' })
-        .getByRole('list')
-        .first()
-        .getByRole('listitem')
+      await page.getByRole('tab', { name: 'Resumen' }).click()
+      const stages = page.getByRole('region', { name: /Paso a paso/ }).locator('li.wf-step')
       await expect(stages).toHaveCount(5)
-      await expect(stages.nth(2)).toContainText('A la vez: calidad, seguridad')
+      await expect(stages.nth(2)).toContainText('2 agentes a la vez: calidad y seguridad')
       await expect(stages.nth(3)).toContainText('Solo si review.hasBlockingFindings')
       await expectAccessible(page, 'plantilla «Revisión en paralelo»')
+      await page.getByRole('tab', { name: 'YAML' }).click()
     })
 
     await test.step('importarla con los comandos del repositorio y publicarla', async () => {

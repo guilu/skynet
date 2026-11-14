@@ -5,7 +5,7 @@ import { api, type Validation, type WorkflowModel } from '../../api'
 import { cn } from '../../lib/cn'
 import { LinesSkeleton } from '../ui/Skeleton'
 import { TabList, TabPanel } from '../ui/Tabs'
-import { DefinitionSummary } from './DefinitionSummary'
+import { AgentList, DefinitionOverview, LaunchInputs, ReadyItems } from './DefinitionOverview'
 import { Companion } from '../companion/Companion'
 import { ProblemList } from './ProblemList'
 import { problemSummary } from './problems'
@@ -24,8 +24,9 @@ const DefinitionGraph = lazy(() => import('../graph/DefinitionGraph'))
 const GraphEditor = lazy(() => import('./GraphEditor').then((m) => ({ default: m.GraphEditor })))
 
 const VIEWS = [
-  { id: 'yaml', label: 'YAML', icon: 'code' },
+  { id: 'summary', label: 'Resumen', icon: 'list' },
   { id: 'graph', label: 'Grafo', icon: 'graph' },
+  { id: 'yaml', label: 'YAML', icon: 'code' },
 ] as const
 type View = (typeof VIEWS)[number]['id']
 
@@ -65,13 +66,16 @@ export function DefinitionEditor({
 }: Props) {
   const editor = useRef<YamlEditorHandle>(null)
   const [params, setParams] = useSearchParams()
-  const view: View = params.get('view') === 'graph' ? 'graph' : 'yaml'
+  // Una versión que solo se lee abre en «Resumen» (WF-E); un borrador, en el YAML.
+  const defaultView: View = readOnly ? 'summary' : 'yaml'
+  const asked = params.get('view')
+  const view: View = VIEWS.find((v) => v.id === asked)?.id ?? defaultView
   const selectView = (next: View) =>
     setParams(
       (prev) => {
         const p = new URLSearchParams(prev)
-        if (next === 'graph') p.set('view', 'graph')
-        else p.delete('view')
+        if (next === defaultView) p.delete('view')
+        else p.set('view', next)
         return p
       },
       { replace: true },
@@ -132,6 +136,23 @@ export function DefinitionEditor({
             idPrefix="definition-view"
             panelId="definition-view-panel"
           />
+          {view === 'summary' && (
+            <TabPanel
+              id="definition-view-panel"
+              labelledBy="definition-view-summary"
+              className="definition-overview"
+            >
+              {definition ? (
+                <DefinitionOverview definition={definition} />
+              ) : (
+                <p className="muted">
+                  {current
+                    ? 'El YAML no se puede leer: corrige los problemas para ver el resumen.'
+                    : 'Validando…'}
+                </p>
+              )}
+            </TabPanel>
+          )}
           {view === 'graph' && (
             <TabPanel
               id="definition-view-panel"
@@ -219,25 +240,32 @@ export function DefinitionEditor({
         <aside className="definition-aside">
           <section className="card" aria-labelledby="problems-title">
             <div className="problems-head">
-              <h2 id="problems-title">Problemas</h2>
+              <h2 id="problems-title">Listo para lanzar</h2>
               {/* Skyny pone cara de lo que ve: pensando al validar, error si hay errores (SY-C). */}
               <Companion state={skyny} size={36} still season={null} />
             </div>
             <p className="muted small" aria-live="polite">
               {current ? problemSummary(problems) : 'Validando…'}
             </p>
+            {current && <ReadyItems definition={definition} problems={problems} />}
             {problems.length > 0 && (
               <ProblemList
                 problems={problems}
-                onSelect={(line, column) => editor.current?.reveal(line, column)}
+                onSelect={(line, column) => revealInYaml(line, column)}
               />
             )}
           </section>
-          {definition && (
-            <section className="card" aria-labelledby="summary-title">
-              <h2 id="summary-title">Qué define</h2>
-              <DefinitionSummary definition={definition} />
-            </section>
+          {definition && view === 'summary' && (
+            <>
+              <section className="card" aria-labelledby="inputs-title">
+                <h2 id="inputs-title">Al lanzar te pide</h2>
+                <LaunchInputs definition={definition} />
+              </section>
+              <section className="card" aria-labelledby="agents-title">
+                <h2 id="agents-title">Agentes</h2>
+                <AgentList definition={definition} />
+              </section>
+            </>
           )}
         </aside>
       </div>
