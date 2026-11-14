@@ -16,9 +16,6 @@ import { RISK_LABEL } from '../components/approval/approvalFormat'
 import { usePendingApprovals } from '../components/approval/usePendingApprovals'
 import { AttentionList, type Alert } from '../components/AttentionList'
 import { CompanionHello } from '../components/companion/CompanionHello'
-import { CompanionPeek } from '../components/companion/CompanionPeek'
-import { useCompanion } from '../components/companion/context'
-import { peekText } from '../components/companion/peek'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { Icon } from '../components/icons/Icon'
 import type { IconName } from '../components/icons/registry'
@@ -80,7 +77,6 @@ export function HomePage() {
   })
   const approvals = usePendingApprovals()
   const now = useNow(true)
-  const companion = useCompanion()
 
   const items = [...(pending.data ?? [])].sort(byPhase)
   const data = summary.data
@@ -110,13 +106,6 @@ export function HomePage() {
             </p>
           )}
         </div>
-        <CompanionPeek
-          state={companion.expression}
-          text={peekText(companion.expression, companion.pendingApprovals)}
-          gesture={companion.gesture}
-          sweat={(data?.quotaWarnings.length ?? 0) > 0}
-          className="dash-peek"
-        />
         <div className="dash-actions">
           {projects.data && active.length === 0 ? (
             <Link to="/projects" className="btn">
@@ -132,7 +121,10 @@ export function HomePage() {
         </div>
       </div>
       <ErrorMessage error={summary.error} />
-      <CompanionHello approvals={approvals.data ?? []} />
+      <CompanionHello
+        approvals={approvals.data ?? []}
+        sweat={(data?.quotaWarnings.length ?? 0) > 0}
+      />
       <AttentionList alerts={alerts} className="dash-section" title="Necesita tu intervención" />
 
       <section className="dash-section" aria-labelledby="projects-title">
