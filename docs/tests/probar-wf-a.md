@@ -42,12 +42,14 @@ scripts/seed-workflows.sh --actualizar
 
 ## 3. La puerta de `corregir-bug`, sobre demo-repo
 
-1. Lanza `corregir-bug` sobre un trabajo de demo-repo con el runner de fake-codex, de modo que `reproducir` devuelva `reproduced: true`:
-   - la fase «Decides si seguir sin reproducirlo» sale **omitida** (`stage.skipped`, `condition-false`);
+`reproducir` es el único agente de Codex del workflow. Lo que devuelve sale de `FAKE_CODEX_STRUCTURED_OUTPUT` en el entorno del runner (fake-codex).
+
+1. **Se reproduce.** Arranca el runner con `FAKE_CODEX_STRUCTURED_OUTPUT='{"reproduced": true, "test": "src/test/FalloTest.java", "cause": "falta un caso"}'` y lanza `corregir-bug` sobre un trabajo de demo-repo. Comprueba:
+   - «Decides si seguir sin reproducirlo» sale **omitida** (`stage.skipped` con motivo `condition-false`);
    - `corregir` arranca sin esperar y continúa el worktree de `reproducir`.
-2. Si tu fake devuelve `reproduced: false`:
-   - la ejecución se para en **Aprobaciones**, con la acción «No se ha podido reproducir …: ¿sigo con la corrección?»;
-   - al aprobarla, `corregir` sigue en el mismo worktree.
+2. **No se reproduce.** Arranca el runner con `FAKE_CODEX_STRUCTURED_OUTPUT='{"reproduced": false, "test": "", "cause": "no aparece con los datos de prueba"}'` y lanza otra ejecución. Comprueba:
+   - la ejecución se para en **Aprobaciones**, con la acción «No se ha podido reproducir … (no aparece con los datos de prueba): ¿sigo con la corrección?»;
+   - al aprobarla, `corregir` sigue en el worktree de `reproducir`.
 
 ## 4. Terminar
 
