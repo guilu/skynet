@@ -926,6 +926,29 @@ export interface WorkflowSummary {
   draft: VersionView | null
   createdAt: string
   archivedAt: string | null
+  /** Lo que la tarjeta cuenta de la definición mostrada; null si no se pudo leer. */
+  overview: WorkflowOverview | null
+}
+
+/** Resumen de una definición: fases, puertas, proveedores y qué entrega (WF-B). */
+export interface WorkflowOverview {
+  stages: number
+  /** Agentes que corren a la vez dentro de fases parallel, sumados. */
+  parallelChildren: number
+  /** Fases human-approval: las que te piden aprobar. */
+  gates: number
+  /** Agentes distintos que juzgan en fases verification. */
+  judges: number
+  /** Sin repetir y por orden de aparición; `repository` si una fase usa el agente del repositorio. */
+  providers: string[]
+  fallbackProviders: string[]
+  /** Macrofases con alguna fase, en el orden de los carriles del grafo. */
+  lanes: string[]
+  inputs: { name: string; required: boolean }[]
+  /** Tiene una fase github-pr. */
+  delivers: boolean
+  /** Ningún agente puede cambiar el repositorio. */
+  readOnly: boolean
 }
 
 export interface WorkflowView {

@@ -116,6 +116,7 @@ import type {
   WorkflowModel,
   WorkflowRef,
   WorkflowSummary,
+  WorkflowOverview,
   WorkflowView,
   Workspace,
   ChangeView,
@@ -656,6 +657,19 @@ const WORKFLOW_SUMMARY: Keys<WorkflowSummary> = {
   draft: true,
   createdAt: true,
   archivedAt: true,
+  overview: true,
+}
+const WORKFLOW_OVERVIEW: Keys<WorkflowOverview> = {
+  stages: true,
+  parallelChildren: true,
+  gates: true,
+  judges: true,
+  providers: true,
+  fallbackProviders: true,
+  lanes: true,
+  inputs: true,
+  delivers: true,
+  readOnly: true,
 }
 const WORKFLOW_VIEW: Keys<WorkflowView> = { workflow: true, versions: true }
 const DEFINITION_DETAIL: Keys<DefinitionDetail> = {
@@ -748,6 +762,10 @@ function expectSummary(summary: WorkflowSummary) {
   expectShape(summary, WORKFLOW_SUMMARY)
   if (summary.published) expectShape(summary.published, VERSION)
   if (summary.draft) expectShape(summary.draft, VERSION)
+  if (summary.overview) {
+    expectShape(summary.overview, WORKFLOW_OVERVIEW)
+    summary.overview.inputs.forEach((i) => expectShape(i, { name: true, required: true }))
+  }
 }
 
 const keysOf = (value: object) => Object.keys(value).sort()
