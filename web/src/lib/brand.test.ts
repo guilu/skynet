@@ -15,10 +15,10 @@ describe('Marca', () => {
     expect(favicon.trim()).toBe(faviconSvg(FAVICON_DEFAULT.primary))
   })
 
-  it('Skyny lleva cuerpo, tres bandas, visor, tres nodos y ojos', () => {
+  it('Skyny lleva cuerpo, tres bandas, visor, dos manos (sin cabeza) y ojos', () => {
     const svg = skynySvg('#335fe0')
-    expect(svg.match(/<circle [^>]*r="(16|18)"/g)).toHaveLength(3)
-    expect(svg.match(/<path d="M60 6[34] L/g)).toHaveLength(3)
+    expect(svg.match(/<circle [^>]*r="19"/g)).toHaveLength(2)
+    expect(svg.match(/<path d="M60 64 L/g)).toHaveLength(3)
     expect(svg).toContain('stop-color="#335fe0"')
     expect(svg.match(/<rect /g)).toHaveLength(2)
   })

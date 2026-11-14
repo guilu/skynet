@@ -3,6 +3,8 @@
 // Volver a lanzarlo si cambia Skyny:
 //
 //   node scripts/iconos.mjs
+//
+// Si Playwright no encuentra su navegador, pásale uno con CHROMIUM_PATH=/ruta/al/chromium.
 import { chromium } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -25,7 +27,7 @@ const ICONS = [
   { file: '../../docs/ui/skyny-512.webp', size: 512, tile: 'none', scale: 1, webp: true },
 ]
 
-const browser = await chromium.launch()
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH })
 for (const { file, size, tile, scale, webp } of ICONS) {
   const page = await browser.newPage({ viewport: { width: size, height: size } })
   const box =
