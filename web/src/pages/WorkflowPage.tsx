@@ -16,7 +16,7 @@ import { ProblemList } from '../components/workflow/ProblemList'
 import { VersionPill } from '../components/workflow/status'
 import { formatDateTime } from '../format'
 import { cn } from '../lib/cn'
-import { ADHOC } from './WorkflowsPage'
+import { ADHOC } from '../components/workflow/WorkflowCard'
 
 /**
  * Un workflow: sus versiones y, de la elegida (`?version=`; por defecto el borrador o la última
