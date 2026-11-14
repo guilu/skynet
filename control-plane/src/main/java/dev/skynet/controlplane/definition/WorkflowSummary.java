@@ -9,6 +9,8 @@ import java.util.UUID;
  *
  * @param published última versión publicada, o {@code null}
  * @param draft borrador en curso, o {@code null}
+ * @param overview lo que cuenta su definición (WF-B), de la misma versión que el nombre; {@code
+ *     null} si no se puede leer
  */
 public record WorkflowSummary(
     UUID id,
@@ -18,4 +20,5 @@ public record WorkflowSummary(
     VersionView published,
     VersionView draft,
     Instant createdAt,
-    Instant archivedAt) {}
+    Instant archivedAt,
+    WorkflowOverview overview) {}

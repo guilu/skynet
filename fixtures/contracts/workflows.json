@@ -20,5 +20,20 @@
     "publishedAt" : null
   },
   "createdAt" : "2026-10-05T09:00:00Z",
-  "archivedAt" : null
+  "archivedAt" : null,
+  "overview" : {
+    "stages" : 3,
+    "parallelChildren" : 0,
+    "gates" : 0,
+    "judges" : 0,
+    "providers" : [ "claude-code", "repository" ],
+    "fallbackProviders" : [ ],
+    "lanes" : [ ],
+    "inputs" : [ {
+      "name" : "foco",
+      "required" : false
+    } ],
+    "delivers" : false,
+    "readOnly" : false
+  }
 } ]
