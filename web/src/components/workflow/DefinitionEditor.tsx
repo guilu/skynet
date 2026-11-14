@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { lazy, Suspense, useRef, type ReactNode } from 'react'
+import { lazy, Suspense, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { api, type Validation, type WorkflowModel } from '../../api'
 import { cn } from '../../lib/cn'
@@ -14,6 +14,8 @@ import { useTouchOnly } from '../../useTouchOnly'
 import { useMediaQuery } from '../../useMediaQuery'
 import { stageLine } from './definitionEdits'
 import PlainYamlEditor from './PlainYamlEditor'
+import { YamlToolbar } from './YamlToolbar'
+import YamlView from './YamlView'
 import type { YamlEditorHandle } from './YamlEditor'
 
 const YamlEditor = lazy(() => import('./YamlEditor'))
@@ -39,6 +41,8 @@ interface Props {
   label: string
   /** Botones sobre el editor (guardar, publicar, importar…). */
   actions?: ReactNode
+  /** Nombre del fichero al descargar el YAML. */
+  fileName?: string
 }
 
 /**
@@ -57,6 +61,7 @@ export function DefinitionEditor({
   onSave,
   label,
   actions,
+  fileName = 'workflow.yaml',
 }: Props) {
   const editor = useRef<YamlEditorHandle>(null)
   const [params, setParams] = useSearchParams()
@@ -74,6 +79,9 @@ export function DefinitionEditor({
   // En un móvil, Monaco no deja seleccionar, copiar ni pegar: se usa un campo de texto normal.
   const touchOnly = useTouchOnly()
   const narrow = useMediaQuery('(max-width: 720px)')
+  // En el móvil las líneas largas se ajustan de entrada; en escritorio, a petición.
+  const [wrapChoice, setWrap] = useState<boolean | null>(null)
+  const wrap = wrapChoice ?? narrow
   const graphEditable = !readOnly && onChange != null && !narrow
   const schema = useQuery({
     queryKey: ['workflow-schema'],
@@ -178,7 +186,10 @@ export function DefinitionEditor({
               'aria-labelledby': 'definition-view-yaml',
             })}
           >
-            {touchOnly ? (
+            <YamlToolbar text={text} fileName={fileName} wrap={wrap} onWrapChange={setWrap} />
+            {touchOnly && readOnly ? (
+              <YamlView ref={editor} value={text} label={label} wrap={wrap} />
+            ) : touchOnly ? (
               <PlainYamlEditor
                 ref={editor}
                 value={text}
@@ -186,6 +197,7 @@ export function DefinitionEditor({
                 readOnly={readOnly}
                 label={label}
                 onSave={onSave}
+                wrap={wrap}
               />
             ) : (
               <Suspense fallback={<LinesSkeleton label="el editor" lines={12} />}>
@@ -198,6 +210,7 @@ export function DefinitionEditor({
                   schema={schema.data}
                   label={label}
                   onSave={onSave}
+                  wrap={wrap}
                 />
               </Suspense>
             )}

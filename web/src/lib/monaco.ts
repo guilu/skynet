@@ -1,6 +1,7 @@
 import * as monaco from 'monaco-editor/editor/editor.api'
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker'
 import YamlWorker from 'monaco-yaml/yaml.worker?worker'
+import { INITIAL_STATE, tokenizeLine, type YamlState } from './yamlTokens'
 
 // Configuración común de los editores Monaco de la web: solo el editor base, sin los lenguajes ni
 // los workers de TypeScript, CSS o HTML. Este módulo y quien lo importa se cargan bajo demanda
@@ -12,12 +13,66 @@ self.MonacoEnvironment = {
 
 export { monaco }
 
+/** El estado del tokenizador de YAML como lo pide Monaco. */
+class LineState implements monaco.languages.IState {
+  readonly value: YamlState
+  constructor(value: YamlState) {
+    this.value = value
+  }
+  clone() {
+    return new LineState({ ...this.value })
+  }
+  equals(other: monaco.languages.IState) {
+    return (
+      other instanceof LineState &&
+      other.value.block === this.value.block &&
+      other.value.refList === this.value.refList
+    )
+  }
+}
+
+/**
+ * YAML con el tokenizador de la web (WF-D) en lugar del Monarch genérico: así las referencias a
+ * fases y agentes y las variables `{{…}}` tienen su color, igual que en la lectura del móvil.
+ */
+function registerYaml() {
+  monaco.languages.register({ id: 'yaml', extensions: ['.yaml', '.yml'], aliases: ['YAML'] })
+  monaco.languages.setLanguageConfiguration('yaml', {
+    comments: { lineComment: '#' },
+    brackets: [
+      ['{', '}'],
+      ['[', ']'],
+    ],
+    autoClosingPairs: [
+      { open: '{', close: '}' },
+      { open: '[', close: ']' },
+      { open: '"', close: '"' },
+      { open: "'", close: "'" },
+    ],
+    folding: { offSide: true },
+    onEnterRules: [
+      { beforeText: /:\s*$/, action: { indentAction: monaco.languages.IndentAction.Indent } },
+    ],
+  })
+  monaco.languages.setTokensProvider('yaml', {
+    getInitialState: () => new LineState(INITIAL_STATE),
+    tokenize(line, state) {
+      const result = tokenizeLine(line, (state as LineState).value)
+      return {
+        tokens: result.tokens.map((t) => ({ startIndex: t.start, scopes: `code-${t.type}` })),
+        endState: new LineState(result.state),
+      }
+    },
+  })
+}
+
 let registered = false
 
 /** Lenguajes `diff` y `json`, que no vienen en el editor base. */
 export function register() {
   if (registered) return
   registered = true
+  registerYaml()
   monaco.languages.register({ id: 'diff' })
   monaco.languages.setMonarchTokensProvider('diff', {
     tokenizer: {
@@ -74,25 +129,31 @@ export function defineTheme() {
     base: isDark() ? 'vs-dark' : 'vs',
     inherit: true,
     rules: [
-      { token: '', foreground: token('--fg') },
+      { token: '', foreground: token('--code-fg') },
       { token: 'inserted', foreground: token('--ok-ink') },
       { token: 'deleted', foreground: token('--bad-ink') },
       { token: 'meta', foreground: token('--live-ink'), fontStyle: 'bold' },
       { token: 'header', foreground: token('--muted'), fontStyle: 'bold' },
-      { token: 'key', foreground: token('--primary-ink') },
-      { token: 'string', foreground: token('--ok-ink') },
-      { token: 'number', foreground: token('--warn-ink') },
-      { token: 'keyword', foreground: token('--live-ink') },
-      // YAML (monaco-editor/languages/definitions/yaml).
-      { token: 'type', foreground: token('--primary-ink') },
-      { token: 'comment', foreground: token('--muted'), fontStyle: 'italic' },
-      { token: 'operators', foreground: token('--muted') },
+      // JSON.
+      { token: 'key', foreground: token('--code-key') },
+      { token: 'string', foreground: token('--code-value') },
+      { token: 'number', foreground: token('--code-literal') },
+      { token: 'keyword', foreground: token('--code-literal') },
+      // YAML (lib/yamlTokens, WF-D). Prefijo propio para que no lo pisen las reglas de vs.
+      { token: 'code-text', foreground: token('--code-fg') },
+      { token: 'code-key', foreground: token('--code-key') },
+      { token: 'code-string', foreground: token('--code-value') },
+      { token: 'code-ref', foreground: token('--code-ref'), fontStyle: 'underline' },
+      { token: 'code-variable', foreground: token('--code-var') },
+      { token: 'code-literal', foreground: token('--code-literal') },
+      { token: 'code-comment', foreground: token('--code-comment'), fontStyle: 'italic' },
+      { token: 'code-delimiter', foreground: token('--code-punct') },
     ],
     colors: {
-      'editor.background': c('--surface-2'),
-      'editor.foreground': c('--fg'),
-      'editorLineNumber.foreground': c('--muted'),
-      'editorLineNumber.activeForeground': c('--fg'),
+      'editor.background': c('--code-bg'),
+      'editor.foreground': c('--code-fg'),
+      'editorLineNumber.foreground': c('--code-line'),
+      'editorLineNumber.activeForeground': c('--code-fg'),
       'editor.lineHighlightBackground': c('--surface'),
       'editor.lineHighlightBorder': c('--surface'),
       'editor.selectionBackground': c('--primary-soft'),
@@ -137,4 +198,9 @@ export const BASE_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = 
   fontSize: 13,
   fontFamily: "'JetBrains Mono', ui-monospace, monospace",
   padding: { top: 10, bottom: 10 },
+  // Sin el resaltado de ocurrencias ni de la selección repetida: se confundían con la selección.
+  occurrencesHighlight: 'off',
+  selectionHighlight: false,
+  // Los corchetes de colores competían con los colores del YAML (las variables `{{…}}`).
+  bracketPairColorization: { enabled: false },
 }

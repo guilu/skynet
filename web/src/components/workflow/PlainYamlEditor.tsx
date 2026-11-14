@@ -10,6 +10,8 @@ interface Props {
   /** Ctrl/Cmd+S. */
   onSave?: () => void
   height?: number
+  /** Ajustar las líneas largas. */
+  wrap?: boolean
 }
 
 /**
@@ -18,7 +20,7 @@ interface Props {
  * problemas sigue llevando a ellos.
  */
 const PlainYamlEditor = forwardRef<YamlEditorHandle, Props>(function PlainYamlEditor(
-  { value, onChange, readOnly = false, label, onSave, height = 520 },
+  { value, onChange, readOnly = false, label, onSave, height = 520, wrap = false },
   ref,
 ) {
   const area = useRef<HTMLTextAreaElement>(null)
@@ -56,7 +58,7 @@ const PlainYamlEditor = forwardRef<YamlEditorHandle, Props>(function PlainYamlEd
       autoCapitalize="off"
       autoCorrect="off"
       autoComplete="off"
-      wrap="off"
+      wrap={wrap ? 'soft' : 'off'}
     />
   )
 })

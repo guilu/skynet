@@ -1,8 +1,7 @@
 import { configureMonacoYaml, type MonacoYaml, type MonacoYamlOptions } from 'monaco-yaml'
-import 'monaco-editor/languages/definitions/yaml/register'
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import type { Problem } from '../../api'
-import { BASE_OPTIONS, defineTheme, followTheme, monaco } from '../../lib/monaco'
+import { BASE_OPTIONS, defineTheme, followTheme, monaco, register } from '../../lib/monaco'
 
 const OWNER = 'skynet'
 const SCHEMA_URI = 'https://skynet.dev/schemas/workflow-definition.schema.json'
@@ -51,11 +50,23 @@ interface Props {
   /** Ctrl/Cmd+S. */
   onSave?: () => void
   height?: number
+  /** Ajustar las líneas largas. */
+  wrap?: boolean
 }
 
 /** Editor del YAML de un workflow, con los problemas marcados en su línea. */
 const YamlEditor = forwardRef<YamlEditorHandle, Props>(function YamlEditor(
-  { value, onChange, readOnly = false, problems, schema, label, onSave, height = 520 },
+  {
+    value,
+    onChange,
+    readOnly = false,
+    problems,
+    schema,
+    label,
+    onSave,
+    height = 520,
+    wrap = false,
+  },
   ref,
 ) {
   const container = useRef<HTMLDivElement>(null)
@@ -67,6 +78,7 @@ const YamlEditor = forwardRef<YamlEditorHandle, Props>(function YamlEditor(
   const emitted = useRef(new Set<string>())
 
   useEffect(() => {
+    register()
     defineTheme()
     const model = monaco.editor.createModel(
       value,
@@ -120,8 +132,8 @@ const YamlEditor = forwardRef<YamlEditorHandle, Props>(function YamlEditor(
   }, [value])
 
   useEffect(() => {
-    editor.current?.updateOptions({ readOnly, ariaLabel: label })
-  }, [readOnly, label])
+    editor.current?.updateOptions({ readOnly, ariaLabel: label, wordWrap: wrap ? 'on' : 'off' })
+  }, [readOnly, label, wrap])
 
   useEffect(() => {
     const model = editor.current?.getModel()
