@@ -1,9 +1,10 @@
 id: corregir-bug
 name: Corregir un bug
-description: Codex reproduce el fallo con un test que falla, Claude Code lo corrige con los tests en verde y Antigravity lo juzga buscando regresiones; los escépticos descartan los falsos positivos y Claude Code arregla lo que bloquea de verdad.
+description: Reproduce el fallo con un test, lo corrige con los tests en verde y busca regresiones antes de abrir la PR. Si no se consigue reproducir, te pregunta antes de seguir.
 
 agents:
   reproductor:
+    description: Reproduce el bug con un test que falla, sin corregirlo.
     provider: codex
     model: ${CODEX_FUERTE}
     fallback:
@@ -25,15 +26,16 @@ agents:
         test: {type: string}
         cause: {type: string}
   desarrollador:
+    description: Corrige el bug y deja los tests en verde.
     model: ${CLAUDE_GENERAL}
     fallback:
       provider: codex
       model: ${CODEX_FUERTE}
     permissionMode: acceptEdits
-    prompt: Corrige el bug de {{workItem.key}} y confirma los cambios con un commit.
   # El juez de `juzgar` (VA-B, VA-C): en solo lectura, con la rúbrica y sin ver lo que dijo el
   # desarrollador. Su reserva nunca es Claude Code, que es quien corrige.
   vigia:
+    description: Juez que busca regresiones.
     provider: antigravity
     model: ${AGY_RAPIDO}
     fallback:
@@ -44,13 +46,26 @@ agents:
 
 stages:
   - id: reproducir
+    name: Reproduce el fallo con un test
     type: agent
     agent: reproductor
     phase: test
+  # Si no se pudo reproducir, una persona decide si se sigue (o lo descarta). Si se reprodujo,
+  # la puerta se omite y corregir sigue sin esperar.
+  - id: sin-reproducir
+    name: Decides si seguir sin reproducirlo
+    type: human-approval
+    dependsOn: [reproducir]
+    phase: test
+    condition: "!reproducir.reproduced"
+    action: "No se ha podido reproducir {{workItem.key}} ({{stages.reproducir.output.cause}}): ¿sigo con la corrección?"
+    risk: medium
   - id: corregir
+    name: Corrige el bug
     type: agent
     agent: desarrollador
-    dependsOn: [reproducir]
+    dependsOn: [reproducir, "sin-reproducir?"]
+    workspaceFrom: reproducir
     phase: implement
     prompt: |
       Corrige el bug de {{workItem.key}}: {{workItem.title}}.
@@ -66,6 +81,7 @@ stages:
   # escépticos que intentan refutarlo; lo que sobrevive lo arregla corregir en su sesión, y se
   # vuelve a juzgar (como mucho 2 rondas).
   - id: juzgar
+    name: Busca regresiones
     type: verification
     dependsOn: [corregir]
     phase: review
@@ -84,17 +100,20 @@ stages:
   # Entrega por PR (EN): en un repositorio con la GitHub App sube la rama, abre la PR, espera la CI
   # (si falla, la corrige corregir), pide aprobar la fusión y fusiona. En uno local, se omiten.
   - id: pr
+    name: Abre la PR
     type: github-pr
     dependsOn: [juzgar]
     phase: deliver
     condition: repository.github
   - id: ci
+    name: Espera la CI
     type: github-check
     dependsOn: [pr]
     phase: deliver
     condition: repository.github
     fix: corregir
   - id: aprobar-fusion
+    name: Apruebas fusionar
     type: human-approval
     dependsOn: [ci]
     phase: deliver
@@ -105,6 +124,7 @@ stages:
     # líneas como mucho, con la CI en verde y juzgado.
     autoApprove: {maxRisk: 1, maxLines: 400}
   - id: fusionar
+    name: Fusiona la PR
     type: github-merge
     dependsOn: [aprobar-fusion]
     phase: deliver

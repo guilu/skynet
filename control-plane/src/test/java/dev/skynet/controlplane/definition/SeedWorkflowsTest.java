@@ -49,6 +49,56 @@ class SeedWorkflowsTest {
     assertPublishable(file, filled);
   }
 
+  /**
+   * WF-A: cada fase dice su nombre y su macrofase, que son lo que enseñan las tarjetas, el resumen
+   * y el grafo, en lugar del id y de un carril heredado.
+   */
+  @ParameterizedTest
+  @MethodSource("workflows")
+  void everyStageHasANameAndAPhase(Path file) throws IOException {
+    WorkflowDefinition definition = parse(file);
+    for (StageDefinition stage : definition.stages()) {
+      assertThat(stage.name()).as("name de la fase %s", stage.id()).isNotBlank();
+      assertThat(stage.phase()).as("phase de la fase %s", stage.id()).isNotBlank();
+    }
+  }
+
+  /**
+   * WF-A: el prompt de la fase manda sobre el de su agente, así que el prompt de un agente que solo
+   * usan fases con prompt propio no se lee nunca. Los agentes que solo juzgan (sin fase ni hijo que
+   * los ejecute) lo reciben como «Indicaciones» y sí cuentan.
+   */
+  @ParameterizedTest
+  @MethodSource("workflows")
+  void noAgentPromptIsDead(Path file) throws IOException {
+    WorkflowDefinition definition = parse(file);
+    for (AgentDefinition agent : definition.agents()) {
+      if (agent.prompt() == null) continue;
+      List<String> prompts =
+          definition.stages().stream()
+              .flatMap(
+                  stage ->
+                      Stream.concat(
+                          agent.name().equals(stage.agent())
+                              ? Stream.of(String.valueOf(stage.prompt()))
+                              : Stream.empty(),
+                          stage.children().stream()
+                              .filter(child -> agent.name().equals(child.agent()))
+                              .map(child -> String.valueOf(child.prompt()))))
+              .toList();
+      assertThat(prompts.isEmpty() || prompts.contains("null"))
+          .as("el prompt del agente %s no lo usa ninguna fase", agent.name())
+          .isTrue();
+    }
+  }
+
+  private static WorkflowDefinition parse(Path file) throws IOException {
+    Parsed parsed =
+        DefinitionParser.parse(substitute(Files.readString(file), models()), Expectations.NONE);
+    assertThat(parsed.definition()).isNotNull();
+    return parsed.definition();
+  }
+
   private static void assertPublishable(Path file, Map<String, String> models) throws IOException {
     String source = substitute(Files.readString(file), models);
     assertThat(source).doesNotContain("${");

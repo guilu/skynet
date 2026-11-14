@@ -1,6 +1,6 @@
 id: revisar-codigo
 name: Revisar código
-description: Tres revisores de solo lectura a la vez, uno por proveedor (arquitectura con Claude Code, tests con Codex, seguridad con Antigravity), y un informe único con los hallazgos por prioridad. No cambia nada.
+description: Tres revisores a la vez (arquitectura, tests y seguridad) y un informe único con los hallazgos por prioridad. Solo lee y no cambia nada.
 
 inputs:
   foco:
@@ -10,6 +10,7 @@ inputs:
 
 agents:
   arquitectura:
+    description: Revisa la arquitectura y el diseño, sin cambiar nada.
     model: ${CLAUDE_FUERTE}
     fallback:
       provider: codex
@@ -31,7 +32,8 @@ agents:
               file: {type: string}
               severity: {type: string}
               recommendation: {type: string}
-  tests:
+  revisor-tests:
+    description: Revisa los tests, sin cambiar nada.
     provider: codex
     model: ${CODEX_FUERTE}
     fallback:
@@ -55,6 +57,7 @@ agents:
               severity: {type: string}
               recommendation: {type: string}
   seguridad:
+    description: Revisa la seguridad, sin cambiar nada.
     provider: antigravity
     model: ${AGY_FUERTE}
     fallback:
@@ -80,22 +83,24 @@ agents:
               severity: {type: string}
               recommendation: {type: string}
   redactor:
+    description: Junta las tres revisiones en un informe.
     model: ${CLAUDE_GENERAL}
     fallback:
       provider: codex
       model: ${CODEX_FUERTE}
     permissionMode: plan
-    prompt: Redacta el informe de la revisión de {{workItem.key}}.
 
 stages:
   - id: revisar
+    name: Revisan arquitectura, tests y seguridad
     type: parallel
     phase: review
     children:
       - agent: arquitectura
-      - agent: tests
+      - {id: tests, agent: revisor-tests}
       - agent: seguridad
   - id: informe
+    name: Redacta el informe
     type: agent
     agent: redactor
     dependsOn: [revisar]
@@ -113,3 +118,18 @@ stages:
       {{stages.revisar.seguridad.output.findings}}
 
       Quita los duplicados, comprueba en el código los hallazgos dudosos y ordénalos por prioridad: primero lo que hay que arreglar ya. No cambies nada.
+      Devuelve un resumen y los hallazgos, cada uno con su título, su fichero, su gravedad (alta, media o baja), qué harías y quién lo vio (arquitectura, tests o seguridad).
+    outputSchema:
+      type: object
+      properties:
+        summary: {type: string}
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              title: {type: string}
+              file: {type: string}
+              severity: {type: string}
+              recommendation: {type: string}
+              source: {type: string}

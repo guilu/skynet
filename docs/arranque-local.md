@@ -90,10 +90,10 @@ Los proyectos y los repositorios no se siembran.
 | Workflow | Para qué | Fases (proveedor) |
 |---|---|---|
 | `adhoc` | Una tarea suelta con tu prompt | agente (el que elijas al lanzar) |
-| `conocer-repositorio` | El primer contacto con un proyecto | comandos de compilar y de tests (Codex) → mapa en `docs/skynet/mapa-<clave>.md`, con la clave del proyecto en minúsculas, p. ej. `mapa-demo.md` (Antigravity) |
+| `conocer-repositorio` | El primer contacto con un proyecto | comandos de compilar y de tests (Codex) → mapa en `docs/skynet/mapa-<clave>.md`, con la clave del proyecto en minúsculas, p. ej. `mapa-demo.md` (Antigravity), confirmado con un commit → entrega por PR si el repositorio está en GitHub |
 | `implementar-tarea` | Una tarea bien definida | explorar (Antigravity, solo lectura) → implementar con los tests en verde (Claude Code) → juez de corrección (Codex) y de seguridad (Antigravity) a la vez, con escépticos para lo que bloquea → si suspende, implementar corrige y se vuelve a juzgar |
-| `corregir-bug` | Un fallo que se puede reproducir | test que falla (Codex) → corrección con los tests en verde (Claude Code) → juez que busca regresiones (Antigravity), con escépticos → si suspende, corregir lo arregla y se vuelve a juzgar |
-| `revisar-codigo` | Una auditoría sin cambios, con un `foco` opcional | arquitectura (Claude Code), tests (Codex) y seguridad (Antigravity) a la vez → un informe con los hallazgos por prioridad (Claude Code) |
+| `corregir-bug` | Un fallo que se puede reproducir | test que falla (Codex) → si no se pudo reproducir, una puerta te pregunta si sigue → corrección con los tests en verde (Claude Code) → juez que busca regresiones (Antigravity), con escépticos → si suspende, corregir lo arregla y se vuelve a juzgar |
+| `revisar-codigo` | Una auditoría sin cambios, con un `foco` opcional | arquitectura (Claude Code), tests (Codex) y seguridad (Antigravity) a la vez → un informe con los hallazgos por prioridad, como salida estructurada (Claude Code) |
 | `especificar-planificar-implementar` | Una funcionalidad que conviene pensar antes | especificación (Antigravity), que tiene que pasar el check `spec` → plan (Claude Code) → **tu aprobación** → implementar (Claude Code) → juez contra la propuesta (Codex), con escépticos → si suspende, implementar corrige y se vuelve a juzgar |
 | `investigar-mejoras` | Decidir qué hacer después, con un `foco` opcional | lee la memoria del proyecto (bitácora, decisiones y hallazgos), comprueba en el código qué sigue abierto y propone mejoras por prioridad, sin cambiar nada (Claude Code, `memory: read`) |
 

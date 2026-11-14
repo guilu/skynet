@@ -1,9 +1,10 @@
 id: implementar-tarea
 name: Implementar una tarea
-description: Antigravity explora el repositorio, Claude Code implementa con los tests en verde, Codex y Antigravity lo juzgan a la vez con una rúbrica, los escépticos descartan los falsos positivos y Claude Code corrige solo lo que bloquea de verdad.
+description: Para una tarea bien definida. Explora el repositorio, la implementa con los tests en verde, dos jueces la revisan a la vez (corrección y seguridad) y la entrega por PR.
 
 agents:
   explorador:
+    description: Explora el repositorio antes de implementar, sin cambiar nada.
     provider: antigravity
     model: ${AGY_RAPIDO}
     fallback:
@@ -19,20 +20,16 @@ agents:
       No cambies nada. Devuelve un resumen de cómo está organizado lo que toca la tarea, los ficheros que habrá que cambiar y los riesgos.
       En `assumptions`, lo que hayas supuesto sin poder comprobarlo, una frase cada uno.
   desarrollador:
+    description: Implementa la tarea con los tests en verde.
     model: ${CLAUDE_GENERAL}
     fallback:
       provider: codex
       model: ${CODEX_FUERTE}
     permissionMode: acceptEdits
-    prompt: |
-      Implementa {{workItem.key}}: {{workItem.title}}.
-
-      {{workItem.description}}
-
-      Sigue las convenciones del repositorio, añade o ajusta los tests y confirma los cambios con un commit.
   # Los jueces de `juzgar` (VA-B, VA-C): en solo lectura, con la rúbrica que escribe Skynet y sin
   # ver lo que dijo el desarrollador. Su reserva nunca es Claude Code, que es quien implementa.
   calidad:
+    description: Juez de corrección, tests y casos límite.
     provider: codex
     model: ${CODEX_FUERTE}
     fallback:
@@ -41,6 +38,7 @@ agents:
     prompt: |
       Fíjate sobre todo en la corrección, los tests y los casos límite.
   seguridad:
+    description: Juez de seguridad.
     provider: antigravity
     model: ${AGY_FUERTE}
     fallback:
@@ -51,6 +49,7 @@ agents:
 
 stages:
   - id: explorar
+    name: Explora el repositorio
     type: agent
     agent: explorador
     phase: spec
@@ -61,6 +60,7 @@ stages:
         files: {type: array, items: {type: string}}
         risks: {type: array, items: {type: string}}
   - id: implementar
+    name: Implementa la tarea
     type: agent
     agent: desarrollador
     dependsOn: [explorar]
@@ -80,6 +80,7 @@ stages:
   # bloquea pasa por dos escépticos que intentan refutarlo; lo que sobrevive lo corrige implementar
   # en su sesión, y se vuelve a juzgar (como mucho 2 rondas).
   - id: juzgar
+    name: Juzgan corrección y seguridad
     type: verification
     dependsOn: [implementar]
     phase: review
@@ -100,17 +101,20 @@ stages:
   # del juez), espera la CI (si falla, la corrige implementar), pide aprobar la fusión y fusiona. En
   # uno local, se omiten.
   - id: pr
+    name: Abre la PR
     type: github-pr
     dependsOn: [juzgar]
     phase: deliver
     condition: repository.github
   - id: ci
+    name: Espera la CI
     type: github-check
     dependsOn: [pr]
     phase: deliver
     condition: repository.github
     fix: implementar
   - id: aprobar-fusion
+    name: Apruebas fusionar
     type: human-approval
     dependsOn: [ci]
     phase: deliver
@@ -121,6 +125,7 @@ stages:
     # líneas como mucho, con la CI en verde y juzgado.
     autoApprove: {maxRisk: 1, maxLines: 400}
   - id: fusionar
+    name: Fusiona la PR
     type: github-merge
     dependsOn: [aprobar-fusion]
     phase: deliver

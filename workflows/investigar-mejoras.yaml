@@ -1,6 +1,6 @@
 id: investigar-mejoras
 name: Investigar mejoras
-description: Parte de la memoria del proyecto (la bitácora de las ejecuciones, las decisiones, las trampas y los hallazgos guardados) y propone las siguientes mejoras del repositorio por prioridad. Solo lee la memoria y no cambia nada.
+description: Lee la memoria del proyecto (bitácora, decisiones, trampas y hallazgos) y propone las siguientes mejoras del repositorio por prioridad. Solo lee y no cambia nada.
 
 inputs:
   foco:
@@ -10,12 +10,12 @@ inputs:
 
 agents:
   investigador:
+    description: Propone mejoras a partir de la memoria del proyecto, sin cambiar nada.
     model: ${CLAUDE_FUERTE}
     fallback:
       provider: codex
       model: ${CODEX_FUERTE}
     permissionMode: plan
-    prompt: Propón las siguientes mejoras de este repositorio a partir de su memoria.
     output:
       type: object
       properties:
@@ -34,6 +34,7 @@ agents:
 
 stages:
   - id: investigar
+    name: Propone las siguientes mejoras
     type: agent
     agent: investigador
     phase: plan

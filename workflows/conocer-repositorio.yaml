@@ -1,9 +1,10 @@
 id: conocer-repositorio
 name: Conocer un repositorio
-description: Para empezar con un proyecto nuevo. Codex averigua cómo se compila y se prueban los tests, y Antigravity escribe un mapa del repositorio en docs/skynet/mapa-<clave>.md (la clave del proyecto en minúsculas) con ese dato.
+description: Para empezar con un proyecto nuevo. Averigua cómo se compila y se prueba, y deja un mapa del repositorio en docs/skynet/mapa-<clave>.md para quien trabaje en él después.
 
 agents:
   comandos:
+    description: Averigua cómo se compila y se prueba el repositorio, sin cambiar nada.
     provider: codex
     model: ${CODEX_RAPIDO}
     fallback:
@@ -21,20 +22,22 @@ agents:
         testsPass: {type: boolean}
         notes: {type: string}
   cartografo:
+    description: Escribe el mapa del repositorio.
     provider: antigravity
     model: ${AGY_FUERTE}
     fallback:
       provider: claude-code
       model: ${CLAUDE_FUERTE}
     permissionMode: acceptEdits
-    prompt: Escribe el mapa del repositorio en docs/skynet/mapa-{{project.slug}}.md.
 
 stages:
   - id: comandos
+    name: Averigua cómo se compila y se prueba
     type: agent
     agent: comandos
     phase: test
   - id: mapa
+    name: Escribe el mapa del repositorio
     type: agent
     agent: cartografo
     dependsOn: [comandos]
@@ -51,4 +54,37 @@ stages:
       Para compilar: {{stages.comandos.output.buildCommand}}
       Para los tests: {{stages.comandos.output.testCommand}} (¿pasan? {{stages.comandos.output.testsPass}})
       Notas: {{stages.comandos.output.notes}}
+
+      Cambia solo ese fichero y confírmalo con un commit.
     artifacts: [docs/skynet/mapa-*.md]
+    # El mapa tiene que llegar a la rama por defecto: los demás workflows lo buscan ahí.
+    checks: [commit]
+  # Entrega por PR (EN): en un repositorio con la GitHub App sube la rama, abre la PR, espera la CI
+  # (si falla, la corrige mapa), pide aprobar la fusión y fusiona. En uno local, se omiten.
+  - id: pr
+    name: Abre la PR
+    type: github-pr
+    dependsOn: [mapa]
+    phase: deliver
+    condition: repository.github
+  - id: ci
+    name: Espera la CI
+    type: github-check
+    dependsOn: [pr]
+    phase: deliver
+    condition: repository.github
+    fix: mapa
+  - id: aprobar-fusion
+    name: Apruebas fusionar
+    type: human-approval
+    dependsOn: [ci]
+    phase: deliver
+    condition: repository.github
+    action: "Fusionar el mapa del repositorio de {{project.name}}"
+    risk: low
+  - id: fusionar
+    name: Fusiona la PR
+    type: github-merge
+    dependsOn: [aprobar-fusion]
+    phase: deliver
+    condition: repository.github

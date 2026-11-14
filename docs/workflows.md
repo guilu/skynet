@@ -492,7 +492,7 @@ stages:
   - lo que se fusiona está juzgado (AU-B): el juez aprobó ese commit, el delta pasó o no hacía falta juzgarlo, o la fase pasó sin juez por `minRisk` y el nivel no ha subido desde entonces;
   - Skynet no ha aprobado solo ya 10 puertas hoy (UTC) en el repositorio (`SKYNET_AUTONOMY_MAX_MERGES_PER_DAY`).
 - Si se cumple, decide el actor `skynet` con un comentario que lista lo que se cumplió, y la fusión sigue sin esperar (`approval.granted` con `auto: true`; no avisa de que hay algo pendiente). Si falla una sola, pregunta como siempre y la puerta dice por qué: «No se aprueba sola: nivel 2: `db/migration/V2__x.sql` (ruta)». En la página de la aprobación sale cada condición con ✓ o ✗ (`evidence.autoApprove`).
-- Las tres fases `aprobar-fusion` de los workflows iniciales llevan `autoApprove: {maxRisk: 1, maxLines: 400}` y sus `juzgar`, `minRisk: 1` y `refuteMinRisk: 2`. `scripts/seed-workflows.sh --actualizar` publica las versiones nuevas. Mientras el interruptor del repositorio esté apagado, la fusión pregunta como antes; lo que sí cambia con esas versiones es que un cambio de solo documentación pasa sin juez y los escépticos solo corren en el nivel 2.
+- Las fases `aprobar-fusion` de `especificar-planificar-implementar`, `implementar-tarea` y `corregir-bug` llevan `autoApprove: {maxRisk: 1, maxLines: 400}` y sus `juzgar`, `minRisk: 1` y `refuteMinRisk: 2`. `scripts/seed-workflows.sh --actualizar` publica las versiones nuevas. Mientras el interruptor del repositorio esté apagado, la fusión pregunta como antes; lo que sí cambia con esas versiones es que un cambio de solo documentación pasa sin juez y los escépticos solo corren en el nivel 2. La de `conocer-repositorio` (riesgo `low`) no tiene juez, así que siempre pregunta.
 
 **Registro de hallazgos** (RH-A). Cada hallazgo de un juez (el de la fase o el del delta de AU-B) queda en el registro con su **huella** y su **desenlace**. No cambia lo que ve el juez ni lo que bloquea: solo registra.
 
@@ -629,7 +629,7 @@ Más detalles:
 - Eventos `stage.github.pr.merged` (con `external: true` si se fusionó a mano) y `stage.github.pr.merge.failed`. `GET /api/workflow-runs/{id}/merges` da la fusión de cada fase: método, commit esperado, commit de la fusión, si se borró la rama y el error.
 - En la ejecución, una tarjeta **Pull request** enseña la PR con su enlace, la rama, el commit, la CI check a check con sus rondas de corrección y la fusión.
 
-Las plantillas `especificar-planificar-implementar`, `implementar-tarea` y `corregir-bug` terminan con estas cuatro fases (`pr`, `ci`, `aprobar-fusion` y `fusionar`), todas con `condition: repository.github`: en un repositorio sin GitHub se omiten y la ejecución termina como antes. `scripts/seed-workflows.sh --actualizar` publica la versión nueva de cada una. Más en [`entrega-por-pr.md`](entrega-por-pr.md).
+Las plantillas `especificar-planificar-implementar`, `implementar-tarea`, `corregir-bug` y `conocer-repositorio` terminan con estas cuatro fases (`pr`, `ci`, `aprobar-fusion` y `fusionar`), todas con `condition: repository.github`: en un repositorio sin GitHub se omiten y la ejecución termina como antes. `scripts/seed-workflows.sh --actualizar` publica la versión nueva de cada una. Más en [`entrega-por-pr.md`](entrega-por-pr.md).
 
 **Puertas de aprobación.** Una fase `type: human-approval` para la ejecución hasta que alguien decide, p. ej. aprobar el plan antes de implementar:
 
