@@ -89,6 +89,13 @@
   --radius-lg: var(--r-lg);
   --sidenav-width: 232px;
 
+  /* Monogramas de los proveedores en las tarjetas de workflow (WF-C): tinta y fondo suave */
+  --prov-claude: #a8481f;
+  --prov-claude-soft: #fbeae2;
+  --prov-codex: #343c4e;
+  --prov-codex-soft: #eceff4;
+  --prov-agy: #2a52c4;
+  --prov-agy-soft: #e4ecff;
   color-scheme: light;
 }
 
@@ -138,6 +145,12 @@
     --companion-band: #141a33;
     --skyny-orange: #ff8d4d;
     --skyny-yellow: #ffc21a;
+    --prov-claude: #f2a585;
+    --prov-claude-soft: #3a2219;
+    --prov-codex: #e9eefa;
+    --prov-codex-soft: #232d42;
+    --prov-agy: #a9c1ff;
+    --prov-agy-soft: #1f2d52;
     color-scheme: dark;
   }
 }
@@ -187,6 +200,12 @@
   --companion-band: #141a33;
   --skyny-orange: #ff8d4d;
   --skyny-yellow: #ffc21a;
+  --prov-claude: #f2a585;
+  --prov-claude-soft: #3a2219;
+  --prov-codex: #e9eefa;
+  --prov-codex-soft: #232d42;
+  --prov-agy: #a9c1ff;
+  --prov-agy-soft: #1f2d52;
   color-scheme: dark;
 }
 
@@ -5447,6 +5466,7 @@
   }
 
   .wf-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
@@ -5462,11 +5482,23 @@
     border-color: var(--border-strong);
   }
 
+  /* Toda la tarjeta es el enlace: el ::after lo extiende; «⋯» queda por encima. */
+  .wf-card:has(.wf-card-link:focus-visible) {
+    outline: 3px solid var(--primary);
+    outline-offset: 2px;
+  }
+
   .wf-card-head {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: var(--space-2);
+  }
+
+  .wf-card-head .archive-menu,
+  .wf-card-more {
+    position: relative;
+    z-index: 1;
   }
 
   .wf-card-link {
@@ -5478,7 +5510,18 @@
     overflow-wrap: anywhere;
   }
 
-  .wf-card-link:hover .wf-card-name {
+  .wf-card-link:focus-visible {
+    outline: none;
+  }
+
+  .wf-card-link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+
+  .wf-card:hover .wf-card-name {
     text-decoration: underline;
   }
 
@@ -5496,28 +5539,197 @@
     overflow: hidden;
   }
 
+  /* Tira de etapas: seis segmentos, en azul las que tienen alguna fase. */
+  .wf-strip-steps {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--muted);
+    font-size: 0.6875rem;
+  }
+
+  .wf-strip-steps li::before {
+    content: '';
+    display: block;
+    height: 5px;
+    margin-bottom: 4px;
+    border-radius: 999px;
+    background: var(--surface-2);
+  }
+
+  .wf-strip-steps li.on {
+    color: var(--fg);
+  }
+
+  .wf-strip-steps li.on::before {
+    background: var(--primary);
+  }
+
+  .wf-card-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .wf-card-chips li {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border: var(--border-w) solid var(--border);
+    border-radius: 999px;
+    font-size: 0.8125rem;
+  }
+
+  .wf-card-chips svg {
+    color: var(--muted);
+  }
+
+  .wf-card-providers {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0;
+    padding-top: var(--space-3);
+    border-top: var(--border-w) solid var(--border);
+    color: var(--muted);
+  }
+
+  .wf-monos {
+    display: inline-flex;
+    gap: 4px;
+  }
+
+  .wf-mono {
+    display: inline-grid;
+    place-items: center;
+    min-width: 26px;
+    height: 24px;
+    padding: 0 4px;
+    border-radius: 7px;
+    background: var(--surface-2);
+    color: var(--fg);
+    font-size: 0.6875rem;
+    font-weight: 600;
+  }
+
+  .wf-mono-claude-code {
+    background: var(--prov-claude-soft);
+    color: var(--prov-claude);
+  }
+
+  .wf-mono-codex {
+    background: var(--prov-codex-soft);
+    color: var(--prov-codex);
+  }
+
+  .wf-mono-antigravity {
+    background: var(--prov-agy-soft);
+    color: var(--prov-agy);
+  }
+
+  .wf-card-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-3);
+    margin-top: auto;
+  }
+
   .wf-card-versions {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2);
   }
 
-  .wf-card-meta {
+  .wf-card-when {
+    margin: 0;
+  }
+
+  .btn.wf-fab {
+    display: none;
+  }
+
+  .wf-filters {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-2) var(--space-6);
-    margin: auto 0 0;
-    padding-top: var(--space-3);
+    gap: var(--space-2) var(--space-4);
+    margin-top: var(--space-3);
+  }
+
+  .wf-actions {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .wf-actions li + li {
     border-top: var(--border-w) solid var(--border);
   }
 
-  .wf-card-meta dt {
-    color: var(--muted);
-    font-size: 0.75rem;
+  .wf-action {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-height: 52px;
   }
 
-  .wf-card-meta dd {
-    margin: 0;
+  .wf-action a,
+  .wf-action button {
+    flex: 1;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--fg);
+    font: inherit;
+    font-size: 1rem;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  /* Móvil: una columna, sin descripción, filtros desplazables y «Nuevo» flotante. */
+  @media (max-width: 720px) {
+    .wf-card-desc {
+      display: none;
+    }
+
+    .wf-filters {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      margin-inline: calc(-1 * var(--space-4));
+      padding-inline: var(--space-4);
+      scrollbar-width: none;
+    }
+
+    .wf-filters .chips {
+      flex-wrap: nowrap;
+    }
+
+    .wf-filters .chip {
+      white-space: nowrap;
+    }
+
+    .wf-new-desk {
+      display: none;
+    }
+
+    .btn.wf-fab {
+      display: inline-flex;
+      position: fixed;
+      right: 16px;
+      bottom: calc(var(--mobile-nav-h, 72px) + 16px + env(safe-area-inset-bottom, 0px));
+      z-index: 20;
+    }
   }
 
   .wf-card.row-archived {
