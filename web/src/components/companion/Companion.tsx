@@ -1,11 +1,4 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import {
-  SKYNY_BANDS,
-  SKYNY_BODY,
-  SKYNY_BODY_STROKE,
-  SKYNY_NODES,
-  SKYNY_VISOR,
-} from '../../lib/brand'
 import { cn } from '../../lib/cn'
 import type { Gesture } from './gesture'
 import { lookOffset, prefersReducedMotion } from './look'
@@ -19,14 +12,25 @@ const LARGE = 64
 /** Lo que tarda en cerrarse el visor al cambiar de expresión; el cambio queda tapado. */
 export const SWAP_MS = 110
 
-const BODY = SKYNY_BODY
-const [HEAD, HAND_L, HAND_R] = SKYNY_NODES
-const VISOR = SKYNY_VISOR
+/**
+ * Geometría del v2 (SV-D), como el Skyny 3D: un cuerpo más bajo y redondeado (un triángulo de lados
+ * algo abombados que el trazo redondea), un visor más grande y las manos, grandes, en las esquinas de abajo.
+ */
+const BODY = 'M60 20 Q28 48 16 94 Q60 101 104 94 Q92 48 60 20 Z'
+const BODY_STROKE = 30
+const HAND_L = { cx: 12, cy: 100, r: 19 }
+const HAND_R = { cx: 108, cy: 100, r: 19 }
+const VISOR = { cx: 60, cy: 64, r: 24, ring: 30 }
+/**
+ * Las bandas del v2 (SV-D), como en el Skyny 3D: las laterales salen del visor hacia arriba, en
+ * diagonal, y la de abajo baja hasta el borde.
+ */
+const BANDS = ['M60 64 L-6 26', 'M60 64 L126 26', 'M60 64 L60 120']
 
 /**
- * Skyny v3 (plan `plans/siguiente-hito-sy.md`): el isotipo de Skynet hecho personaje. El nodo de
- * arriba es la cabeza, los de abajo las manos, y el visor oscuro con tres bandas es la cara, donde
- * cambian los ojos. El cuerpo toma el color del estado (Reposo y Revisando, el del acento de
+ * Skyny v3 (plan `plans/siguiente-hito-sy.md`), redibujado en SV-D como el Skyny 3D (estudio v2):
+ * sin el nodo de la cabeza, con las manos abajo, las bandas laterales subiendo en diagonal y el
+ * visor oscuro con un aro metálico, donde cambian los ojos. El cuerpo toma el color del estado (Reposo y Revisando, el del acento de
  * UI-G). Cada cambio de `state` pasa por un parpadeo del visor.
  *
  * Con `label` se anuncia como imagen; sin él es decorativa y el texto va al lado. `still` la deja
@@ -163,7 +167,7 @@ export function Companion({
             d={BODY}
             fill="#fff"
             stroke="#fff"
-            strokeWidth={SKYNY_BODY_STROKE}
+            strokeWidth={BODY_STROKE}
             strokeLinejoin="round"
           />
         </mask>
@@ -200,11 +204,11 @@ export function Companion({
           d={BODY}
           fill={ref('body')}
           stroke={ref('body')}
-          strokeWidth={SKYNY_BODY_STROKE}
+          strokeWidth={BODY_STROKE}
           strokeLinejoin="round"
         />
-        <g className="companion-bands" mask={ref('shape')} strokeWidth={small ? 13 : 11}>
-          {SKYNY_BANDS.map((d) => (
+        <g className="companion-bands" mask={ref('shape')} strokeWidth={small ? 14 : 12}>
+          {BANDS.map((d) => (
             <path key={d} d={d} />
           ))}
         </g>
@@ -215,17 +219,24 @@ export function Companion({
           cy={VISOR.cy}
           r={small ? VISOR.r + 2 : VISOR.r}
         />
-        {!small && <path className="companion-visor-shine" d="M44 52 Q50 45 58 44" />}
-        <g className="companion-head">
-          <Node {...HEAD} small={small} fill={ref('node')} />
-          {hat && (
-            // Ladeado sobre el lado izquierdo de la cabeza, lejos de los bocadillos (arriba a la
-            // derecha). Se dibuja centrado arriba, se agranda desde el ala y se gira con la cabeza.
-            <g transform="rotate(-50 60 12) translate(60 0) scale(1.2) translate(-60 0)">
+        {!small && (
+          <ellipse
+            className="companion-visor-shine"
+            cx={VISOR.cx}
+            cy={VISOR.cy - 12}
+            rx="13"
+            ry="5"
+          />
+        )}
+        {hat && (
+          // Sin cabeza (SV-D), el sombrero va en la punta del cuerpo, ladeado a la izquierda para
+          // no chocar con los bocadillos (arriba a la derecha).
+          <g className="companion-head">
+            <g transform="translate(-6 8) rotate(-22 60 0)">
               <Hat season={hat} />
             </g>
-          )}
-        </g>
+          </g>
+        )}
         <g ref={gaze} className="companion-gaze">
           <g className="companion-eyes" filter={small ? undefined : ref('glow')}>
             <Eyes state={gesture ? GESTURE_EYES[gesture] : shown} small={small} />

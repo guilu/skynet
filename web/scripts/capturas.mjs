@@ -193,6 +193,8 @@ const repository = {
 // La primera ruta que encaja responde; el orden importa.
 const ROUTES = [
   [/\/api\/auth\/session/, { username: 'admin' }],
+  // Supuestos de la ejecución: ninguno en la de ejemplo.
+  [/\/assumptions/, []],
   [/\/api\/settings\/appearance/, { colors: {}, icons, updatedAt: null }],
   [/\/api\/dashboard\/metrics/, fixture('dashboard-metrics')],
   [/\/api\/dashboard$/, fixture('dashboard-summary')],
