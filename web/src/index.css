@@ -96,6 +96,18 @@
   --prov-codex-soft: #eceff4;
   --prov-agy: #2a52c4;
   --prov-agy-soft: #e4ecff;
+  /* Código (WF-D): YAML, JSON y logs. Cada token llega a 4,5:1 sobre --code-bg (yamlTokens.test) */
+  --code-bg: #f4f6fa;
+  --code-fg: #343c4e;
+  --code-line: #5b667c;
+  --code-key: #2346b0;
+  --code-value: #8f420c;
+  --code-ref: #6a2bb8;
+  --code-var: #a0195a;
+  --code-var-bg: #fbe6f0;
+  --code-literal: #0b6b57;
+  --code-comment: #5b667c;
+  --code-punct: #5b667c;
   color-scheme: light;
 }
 
@@ -151,6 +163,17 @@
     --prov-codex-soft: #232d42;
     --prov-agy: #a9c1ff;
     --prov-agy-soft: #1f2d52;
+    --code-bg: #141c2c;
+    --code-fg: #e9eefa;
+    --code-line: #9eabc6;
+    --code-key: #8fb3ff;
+    --code-value: #f4b88e;
+    --code-ref: #cfb2ff;
+    --code-var: #ff9fcd;
+    --code-var-bg: #3d1f33;
+    --code-literal: #6fe0c0;
+    --code-comment: #9eabc6;
+    --code-punct: #9eabc6;
     color-scheme: dark;
   }
 }
@@ -206,6 +229,17 @@
   --prov-codex-soft: #232d42;
   --prov-agy: #a9c1ff;
   --prov-agy-soft: #1f2d52;
+  --code-bg: #141c2c;
+  --code-fg: #e9eefa;
+  --code-line: #9eabc6;
+  --code-key: #8fb3ff;
+  --code-value: #f4b88e;
+  --code-ref: #cfb2ff;
+  --code-var: #ff9fcd;
+  --code-var-bg: #3d1f33;
+  --code-literal: #6fe0c0;
+  --code-comment: #9eabc6;
+  --code-punct: #9eabc6;
   color-scheme: dark;
 }
 
@@ -2089,6 +2123,128 @@
     overflow: auto;
     resize: vertical;
     border-radius: var(--r-md);
+  }
+
+  .plain-yaml-editor[wrap='soft'] {
+    white-space: pre-wrap;
+  }
+
+  /* WF-D · El YAML pintado: los mismos colores en Monaco (lib/monaco) y en la lectura del móvil. */
+  .yk-key {
+    color: var(--code-key);
+  }
+
+  .yk-string {
+    color: var(--code-value);
+  }
+
+  .yk-ref {
+    color: var(--code-ref);
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+  }
+
+  .yk-variable {
+    border-radius: 4px;
+    background: var(--code-var-bg);
+    color: var(--code-var);
+  }
+
+  .yk-literal {
+    color: var(--code-literal);
+  }
+
+  .yk-comment {
+    color: var(--code-comment);
+    font-style: italic;
+  }
+
+  .yk-delimiter {
+    color: var(--code-punct);
+  }
+
+  .yaml-view {
+    margin: 0;
+    max-height: 70vh;
+    overflow: auto;
+    padding: 10px 12px 10px 0;
+    border-radius: var(--r-md);
+    background: var(--code-bg);
+    color: var(--code-fg);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    tab-size: 2;
+    counter-reset: line;
+  }
+
+  .yaml-line {
+    display: block;
+    padding-left: 3.25em;
+    text-indent: -3.25em;
+  }
+
+  .yaml-line::before {
+    counter-increment: line;
+    content: counter(line);
+    display: inline-block;
+    width: 2.5em;
+    margin-right: 0.75em;
+    color: var(--code-line);
+    text-align: right;
+    user-select: none;
+  }
+
+  .yaml-line:focus {
+    outline: none;
+    background: var(--primary-soft);
+  }
+
+  .yaml-view-wrap {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .yaml-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+    margin-bottom: var(--space-2);
+  }
+
+  .yaml-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
+  .yaml-legend li {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .yaml-swatch {
+    padding: 0 5px;
+    border-radius: 5px;
+    background: var(--code-bg);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-style: normal;
+    text-decoration: none;
+  }
+
+  .yaml-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   /* Safari de iOS amplía la página al enfocar un campo con letra de menos de 16 px. */

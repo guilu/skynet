@@ -248,6 +248,7 @@ function VersionPanel({
         validateAs={isDraft ? { key: saved.key, version: saved.version } : undefined}
         onSave={() => editable && dirty && save.mutate()}
         label={`YAML de ${saved.key} v${saved.version}`}
+        fileName={`${saved.key}-v${saved.version}.yaml`}
         actions={
           editable && (
             <>

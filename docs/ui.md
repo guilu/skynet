@@ -28,6 +28,8 @@ Todos los colores, radios y profundidades son variables CSS en `web/src/index.cs
 | Acento | `--primary`, `--primary-shade`, `--primary-soft`, `--primary-ink`, `--on-primary` | Botón principal, selección, foco y enlaces |
 | Estados | `--ok`, `--warn`, `--bad`, `--live`, `--idle`, cada uno con `-shade`, `-soft` e `-ink` | Píldoras, puntos del árbol, barras de la cascada y avisos |
 | Botones de estado | `--ok-btn`, `--bad-btn` y sus `-shade` | Más oscuros que el estado, para que el texto blanco llegue a AA |
+| Código | `--code-bg`, `--code-fg`, `--code-line`, `--code-key`, `--code-value`, `--code-ref`, `--code-var` (y `--code-var-bg`), `--code-literal`, `--code-comment`, `--code-punct` | El YAML de los workflows en Monaco y en la lectura del móvil (`lib/yamlTokens.ts`, WF-D). Cada uno llega a 4,5:1 sobre `--code-bg` |
+| Proveedores | `--prov-claude`, `--prov-codex`, `--prov-agy` y sus `-soft` | Monogramas de las tarjetas de workflow (WF-C) |
 | Formas | `--r-sm` (10), `--r-md` (12), `--r-lg` (16) | Campos y botones, bloques internos y tarjetas |
 | Profundidad | `--lift` (4 px; 3 px en `.btn-sm`), `--lift-card` (0 px) | El «labio» inferior de los botones, como en Duolingo; los paneles van planos |
 | Movimiento | `--ease-pop`, `--animate-pop`, `--animate-pulse-ring` | Entradas con rebote y el latido de lo vivo |
