@@ -1,6 +1,6 @@
 # Companion
 
-La mascota de Skynet se llama **Skyny** (diminutivo de Skynet) y cuenta cómo van los agentes. Se presenta por su nombre en el saludo del Dashboard y en Ajustes › Companion. Es el isotipo convertido en personaje: el nodo de arriba es la cabeza, los dos de abajo son las manos y el visor oscuro es la cara, con **tres bandas** que van hasta el borde del cuerpo (las laterales suben un poco) y unos ojos cian que brillan. No usa imágenes, solo SVG con CSS.
+La mascota de Skynet se llama **Skyny** (diminutivo de Skynet) y cuenta cómo van los agentes. Se presenta por su nombre en el saludo del Dashboard y en Ajustes › Companion. Es el isotipo convertido en personaje y, desde SV-D, se dibuja igual que el Skyny 3D (estudio v2): un cuerpo triangular bajo y redondeado, sin el nodo de la cabeza, con las manos grandes en las esquinas de abajo y el visor oscuro con un aro metálico (`--companion-bezel`). Del visor salen **tres bandas**: las laterales suben en diagonal hasta el borde y la de abajo baja. Los ojos son cian y brillan. No usa imágenes, solo SVG con CSS, así que sigue el tema y la paleta.
 
 Desde el hito SY (issue #181, plan `plans/siguiente-hito-sy.md`) se dibuja según la lámina v3 de Diego: cada estado tiene su color, hay una expresión de reposo con animación idle y lleva accesorios de temporada.
 
@@ -107,7 +107,7 @@ En Ajustes › Companion hay opciones que valen **solo para este navegador** (`l
 
 ### Accesorios de temporada (SY-A)
 
-Skyny lleva un sombrero según la fecha (`season.ts`, hora local, se mira al montar). Va ladeado sobre el lado izquierdo de la cabeza, para no chocar con los bocadillos, que salen arriba a la derecha:
+Skyny lleva un sombrero según la fecha (`season.ts`, hora local, se mira al montar). Va en la punta del cuerpo, ladeado a la izquierda, para no chocar con los bocadillos, que salen arriba a la derecha:
 
 | Accesorio | Cuándo |
 |---|---|

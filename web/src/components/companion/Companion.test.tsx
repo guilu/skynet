@@ -41,13 +41,15 @@ describe('Companion', () => {
     expect(svg(container).dataset.state).toBe('success')
   })
 
-  it('dibuja cuerpo, tres bandas, visor, cabeza y manos en cada expresión', () => {
+  it('dibuja cuerpo, tres bandas, visor y manos (sin cabeza, SV-D) en cada expresión', () => {
     for (const { state } of COMPANION_STATES) {
       const { container, unmount } = render(<Companion state={state} season={null} />)
       expect(container.querySelector('.companion-shell')).not.toBeNull()
       expect(container.querySelectorAll('.companion-bands path')).toHaveLength(3)
       expect(container.querySelector('.companion-visor')).not.toBeNull()
-      expect(container.querySelectorAll('.companion-node')).toHaveLength(3)
+      expect(container.querySelector('.companion-ring')).not.toBeNull()
+      expect(container.querySelectorAll('.companion-node')).toHaveLength(2)
+      expect(container.querySelector('.companion-head')).toBeNull()
       expect(container.querySelector('.companion-eyes')!.childElementCount).toBeGreaterThan(0)
       unmount()
     }

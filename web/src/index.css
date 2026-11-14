@@ -56,6 +56,7 @@
   /* Mascota (CO-A): nodos blancos y visor oscuro en los dos temas */
   --companion-node: #ffffff;
   --companion-visor: #1c2345;
+  --companion-bezel: #c7cbd1;
   /* Skyny v3 (SY-A): bandas, ojos y los colores de estado que no tienen token propio */
   --companion-band: #1f2647;
   --companion-eye: #c9f1ff;
@@ -133,6 +134,7 @@
     --other: #6f7b93;
     --companion-node: #f4f6ff;
     --companion-visor: #11162c;
+    --companion-bezel: #9ea4ae;
     --companion-band: #141a33;
     --skyny-orange: #ff8d4d;
     --skyny-yellow: #ffc21a;
@@ -181,6 +183,7 @@
   --other: #6f7b93;
   --companion-node: #f4f6ff;
   --companion-visor: #11162c;
+  --companion-bezel: #9ea4ae;
   --companion-band: #141a33;
   --skyny-orange: #ff8d4d;
   --skyny-yellow: #ffc21a;
@@ -7056,7 +7059,7 @@
   }
 
   .companion-head {
-    transform-origin: 60px 12px;
+    transform-origin: 60px 4px;
   }
 
   .companion-eyes {
@@ -7064,11 +7067,11 @@
   }
 
   .companion-hand-l {
-    transform-origin: 14px 96px;
+    transform-origin: 12px 100px;
   }
 
   .companion-hand-r {
-    transform-origin: 106px 96px;
+    transform-origin: 108px 100px;
   }
 
   .companion-floor {
@@ -7081,8 +7084,9 @@
     stroke: var(--companion-band);
   }
 
+  /* Aro metálico del visor, como el bisel del Skyny 3D (SV-D) */
   .companion-ring {
-    fill: color-mix(in srgb, var(--c-hi) 25%, white);
+    fill: var(--companion-bezel);
   }
 
   .companion-visor {
@@ -7090,11 +7094,8 @@
   }
 
   .companion-visor-shine {
-    fill: none;
-    stroke: #fff;
-    stroke-opacity: 0.18;
-    stroke-width: 3;
-    stroke-linecap: round;
+    fill: #fff;
+    opacity: 0.1;
   }
 
   .companion-node {
@@ -7398,11 +7399,11 @@
   }
 
   .companion[data-pose] .companion-hand-l {
-    transform: translate(35px, -34px);
+    transform: translate(37px, -36px);
   }
 
   .companion[data-pose='cover'] .companion-hand-r {
-    transform: translate(-35px, -34px);
+    transform: translate(-37px, -36px);
   }
 
   .companion[data-pose='peek'] .companion-hand-r {
