@@ -28,7 +28,7 @@ stages:
     dependsOn: [review]
 `
 
-const problemsCard = (page: Page) => page.getByRole('region', { name: 'Problemas' })
+const problemsCard = (page: Page) => page.getByRole('region', { name: 'Listo para lanzar' })
 
 test('importar, validar mientras se escribe, publicar, editar y descartar un workflow', async ({
   page,
@@ -49,12 +49,14 @@ test('importar, validar mientras se escribe, publicar, editar y descartar un wor
     })
     await expect(page.locator('.monaco-editor').getByText(`id: ${key}`)).toBeVisible()
     await expect(problemsCard(page).getByText('Sin problemas')).toBeVisible()
-    const summary = page.getByRole('region', { name: 'Qué define' })
-    const stages = summary.getByRole('list').first().getByRole('listitem')
+    await page.getByRole('tab', { name: 'Resumen' }).click()
+    const stages = page.getByRole('region', { name: /Paso a paso/ }).locator('li.wf-step')
     await expect(stages).toHaveCount(2)
-    await expect(stages.nth(1)).toContainText('fix agent · Agente: el del repositorio')
-    await expect(stages.nth(1)).toContainText('Depende de review')
+    await expect(stages.nth(1)).toContainText('2. fix')
+    await expect(stages.nth(1)).toContainText('El del repositorio')
+    await expect(stages.nth(1)).toContainText('Después de «review»')
     await expectAccessible(page, 'alta de workflow')
+    await page.getByRole('tab', { name: 'YAML' }).click()
   })
 
   await test.step('un error aparece mientras se escribe y desaparece al corregirlo', async () => {
@@ -63,7 +65,7 @@ test('importar, validar mientras se escribe, publicar, editar y descartar un wor
     await page.keyboard.type('colr: azul')
     const problem = problemsCard(page).getByRole('button', { name: /Clave `colr` desconocida/ })
     await expect(problem).toBeVisible()
-    await expect(problemsCard(page).getByText('1 error')).toBeVisible()
+    await expect(problemsCard(page).getByText('1 error', { exact: true })).toBeVisible()
     await expect(page.locator('.monaco-editor .squiggly-error')).toHaveCount(1)
     for (let i = 0; i < 'colr: azul'.length; i++) await page.keyboard.press('Backspace')
     await expect(problemsCard(page).getByText('Sin problemas')).toBeVisible()
@@ -86,13 +88,13 @@ test('importar, validar mientras se escribe, publicar, editar y descartar un wor
 
   await test.step('«Editar» abre el borrador de la v2, que se descarta sin tocar la v1', async () => {
     await page.getByRole('button', { name: 'Editar' }).click()
-    const versions = page.getByRole('navigation', { name: 'Versiones' })
-    await expect(versions.getByRole('button')).toHaveCount(2)
+    const versions = page.getByLabel('Versión').locator('option')
+    await expect(versions).toHaveCount(2)
     await expect(page.getByRole('button', { name: 'Guardar' })).toBeDisabled()
     await page.getByRole('button', { name: 'Descartar borrador…' }).click()
     const sheet = page.getByRole('dialog', { name: 'Descartar el borrador v2' })
     await sheet.getByRole('button', { name: 'Descartar' }).click()
-    await expect(versions.getByRole('button')).toHaveCount(1)
+    await expect(versions).toHaveCount(1)
     await expect(page.getByRole('button', { name: 'Editar' })).toBeVisible()
   })
 
@@ -270,11 +272,11 @@ test('editar un borrador desde el grafo: añadir una fase, unirla, completar su 
     await page.getByRole('button', { name: 'Guardar' }).click()
     await expect(page.getByText(/Guardado el/)).toBeVisible()
     await page.reload()
-    const summary = page.getByRole('region', { name: 'Qué define' })
-    const stages = summary.getByRole('list').first().getByRole('listitem')
+    await page.getByRole('tab', { name: 'Resumen' }).click()
+    const stages = page.getByRole('region', { name: /Paso a paso/ }).locator('li.wf-step')
     await expect(stages).toHaveCount(3)
     await expect(stages.nth(2)).toContainText('Ejecuta ./gradlew test')
-    await expect(stages.nth(2)).toContainText('Depende de fix, review (opcional)')
-    await expect(stages.nth(2)).toContainText('continúa el de fix')
+    await expect(stages.nth(2)).toContainText('Después de «fix» y «review» (opcional)')
+    await expect(stages.nth(2)).toContainText('Continúa el worktree de «fix»')
   })
 })

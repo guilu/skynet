@@ -10,7 +10,7 @@ import { expectAccessible, login, workItemViaApi } from './helpers.ts'
 // Sin el proxy cortable de run.e2e.ts: directamente a vite preview.
 test.use({ baseURL: 'http://localhost:4173' })
 
-const problemsCard = (page: Page) => page.getByRole('region', { name: 'Problemas' })
+const problemsCard = (page: Page) => page.getByRole('region', { name: 'Listo para lanzar' })
 const graph = (page: Page) => page.getByRole('group', { name: 'Grafo de Editor E2E' })
 const box = (page: Page, id: string) => graph(page).locator(`.react-flow__node[data-id="${id}"]`)
 

@@ -113,16 +113,15 @@ test(
       await expect(
         page.locator('.monaco-editor').getByText('id: especificar-planificar-implementar'),
       ).toBeVisible()
-      const stages = page
-        .getByRole('region', { name: 'Qué define' })
-        .getByRole('list')
-        .first()
-        .getByRole('listitem')
+      await page.getByRole('tab', { name: 'Resumen' }).click()
+      const stages = page.getByRole('region', { name: /Paso a paso/ }).locator('li.wf-step')
       await expect(stages).toHaveCount(4)
-      await expect(stages.nth(0)).toContainText('Comprueba artifacts openspec/proposal.md')
-      await expect(stages.nth(2)).toContainText('Pide aprobar')
-      await expect(stages.nth(3)).toContainText('Comprueba tests, diff')
+      await expect(stages.nth(0)).toContainText('Deja openspec/proposal.md')
+      await expect(stages.nth(2)).toContainText('Tu aprobación')
+      await expect(stages.nth(3)).toContainText('Tests en verde')
+      await expect(stages.nth(3)).toContainText('Hay cambios (diff)')
       await expectAccessible(page, 'plantilla «Especificar, planificar e implementar»')
+      await page.getByRole('tab', { name: 'YAML' }).click()
     })
 
     await publishWorkflowViaApi(page, yaml(withProposal, true))

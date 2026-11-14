@@ -15,7 +15,6 @@ import { SkynySays } from '../components/companion/SkynySays'
 import { ProblemList } from '../components/workflow/ProblemList'
 import { VersionPill } from '../components/workflow/status'
 import { formatDateTime } from '../format'
-import { cn } from '../lib/cn'
 import { ADHOC } from '../components/workflow/WorkflowCard'
 
 /**
@@ -51,7 +50,8 @@ export function WorkflowPage() {
       choose(draft.id)
     },
   })
-  const hasDraft = versions.some((v) => v.status !== 'PUBLISHED')
+  const draft = versions.find((v) => v.status !== 'PUBLISHED')
+  const hasDraft = draft != null
 
   return (
     <>
@@ -91,7 +91,21 @@ export function WorkflowPage() {
           note="No sale al lanzar y su borrador no se puede editar."
         />
       )}
-      {versions.length > 0 && <VersionTabs versions={versions} chosen={chosen} onChoose={choose} />}
+      {versions.length > 0 && (
+        <VersionPicker versions={versions} chosen={chosen} onChoose={choose} />
+      )}
+      {draft && chosen && chosen.id !== draft.id && (
+        <div className="draft-notice">
+          <FilePen size={18} strokeWidth={2.25} aria-hidden="true" />
+          <p>
+            Hay un <strong>borrador v{draft.version}</strong>, guardado el{' '}
+            {formatDateTime(draft.updatedAt)}.
+          </p>
+          <Button variant="secondary" size="sm" onClick={() => choose(draft.id)}>
+            Ver borrador
+          </Button>
+        </div>
+      )}
       {workflow.isPending && <LinesSkeleton label="el workflow" lines={8} />}
       {chosen && (
         <VersionPanel
@@ -111,8 +125,8 @@ export function WorkflowPage() {
   )
 }
 
-/** Versiones del workflow, de la más reciente a la más antigua. */
-function VersionTabs({
+/** Qué versión se ve, en un desplegable: de la más reciente a la más antigua (WF-E). */
+function VersionPicker({
   versions,
   chosen,
   onChoose,
@@ -121,22 +135,31 @@ function VersionTabs({
   chosen: VersionView | undefined
   onChoose: (id: string) => void
 }) {
+  const label = (v: VersionView) =>
+    `v${v.version} · ${STATUS_WORD[v.status]} el ${formatDateTime(v.publishedAt ?? v.updatedAt)}`
   return (
-    <nav className="version-tabs" aria-label="Versiones">
-      {versions.map((v) => (
-        <button
-          key={v.id}
-          type="button"
-          className={cn('chip', v.id === chosen?.id && 'chip-on')}
-          aria-current={v.id === chosen?.id ? 'page' : undefined}
-          onClick={() => onChoose(v.id)}
-        >
-          <VersionPill version={v} />
-          <span className="muted small">{formatDateTime(v.publishedAt ?? v.updatedAt)}</span>
-        </button>
-      ))}
-    </nav>
+    <div className="version-picker">
+      <label htmlFor="version-picker">Versión</label>
+      <select
+        id="version-picker"
+        value={chosen?.id ?? ''}
+        onChange={(e) => onChoose(e.target.value)}
+      >
+        {versions.map((v) => (
+          <option key={v.id} value={v.id}>
+            {label(v)}
+          </option>
+        ))}
+      </select>
+      {chosen && <VersionPill version={chosen} />}
+    </div>
   )
+}
+
+const STATUS_WORD: Record<VersionView['status'], string> = {
+  PUBLISHED: 'publicada',
+  VALIDATED: 'borrador guardado',
+  DRAFT: 'borrador guardado',
 }
 
 /** El YAML de una versión; si es un borrador editable, con guardar, publicar y descartar. */

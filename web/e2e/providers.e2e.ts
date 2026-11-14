@@ -107,14 +107,15 @@ test(
       await expect(
         page.locator('.monaco-editor').getByText('id: revision-con-codex-y-antigravity'),
       ).toBeVisible()
-      const summary = page.getByRole('region', { name: 'Qué define' })
-      await expect(
-        summary.getByRole('listitem').filter({ hasText: 'calidad' }).last(),
-      ).toContainText('Codex')
-      await expect(
-        summary.getByRole('listitem').filter({ hasText: 'seguridad' }).last(),
-      ).toContainText('Antigravity CLI')
+      await page.getByRole('tab', { name: 'Resumen' }).click()
+      const step = page
+        .getByRole('region', { name: /Paso a paso/ })
+        .locator('li.wf-step')
+        .filter({ hasText: 'a la vez' })
+      await expect(step).toContainText('Codex · calidad')
+      await expect(step).toContainText('Antigravity · seguridad')
       await expectAccessible(page, 'plantilla «Revisión con Codex y Antigravity»')
+      await page.getByRole('tab', { name: 'YAML' }).click()
     })
 
     await publishWorkflowViaApi(page, yaml(withFindings, true))

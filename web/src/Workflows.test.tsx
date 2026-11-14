@@ -90,13 +90,30 @@ describe('Workflows', () => {
     expect(screen.getByText(/Usa algo que el motor aún no ejecuta/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Publicar…' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Guardar' })).toBeDisabled()
-    const summary = screen.getByRole('region', { name: 'Qué define' })
-    expect(within(summary).getAllByRole('listitem')[2]).toHaveTextContent(
-      'verify verification · Tiempo máximo: 30 min por intento · Comprueba artifacts docs/review.md, tests, tests-intact, scope src/**, docs/**, command npm run lint · Depende de fix (opcional)',
+    // Un borrador abre en el YAML; «Resumen» cuenta cada fase en palabras (WF-E).
+    const tabs = screen.getByRole('tablist', { name: 'Vista de la definición' })
+    fireEvent.click(within(tabs).getByRole('tab', { name: 'Resumen' }))
+    const steps = screen.getByRole('region', { name: /Paso a paso/ })
+    const [review, , verify] = within(steps)
+      .getAllByRole('listitem')
+      .filter((li) => li.classList.contains('wf-step'))
+    expect(review).toHaveTextContent('1. review')
+    expect(review).toHaveTextContent('reviewer')
+    expect(review).toHaveTextContent('Devuelve summary')
+    for (const text of [
+      'Después de «fix» (opcional)',
+      'Deja docs/review.md',
+      'Tests en verde',
+      'No toca los tests',
+      'Solo cambia src/**, docs/**',
+      'Pasa npm run lint',
+      'Como mucho 30 min',
+    ])
+      expect(verify).toHaveTextContent(text)
+    expect(screen.getByRole('region', { name: 'Listo para lanzar' })).toHaveTextContent(
+      'El repositorio necesita su comando de verificación: lo usan los tests de «verify».',
     )
-    expect(within(summary).getAllByRole('listitem')[0]).toHaveTextContent(
-      'review agent · Agente: reviewer · Salida: summary',
-    )
+    fireEvent.click(within(tabs).getByRole('tab', { name: 'YAML' }))
 
     // Mientras se escribe, el control plane valida el texto como borrador de esta versión.
     fireEvent.change(editor, { target: { value: `${draft.sourceYaml}colr: azul\n` } })
@@ -127,9 +144,13 @@ describe('Workflows', () => {
     const editor = await screen.findByLabelText(`YAML de ${draft.key} v1`)
     expect(editor).toHaveAttribute('readonly')
     expect(screen.queryByRole('button', { name: 'Guardar' })).toBeNull()
-    const versions = screen.getByRole('navigation', { name: 'Versiones' })
-    expect(within(versions).getAllByRole('button')).toHaveLength(2)
-    expect(within(versions).getByRole('button', { current: 'page' })).toHaveTextContent('v1')
+    const versions = screen.getByLabelText('Versión')
+    expect(within(versions).getAllByRole('option')).toHaveLength(2)
+    expect(versions).toHaveValue(v1.id)
+    // Hay un borrador abierto: el aviso lleva a él.
+    expect(screen.getByRole('button', { name: 'Ver borrador' })).toBeInTheDocument()
+    // Una versión que solo se lee abre en «Resumen».
+    expect(screen.getByRole('tab', { name: 'Resumen' })).toHaveAttribute('aria-selected', 'true')
     // Ya hay un borrador (v2): «Editar» no abre otro.
     expect(screen.queryByRole('button', { name: 'Editar' })).toBeNull()
     expect(v2.status).toBe('VALIDATED')
@@ -174,7 +195,7 @@ describe('Workflows', () => {
     expect((editor as HTMLTextAreaElement).value).toMatch(/^id: mi-workflow/)
     fireEvent.click(screen.getByRole('button', { name: 'Crear borrador' }))
     await waitFor(() => expect(bodies(fetch, 'POST', '/api/workflows')).toHaveLength(1))
-    expect(await screen.findByRole('navigation', { name: 'Versiones' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('Versión')).toBeInTheDocument()
   })
 
   it('cambiar de plantilla sustituye el YAML y pregunta antes de perder lo escrito', async () => {
