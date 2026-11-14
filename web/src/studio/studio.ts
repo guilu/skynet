@@ -47,7 +47,11 @@ const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 const params = new URLSearchParams(location.search)
 const initial = (params.get('state') as CompanionState | null) ?? 'calm'
 
-document.body.innerHTML = `
+// Se añade al final del body sin vaciarlo: si el HTML exportado acaba metido dentro del body de
+// otra página (p. ej. al publicarlo como vista previa), el <style> del estudio queda ahí y no debe borrarse.
+document.body.insertAdjacentHTML(
+  'beforeend',
+  `
   <div class="st">
     <header class="st-bar">
       <div class="st-title">
@@ -91,7 +95,8 @@ document.body.innerHTML = `
         <ul></ul>
       </aside>
     </main>
-  </div>`
+  </div>`,
+)
 
 const $ = <T extends Element>(selector: string) => document.querySelector<T>(selector)!
 const canvas = $<HTMLCanvasElement>('.st-canvas')
