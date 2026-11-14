@@ -53,7 +53,7 @@ public class MemoryService {
   private static final String COLUMNS =
       "id, project_id, repository_id, kind, title, topic_key, what, why, location, learned, tags,"
           + " origin, source_workflow_run_id, source_agent_run_id, pinned, redacted, version,"
-          + " created_at, updated_at, updated_by, archived_at";
+          + " created_at, updated_at, updated_by, archived_at, trust, trust_reason";
 
   private final JdbcClient jdbc;
   private final ProjectService projects;
@@ -90,6 +90,7 @@ public class MemoryService {
     }
     Clean clean = clean(content);
     Instant now = time.now();
+    Trust trust = trust(clean, source, null);
     if (clean.topicKey() != null) {
       lockTopic(projectId, repositoryId, clean.topicKey());
       Optional<MemoryObservation> existing = liveTopic(projectId, repositoryId, clean.topicKey());
@@ -106,9 +107,10 @@ public class MemoryService {
             "INSERT INTO memory_observation (id, project_id, repository_id, kind, title, topic_key,"
                 + " what, why, location, learned, tags, origin, source_workflow_run_id,"
                 + " source_agent_run_id, redacted, version, created_at, updated_at, updated_by,"
-                + " search) VALUES (:id, :project, :repository, :kind, :title, :topic, :what,"
-                + " :why, :location, :learned, :tags, :origin, :workflowRun, :agentRun,"
-                + " :redacted, 1, :now, :now, :actor, to_tsvector('simple', :document))")
+                + " trust, trust_reason, trust_changed_at, search) VALUES (:id, :project,"
+                + " :repository, :kind, :title, :topic, :what, :why, :location, :learned, :tags,"
+                + " :origin, :workflowRun, :agentRun, :redacted, 1, :now, :now, :actor, :trust,"
+                + " :trustReason, :now, to_tsvector('simple', :document))")
         .param("id", id)
         .param("project", projectId)
         .param("repository", repositoryId)
@@ -126,6 +128,8 @@ public class MemoryService {
         .param("redacted", clean.redacted())
         .param("now", java.sql.Timestamp.from(now))
         .param("actor", source.actor())
+        .param("trust", trust.trust().name())
+        .param("trustReason", trust.reason())
         .param("document", clean.document())
         .update();
     MemoryObservation saved = get(id);
@@ -217,9 +221,86 @@ public class MemoryService {
         .param("actor", actor)
         .param("id", id)
         .update();
+    if (pinned && current.trust() != MemoryTrust.CONFIRMED) {
+      // Fijarla es fiarse de ella: una persona la ha leído y quiere que la vean todos los agentes.
+      setTrust(id, MemoryTrust.CONFIRMED, "Fijada por " + actor, now);
+      append(get(id), "memory.confirmed", MemorySource.human(actor), now);
+    }
     MemoryObservation changed = get(id);
     append(changed, pinned ? "memory.pinned" : "memory.unpinned", MemorySource.human(actor), now);
     return changed;
+  }
+
+  /** Una persona se fía de la observación: llega a los agentes, también en el bloque inicial. */
+  @Transactional
+  public MemoryObservation confirm(UUID id, String actor) {
+    MemoryObservation current = get(id);
+    if (current.trust() == MemoryTrust.CONFIRMED) {
+      return current;
+    }
+    requireWritableScope(current.projectId(), current.repositoryId());
+    Instant now = time.now();
+    setTrust(id, MemoryTrust.CONFIRMED, "Confirmada por " + actor, now);
+    MemoryObservation confirmed = get(id);
+    append(confirmed, "memory.confirmed", MemorySource.human(actor), now);
+    return confirmed;
+  }
+
+  /**
+   * Una persona aparta la observación: no llega a ningún agente hasta que alguien la confirme. Deja
+   * de estar fijada.
+   */
+  @Transactional
+  public MemoryObservation quarantine(UUID id, String reason, String actor) {
+    MemoryObservation current = get(id);
+    if (current.trust() == MemoryTrust.QUARANTINED) {
+      return current;
+    }
+    requireWritableScope(current.projectId(), current.repositoryId());
+    String why = blankToNull(reason);
+    if (why != null) {
+      why = text(why, "reason", MAX_TITLE, false);
+    }
+    Instant now = time.now();
+    jdbc.sql("UPDATE memory_observation SET pinned = false, updated_by = :actor WHERE id = :id")
+        .param("actor", actor)
+        .param("id", id)
+        .update();
+    setTrust(
+        id,
+        MemoryTrust.QUARANTINED,
+        "En cuarentena por " + actor + (why == null ? "" : ": " + redactor.redact(why)),
+        now);
+    MemoryObservation quarantined = get(id);
+    append(quarantined, "memory.quarantined", MemorySource.human(actor), now);
+    return quarantined;
+  }
+
+  /**
+   * Una persona ha aceptado el trabajo de la ejecución (su PR se fusionó, o la aprobó): lo que sus
+   * agentes guardaron y sigue sin confirmar pasa a confirmado. Lo que está en cuarentena se queda
+   * como está.
+   *
+   * @param reason por qué, en palabras: «Se fusionó la PR de su ejecución»…
+   * @return cuántas observaciones se confirman
+   */
+  @Transactional
+  public int confirmRun(UUID workflowRunId, String reason) {
+    Instant now = time.now();
+    List<UUID> ids =
+        jdbc.sql(
+                "UPDATE memory_observation SET trust = 'CONFIRMED', trust_reason = :reason,"
+                    + " trust_changed_at = :now WHERE source_workflow_run_id = :run"
+                    + " AND trust = 'UNCONFIRMED' AND archived_at IS NULL RETURNING id")
+            .param("reason", reason)
+            .param("now", java.sql.Timestamp.from(now))
+            .param("run", workflowRunId)
+            .query(UUID.class)
+            .list();
+    for (UUID id : ids) {
+      append(get(id), "memory.confirmed", MemorySource.system(workflowRunId), now);
+    }
+    return ids.size();
   }
 
   @Transactional(readOnly = true)
@@ -339,6 +420,10 @@ public class MemoryService {
       where.append(" AND pinned = :pinned");
       params.put("pinned", query.pinned());
     }
+    if (!query.trust().isEmpty()) {
+      where.append(" AND trust IN (:trust)");
+      params.put("trust", query.trust().stream().map(Enum::name).toList());
+    }
     where.append(query.archived().sql("archived_at"));
     String text = query.text() == null ? null : query.text().strip();
     String order = " ORDER BY pinned DESC, updated_at DESC, id";
@@ -390,13 +475,16 @@ public class MemoryService {
   private MemoryObservation newVersion(
       MemoryObservation current, Clean clean, MemorySource source, Instant now) {
     int version = current.version() + 1;
+    Trust trust = trust(clean, source, current);
     jdbc.sql(
             "UPDATE memory_observation SET kind = :kind, title = :title, topic_key = :topic,"
                 + " what = :what, why = :why, location = :location, learned = :learned,"
                 + " tags = :tags, origin = :origin, source_workflow_run_id = :workflowRun,"
                 + " source_agent_run_id = :agentRun, redacted = :redacted, version = :version,"
-                + " updated_at = :now, updated_by = :actor,"
-                + " search = to_tsvector('simple', :document) WHERE id = :id")
+                + " updated_at = :now, updated_by = :actor, trust = :trust,"
+                + " trust_reason = :trustReason, trust_changed_at = CASE WHEN trust = :trust"
+                + " AND trust_reason IS NOT DISTINCT FROM :trustReason THEN trust_changed_at"
+                + " ELSE :now END, search = to_tsvector('simple', :document) WHERE id = :id")
         .param("kind", clean.kind().name())
         .param("title", clean.title())
         .param("topic", clean.topicKey())
@@ -412,6 +500,8 @@ public class MemoryService {
         .param("version", version)
         .param("now", java.sql.Timestamp.from(now))
         .param("actor", source.actor())
+        .param("trust", trust.trust().name())
+        .param("trustReason", trust.reason())
         .param("document", clean.document())
         .param("id", current.id())
         .update();
@@ -457,6 +547,7 @@ public class MemoryService {
     }
     payload.put("version", o.version());
     payload.put("origin", source.origin().name());
+    payload.put("trust", o.trust().name());
     if (source.actor() != null) {
       payload.put("actor", source.actor());
     }
@@ -511,6 +602,48 @@ public class MemoryService {
               throw new ConflictException(
                   "Ya hay otra observación viva con el tema " + topicKey + ": " + other.title());
             });
+  }
+
+  private record Trust(MemoryTrust trust, String reason) {}
+
+  /**
+   * La confianza de lo que se guarda (MV-A). Lo de una persona, confirmado. Lo de Skynet, también,
+   * salvo que parezca una orden. Lo de un agente, sin confirmar hasta que se acepte su trabajo, o
+   * en cuarentena si parece una orden. Una versión nueva que no escribe una persona no saca de
+   * cuarentena lo que ya estaba.
+   */
+  private static Trust trust(Clean clean, MemorySource source, MemoryObservation current) {
+    if (source.origin() == MemoryOrigin.HUMAN) {
+      return new Trust(
+          MemoryTrust.CONFIRMED,
+          current == null ? "Escrita por " + source.actor() : "Editada por " + source.actor());
+    }
+    Optional<String> suspicious =
+        MemoryInstructionDetector.reason(
+            clean.title(), clean.what(), clean.why(), clean.where(), clean.learned());
+    if (suspicious.isPresent()) {
+      return new Trust(MemoryTrust.QUARANTINED, suspicious.get());
+    }
+    if (current != null && current.trust() == MemoryTrust.QUARANTINED) {
+      return new Trust(MemoryTrust.QUARANTINED, current.trustReason());
+    }
+    if (source.origin() == MemoryOrigin.SYSTEM) {
+      return new Trust(MemoryTrust.CONFIRMED, "Escrita por Skynet");
+    }
+    return new Trust(
+        MemoryTrust.UNCONFIRMED,
+        "La guardó un agente: se confirma cuando se acepta el trabajo de su ejecución");
+  }
+
+  private void setTrust(UUID id, MemoryTrust trust, String reason, Instant now) {
+    jdbc.sql(
+            "UPDATE memory_observation SET trust = :trust, trust_reason = :reason,"
+                + " trust_changed_at = :now WHERE id = :id")
+        .param("trust", trust.name())
+        .param("reason", reason)
+        .param("now", java.sql.Timestamp.from(now))
+        .param("id", id)
+        .update();
   }
 
   /** Contenido validado, normalizado y con los secretos enmascarados. */
@@ -672,7 +805,9 @@ public class MemoryService {
         rs.getTimestamp("created_at").toInstant(),
         rs.getTimestamp("updated_at").toInstant(),
         rs.getString("updated_by"),
-        archived == null ? null : archived.toInstant());
+        archived == null ? null : archived.toInstant(),
+        MemoryTrust.valueOf(rs.getString("trust")),
+        rs.getString("trust_reason"));
   }
 
   private static List<String> strings(Array array) throws SQLException {

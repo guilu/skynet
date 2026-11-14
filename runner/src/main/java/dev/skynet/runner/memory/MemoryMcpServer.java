@@ -137,7 +137,8 @@ public final class MemoryMcpServer {
         tools,
         "mem_search",
         "Busca en la memoria del repositorio y de su proyecto. Devuelve vistas previas: lee la"
-            + " entrada entera con mem_get.",
+            + " entrada entera con mem_get. Las que llevan trust UNCONFIRMED las guardó un agente"
+            + " y nadie ha aceptado todavía su trabajo: compruébalas antes de fiarte.",
         search,
         true);
     ObjectNode get = schema();

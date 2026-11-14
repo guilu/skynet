@@ -101,6 +101,13 @@ test('una ejecución guarda una decisión, otra nueva la encuentra y la web ense
   )
 
   const first = await launchAndFinish(page, workItemId, repositoryId, save)
+  // Lo que guarda un agente no va en el bloque de las ejecuciones siguientes hasta que alguien
+  // acepta su trabajo (MV-A): aquí se confirma a mano.
+  const saved = await (
+    await page.request.get(`/api/projects/${projectId}/memory?q=squash&trust=UNCONFIRMED`)
+  ).json()
+  expect(saved.items).toHaveLength(1)
+  await postApi(page, `/api/memory/${saved.items[0].id}/confirm`, {})
   const second = await launchAndFinish(page, workItemId, repositoryId, search)
 
   await test.step('la pestaña Memoria del proyecto enseña la decisión y las bitácoras', async () => {

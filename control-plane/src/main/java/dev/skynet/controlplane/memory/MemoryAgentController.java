@@ -47,6 +47,7 @@ class MemoryAgentController {
       boolean pinned,
       int version,
       MemoryOrigin origin,
+      MemoryTrust trust,
       String updatedAt) {
 
     static ObservationView of(MemoryObservation o) {
@@ -64,6 +65,7 @@ class MemoryAgentController {
           o.pinned(),
           o.version(),
           o.origin(),
+          o.trust(),
           o.updatedAt().toString());
     }
   }

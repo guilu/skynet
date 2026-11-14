@@ -37,6 +37,10 @@ public class MemoryAgents {
   private static final int MAX_RESULTS = 20;
   private static final int MAX_GOAL = 180;
 
+  /** Lo que un agente puede buscar y leer: todo menos lo que está en cuarentena (MV-A). */
+  private static final Set<MemoryTrust> AGENT_VISIBLE =
+      Set.of(MemoryTrust.CONFIRMED, MemoryTrust.UNCONFIRMED);
+
   /** Acceso de una invocación a la memoria. */
   public enum Mode {
     READ,
@@ -61,6 +65,7 @@ public class MemoryAgents {
       boolean pinned,
       int version,
       MemoryOrigin origin,
+      MemoryTrust trust,
       Instant updatedAt) {}
 
   record SearchResult(List<Preview> results, long total) {}
@@ -86,7 +91,9 @@ public class MemoryAgents {
 
   static final String TOOLS_WRITE =
       "Tienes las herramientas de memoria `skynet_memoria`. Antes de decidir algo que pueda estar"
-          + " ya resuelto, busca con `mem_search` y lee la entrada entera con `mem_get`. Guarda con"
+          + " ya resuelto, busca con `mem_search` y lee la entrada entera con `mem_get`; lo que"
+          + " lleve `trust: UNCONFIRMED` no lo ha aceptado nadie todavía: compruébalo antes de"
+          + " fiarte. Guarda con"
           + " `mem_save` las decisiones, los bugs resueltos, los descubrimientos, los patrones, la"
           + " configuración, las trampas y las restricciones que convenga recordar, con un"
           + " `topic_key` estable si actualiza un tema; no guardes salidas de herramientas, cada"
@@ -95,7 +102,8 @@ public class MemoryAgents {
   static final String TOOLS_READ =
       "Tienes las herramientas de memoria `skynet_memoria` en modo de solo lectura. Antes de"
           + " decidir algo que pueda estar ya resuelto, busca con `mem_search` y lee la entrada"
-          + " entera con `mem_get`. Esta fase no guarda en la memoria.";
+          + " entera con `mem_get`; lo que lleve `trust: UNCONFIRMED` no lo ha aceptado nadie"
+          + " todavía: compruébalo antes de fiarte. Esta fase no guarda en la memoria.";
 
   /**
    * Lo que el agente pide guardar. Sin {@code scope}, o con {@code repository}, va al repositorio.
@@ -279,7 +287,8 @@ public class MemoryAgents {
                 Archived.EXCLUDE,
                 query,
                 0,
-                limit == null ? 10 : Math.clamp(limit, 1, MAX_RESULTS)));
+                limit == null ? 10 : Math.clamp(limit, 1, MAX_RESULTS),
+                AGENT_VISIBLE));
     page.items().forEach(o -> record(caller, o, "SEARCH"));
     return new SearchResult(
         page.items().stream().map(MemoryAgents::preview).toList(), page.total());
@@ -297,7 +306,7 @@ public class MemoryAgents {
     boolean inScope =
         o.projectId().equals(caller.projectId())
             && (o.repositoryId() == null || o.repositoryId().equals(caller.repositoryId()));
-    if (!inScope || o.archivedAt() != null) {
+    if (!inScope || !o.visibleToAgents()) {
       throw new NotFoundException("Observación", id);
     }
     record(caller, o, "GET");
@@ -439,6 +448,7 @@ public class MemoryAgents {
         o.pinned(),
         o.version(),
         o.origin(),
+        o.trust(),
         o.updatedAt());
   }
 

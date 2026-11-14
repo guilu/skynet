@@ -77,6 +77,7 @@ class MemoryController {
       @RequestParam(required = false) Boolean pinned,
       @RequestParam(defaultValue = "false") String archived,
       @RequestParam(required = false) String q,
+      @RequestParam(required = false) Set<MemoryTrust> trust,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "50") int size) {
     MemoryQuery.Scope scope;
@@ -92,7 +93,16 @@ class MemoryController {
     return service.search(
         projectId,
         new MemoryQuery(
-            scope, repositoryId, kind, origin, pinned, Archived.of(archived), q, page, size));
+            scope,
+            repositoryId,
+            kind,
+            origin,
+            pinned,
+            Archived.of(archived),
+            q,
+            page,
+            size,
+            trust));
   }
 
   @PostMapping("/api/projects/{projectId}/memory")
@@ -138,6 +148,24 @@ class MemoryController {
   @PostMapping("/api/memory/{id}/restore")
   MemoryObservation restore(@PathVariable UUID id, Principal principal) {
     return service.restore(id, principal.getName());
+  }
+
+  /** Por qué se aparta una observación; opcional. */
+  record QuarantineRequest(String reason) {}
+
+  /** Una persona se fía de la observación (MV-A): llega a los agentes, también al empezar. */
+  @PostMapping("/api/memory/{id}/confirm")
+  MemoryObservation confirm(@PathVariable UUID id, Principal principal) {
+    return service.confirm(id, principal.getName());
+  }
+
+  /** Una persona aparta la observación (MV-A): no llega a ningún agente. */
+  @PostMapping("/api/memory/{id}/quarantine")
+  MemoryObservation quarantine(
+      @PathVariable UUID id,
+      @RequestBody(required = false) QuarantineRequest request,
+      Principal principal) {
+    return service.quarantine(id, request == null ? null : request.reason(), principal.getName());
   }
 
   @PostMapping("/api/memory/{id}/pin")

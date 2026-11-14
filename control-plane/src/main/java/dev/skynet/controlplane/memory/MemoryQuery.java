@@ -14,6 +14,7 @@ import java.util.UUID;
  * @param origin origen, o {@code null} para todos
  * @param pinned solo las fijadas ({@code true}), solo las no fijadas ({@code false}) o todas
  * @param text texto a buscar en título, tema, contenido y etiquetas, o {@code null}
+ * @param trust confianzas (MV-A); vacío, todas
  */
 public record MemoryQuery(
     Scope scope,
@@ -24,7 +25,21 @@ public record MemoryQuery(
     Archived archived,
     String text,
     int page,
-    int size) {
+    int size,
+    Set<MemoryTrust> trust) {
+
+  public MemoryQuery(
+      Scope scope,
+      UUID repositoryId,
+      Set<MemoryKind> kinds,
+      MemoryOrigin origin,
+      Boolean pinned,
+      Archived archived,
+      String text,
+      int page,
+      int size) {
+    this(scope, repositoryId, kinds, origin, pinned, archived, text, page, size, Set.of());
+  }
 
   public enum Scope {
     /** Todo el proyecto, con sus repositorios. */
@@ -40,5 +55,6 @@ public record MemoryQuery(
   public MemoryQuery {
     kinds = kinds == null ? Set.of() : Set.copyOf(kinds);
     archived = archived == null ? Archived.EXCLUDE : archived;
+    trust = trust == null ? Set.of() : Set.copyOf(trust);
   }
 }

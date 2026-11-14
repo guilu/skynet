@@ -58,6 +58,18 @@ class MemoryAgentIT extends IntegrationTest {
     assertThat(full.path("what").asString()).isEqualTo("Las PRs van con squash");
     assertThat(full.path("origin").asString()).isEqualTo("AGENT");
 
+    // Lo que guardó un agente se encuentra, marcado, pero no va en el contexto inicial hasta que
+    // alguien acepta su trabajo (MV-A).
+    assertThat(found.path("results").get(0).path("trust").asString()).isEqualTo("UNCONFIRMED");
+    assertThat(full.path("trust").asString()).isEqualTo("UNCONFIRMED");
+    assertThat(call(second, "context", Map.of()).path("observations")).isEmpty();
+    post("/api/memory/" + id + "/confirm", Map.of());
+    String summary =
+        jdbc.sql("SELECT id FROM memory_observation WHERE kind = 'SESSION_SUMMARY'")
+            .query(String.class)
+            .single();
+    post("/api/memory/" + summary + "/confirm", Map.of());
+
     JsonNode context = call(second, "context", Map.of());
     assertThat(context.path("text").asString())
         .startsWith(MemoryContext.HEADER)
@@ -80,7 +92,7 @@ class MemoryAgentIT extends IntegrationTest {
                 .params(agentId(other), UUID.fromString(id))
                 .query(String.class)
                 .list())
-        .containsExactly("PROMPT", "SEARCH", "GET", "CONTEXT");
+        .containsExactly("SEARCH", "GET", "CONTEXT");
 
     // La web lo ve por invocación: lo que guardó una y lo que recibió, buscó y leyó la otra.
     JsonNode saver = get("/api/agent-runs/" + firstAgent + "/memory");
@@ -94,7 +106,7 @@ class MemoryAgentIT extends IntegrationTest {
     assertThat(reader.path("accesses"))
         .filteredOn(a -> a.path("observationId").asString().equals(id))
         .extracting(a -> a.path("via").asString() + " v" + a.path("version").asInt())
-        .containsExactly("PROMPT v1", "SEARCH v1", "GET v1", "CONTEXT v1");
+        .containsExactly("SEARCH v1", "GET v1", "CONTEXT v1");
     assertStatus(() -> get("/api/agent-runs/" + UUID.randomUUID() + "/memory"), 404);
   }
 
