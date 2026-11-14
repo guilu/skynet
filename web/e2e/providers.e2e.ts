@@ -104,12 +104,9 @@ test(
     await test.step('elegir la plantilla en Nuevo workflow', async () => {
       await page.goto('/workflows/new')
       await page.getByLabel('Plantilla').selectOption({ label: 'Revisión con Codex y Antigravity' })
-      await expect(
-        page.locator('.monaco-editor').getByText('id: revision-con-codex-y-antigravity'),
-      ).toBeVisible()
-      await page.getByRole('tab', { name: 'Resumen' }).click()
+      // WF-F: el alta abre en «Pasos».
       const step = page
-        .getByRole('region', { name: /Paso a paso/ })
+        .getByRole('region', { name: 'Pasos' })
         .locator('li.wf-step')
         .filter({ hasText: 'a la vez' })
       await expect(step).toContainText('Codex · calidad')

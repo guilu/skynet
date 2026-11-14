@@ -85,15 +85,19 @@ describe('Workflows', () => {
     renderAt(`/workflows/${draft.key}`, <App />)
 
     const editor = await screen.findByLabelText(`YAML de ${draft.key} v2`)
-    expect(await screen.findByText('1 aún no se ejecuta')).toBeInTheDocument()
+    const ready = await screen.findByRole('region', { name: 'Listo para lanzar' })
+    expect(await within(ready).findByText('1 aún no se ejecuta')).toBeInTheDocument()
     expect(screen.getByText(/`promptTemplate` todavía no se usa: llega en S3/)).toBeInTheDocument()
     expect(screen.getByText(/Usa algo que el motor aún no ejecuta/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Publicar…' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Guardar' })).toBeDisabled()
-    // Un borrador abre en el YAML; «Resumen» cuenta cada fase en palabras (WF-E).
+    // Un borrador abre en «Pasos», que cuenta cada fase en palabras y se edita (WF-F).
     const tabs = screen.getByRole('tablist', { name: 'Vista de la definición' })
-    fireEvent.click(within(tabs).getByRole('tab', { name: 'Resumen' }))
-    const steps = screen.getByRole('region', { name: /Paso a paso/ })
+    expect(within(tabs).getByRole('tab', { name: 'Pasos' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    const steps = screen.getByRole('region', { name: 'Pasos' })
     const [review, , verify] = within(steps)
       .getAllByRole('listitem')
       .filter((li) => li.classList.contains('wf-step'))
@@ -118,7 +122,7 @@ describe('Workflows', () => {
     // Mientras se escribe, el control plane valida el texto como borrador de esta versión.
     fireEvent.change(editor, { target: { value: `${draft.sourceYaml}colr: azul\n` } })
     expect(screen.getByText('Cambios sin guardar')).toBeInTheDocument()
-    expect(await screen.findByText('1 error', {}, { timeout: 2000 })).toBeInTheDocument()
+    expect(await within(ready).findByText('1 error', {}, { timeout: 2000 })).toBeInTheDocument()
     expect(bodies(fetch, 'POST', '/api/workflows/validate').at(-1)).toEqual({
       sourceYaml: `${draft.sourceYaml}colr: azul\n`,
       key: draft.key,

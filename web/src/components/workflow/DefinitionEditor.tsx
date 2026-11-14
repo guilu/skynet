@@ -1,7 +1,8 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { CircleAlert, CircleCheck, Redo2, Undo2 } from 'lucide-react'
 import { lazy, Suspense, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
-import { api, type Validation, type WorkflowModel } from '../../api'
+import { api, type Problem, type Validation, type WorkflowModel } from '../../api'
 import { cn } from '../../lib/cn'
 import { LinesSkeleton } from '../ui/Skeleton'
 import { TabList, TabPanel } from '../ui/Tabs'
@@ -10,6 +11,8 @@ import { Companion } from '../companion/Companion'
 import { ProblemList } from './ProblemList'
 import { problemSummary } from './problems'
 import { useDebounced } from './useDebounced'
+import { StepsEditor } from './StepsEditor'
+import { problemBadge } from '../graph/definitionProblems'
 import { useTouchOnly } from '../../useTouchOnly'
 import { useMediaQuery } from '../../useMediaQuery'
 import { stageLine } from './definitionEdits'
@@ -23,12 +26,19 @@ const YamlEditor = lazy(() => import('./YamlEditor'))
 const DefinitionGraph = lazy(() => import('../graph/DefinitionGraph'))
 const GraphEditor = lazy(() => import('./GraphEditor').then((m) => ({ default: m.GraphEditor })))
 
-const VIEWS = [
+/** Lo que se lee: el resumen (WF-E), el grafo y el YAML. */
+const READ_VIEWS = [
   { id: 'summary', label: 'Resumen', icon: 'list' },
   { id: 'graph', label: 'Grafo', icon: 'graph' },
   { id: 'yaml', label: 'YAML', icon: 'code' },
 ] as const
-type View = (typeof VIEWS)[number]['id']
+/** Lo que se edita (WF-F): los pasos, el grafo y el YAML. */
+const EDIT_VIEWS = [
+  { id: 'steps', label: 'Pasos', icon: 'list' },
+  { id: 'graph', label: 'Grafo', icon: 'graph' },
+  { id: 'yaml', label: 'YAML', icon: 'code' },
+] as const
+type View = (typeof READ_VIEWS)[number]['id'] | (typeof EDIT_VIEWS)[number]['id']
 
 interface Props {
   text: string
@@ -44,6 +54,13 @@ interface Props {
   actions?: ReactNode
   /** Nombre del fichero al descargar el YAML. */
   fileName?: string
+}
+
+/** Lo que dice la barra del borrador: sin problemas, o cuántos errores y avisos. */
+function barStatus(problems: Problem[]): { tone: 'ok' | 'warn' | 'bad'; label: string } {
+  const badge = problemBadge(problems)
+  if (!badge) return { tone: 'ok', label: 'Sin problemas' }
+  return { tone: badge.severity === 'ERROR' ? 'bad' : 'warn', label: badge.label }
 }
 
 /**
@@ -66,10 +83,16 @@ export function DefinitionEditor({
 }: Props) {
   const editor = useRef<YamlEditorHandle>(null)
   const [params, setParams] = useSearchParams()
-  // Una versión que solo se lee abre en «Resumen» (WF-E); un borrador, en el YAML.
-  const defaultView: View = readOnly ? 'summary' : 'yaml'
+  // En un móvil, Monaco no deja seleccionar, copiar ni pegar: se usa un campo de texto normal.
+  const touchOnly = useTouchOnly()
+  const narrow = useMediaQuery('(max-width: 720px)')
+  const editing = !readOnly && onChange != null
+  const views = editing ? EDIT_VIEWS : READ_VIEWS
+  // Una versión que solo se lee abre en «Resumen» (WF-E); un borrador, en «Pasos» (WF-F), salvo en
+  // una pantalla estrecha, donde de momento se edita en el YAML.
+  const defaultView: View = !editing ? 'summary' : narrow ? 'yaml' : 'steps'
   const asked = params.get('view')
-  const view: View = VIEWS.find((v) => v.id === asked)?.id ?? defaultView
+  const view: View = views.find((v) => v.id === asked)?.id ?? defaultView
   const selectView = (next: View) =>
     setParams(
       (prev) => {
@@ -80,13 +103,10 @@ export function DefinitionEditor({
       },
       { replace: true },
     )
-  // En un móvil, Monaco no deja seleccionar, copiar ni pegar: se usa un campo de texto normal.
-  const touchOnly = useTouchOnly()
-  const narrow = useMediaQuery('(max-width: 720px)')
   // En el móvil las líneas largas se ajustan de entrada; en escritorio, a petición.
   const [wrapChoice, setWrap] = useState<boolean | null>(null)
   const wrap = wrapChoice ?? narrow
-  const graphEditable = !readOnly && onChange != null && !narrow
+  const graphEditable = editing && !narrow
   const schema = useQuery({
     queryKey: ['workflow-schema'],
     queryFn: api.workflowSchema,
@@ -123,19 +143,108 @@ export function DefinitionEditor({
     requestAnimationFrame(() => editor.current?.reveal(line, column))
   }
 
+  const tabs = (
+    <TabList
+      label="Vista de la definición"
+      tabs={views}
+      selected={view}
+      onSelect={selectView}
+      idPrefix="definition-view"
+      panelId="definition-view-panel"
+    />
+  )
+
   return (
     <>
-      {actions && <div className="definition-actions">{actions}</div>}
-      <div className={cn('definition-editor', view === 'graph' && 'definition-editor-graph')}>
+      {editing ? (
+        // La barra del borrador (WF-F): modo, deshacer, rehacer, cómo está y guardar, siempre a
+        // la vista.
+        <div className="definition-bar">
+          {tabs}
+          {!touchOnly && (
+            <span className="definition-history">
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label="Deshacer"
+                title="Deshacer (Ctrl+Z)"
+                onClick={() => editor.current?.undo?.()}
+              >
+                <Undo2 size={20} strokeWidth={2.25} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label="Rehacer"
+                title="Rehacer (Ctrl+Mayús+Z)"
+                onClick={() => editor.current?.redo?.()}
+              >
+                <Redo2 size={20} strokeWidth={2.25} aria-hidden="true" />
+              </button>
+            </span>
+          )}
+          <span
+            className={cn(
+              'definition-bar-status',
+              current ? `is-${barStatus(problems).tone}` : 'is-thinking',
+            )}
+          >
+            {current && barStatus(problems).tone === 'ok' ? (
+              <CircleCheck size={16} strokeWidth={2.5} aria-hidden="true" />
+            ) : (
+              <CircleAlert size={16} strokeWidth={2.5} aria-hidden="true" />
+            )}
+            {current ? barStatus(problems).label : 'Validando…'}
+          </span>
+          {actions && <div className="definition-actions">{actions}</div>}
+        </div>
+      ) : (
+        actions && <div className="definition-actions">{actions}</div>
+      )}
+      <div
+        className={cn(
+          'definition-editor',
+          (view === 'graph' || view === 'steps') && 'definition-editor-graph',
+        )}
+      >
         <section className="definition-source" aria-label="Definición">
-          <TabList
-            label="Vista de la definición"
-            tabs={VIEWS}
-            selected={view}
-            onSelect={selectView}
-            idPrefix="definition-view"
-            panelId="definition-view-panel"
-          />
+          {!editing && tabs}
+          {view === 'steps' && (
+            <TabPanel
+              id="definition-view-panel"
+              labelledBy="definition-view-steps"
+              className="definition-steps"
+            >
+              {definition && !narrow && onChange ? (
+                <StepsEditor
+                  text={text}
+                  onChange={onChange}
+                  definition={definition}
+                  problems={problems}
+                  source={current?.text ?? text}
+                  reveal={revealInYaml}
+                  lineOf={(id, field) => stageLine(text, id, field)}
+                  keyEditable={validateAs == null}
+                  undo={touchOnly ? undefined : () => editor.current?.undo?.()}
+                  redo={touchOnly ? undefined : () => editor.current?.redo?.()}
+                />
+              ) : definition ? (
+                <>
+                  <p className="muted small">
+                    En una pantalla estrecha los pasos son de solo lectura: edita en la pestaña
+                    YAML.
+                  </p>
+                  <DefinitionOverview definition={definition} />
+                </>
+              ) : (
+                <p className="muted">
+                  {current
+                    ? 'El YAML no se puede leer: corrige los problemas para ver los pasos.'
+                    : 'Validando…'}
+                </p>
+              )}
+            </TabPanel>
+          )}
           {view === 'summary' && (
             <TabPanel
               id="definition-view-panel"

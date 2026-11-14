@@ -4,7 +4,6 @@ import {
   Bot,
   Check,
   ChevronRight,
-  Circle,
   CircleAlert,
   CircleCheck,
   CircleX,
@@ -20,18 +19,18 @@ import {
   Repeat,
   Scale,
   Sparkles,
-  Terminal,
   Timer,
   TriangleAlert,
   Users,
   Wrench,
   type LucideIcon,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { WorkflowModel } from '../../api'
 import { providerName } from '../../format'
 import { cn } from '../../lib/cn'
 import { useMediaQuery } from '../../useMediaQuery'
+import { STEP_ICON } from './stepIcons'
 import { PHASE_LABEL } from '../graph/layout'
 import { Sheet } from '../ui/Sheet'
 import { providerInfo } from './overview'
@@ -47,16 +46,6 @@ import {
   type StepWorker,
 } from './steps'
 import type { Problem } from '../../api'
-
-const STEP_ICON: Record<Step['icon'], LucideIcon> = {
-  agent: Bot,
-  approval: Hand,
-  judge: Scale,
-  github: GitPullRequest,
-  command: Terminal,
-  parallel: Users,
-  other: Circle,
-}
 
 const CHIP_ICON: Record<ChipIcon, LucideIcon> = {
   after: CornerDownRight,
@@ -118,23 +107,65 @@ function StepChips({ step }: { step: Step }) {
   )
 }
 
-function StepHead({ step }: { step: Step }) {
+function StepHead({
+  step,
+  onSelect,
+  badge,
+  menu,
+}: {
+  step: Step
+  onSelect?: () => void
+  badge?: ReactNode
+  menu?: ReactNode
+}) {
   return (
     <div className="wf-step-head">
       <h4 className="wf-step-title">
-        {step.n}. {step.title}
+        {onSelect ? (
+          <button type="button" className="wf-step-select" data-step={step.id} onClick={onSelect}>
+            {step.n}. {step.title}
+          </button>
+        ) : (
+          <>
+            {step.n}. {step.title}
+          </>
+        )}
       </h4>
+      {badge}
       <span className="tag">{step.kind}</span>
       <code className="muted small">{step.id}</code>
+      {menu && <span className="wf-step-menu">{menu}</span>}
     </div>
   )
 }
 
-/** Un paso entero: título, quién, la frase, los chips y el prompt plegado. */
-function StepCard({ step }: { step: Step }) {
+/**
+ * Un paso entero: título, quién, la frase, los chips y el prompt plegado. En el editor (WF-F), el
+ * título es el botón que lo elige y lleva sus problemas y su menú.
+ */
+export function StepCard({
+  step,
+  onSelect,
+  selected = false,
+  badge,
+  menu,
+}: {
+  step: Step
+  onSelect?: () => void
+  selected?: boolean
+  badge?: ReactNode
+  menu?: ReactNode
+}) {
   return (
-    <div className="wf-step-card">
-      <StepHead step={step} />
+    <div
+      className={cn('wf-step-card', onSelect && 'wf-step-card-edit', selected && 'is-selected')}
+      onClick={(e) => {
+        // Pinchar en la tarjeta la elige, salvo en sus botones, enlaces y el prompt plegado.
+        if (onSelect && !(e.target as HTMLElement).closest('button, a, details, [role="menu"]'))
+          onSelect()
+      }}
+    >
+      <StepHead step={step} onSelect={onSelect} badge={badge} menu={menu} />
       {step.workers.map((w, i) => (
         <Worker key={`${w.agent}.${i}`} worker={w} />
       ))}

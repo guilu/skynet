@@ -110,11 +110,8 @@ test(
       await page
         .getByLabel('Plantilla')
         .selectOption({ label: 'Especificar, planificar e implementar' })
-      await expect(
-        page.locator('.monaco-editor').getByText('id: especificar-planificar-implementar'),
-      ).toBeVisible()
-      await page.getByRole('tab', { name: 'Resumen' }).click()
-      const stages = page.getByRole('region', { name: /Paso a paso/ }).locator('li.wf-step')
+      // WF-F: el alta abre en «Pasos».
+      const stages = page.getByRole('region', { name: 'Pasos' }).locator('li.wf-step')
       await expect(stages).toHaveCount(4)
       await expect(stages.nth(0)).toContainText('Deja openspec/proposal.md')
       await expect(stages.nth(2)).toContainText('Tu aprobación')

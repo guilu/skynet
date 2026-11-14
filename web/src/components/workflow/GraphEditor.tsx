@@ -1,4 +1,4 @@
-import { Bot, FileText, Redo2, TextCursorInput, Trash2, Undo2 } from 'lucide-react'
+import { Bot, FileText, TextCursorInput, Trash2 } from 'lucide-react'
 import { lazy, Suspense, useState, type KeyboardEvent } from 'react'
 import type { Problem, WorkflowModel } from '../../api'
 import type { GraphSelection } from '../graph/DefinitionGraph'
@@ -45,6 +45,7 @@ interface Props {
   reveal: (line: number, column: number) => void
   /** La línea de una fase (o de su campo) en el texto, para «Editar en YAML». */
   lineOf: (id: string, field?: string) => { line: number; column: number } | null
+  /** Para Ctrl/Cmd+Z: los botones están en la barra del editor (WF-F). */
   undo?: () => void
   redo?: () => void
   /** Si se puede cambiar el id del workflow: solo en el alta. */
@@ -169,18 +170,6 @@ export function GraphEditor({
             ))}
           </select>
         </label>
-        {undo && (
-          <Button variant="secondary" size="sm" onClick={undo}>
-            <Undo2 size={16} aria-hidden="true" />
-            Deshacer
-          </Button>
-        )}
-        {redo && (
-          <Button variant="secondary" size="sm" onClick={redo}>
-            <Redo2 size={16} aria-hidden="true" />
-            Rehacer
-          </Button>
-        )}
         <div className="graph-panels" role="group" aria-label="Más del workflow">
           {PANELS.map(({ id, label, icon: Icon }) => (
             <Button

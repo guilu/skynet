@@ -47,16 +47,16 @@ test('importar, validar mientras se escribe, publicar, editar y descartar un wor
       mimeType: 'text/yaml',
       buffer: Buffer.from(yaml(key)),
     })
-    await expect(page.locator('.monaco-editor').getByText(`id: ${key}`)).toBeVisible()
     await expect(problemsCard(page).getByText('Sin problemas')).toBeVisible()
-    await page.getByRole('tab', { name: 'Resumen' }).click()
-    const stages = page.getByRole('region', { name: /Paso a paso/ }).locator('li.wf-step')
+    // WF-F: el alta abre en «Pasos».
+    const stages = page.getByRole('region', { name: 'Pasos' }).locator('li.wf-step')
     await expect(stages).toHaveCount(2)
     await expect(stages.nth(1)).toContainText('2. fix')
     await expect(stages.nth(1)).toContainText('El del repositorio')
     await expect(stages.nth(1)).toContainText('Después de «review»')
     await expectAccessible(page, 'alta de workflow')
     await page.getByRole('tab', { name: 'YAML' }).click()
+    await expect(page.locator('.monaco-editor').getByText(`id: ${key}`)).toBeVisible()
   })
 
   await test.step('un error aparece mientras se escribe y desaparece al corregirlo', async () => {
@@ -104,6 +104,57 @@ test('importar, validar mientras se escribe, publicar, editar y descartar un wor
     const card = page.getByRole('listitem').filter({ hasText: key })
     await expect(card).toHaveCount(1)
     await expect(card.getByText('v1')).toBeVisible()
+  })
+})
+
+test('editar por pasos: arreglar un error en un clic, añadir un paso y moverlo con Alt+↑', async ({
+  page,
+}) => {
+  await page.goto('/workflows/new')
+  await login(page)
+  await page.getByLabel('Archivo YAML del workflow').setInputFiles({
+    name: 'pasos.yaml',
+    mimeType: 'text/yaml',
+    buffer: Buffer.from(yaml('e2e-pasos').replace('dependsOn: [review]', 'dependsOn: [reviw]')),
+  })
+  const steps = page.getByRole('region', { name: 'Pasos' })
+  const items = steps.locator('li.wf-step')
+
+  await test.step('el error dice su paso y se arregla con «Cambiar a…»', async () => {
+    const alert = page.getByRole('region', { name: /No se puede publicar: 1 error/ })
+    await expect(alert).toContainText('No hay ninguna fase `reviw`')
+    await expect(alert).toContainText('Paso 2 · fix')
+    await expect(items.nth(1)).toContainText('1 error')
+    await alert.getByRole('button', { name: 'Cambiar a «review»' }).click()
+    await expect(problemsCard(page).getByText('Sin problemas')).toBeVisible()
+    await expect(alert).toHaveCount(0)
+  })
+
+  await test.step('añadir «Tu aprobación» entre review y fix, y completarla', async () => {
+    await steps.getByRole('button', { name: 'Añadir paso detrás de review' }).click()
+    await page.getByRole('menuitem', { name: /Tu aprobación/ }).click()
+    const panel = page.getByRole('region', { name: 'Fase aprobacion' })
+    await expect(panel).toBeVisible()
+    await expect(items).toHaveCount(3)
+    await expect(items.nth(2)).toContainText('Después de «aprobacion»')
+    await panel.getByLabel('Qué se aprueba').fill('Seguir con la corrección')
+    await panel.getByLabel('Qué se aprueba').press('Enter')
+    await expect(problemsCard(page).getByText('Sin problemas')).toBeVisible()
+  })
+
+  await expectAccessible(page, 'editor por pasos')
+  await page.screenshot({
+    path: `${process.env.E2E_OUT ?? 'build'}/wf-f-pasos.png`,
+    fullPage: true,
+  })
+
+  await test.step('Alt+↑ sube fix por encima de la aprobación; «Deshacer» lo devuelve', async () => {
+    await steps.getByRole('button', { name: '3. fix' }).focus()
+    await page.keyboard.press('Alt+ArrowUp')
+    await expect(items.nth(1)).toContainText('fix')
+    await expect(items.nth(2)).toContainText('Después de «fix»')
+    await page.getByRole('button', { name: 'Deshacer' }).click()
+    await expect(items.nth(2)).toContainText('Después de «aprobacion»')
   })
 })
 
@@ -271,9 +322,8 @@ test('editar un borrador desde el grafo: añadir una fase, unirla, completar su 
   await test.step('guardar: el YAML queda con la fase nueva', async () => {
     await page.getByRole('button', { name: 'Guardar' }).click()
     await expect(page.getByText(/Guardado el/)).toBeVisible()
-    await page.reload()
-    await page.getByRole('tab', { name: 'Resumen' }).click()
-    const stages = page.getByRole('region', { name: /Paso a paso/ }).locator('li.wf-step')
+    await page.goto(`/workflows/${key}`)
+    const stages = page.getByRole('region', { name: 'Pasos' }).locator('li.wf-step')
     await expect(stages).toHaveCount(3)
     await expect(stages.nth(2)).toContainText('Ejecuta ./gradlew test')
     await expect(stages.nth(2)).toContainText('Después de «fix» y «review» (opcional)')
