@@ -533,6 +533,13 @@ public class PullRequestMerges {
         .param("now", Timestamp.from(now))
         .param("id", id)
         .update();
+    if (MERGED.equals(status)) {
+      jdbc.sql("SELECT workflow_run_id FROM github_pull_request WHERE id = ?")
+          .param(id)
+          .query(UUID.class)
+          .optional()
+          .ifPresent(runId -> publisher.publishEvent(new PullRequestMerged(runId)));
+    }
   }
 
   /** Los worktrees que subió la entrega: el del push de la PR y los de las correcciones de CI. */

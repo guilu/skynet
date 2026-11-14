@@ -10,6 +10,8 @@ import java.util.UUID;
  * @param repositoryId repositorio, o {@code null} si es de todo el proyecto
  * @param origin quién escribió la versión actual
  * @param redacted si se enmascaró algún secreto al guardarla
+ * @param trust cuánto se fía Skynet de ella (MV-A)
+ * @param trustReason por qué tiene esa confianza
  */
 public record MemoryObservation(
     UUID id,
@@ -32,4 +34,12 @@ public record MemoryObservation(
     Instant createdAt,
     Instant updatedAt,
     String updatedBy,
-    Instant archivedAt) {}
+    Instant archivedAt,
+    MemoryTrust trust,
+    String trustReason) {
+
+  /** Si un agente puede encontrarla o leerla; en el bloque inicial solo van las confirmadas. */
+  public boolean visibleToAgents() {
+    return archivedAt == null && trust != MemoryTrust.QUARANTINED;
+  }
+}

@@ -15,6 +15,7 @@ Cada entrada es una **observación**:
 | Título y tema | Un título breve (hasta 200 caracteres) y, opcional, un `topic_key` estable como `arquitectura/auth`. |
 | Contenido | `what` (obligatorio), `why`, `where` y `learned`, hasta 4 000 caracteres cada uno, y hasta 20 etiquetas. |
 | Estado | Activa o archivada, y fijada o no. |
+| Confianza | Confirmada, sin confirmar o en cuarentena, con su motivo (ver «Confianza»). |
 | Procedencia | Quién escribió la versión actual (un agente, una persona o Skynet), y la ejecución y la invocación de las que sale. |
 | Versiones | Cada cambio crea una versión nueva; todas se guardan con quién la hizo y cuándo. |
 
@@ -22,9 +23,30 @@ Cada entrada es una **observación**:
 
 **Secretos:** todo lo que se guarda pasa por la misma redacción que los eventos (claves de API, tokens de GitHub, de AWS, de Slack y de Google, JWT, cabeceras `Bearer` y contraseñas en URLs) y sale como `[REDACTED]`. La entrada queda marcada como enmascarada y la web lo avisa.
 
+## Confianza
+
+Lo que guarda un agente puede estar mal, o venir de algo que leyó en el repositorio o en la web y que no debería repetirse en cada ejecución. Por eso cada observación tiene una **confianza** (hito MV, MV-A):
+
+| Confianza | Cuándo | Qué ven los agentes |
+|---|---|---|
+| **Confirmada** | La escribió o la editó una persona, o Skynet (la bitácora); o una persona aceptó el trabajo de la ejecución de la que sale. | Va en el bloque inicial y sale en las búsquedas. |
+| **Sin confirmar** | La guardó un agente (también su resumen de sesión) y nadie ha aceptado todavía su trabajo. | No va en el bloque inicial. `mem_search` y `mem_get` la devuelven con `trust: UNCONFIRMED`, y el agente sabe que tiene que comprobarla. |
+| **En cuarentena** | Parece una orden para el agente, o una persona la apartó. | Nada: ni el bloque, ni las búsquedas, ni `mem_get` (404). |
+
+**Cuándo se confirma lo de un agente:**
+- Al **fusionarse la PR** de su ejecución, la fusione Skynet (`github-merge`) o alguien a mano en GitHub.
+- Al **terminar bien una ejecución en la que una persona aprobó alguna puerta** (también con `/skynet aprobar` desde GitHub). Una aprobación automática (`autoApprove`) no cuenta.
+- Cuando una persona la **edita**, la **fija** o la **confirma** a mano.
+
+Lo que está en cuarentena no sale de ella con una fusión ni con una versión nueva de un agente: solo si una persona la confirma, la edita o la fija.
+
+**Qué va a cuarentena sola.** Sin modelo, se miran el título y los campos de lo que guardan los agentes y Skynet. Va a cuarentena lo que tiene frases dirigidas al agente («ignora las instrucciones anteriores», «a partir de ahora debes…», «from now on, you must…», «new instructions:») o lo que descarga y ejecuta código (`curl … | sh`, `base64 -d | sh`, `bash <(curl …)`). Una nota normal sobre comandos, URLs o configuración no se marca. Lo que escribe una persona no se mira.
+
+Lo guardado antes de MV-A quedó como confirmado.
+
 ## Cómo la usan los agentes
 
-1. **Al empezar una sesión nueva**, el prompt de la fase va precedido de un bloque `<memoria-del-proyecto>`. Lleva lo fijado, los últimos resúmenes de sesión, la bitácora y lo último guardado en el repositorio de la ejecución y en todo el proyecto, con un tope de 4 000 caracteres (`SKYNET_MEMORY_CONTEXT_MAX_CHARS`). Si no cabe todo, deja fuera entradas enteras y avisa de que hay más. Llega como contexto de referencia, no como instrucciones: si contradice el repositorio, manda el repositorio. Una continuación (mensaje, reanudación o bifurcación) no lo repite.
+1. **Al empezar una sesión nueva**, el prompt de la fase va precedido de un bloque `<memoria-del-proyecto>`. Solo lleva lo confirmado: lo fijado, los últimos resúmenes de sesión, la bitácora y lo último guardado en el repositorio de la ejecución y en todo el proyecto, con un tope de 4 000 caracteres (`SKYNET_MEMORY_CONTEXT_MAX_CHARS`). Si no cabe todo, deja fuera entradas enteras y avisa de que hay más. Llega como contexto de referencia, no como instrucciones: si contradice el repositorio, manda el repositorio. Una continuación (mensaje, reanudación o bifurcación) no lo repite.
 2. **Mientras trabajan**, Claude Code y Codex tienen las herramientas MCP del servidor `skynet_memoria`:
 
    | Herramienta | Qué hace |
@@ -75,18 +97,21 @@ En el detalle de cada agente, la pestaña **Memoria** dice qué hizo esa invocac
 
 | Método y ruta | Qué hace |
 |---|---|
-| `GET /api/projects/{id}/memory` | Busca. Parámetros: `q`, `repository` (un id o `project`), `withProject`, `kind` (se puede repetir), `origin`, `pinned`, `archived` (`false`, `true` o `all`), `page` y `size` (hasta 100). |
+| `GET /api/projects/{id}/memory` | Busca. Parámetros: `q`, `repository` (un id o `project`), `withProject`, `kind` (se puede repetir), `origin`, `pinned`, `archived` (`false`, `true` o `all`), `trust` (`CONFIRMED`, `UNCONFIRMED` o `QUARANTINED`; se puede repetir), `page` y `size` (hasta 100). |
 | `POST /api/projects/{id}/memory` | Guarda una observación como persona (201, o 200 si es una versión nueva de un tema). |
 | `GET /api/memory/{id}` | Una observación. |
 | `PUT /api/memory/{id}` | Una versión nueva con lo que cambie una persona. |
 | `GET /api/memory/{id}/history` | Todas las versiones, de la más reciente a la más antigua. |
-| `POST /api/memory/{id}/archive`, `…/restore`, `…/pin`, `…/unpin` | Revisión. |
+| `POST /api/memory/{id}/archive`, `…/restore`, `…/pin`, `…/unpin` | Revisión. Fijar también la confirma. |
+| `POST /api/memory/{id}/confirm` | Confirmarla: llega a los agentes, también en el bloque inicial. |
+| `POST /api/memory/{id}/quarantine` | Ponerla en cuarentena, con un `reason` opcional en el cuerpo. Deja de estar fijada. |
 | `GET /api/agent-runs/{id}/memory` | Lo que una invocación recibió, buscó, leyó y guardó, con su modo (`READ`, `WRITE` o `null`). |
 
-Cada cambio deja un evento en el historial: `memory.created`, `memory.updated`, `memory.archived`, `memory.restored`, `memory.pinned` y `memory.unpinned`. Los que escribe una ejecución (lo que guardan sus agentes y su bitácora) salen en su línea de tiempo.
+Cada cambio deja un evento en el historial: `memory.created`, `memory.updated`, `memory.archived`, `memory.restored`, `memory.pinned`, `memory.unpinned`, `memory.confirmed` y `memory.quarantined`, todos con la confianza (`trust`) que queda. Los que escribe una ejecución (lo que guardan sus agentes y su bitácora) salen en su línea de tiempo.
 
 ## Fuera de esta versión
 
 - Detectar duplicados y contradicciones entre entradas (`mem_judge`, `mem_compare` y `mem_consolidate` de engram).
 - Memoria global entre proyectos, búsqueda semántica y caducidad de entradas.
 - Lanzar `investigar-mejoras` de forma programada.
+- Lo que queda del hito MV «Memoria viva» ([#307](https://github.com/guilu/skynet/issues/307)–[#311](https://github.com/guilu/skynet/issues/311)): la puerta «¿ya está hecho?», las páginas de la wiki, el contexto según el trabajo, el curador y la confianza en la web.

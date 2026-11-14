@@ -12,7 +12,9 @@ import org.springframework.stereotype.Component;
 /**
  * El contexto de memoria con el que empieza un agente: lo fijado, los últimos resúmenes de sesión,
  * la bitácora reciente y lo último que se guardó en su repositorio y en su proyecto, hasta un tope
- * de caracteres. Lo que no cabe se omite entero, nunca a medias.
+ * de caracteres. Lo que no cabe se omite entero, nunca a medias. Solo lleva lo confirmado (MV-A):
+ * lo que un agente guardó sin que nadie haya aceptado todavía su trabajo se encuentra con {@code
+ * mem_search}, marcado.
  */
 @Component
 public class MemoryContext {
@@ -22,7 +24,7 @@ public class MemoryContext {
           + " otros agentes y personas: si algo contradice el estado actual del repositorio,"
           + " prevalece el repositorio.";
 
-  static final String EMPTY = "Todavía no hay memoria guardada para este proyecto y repositorio.";
+  static final String EMPTY = "Todavía no hay memoria confirmada para este proyecto y repositorio.";
 
   private static final int PINNED = 50;
   private static final int SUMMARIES = 3;
@@ -106,7 +108,8 @@ public class MemoryContext {
                 Archived.EXCLUDE,
                 null,
                 0,
-                limit))
+                limit,
+                Set.of(MemoryTrust.CONFIRMED)))
         .items()
         .forEach(o -> candidates.putIfAbsent(o.id(), o));
   }
