@@ -65,7 +65,7 @@ test('importar, validar mientras se escribe, publicar, editar y descartar un wor
     await page.keyboard.type('colr: azul')
     const problem = problemsCard(page).getByRole('button', { name: /Clave `colr` desconocida/ })
     await expect(problem).toBeVisible()
-    await expect(problemsCard(page).getByText('1 error')).toBeVisible()
+    await expect(problemsCard(page).getByText('1 error', { exact: true })).toBeVisible()
     await expect(page.locator('.monaco-editor .squiggly-error')).toHaveCount(1)
     for (let i = 0; i < 'colr: azul'.length; i++) await page.keyboard.press('Backspace')
     await expect(problemsCard(page).getByText('Sin problemas')).toBeVisible()
