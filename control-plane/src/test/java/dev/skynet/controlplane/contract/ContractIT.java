@@ -9,6 +9,7 @@ import dev.skynet.controlplane.definition.DefinitionParser;
 import dev.skynet.controlplane.definition.DefinitionStatus;
 import dev.skynet.controlplane.definition.StageType;
 import dev.skynet.controlplane.definition.VersionView;
+import dev.skynet.controlplane.definition.WorkflowOverview;
 import dev.skynet.controlplane.definition.WorkflowSummary;
 import dev.skynet.controlplane.definition.WorkflowView;
 import dev.skynet.controlplane.event.StoredEvent;
@@ -1112,7 +1113,10 @@ class ContractIT extends IntegrationTest {
           reviewV1(),
           reviewDraft(),
           T0,
-          null);
+          null,
+          WorkflowOverview.of(
+              DefinitionParser.parse(REVIEW_YAML, DefinitionParser.Expectations.NONE)
+                  .definition()));
     }
 
     static DefinitionDetail reviewDraftDetail() {

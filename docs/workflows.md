@@ -813,7 +813,7 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| `GET` | `/api/workflows?archived=` | Lista los workflows con su última versión publicada y su borrador |
+| `GET` | `/api/workflows?archived=` | Lista los workflows con su última versión publicada, su borrador y `overview` (WF-B, ver abajo) |
 | `POST` | `/api/workflows` | Crea un workflow con el YAML (`sourceYaml`) como borrador de la versión 1 |
 | `POST` | `/api/workflows/validate` | Valida un YAML sin guardarlo; con `key` y `version`, como el borrador de esa versión |
 | `GET` | `/api/workflows/schema` | El JSON Schema, para el editor |
@@ -850,6 +850,19 @@ Hay como mucho un borrador por workflow. Guardar o publicar un borrador exige la
 | `POST` | `/api/lessons/{id}/apply` | Aplica una lección propuesta (`{text}`, opcional: si falta, el propuesto); 409 si ya está decidida |
 | `GET` | `/api/factory/lessons?status=` | Las lecciones de todos los proyectos activos, para Fábrica → Lecciones (AP-C) |
 | `POST` | `/api/lessons/{id}/dismiss` | Descarta una lección propuesta o desactiva una aplicada (`{reason}`, obligatorio; AP-C); al desactivar una `prevenir`, archiva su restricción; 409 si ya está descartada |
+
+**El resumen de cada workflow** (WF-B). Cada workflow de `GET /api/workflows` (y de `GET /api/workflows/{key}`) trae `overview`, calculado de la versión publicada o, si no hay, del borrador. Es la misma versión de la que salen `name` y `description`. Si esa versión no se puede leer, vale `null`.
+
+- `stages`: fases de primer nivel. `parallelChildren`: agentes que corren a la vez dentro de las fases `parallel`, sumados.
+- `gates`: fases `human-approval`. `judges`: agentes distintos que juzgan en las fases `verification`.
+- `providers`: proveedores de los agentes que trabajan o juzgan, por orden de aparición. Una fase de agente sin `agent` cuenta como `repository` (el agente del repositorio).
+- `fallbackProviders`: proveedores de reserva que no están ya en `providers`.
+- `lanes`: las macrofases (`phase`) con alguna fase, en el orden de los carriles del grafo.
+- `inputs`: `[{name, required}]`, los datos que se piden al lanzar.
+- `delivers`: tiene una fase `github-pr`.
+- `readOnly`: ningún agente puede cambiar el repositorio. Se cumple si todos los agentes de las fases `agent` y `parallel` van en `plan` o `dontAsk`, y no hay fases `command`, de GitHub o de entrega, ni comprobaciones `commit` o `diff`.
+
+El de una versión publicada se guarda en memoria, porque no cambia; el de un borrador se calcula en cada lectura.
 
 Cada problema lleva `severity` (`ERROR`, `UNSUPPORTED` o `WARNING`), `path` (p. ej. `stages.fix.dependsOn[0]`), `line`, `column` y `message`.
 

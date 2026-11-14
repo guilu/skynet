@@ -46,6 +46,9 @@ public class WorkflowDefinitions {
   /** Las versiones publicadas no cambian: se leen una vez. */
   private final Map<UUID, PublishedDefinition> published = new ConcurrentHashMap<>();
 
+  /** El resumen de cada versión publicada (WF-B), que no cambia. */
+  private final Map<UUID, WorkflowOverview> overviews = new ConcurrentHashMap<>();
+
   WorkflowDefinitions(JdbcClient jdbc, EventStore events, TimeSource time) {
     this.jdbc = jdbc;
     this.events = events;
@@ -433,16 +436,19 @@ public class WorkflowDefinitions {
     Map<String, String> texts =
         shown == null
             ? Map.of()
-            : jdbc.sql("SELECT name, description FROM workflow_definition WHERE id = ?")
+            : jdbc.sql(
+                    "SELECT name, description, source_yaml FROM workflow_definition WHERE id = ?")
                 .param(shown.id())
                 .query(
                     (rs, n) -> {
                       Map<String, String> m = new java.util.HashMap<>();
                       m.put("name", rs.getString("name"));
                       m.put("description", rs.getString("description"));
+                      m.put("source", rs.getString("source_yaml"));
                       return m;
                     })
                 .single();
+    WorkflowOverview overview = shown == null ? null : overview(shown, texts.get("source"));
     return new WorkflowSummary(
         workflow.id(),
         workflow.key(),
@@ -451,7 +457,24 @@ public class WorkflowDefinitions {
         published,
         draft,
         workflow.createdAt(),
-        workflow.archivedAt());
+        workflow.archivedAt(),
+        overview);
+  }
+
+  /**
+   * El resumen de la definición de una versión (WF-B). El de una versión publicada no cambia, así
+   * que se guarda; el de un borrador se calcula cada vez, porque se edita.
+   */
+  private WorkflowOverview overview(VersionView version, String source) {
+    if (version.status() == DefinitionStatus.PUBLISHED) {
+      WorkflowOverview cached = overviews.get(version.id());
+      if (cached != null) return cached;
+    }
+    WorkflowDefinition definition = DefinitionParser.parse(source, Expectations.NONE).definition();
+    if (definition == null) return null;
+    WorkflowOverview overview = WorkflowOverview.of(definition);
+    if (version.status() == DefinitionStatus.PUBLISHED) overviews.put(version.id(), overview);
+    return overview;
   }
 
   private List<VersionView> versions(String key) {
