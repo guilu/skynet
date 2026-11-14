@@ -24,29 +24,35 @@ export const MARK_NOTCH = 'M26 22.5h12'
 export const MARK_NOTCH_WIDTH = 2.5
 
 /*
- * Skyny v3 (hito SY): la mascota, que desde SY-B es también el icono de la app. Una sola geometría
- * para el componente `Companion` y para los iconos (favicon, favicon de estado y PNG).
+ * Skyny (hito SY, redibujado en SV-D como el Skyny 3D del estudio v2): la mascota, que desde SY-B
+ * es también el icono de la app. Una sola geometría para el componente `Companion` y para los
+ * iconos (favicon, favicon de estado y PNG).
  */
 
-/** El cuerpo: un triángulo que un trazo de `SKYNY_BODY_STROKE` redondea. */
-export const SKYNY_BODY = 'M60 12 L10 94 L110 94 Z'
-export const SKYNY_BODY_STROKE = 22
+/** El cuerpo: un triángulo bajo de lados algo abombados que un trazo de `SKYNY_BODY_STROKE` redondea. */
+export const SKYNY_BODY = 'M60 20 Q28 48 16 94 Q60 101 104 94 Q92 48 60 20 Z'
+export const SKYNY_BODY_STROKE = 30
 
-/** Las tres bandas, del visor al borde: las laterales suben un poco y la inferior baja. */
-export const SKYNY_BANDS = ['M60 63 L-6 50', 'M60 63 L126 50', 'M60 64 L60 120']
+/** Las tres bandas, del visor al borde: las laterales suben en diagonal y la inferior baja. */
+export const SKYNY_BANDS = ['M60 64 L-6 26', 'M60 64 L126 26', 'M60 64 L60 120']
 
-/** Cabeza y manos. */
-export const SKYNY_NODES = [
-  { cx: 60, cy: 12, r: 16 },
-  { cx: 14, cy: 96, r: 18 },
-  { cx: 106, cy: 96, r: 18 },
+/** Las manos, grandes, en las esquinas de abajo (sin cabeza desde SV-D). */
+export const SKYNY_HANDS = [
+  { cx: 12, cy: 100, r: 19 },
+  { cx: 108, cy: 100, r: 19 },
 ]
 
-/** El visor: centro, radio y aro claro de alrededor. */
-export const SKYNY_VISOR = { cx: 60, cy: 64, r: 22, ring: 27 }
+/** El visor: centro, radio y aro metálico de alrededor. */
+export const SKYNY_VISOR = { cx: 60, cy: 64, r: 24, ring: 30 }
 
 /** Colores fijos del icono: el favicon y los PNG no ven los tokens de la página. */
-export const SKYNY_INK = { visor: '#1c2345', band: '#1f2647', eye: '#c9f1ff', node: '#ffffff' }
+export const SKYNY_INK = {
+  visor: '#1c2345',
+  band: '#1f2647',
+  eye: '#c9f1ff',
+  node: '#ffffff',
+  bezel: '#c7cbd1',
+}
 
 /** Mezcla `hex` con blanco: `amount` 0 deja el color y 1 da blanco. */
 export function tint(hex: string, amount: number): string {
@@ -63,12 +69,12 @@ export type SkynyEyes = 'calm' | 'error'
 
 /**
  * Skyny como SVG suelto, sin efectos ni animación: el cuerpo con el degradado de `color`, las
- * tres bandas, el visor con su aro, los nodos y los ojos. Para los iconos de la app.
+ * tres bandas, el visor con su aro metálico, las manos y los ojos. Para los iconos de la app.
  */
 export function skynySvg(color: string, eyes: SkynyEyes = 'calm'): string {
   const hi = tint(color, 0.58)
-  const { visor, band, eye, node } = SKYNY_INK
-  const nodes = SKYNY_NODES.map(
+  const { visor, band, eye, node, bezel } = SKYNY_INK
+  const nodes = SKYNY_HANDS.map(
     (n) =>
       `<circle cx="${n.cx}" cy="${n.cy}" r="${n.r}" fill="${node}" stroke="${hi}" stroke-width="4"/>`,
   ).join('')
@@ -78,7 +84,7 @@ export function skynySvg(color: string, eyes: SkynyEyes = 'calm'): string {
       : `<rect x="47" y="54" width="10" height="19" rx="5" fill="${eye}"/><rect x="63" y="54" width="10" height="19" rx="5" fill="${eye}"/>`
   const body = `d="${SKYNY_BODY}" stroke-width="${SKYNY_BODY_STROKE}" stroke-linejoin="round"`
   return [
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -10 140 132">',
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -6 144 136">',
     '<defs>',
     `<linearGradient id="b" x1="0" y1="0" x2=".25" y2="1"><stop offset="0" stop-color="${hi}"/><stop offset=".85" stop-color="${color}"/></linearGradient>`,
     `<mask id="s" maskUnits="userSpaceOnUse" x="-20" y="-20" width="160" height="160"><path ${body} fill="#fff" stroke="#fff"/></mask>`,
@@ -87,7 +93,7 @@ export function skynySvg(color: string, eyes: SkynyEyes = 'calm'): string {
     `<g mask="url(#s)" stroke="${band}" stroke-width="12" fill="none">`,
     SKYNY_BANDS.map((d) => `<path d="${d}"/>`).join(''),
     '</g>',
-    `<circle cx="${SKYNY_VISOR.cx}" cy="${SKYNY_VISOR.cy}" r="${SKYNY_VISOR.ring}" fill="${tint(color, 0.85)}"/>`,
+    `<circle cx="${SKYNY_VISOR.cx}" cy="${SKYNY_VISOR.cy}" r="${SKYNY_VISOR.ring}" fill="${bezel}"/>`,
     `<circle cx="${SKYNY_VISOR.cx}" cy="${SKYNY_VISOR.cy}" r="${SKYNY_VISOR.r}" fill="${visor}"/>`,
     face,
     nodes,

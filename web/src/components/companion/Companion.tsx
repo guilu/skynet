@@ -1,4 +1,11 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import {
+  SKYNY_BANDS,
+  SKYNY_BODY,
+  SKYNY_BODY_STROKE,
+  SKYNY_HANDS,
+  SKYNY_VISOR,
+} from '../../lib/brand'
 import { cn } from '../../lib/cn'
 import type { Gesture } from './gesture'
 import { lookOffset, prefersReducedMotion } from './look'
@@ -12,20 +19,10 @@ const LARGE = 64
 /** Lo que tarda en cerrarse el visor al cambiar de expresión; el cambio queda tapado. */
 export const SWAP_MS = 110
 
-/**
- * Geometría del v2 (SV-D), como el Skyny 3D: un cuerpo más bajo y redondeado (un triángulo de lados
- * algo abombados que el trazo redondea), un visor más grande y las manos, grandes, en las esquinas de abajo.
- */
-const BODY = 'M60 20 Q28 48 16 94 Q60 101 104 94 Q92 48 60 20 Z'
-const BODY_STROKE = 30
-const HAND_L = { cx: 12, cy: 100, r: 19 }
-const HAND_R = { cx: 108, cy: 100, r: 19 }
-const VISOR = { cx: 60, cy: 64, r: 24, ring: 30 }
-/**
- * Las bandas del v2 (SV-D), como en el Skyny 3D: las laterales salen del visor hacia arriba, en
- * diagonal, y la de abajo baja hasta el borde.
- */
-const BANDS = ['M60 64 L-6 26', 'M60 64 L126 26', 'M60 64 L60 120']
+const BODY = SKYNY_BODY
+const [HAND_L, HAND_R] = SKYNY_HANDS
+const VISOR = SKYNY_VISOR
+const BANDS = SKYNY_BANDS
 
 /**
  * Skyny v3 (plan `plans/siguiente-hito-sy.md`), redibujado en SV-D como el Skyny 3D (estudio v2):
@@ -167,7 +164,7 @@ export function Companion({
             d={BODY}
             fill="#fff"
             stroke="#fff"
-            strokeWidth={BODY_STROKE}
+            strokeWidth={SKYNY_BODY_STROKE}
             strokeLinejoin="round"
           />
         </mask>
@@ -204,7 +201,7 @@ export function Companion({
           d={BODY}
           fill={ref('body')}
           stroke={ref('body')}
-          strokeWidth={BODY_STROKE}
+          strokeWidth={SKYNY_BODY_STROKE}
           strokeLinejoin="round"
         />
         <g className="companion-bands" mask={ref('shape')} strokeWidth={small ? 14 : 12}>
