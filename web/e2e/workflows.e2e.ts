@@ -138,7 +138,8 @@ test('editar por pasos: arreglar un error en un clic, añadir un paso y moverlo 
     await expect(items).toHaveCount(3)
     await expect(items.nth(2)).toContainText('Después de «aprobacion»')
     await panel.getByLabel('Qué se aprueba').fill('Seguir con la corrección')
-    await panel.getByLabel('Qué se aprueba').press('Enter')
+    // Es un campo de varias líneas: se guarda al salir de él.
+    await panel.getByLabel('Qué se aprueba').blur()
     await expect(problemsCard(page).getByText('Sin problemas')).toBeVisible()
   })
 
