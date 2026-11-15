@@ -60,7 +60,7 @@ class WikiWriter {
   static final String INDEX = "indice";
   static final String DONE = "lo-hecho";
   static final String ERRORS = "errores-conocidos";
-  static final String DECISIONS = "decisiones";
+  static final String DECISIONS = "decisiones-y-restricciones";
 
   static final int MAX_DONE = 100;
   static final int MAX_FILES = 8;
@@ -294,7 +294,22 @@ class WikiWriter {
             "Lo que ya falló alguna vez en este proyecto y cómo se evitó. Si tu cambio toca lo mismo,"
                 + " no lo repitas.\n");
     List<WikiSource> sources = new ArrayList<>();
+    int fixed = fixedFindings(projectId, body, sources);
+    int lessons = appliedLessons(projectId, body, sources);
+    int pitfalls = pitfalls(projectId, repositories, body, sources);
+    int escapes = escapes(projectId, body, sources);
+    String summary =
+        String.join(
+            ", ",
+            count(fixed, "fallo corregido", "fallos corregidos"),
+            count(lessons, "lección", "lecciones"),
+            count(pitfalls, "trampa o bug", "trampas o bugs"),
+            count(escapes, "escape", "escapes"));
+    return new Generated(body.toString(), sources, summary);
+  }
 
+  /** Los hallazgos corregidos, agrupados por su primera aparición; devuelve cuántos. */
+  private int fixedFindings(UUID projectId, StringBuilder body, List<WikiSource> sources) {
     record Fixed(UUID id, String repository, String file, String severity, String text, int runs) {}
     List<Fixed> fixed =
         jdbc.sql(
@@ -337,7 +352,11 @@ class WikiWriter {
       body.append('\n');
       sources.add(new WikiSource("finding", f.id(), clip(oneLine(f.text())), null));
     }
+    return fixed.size();
+  }
 
+  /** Las lecciones de {@code prevenir} aplicadas; devuelve cuántas. */
+  private int appliedLessons(UUID projectId, StringBuilder body, List<WikiSource> sources) {
     record Lesson(UUID id, String repository, String category, String text, int runs) {}
     List<Lesson> lessons =
         jdbc.sql(
@@ -371,7 +390,15 @@ class WikiWriter {
           .append(" ejecuciones)\n");
       sources.add(new WikiSource("lesson", l.id(), l.repository() + " · " + l.category(), null));
     }
+    return lessons.size();
+  }
 
+  /** Los {@code PITFALL} y {@code BUGFIX} confirmados; devuelve cuántos. */
+  private int pitfalls(
+      UUID projectId,
+      Map<UUID, String> repositories,
+      StringBuilder body,
+      List<WikiSource> sources) {
     List<MemoryObservation> pitfalls =
         confirmed(projectId, Set.of(MemoryKind.PITFALL, MemoryKind.BUGFIX));
     body.append("\n## Trampas y bugs de la memoria\n\n");
@@ -381,7 +408,11 @@ class WikiWriter {
     for (MemoryObservation o : pitfalls) {
       observation(body, sources, o, repositories, o.learned() != null ? o.learned() : o.what());
     }
+    return pitfalls.size();
+  }
 
+  /** Lo que se le escapó al juez; devuelve cuántos escapes. */
+  private int escapes(UUID projectId, StringBuilder body, List<WikiSource> sources) {
     record Escape(
         UUID id,
         String key,
@@ -437,14 +468,7 @@ class WikiWriter {
       body.append('\n');
       sources.add(new WikiSource("escape", e.id(), e.key() + " · " + pr, e.url()));
     }
-    String summary =
-        String.join(
-            ", ",
-            count(fixed.size(), "fallo corregido", "fallos corregidos"),
-            count(lessons.size(), "lección", "lecciones"),
-            count(pitfalls.size(), "trampa o bug", "trampas o bugs"),
-            count(escapes.size(), "escape", "escapes"));
-    return new Generated(body.toString(), sources, summary);
+    return escapes.size();
   }
 
   // Decisiones y restricciones

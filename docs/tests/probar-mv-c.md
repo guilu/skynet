@@ -7,7 +7,7 @@ MV-C (#308) es la tercera PR del hito MV «Memoria viva». Lo explica [`docs/mem
   - **Índice** (`indice`): qué páginas hay, con una línea de cada una.
   - **Lo hecho** (`lo-hecho`): los trabajos con una PR fusionada, con la PR, la fecha, el repositorio y los ficheros.
   - **Errores conocidos** (`errores-conocidos`): hallazgos corregidos, lecciones de `prevenir` aplicadas, `PITFALL` y `BUGFIX` confirmados y escapes del juez.
-  - **Decisiones y restricciones** (`decisiones`): las `DECISION` y `CONSTRAINT` confirmadas.
+  - **Decisiones y restricciones** (`decisiones-y-restricciones`): las `DECISION` y `CONSTRAINT` confirmadas.
 - **Cuándo:** al terminar cada ejecución, al fusionarse una PR (después de confirmar su memoria) y a mano con `POST /api/projects/{id}/wiki/refresh`.
 - **Lo que no cambia no crea versión.**
 - **API de solo lectura:** `GET /api/projects/{id}/wiki`, `…/wiki/{slug}`, `…/wiki/{slug}/revisions` y `…/revisions/{version}`.
@@ -29,7 +29,7 @@ SKYNET_TEST_DB_URL=jdbc:postgresql://localhost:5432/skynet_test \
   - «Errores conocidos» lleva el hallazgo «(en 2 ejecuciones)», la lección, la trampa confirmada y el escape; no lleva el hallazgo abierto, la lección propuesta ni la trampa sin confirmar del agente;
   - «Decisiones y restricciones» lleva la restricción y la decisión;
   - el índice dice «1 trabajo entregado; el último, AKA-1 el 3/11/2026», «1 fallo corregido, 1 lección, 1 trampa o bug, 1 escape» y «1 restricción, 1 decisión».
-- regenerar sin cambios deja la versión 1; con una decisión nueva, `decisiones` pasa a la versión 2, el historial tiene dos versiones y la 1 no lleva la nueva. «Lo hecho» sigue en la 1;
+- regenerar sin cambios deja la versión 1; con una decisión nueva, `decisiones-y-restricciones` pasa a la versión 2, el historial tiene dos versiones y la 1 no lleva la nueva. «Lo hecho» sigue en la 1;
 - una página que no existe da 404;
 - un proyecto vacío dice «Todavía no se ha entregado nada».
 
@@ -45,7 +45,7 @@ Trabaja sobre `demo-repo`. «Entregado» quiere decir PR fusionada, y sin GitHub
    curl -s $AUTH -X POST "$API/api/projects/<proyecto>/wiki/refresh" | jq '.[] | {slug, version}'
    ```
 
-   **Esperado:** `decisiones`, `errores-conocidos`, `indice` y `lo-hecho`, todas en la versión 1.
+   **Esperado:** `decisiones-y-restricciones`, `errores-conocidos`, `indice` y `lo-hecho`, todas en la versión 1.
 2. Lee el índice y «Lo hecho»:
 
    ```bash
@@ -63,7 +63,7 @@ Trabaja sobre `demo-repo`. «Entregado» quiere decir PR fusionada, y sin GitHub
 
 1. Guarda desde la web, en la pestaña Memoria del proyecto, una **Decisión** «Probar la wiki» y una **Trampa** «Cuidado con la wiki».
 2. Regenera (2.1, paso 1).
-   **Esperado:** `decisiones` y `errores-conocidos` suben a la versión 2, y las dos entradas salen en su página. `lo-hecho` y el `indice` cambian solo si cambió su resumen.
+   **Esperado:** `decisiones-y-restricciones` y `errores-conocidos` suben a la versión 2, y las dos entradas salen en su página. `lo-hecho` y el `indice` cambian solo si cambió su resumen.
 3. Lanza en el proyecto un workflow con fake-claude que guarde un `PITFALL` con `mem_save` (guion de la guía de MV-A, `FAKE_MCP_CALLS=@.memoria.json`), y espera a que termine **sin** PR fusionada ni aprobación.
    **Esperado:** la trampa del agente no sale en «Errores conocidos», porque está sin confirmar.
 4. Confírmala (`POST /api/memory/<id>/confirm`) y regenera.
@@ -73,7 +73,7 @@ Trabaja sobre `demo-repo`. «Entregado» quiere decir PR fusionada, y sin GitHub
 
 1. Lanza cualquier trabajo con fake-claude y espera a que termine.
    **Esperado:** sin regenerar a mano, `GET …/wiki` enseña `updatedAt` reciente en las páginas que cambiaron.
-2. Pide el historial: `curl -s $AUTH "$API/api/projects/<proyecto>/wiki/decisiones/revisions" | jq '.[] | {version, createdBy}'`.
+2. Pide el historial: `curl -s $AUTH "$API/api/projects/<proyecto>/wiki/decisiones-y-restricciones/revisions" | jq '.[] | {version, createdBy}'`.
    **Esperado:** una versión por cada cambio, de la más reciente a la más antigua, todas de `skynet`.
 3. Pide una versión vieja con `…/revisions/1`. **Esperado:** el contenido de entonces.
 

@@ -9,8 +9,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * La wiki de un proyecto (MV-C), de solo lectura: sus páginas, cada una con sus fuentes, y sus
- * versiones. {@code repositoryId} elige la página de un repositorio; sin él, la de todo el
- * proyecto.
+ * versiones. {@code repositoryId} elige la página de un repositorio; sin él, la del proyecto
+ * entero.
  */
 @RestController
 class WikiController {

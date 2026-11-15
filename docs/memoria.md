@@ -71,7 +71,7 @@ Skynet genera cuatro páginas de todo el proyecto **sin modelo**, a partir de lo
 | **Índice** (`indice`) | Qué páginas hay y una línea de cada una: «1 trabajo entregado; el último, AKA-1 el 3/11/2026». |
 | **Lo hecho** (`lo-hecho`) | Los trabajos entregados (con una PR fusionada), del más reciente al más antiguo, hasta 100: la PR, la fecha, el repositorio y los ficheros que tocó, sacados del último `GIT_CHANGES` de su ejecución. |
 | **Errores conocidos** (`errores-conocidos`) | Los hallazgos de los jueces que se corrigieron, agrupados por hallazgo y con en cuántas ejecuciones salió; las lecciones de `prevenir` aplicadas; las trampas y bugs (`PITFALL`, `BUGFIX`) **confirmados** de la memoria, y lo que se le escapó al juez. Hasta 30 de cada. |
-| **Decisiones y restricciones** (`decisiones`) | Las `CONSTRAINT` y `DECISION` **confirmadas**, primero las fijadas. Hasta 30 de cada. |
+| **Decisiones y restricciones** (`decisiones-y-restricciones`) | Las `CONSTRAINT` y `DECISION` **confirmadas**, primero las fijadas. Hasta 30 de cada. |
 
 - **Cuándo se generan:** al terminar cada ejecución y al fusionarse una PR, después de confirmar la memoria de esa ejecución. También a mano, con `POST /api/projects/{id}/wiki/refresh`, por ejemplo para un proyecto con historia de antes de la wiki o tras confirmar entradas.
 - **Lo que no cambia no crea versión.** Si el título y el contenido son los de ahora, la página se queda en su versión.

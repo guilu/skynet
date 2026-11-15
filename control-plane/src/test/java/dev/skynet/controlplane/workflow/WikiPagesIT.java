@@ -79,7 +79,7 @@ class WikiPagesIT extends IntegrationTest {
     events.publishEvent(new WorkflowRunFinished(other));
     JsonNode list = get("/api/projects/" + project + "/wiki");
     assertThat(list.findValuesAsString("slug"))
-        .containsExactly("decisiones", "errores-conocidos", "indice", "lo-hecho");
+        .containsExactly("decisiones-y-restricciones", "errores-conocidos", "indice", "lo-hecho");
     assertThat(list.get(0).path("origin").asString()).isEqualTo("GENERATED");
 
     JsonNode done = get("/api/projects/" + project + "/wiki/lo-hecho");
@@ -105,7 +105,10 @@ class WikiPagesIT extends IntegrationTest {
         .contains("**AKA-1** «Exportar las notas a PDF» ([PR #40]")
         .contains("se revirtió o falló tras fusionarse el 3/11/2026: Revertida por romper el PDF");
 
-    String decisions = get("/api/projects/" + project + "/wiki/decisiones").path("body").asString();
+    String decisions =
+        get("/api/projects/" + project + "/wiki/decisiones-y-restricciones")
+            .path("body")
+            .asString();
     assertThat(decisions)
         .contains(
             "## Restricciones\n\n- **Sin dependencias nuevas de PDF**: Solo la librería actual")
@@ -118,23 +121,28 @@ class WikiPagesIT extends IntegrationTest {
         .contains(
             "- [Errores conocidos](errores-conocidos): 1 fallo corregido, 1 lección, 1 trampa o"
                 + " bug, 1 escape.")
-        .contains("- [Decisiones y restricciones](decisiones): 1 restricción, 1 decisión.");
+        .contains(
+            "- [Decisiones y restricciones](decisiones-y-restricciones): 1 restricción, 1 decisión.");
 
     // Regenerar sin cambios no crea versión; con una decisión nueva, sí, y queda el historial.
     post("/api/projects/" + project + "/wiki/refresh", Map.of());
-    assertThat(get("/api/projects/" + project + "/wiki/decisiones").path("version").asInt())
+    assertThat(
+            get("/api/projects/" + project + "/wiki/decisiones-y-restricciones")
+                .path("version")
+                .asInt())
         .isEqualTo(1);
     remember(project, "DECISION", "Paginar el PDF por alumno", "Lo piden los profesores");
     JsonNode refreshed = post("/api/projects/" + project + "/wiki/refresh", Map.of());
     assertThat(refreshed).hasSize(4);
-    JsonNode page = get("/api/projects/" + project + "/wiki/decisiones");
+    JsonNode page = get("/api/projects/" + project + "/wiki/decisiones-y-restricciones");
     assertThat(page.path("version").asInt()).isEqualTo(2);
     assertThat(page.path("body").asString()).contains("Paginar el PDF por alumno");
-    JsonNode history = get("/api/projects/" + project + "/wiki/decisiones/revisions");
+    JsonNode history =
+        get("/api/projects/" + project + "/wiki/decisiones-y-restricciones/revisions");
     assertThat(history).hasSize(2);
     assertThat(history.get(0).path("version").asInt()).isEqualTo(2);
     assertThat(
-            get("/api/projects/" + project + "/wiki/decisiones/revisions/1")
+            get("/api/projects/" + project + "/wiki/decisiones-y-restricciones/revisions/1")
                 .path("body")
                 .asString())
         .doesNotContain("Paginar");

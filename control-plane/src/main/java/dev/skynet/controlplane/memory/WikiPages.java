@@ -21,7 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Las páginas de la wiki del proyecto (MV-C, docs/memoria.md «La wiki»): markdown con sus fuentes,
- * de todo el proyecto o de un repositorio, con versiones. Las genera Skynet sin modelo ({@link
+ * del proyecto entero o de un repositorio, con versiones. Las genera Skynet sin modelo ({@link
  * WikiOrigin#GENERATED}); más adelante, también el curador y las personas.
  *
  * <p>Escribir lo mismo que ya hay no crea otra versión: así, regenerar las páginas tras cada
@@ -33,7 +33,11 @@ public class WikiPages {
   /** El tope de una página, en caracteres. */
   public static final int MAX_BODY = 60_000;
 
-  private static final Pattern SLUG = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
+  private static final Pattern SLUG = Pattern.compile("^[a-z0-9]++(?:-[a-z0-9]++)*+$");
+  private static final String TITLE = "title";
+  private static final String SOURCES = "sources";
+  private static final String ORIGIN = "origin";
+  private static final String VERSION = "version";
   private static final String COLUMNS =
       "id, project_id, repository_id, slug, title, body, CAST(sources AS text) AS sources, origin,"
           + " version, created_at, updated_at, updated_by";
@@ -173,7 +177,7 @@ public class WikiPages {
   /** Lo que dejó {@link #write}: la página y si cambió. */
   public record Written(Page page, boolean changed) {}
 
-  /** Las páginas del proyecto, primero las de todo el proyecto y luego las de cada repositorio. */
+  /** Las páginas del proyecto, primero las del proyecto entero y luego las de cada repositorio. */
   @Transactional(readOnly = true)
   public List<Summary> list(UUID projectId) {
     projects.get(projectId);
@@ -188,10 +192,10 @@ public class WikiPages {
                     rs.getObject("id", UUID.class),
                     rs.getObject("repository_id", UUID.class),
                     rs.getString("slug"),
-                    rs.getString("title"),
-                    WikiOrigin.valueOf(rs.getString("origin")),
-                    rs.getInt("version"),
-                    rs.getInt("sources"),
+                    rs.getString(TITLE),
+                    WikiOrigin.valueOf(rs.getString(ORIGIN)),
+                    rs.getInt(VERSION),
+                    rs.getInt(SOURCES),
                     rs.getTimestamp("updated_at").toInstant(),
                     rs.getString("updated_by")))
         .list();
@@ -211,7 +215,7 @@ public class WikiPages {
             "SELECT version, title, body, CAST(sources AS text) AS sources, origin, created_at,"
                 + " created_by FROM wiki_page_revision WHERE page_id = ? ORDER BY version DESC")
         .param(page.id())
-        .query(this::revision)
+        .query((rs, n) -> revision(rs))
         .list();
   }
 
@@ -223,7 +227,7 @@ public class WikiPages {
             "SELECT version, title, body, CAST(sources AS text) AS sources, origin, created_at,"
                 + " created_by FROM wiki_page_revision WHERE page_id = ? AND version = ?")
         .params(page.id(), version)
-        .query(this::revision)
+        .query((rs, n) -> revision(rs))
         .optional()
         .orElseThrow(() -> new NotFoundException("Versión de la página " + slug, version));
   }
@@ -241,33 +245,33 @@ public class WikiPages {
                 + " FROM wiki_page WHERE project_id = ? AND repository_id IS NOT DISTINCT FROM ?"
                 + " AND slug = ?")
         .params(projectId, repositoryId, slug)
-        .query(this::page)
+        .query((rs, n) -> page(rs))
         .optional();
   }
 
-  private Page page(ResultSet rs, int n) throws SQLException {
+  private Page page(ResultSet rs) throws SQLException {
     return new Page(
         rs.getObject("id", UUID.class),
         rs.getObject("project_id", UUID.class),
         rs.getObject("repository_id", UUID.class),
         rs.getString("slug"),
-        rs.getString("title"),
+        rs.getString(TITLE),
         rs.getString("body"),
-        sources(rs.getString("sources")),
-        WikiOrigin.valueOf(rs.getString("origin")),
-        rs.getInt("version"),
+        sources(rs.getString(SOURCES)),
+        WikiOrigin.valueOf(rs.getString(ORIGIN)),
+        rs.getInt(VERSION),
         rs.getTimestamp("created_at").toInstant(),
         rs.getTimestamp("updated_at").toInstant(),
         rs.getString("updated_by"));
   }
 
-  private Revision revision(ResultSet rs, int n) throws SQLException {
+  private Revision revision(ResultSet rs) throws SQLException {
     return new Revision(
-        rs.getInt("version"),
-        rs.getString("title"),
+        rs.getInt(VERSION),
+        rs.getString(TITLE),
         rs.getString("body"),
-        sources(rs.getString("sources")),
-        WikiOrigin.valueOf(rs.getString("origin")),
+        sources(rs.getString(SOURCES)),
+        WikiOrigin.valueOf(rs.getString(ORIGIN)),
         rs.getTimestamp("created_at").toInstant(),
         rs.getString("created_by"));
   }
