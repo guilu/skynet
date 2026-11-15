@@ -4,6 +4,8 @@ import dev.skynet.controlplane.memory.MemoryService;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -37,12 +39,14 @@ class MemoryConfirmations {
 
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
   @Transactional(propagation = Propagation.REQUIRES_NEW)
+  @Order(Ordered.HIGHEST_PRECEDENCE) // Antes de regenerar la wiki (WikiWriter).
   public void on(PullRequestMerged merged) {
     confirm(merged.workflowRunId(), MERGED);
   }
 
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
   @Transactional(propagation = Propagation.REQUIRES_NEW)
+  @Order(Ordered.HIGHEST_PRECEDENCE) // Antes de regenerar la wiki (WikiWriter).
   public void on(WorkflowRunFinished finished) {
     UUID runId = finished.workflowRunId();
     boolean accepted =

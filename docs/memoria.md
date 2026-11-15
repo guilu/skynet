@@ -60,6 +60,25 @@ Si se lanza con algún parecido, la ejecución deja el evento `memory.done_match
 
 Los disparadores programados y los de despliegue no se comparan: relanzan a propósito el mismo trabajo.
 
+## La wiki
+
+Además de las entradas sueltas, cada proyecto tiene una **wiki**: páginas de markdown que resumen lo que Skynet sabe de él (hito MV, MV-C). Cada página lleva sus **fuentes** (la PR, el hallazgo, la lección, la observación o el escape de donde sale) y sus **versiones**.
+
+Skynet genera cuatro páginas de todo el proyecto **sin modelo**, a partir de lo que ya está en la base de datos:
+
+| Página | Qué lleva |
+|---|---|
+| **Índice** (`indice`) | Qué páginas hay y una línea de cada una: «1 trabajo entregado; el último, AKA-1 el 3/11/2026». |
+| **Lo hecho** (`lo-hecho`) | Los trabajos entregados (con una PR fusionada), del más reciente al más antiguo, hasta 100: la PR, la fecha, el repositorio y los ficheros que tocó, sacados del último `GIT_CHANGES` de su ejecución. |
+| **Errores conocidos** (`errores-conocidos`) | Los hallazgos de los jueces que se corrigieron, agrupados por hallazgo y con en cuántas ejecuciones salió; las lecciones de `prevenir` aplicadas; las trampas y bugs (`PITFALL`, `BUGFIX`) **confirmados** de la memoria, y lo que se le escapó al juez. Hasta 30 de cada. |
+| **Decisiones y restricciones** (`decisiones-y-restricciones`) | Las `CONSTRAINT` y `DECISION` **confirmadas**, primero las fijadas. Hasta 30 de cada. |
+
+- **Cuándo se generan:** al terminar cada ejecución y al fusionarse una PR, después de confirmar la memoria de esa ejecución. También a mano, con `POST /api/projects/{id}/wiki/refresh`, por ejemplo para un proyecto con historia de antes de la wiki o tras confirmar entradas.
+- **Lo que no cambia no crea versión.** Si el título y el contenido son los de ahora, la página se queda en su versión.
+- **No entra lo que no está confirmado** ni lo que está en cuarentena o archivado.
+
+Los agentes todavía no reciben la wiki: llega con MV-D. El curador (MV-E) escribirá otras páginas, y la web (MV-F) las enseñará.
+
 ## Cómo la usan los agentes
 
 1. **Al empezar una sesión nueva**, el prompt de la fase va precedido de un bloque `<memoria-del-proyecto>`. Solo lleva lo confirmado: lo fijado, los últimos resúmenes de sesión, la bitácora y lo último guardado en el repositorio de la ejecución y en todo el proyecto, con un tope de 4 000 caracteres (`SKYNET_MEMORY_CONTEXT_MAX_CHARS`). Si no cabe todo, deja fuera entradas enteras y avisa de que hay más. Llega como contexto de referencia, no como instrucciones: si contradice el repositorio, manda el repositorio. Una continuación (mensaje, reanudación o bifurcación) no lo repite.
@@ -123,6 +142,10 @@ En el detalle de cada agente, la pestaña **Memoria** dice qué hizo esa invocac
 | `POST /api/memory/{id}/confirm` | Confirmarla: llega a los agentes, también en el bloque inicial. |
 | `POST /api/memory/{id}/quarantine` | Ponerla en cuarentena, con un `reason` opcional en el cuerpo. Deja de estar fijada. |
 | `GET /api/work-items/{id}/done-matches` | Los trabajos entregados del proyecto que se parecen a este, del más parecido al menos, con su PR y si el parecido es fuerte (`strong`). |
+| `GET /api/projects/{id}/wiki` | Las páginas de la wiki, sin su contenido: `slug`, título, origen (`GENERATED`, `CURATOR` o `HUMAN`), versión, cuántas fuentes y cuándo cambió. |
+| `GET /api/projects/{id}/wiki/{slug}` | Una página con su markdown (`body`) y sus fuentes (`sources`: `kind`, `id`, `label` y `url`). Con `repositoryId`, la de ese repositorio. |
+| `GET /api/projects/{id}/wiki/{slug}/revisions`, `…/revisions/{version}` | Sus versiones, de la más reciente a la más antigua, o una de ellas. |
+| `POST /api/projects/{id}/wiki/refresh` | Regenera las páginas que genera Skynet y devuelve la lista. |
 | `GET /api/agent-runs/{id}/memory` | Lo que una invocación recibió, buscó, leyó y guardó, con su modo (`READ`, `WRITE` o `null`). |
 
 Cada cambio deja un evento en el historial: `memory.created`, `memory.updated`, `memory.archived`, `memory.restored`, `memory.pinned`, `memory.unpinned`, `memory.confirmed` y `memory.quarantined`, todos con la confianza (`trust`) que queda. Los que escribe una ejecución (lo que guardan sus agentes y su bitácora) salen en su línea de tiempo.
@@ -132,4 +155,4 @@ Cada cambio deja un evento en el historial: `memory.created`, `memory.updated`, 
 - Detectar duplicados y contradicciones entre entradas (`mem_judge`, `mem_compare` y `mem_consolidate` de engram).
 - Memoria global entre proyectos, búsqueda semántica y caducidad de entradas.
 - Lanzar `investigar-mejoras` de forma programada.
-- Lo que queda del hito MV «Memoria viva» ([#307](https://github.com/guilu/skynet/issues/307)–[#311](https://github.com/guilu/skynet/issues/311)): las páginas de la wiki, el contexto según el trabajo, el curador y la confianza en la web.
+- Lo que queda del hito MV «Memoria viva» ([#309](https://github.com/guilu/skynet/issues/309)–[#311](https://github.com/guilu/skynet/issues/311)): la wiki en el contexto de los agentes, el curador y la confianza en la web.
