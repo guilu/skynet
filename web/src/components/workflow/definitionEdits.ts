@@ -996,3 +996,227 @@ export function setInputField(
   setValue(input, field, written)
   return render(text, doc)
 }
+
+// ---- El editor por pasos (WF-F) -----------------------------------------------------------------
+
+/** Lo que ofrece «Añadir paso»: los tipos de fase en palabras, el juez y la entrega por PR. */
+export const STEP_KINDS = [
+  'agent',
+  'judge',
+  'human-approval',
+  'parallel',
+  'command',
+  'delivery',
+] as const
+export type StepKind = (typeof STEP_KINDS)[number]
+
+interface NewStep {
+  base: string
+  fields: [string, unknown][]
+}
+
+/** La entrega por PR de las plantillas (EN): abre la PR, espera la CI, apruebas y fusiona. */
+function deliverySteps(fix: string | null): NewStep[] {
+  const github: [string, unknown][] = [
+    ['phase', 'deliver'],
+    ['condition', 'repository.github'],
+  ]
+  return [
+    { base: 'pr', fields: [['name', 'Abre la PR'], ['type', 'github-pr'], ...github] },
+    {
+      base: 'ci',
+      fields: [
+        ['name', 'Espera la CI'],
+        ['type', 'github-check'],
+        ...github,
+        ...(fix ? ([['fix', fix]] as [string, unknown][]) : []),
+      ],
+    },
+    {
+      base: 'aprobar-fusion',
+      fields: [
+        ['name', 'Apruebas fusionar'],
+        ['type', 'human-approval'],
+        ...github,
+        ['action', 'Fusionar la PR de {{workItem.key}}: {{workItem.title}}'],
+        ['risk', 'high'],
+      ],
+    },
+    { base: 'fusionar', fields: [['name', 'Fusiona la PR'], ['type', 'github-merge'], ...github] },
+  ]
+}
+
+function newSteps(kind: StepKind, agents: string[], fix: string | null): NewStep[] {
+  switch (kind) {
+    case 'agent':
+      return [
+        {
+          base: 'agente',
+          fields: [
+            ['type', 'agent'],
+            ['prompt', ''],
+          ],
+        },
+      ]
+    case 'judge':
+      return [
+        {
+          base: 'juzgar',
+          fields: [
+            ['type', 'verification'],
+            ['judge', { agents: [agents[0] ?? 'revisor'] }],
+          ],
+        },
+      ]
+    case 'human-approval':
+      return [
+        {
+          base: 'aprobacion',
+          fields: [
+            ['type', 'human-approval'],
+            ['action', ''],
+          ],
+        },
+      ]
+    case 'parallel':
+      return [
+        {
+          base: 'a-la-vez',
+          fields: [
+            ['type', 'parallel'],
+            ['children', []],
+          ],
+        },
+      ]
+    case 'command':
+      return [
+        {
+          base: 'comando',
+          fields: [
+            ['type', 'command'],
+            ['command', ''],
+          ],
+        },
+      ]
+    case 'delivery':
+      return deliverySteps(fix)
+  }
+}
+
+/**
+ * Añade un paso detrás de `after` (o al final): una fase, o las cuatro de la entrega por PR. El
+ * paso nuevo depende de `after` y va en su etapa; si una sola fase seguía a `after`, ahora sigue
+ * al último paso nuevo, para que la cadena no se rompa. Devuelve el id del primer paso nuevo.
+ */
+export function addStep(
+  text: string,
+  kind: StepKind,
+  after: string | null,
+): { text: string; id: string } {
+  const doc = parse(text)
+  const stages = stagesOf(doc)
+  const maps = stageMaps(doc)
+  const taken = new Set(maps.map(idOf).filter((id): id is string => id != null))
+  const previous = after ? findStage(doc, after) : null
+  let index = previous ? stages.items.indexOf(previous) + 1 : stages.items.length
+  // Quien corrige la CI: el último agente antes de la entrega.
+  const fix =
+    stages.items
+      .slice(0, index)
+      .filter((s): s is YAMLMap => isMap(s) && s.get('type') === 'agent')
+      .map(idOf)
+      .at(-1) ?? null
+  const followers = after
+    ? maps.filter((s) => dependenciesOf(s).some((d) => d.stage === after))
+    : []
+  const from = followers.length === 1 ? followers[0].get('workspaceFrom') : null
+  const follower =
+    followers.length === 1 &&
+    !(typeof from === 'string' && (from === after || from.startsWith(`${after}.`)))
+      ? followers[0]
+      : null
+  const phase = previous?.get('phase')
+  let last = after
+  let first: string | null = null
+  for (const step of newSteps(kind, readAgentNames(text), fix)) {
+    const id = freeId(taken, step.base)
+    taken.add(id)
+    first ??= id
+    const map = doc.createNode({ id }) as YAMLMap
+    for (const [key, value] of step.fields) {
+      const node = doc.createNode(value)
+      if (isSeq(node)) node.flow = true
+      if (isMap(node)) node.flow = true
+      if (isScalar(node) && node.value === '') node.type = Scalar.QUOTE_DOUBLE
+      map.set(key, node)
+    }
+    if (kind !== 'delivery' && typeof phase === 'string') map.set('phase', phase)
+    if (last) writeDependencies(doc, map, [{ stage: last, optional: false }])
+    stages.items.splice(index++, 0, map)
+    last = id
+  }
+  if (follower && after && last && last !== after)
+    writeDependencies(
+      doc,
+      follower,
+      dependenciesOf(follower).map((d) => (d.stage === after ? { ...d, stage: last } : d)),
+    )
+  return { text: render(text, doc), id: first! }
+}
+
+const nameOf = (stage: YAMLMap) => {
+  const name = stage.get('name')
+  return `«${typeof name === 'string' ? name : idOf(stage)}»`
+}
+
+/**
+ * Sube o baja un paso un puesto. Si los dos pasos no dependen uno del otro, solo cambia el orden
+ * del YAML. Si el de abajo va justo detrás del de arriba en una sola línea (solo depende de él y
+ * nadie más depende del de arriba), se intercambian también sus dependencias. En los demás casos
+ * no es un simple cambio de orden y se dice por qué.
+ */
+export function moveStage(text: string, id: string, direction: 'up' | 'down'): string {
+  const doc = parse(text)
+  const items = stagesOf(doc).items
+  const i = items.indexOf(findStage(doc, id))
+  const j = direction === 'up' ? i - 1 : i + 1
+  if (j < 0) throw new EditError('Ya es el primer paso')
+  if (j >= items.length) throw new EditError('Ya es el último paso')
+  const [a, b] = j < i ? [items[j], items[i]] : [items[i], items[j]]
+  if (!isMap(a) || !isMap(b)) throw new EditError('El paso de al lado no se puede leer')
+  const aId = idOf(a)
+  const bId = idOf(b)
+  if (!aId || !bId) throw new EditError('El paso de al lado no tiene `id`')
+  const swap = () => {
+    items.splice(Math.min(i, j), 2, b, a)
+    return render(text, doc)
+  }
+  if (!dependencyPath(readStages(text), bId, aId)) return swap()
+
+  const why = `${nameOf(b)} va después de ${nameOf(a)}`
+  const bDeps = dependenciesOf(b)
+  if (bDeps.length !== 1 || bDeps[0].stage !== aId || bDeps[0].optional)
+    throw new EditError(`${why} y de otras fases: cambia sus dependencias en el panel`)
+  const maps = stageMaps(doc)
+  if (maps.some((s) => s !== b && dependenciesOf(s).some((d) => d.stage === aId)))
+    throw new EditError(`${why}, pero otras fases también dependen de ${nameOf(a)}`)
+  const refersTo = (s: YAMLMap, target: string) => {
+    const from = s.get('workspaceFrom')
+    return typeof from === 'string' && (from === target || from.startsWith(`${target}.`))
+  }
+  if (a.has('workspaceFrom') || b.has('workspaceFrom') || maps.some((s) => refersTo(s, bId)))
+    throw new EditError(`${why} y continúa su worktree: cambiar el orden lo rompería`)
+  if (new RegExp(`stages\\.${aId}\\b`).test(JSON.stringify(b.toJSON())))
+    throw new EditError(`${nameOf(b)} usa lo que devuelve ${nameOf(a)}: no puede ir antes`)
+
+  writeDependencies(doc, b, dependenciesOf(a))
+  writeDependencies(doc, a, [{ stage: bId, optional: false }])
+  for (const s of maps)
+    if (s !== a && s !== b && dependenciesOf(s).some((d) => d.stage === bId))
+      writeDependencies(
+        doc,
+        s,
+        dependenciesOf(s).map((d) => (d.stage === bId ? { ...d, stage: aId } : d)),
+      )
+  return swap()
+}

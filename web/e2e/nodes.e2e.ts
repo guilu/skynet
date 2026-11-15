@@ -101,11 +101,8 @@ test(
     await test.step('elegir la plantilla en Nuevo workflow', async () => {
       await page.goto('/workflows/new')
       await page.getByLabel('Plantilla').selectOption({ label: 'Revisión en paralelo' })
-      await expect(
-        page.locator('.monaco-editor').getByText('id: revision-en-paralelo'),
-      ).toBeVisible()
-      await page.getByRole('tab', { name: 'Resumen' }).click()
-      const stages = page.getByRole('region', { name: /Paso a paso/ }).locator('li.wf-step')
+      // WF-F: el alta abre en «Pasos».
+      const stages = page.getByRole('region', { name: 'Pasos' }).locator('li.wf-step')
       await expect(stages).toHaveCount(5)
       await expect(stages.nth(2)).toContainText('2 agentes a la vez: calidad y seguridad')
       await expect(stages.nth(3)).toContainText('Solo si review.hasBlockingFindings')
