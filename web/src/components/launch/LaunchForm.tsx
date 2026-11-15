@@ -4,7 +4,9 @@ import { Fragment, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import {
   api,
+  ApiError,
   type AgentPolicy,
+  type DoneMatch,
   type InputDefinition,
   type ProviderKind,
   type Repository,
@@ -81,7 +83,7 @@ export function LaunchForm({
     setValues((prev) => ({ ...prev, [`${versionId}:${input.name}`]: value }))
 
   const launch = useMutation({
-    mutationFn: () =>
+    mutationFn: (confirmDone: boolean) =>
       api.launchRun(workItemId, {
         repositoryId: repository!.id,
         definitionId: versionId,
@@ -91,6 +93,7 @@ export function LaunchForm({
         timeoutMinutes: optionalNumber(timeoutMinutes),
         provider: unnamedAgents && provider !== CLAUDE_CODE ? provider : undefined,
         model: unnamedAgents && agentModel.trim() ? agentModel.trim() : undefined,
+        confirmDone: confirmDone || undefined,
       }),
     onSuccess: (run) => {
       void queryClient.invalidateQueries({ queryKey: ['runs', workItemId] })
@@ -99,8 +102,11 @@ export function LaunchForm({
   })
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    launch.mutate()
+    launch.mutate(false)
   }
+  // MV-B: se parece mucho a algo ya entregado; se lanza solo si se confirma.
+  const done =
+    launch.error instanceof ApiError && launch.error.code === 'DONE_MATCH' ? launch.error : null
 
   return (
     <form className="form" onSubmit={submit}>
@@ -186,14 +192,86 @@ export function LaunchForm({
         timeoutMinutes={[timeoutMinutes, setTimeoutMinutes]}
       />
       <div className="form-actions">
-        <Button type="submit" disabled={launch.isPending || !repository || !model}>
+        <Button type="submit" disabled={launch.isPending || !repository || !model || !!done}>
           <Play size={18} strokeWidth={2.75} aria-hidden="true" />
           {launch.isPending ? 'Lanzando…' : 'Lanzar'}
         </Button>
       </div>
       <p className="hint">Si no hay ningún runner conectado, mira «Runner local» en el README.</p>
-      <ErrorMessage error={launch.error} />
+      {done ? (
+        <DoneNotice
+          message={done.message}
+          matches={done.doneMatches}
+          pending={launch.isPending}
+          onConfirm={() => launch.mutate(true)}
+          onCancel={() => launch.reset()}
+        />
+      ) : (
+        <ErrorMessage error={launch.error} />
+      )}
     </form>
+  )
+}
+
+/**
+ * «¿Ya está hecho?» (MV-B): el trabajo se parece mucho a uno ya entregado. Se enseña con qué y su
+ * PR, y se lanza solo si se confirma.
+ */
+function DoneNotice({
+  message,
+  matches,
+  pending,
+  onConfirm,
+  onCancel,
+}: {
+  message: string
+  matches: DoneMatch[]
+  pending: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const strong = matches.filter((m) => m.strong)
+  return (
+    <section role="alert" aria-label="Parece ya hecho" className="done-notice">
+      <p>
+        <strong>Esto parece ya hecho.</strong> Comprueba que no repites lo entregado antes de
+        lanzarlo.
+      </p>
+      {strong.length > 0 ? (
+        <ul>
+          {strong.map((m) => (
+            <li key={m.workItemId}>
+              <strong>{m.key}</strong> «{m.title}»{m.self ? ', este mismo trabajo,' : ''} se entregó
+              {m.pullRequestNumber != null && (
+                <>
+                  {' en la '}
+                  {m.pullRequestUrl ? (
+                    <a href={m.pullRequestUrl} target="_blank" rel="noreferrer">
+                      PR #{m.pullRequestNumber}
+                    </a>
+                  ) : (
+                    `PR #${m.pullRequestNumber}`
+                  )}
+                </>
+              )}
+              {!m.self && (
+                <span className="muted"> (parecido {Math.round(m.similarity * 100)} %)</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="small muted">{message}</p>
+      )}
+      <div className="form-actions">
+        <Button variant="secondary" onClick={onConfirm} disabled={pending}>
+          {pending ? 'Lanzando…' : 'Lanzar igualmente'}
+        </Button>
+        <Button variant="link" onClick={onCancel} disabled={pending}>
+          No lanzar
+        </Button>
+      </div>
+    </section>
   )
 }
 

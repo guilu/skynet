@@ -53,7 +53,7 @@ Antes de lanzar un trabajo, Skynet lo compara con los **trabajos ya entregados**
 
 | Parecido | Qué pasa |
 |---|---|
-| **Fuerte**: desde `SKYNET_MEMORY_DONE_SIMILARITY` (0,6), o el propio trabajo ya entregado | Lanzarlo desde la web o la API responde **409** con `code: DONE_MATCH` y los parecidos en `doneMatches`: «Esto parece ya hecho: AKA-1 «Exportar las notas a PDF» se entregó en la PR #40 el 3/11/2026…». Se lanza igualmente con `confirmDone: true`. Un disparador de GitHub no lo lanza y lo comenta en la issue. |
+| **Fuerte**: desde `SKYNET_MEMORY_DONE_SIMILARITY` (0,6), o el propio trabajo ya entregado | Lanzarlo desde la web o la API responde **409** con `code: DONE_MATCH` y los parecidos en `doneMatches`: «Esto parece ya hecho: AKA-1 «Exportar las notas a PDF» se entregó en la PR #40 el 3/11/2026…». Se lanza igualmente con `confirmDone: true`; en la web, el formulario de lanzar enseña los parecidos con su PR y el botón «Lanzar igualmente». Un disparador de GitHub no lo lanza y lo comenta en la issue. |
 | **Leve**: desde `SKYNET_MEMORY_DONE_HINT` (0,3) | Se lanza sin preguntar. |
 
 Si se lanza con algún parecido, la ejecución deja el evento `memory.done_match` con los parecidos y si se confirmó. Además, el bloque `<memoria-del-proyecto>` de cada agente lleva «Trabajos parecidos que ya se entregaron en este proyecto», con su PR y su parecido, para que no repita lo hecho.

@@ -1363,6 +1363,27 @@
     gap: 4px;
   }
 
+  .done-notice {
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid var(--warn);
+    border-radius: var(--radius);
+    background: var(--warn-soft);
+    color: var(--warn-ink);
+  }
+
+  .done-notice p {
+    margin: 0;
+  }
+
+  .done-notice ul {
+    display: grid;
+    gap: 2px;
+    padding-left: var(--space-4);
+    list-style: disc;
+  }
+
   .stage-policies {
     display: grid;
     gap: var(--space-1);

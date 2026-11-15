@@ -16,7 +16,7 @@ MV-B (#307) es la segunda PR del hito MV «Memoria viva». Lo explica [`docs/mem
   - hay una herramienta MCP nueva, `mem_done`, de solo lectura.
 - **API:** `GET /api/work-items/{id}/done-matches`.
 - **Sin migración.** Los disparadores programados y de despliegue no se comparan.
-- **La web todavía no tiene el botón de confirmar.** Desde la web, un parecido fuerte enseña el error con el mensaje. Lanzarlo igualmente, por ahora, se hace por la API; la web llega en la PR siguiente.
+- **En la web**, el botón «Lanzar igualmente» llegó en la PR siguiente: ver [`probar-mv-b-web.md`](probar-mv-b-web.md).
 
 Ninguna prueba de esta guía modifica ficheros versionados de skynet ni abre PRs. Los agentes son fake-claude, así que no se gasta cuota ni hay regeneraciones caras.
 
