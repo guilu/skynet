@@ -5,6 +5,7 @@ import dev.skynet.controlplane.event.EventStore;
 import dev.skynet.controlplane.github.GitHubComment;
 import dev.skynet.controlplane.github.GitHubIssue;
 import dev.skynet.controlplane.github.IssueHandler;
+import dev.skynet.controlplane.memory.DoneWork;
 import dev.skynet.controlplane.project.CodeRepository;
 import dev.skynet.controlplane.project.Project;
 import dev.skynet.controlplane.project.ProjectService;
@@ -83,6 +84,7 @@ class IssueTriggers implements IssueHandler {
   private final EventStore events;
   private final PayloadRedactor redactor;
   private final TriggerCommands commands;
+  private final DoneWork doneWork;
   private final String publicUrl;
 
   IssueTriggers(
@@ -98,6 +100,7 @@ class IssueTriggers implements IssueHandler {
       EventStore events,
       PayloadRedactor redactor,
       TriggerCommands commands,
+      DoneWork doneWork,
       @Value("${skynet.github.pull-requests.public-url:}") String publicUrl) {
     this.jdbc = jdbc;
     this.json = json;
@@ -111,6 +114,7 @@ class IssueTriggers implements IssueHandler {
     this.events = events;
     this.redactor = redactor;
     this.commands = commands;
+    this.doneWork = doneWork;
     this.publicUrl = publicUrl == null ? "" : publicUrl.replaceAll("/+$", "");
   }
 
@@ -448,6 +452,22 @@ class IssueTriggers implements IssueHandler {
           List.of(),
           true);
       event(launch, repository.getId(), "trigger.duplicate", key, active.get(), null);
+      return;
+    }
+    // MV-B: lo que se parece mucho a algo ya entregado no se lanza solo; desde Skynet se puede
+    // lanzar igualmente, confirmándolo.
+    Optional<DoneWork.Match> done =
+        doneWork.matches(workItemId).stream().filter(DoneWork.Match::strong).findFirst();
+    if (done.isPresent()) {
+      reject(
+          launch,
+          "parece ya hecho: "
+              + done.get().describe()
+              + ". Si hay que hacerlo igualmente, lanza "
+              + key
+              + " desde Skynet",
+          repository.getId(),
+          true);
       return;
     }
     int limit = settings.dailyLimit();

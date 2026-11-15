@@ -95,6 +95,19 @@ class MemoryAgentController {
     return ObservationView.of(agents.get(caller, request.id()));
   }
 
+  /** Qué pregunta el agente con {@code mem_done}: sin {@code query}, su propio trabajo. */
+  record DoneRequest(String query) {}
+
+  record DoneResult(List<DoneWork.Match> matches) {}
+
+  @PostMapping("/done")
+  DoneResult done(
+      @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+      @RequestBody(required = false) DoneRequest request) {
+    MemoryAgents.Caller caller = agents.authenticate(authorization);
+    return new DoneResult(agents.done(caller, request == null ? null : request.query()));
+  }
+
   @PostMapping("/save")
   MemoryAgents.Saved save(
       @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,

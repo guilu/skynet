@@ -87,6 +87,10 @@ skynet:
     # Límites de cada invocación: llamadas a las herramientas de memoria y guardados.
     max-calls: ${SKYNET_MEMORY_MAX_CALLS:500}
     max-saves: ${SKYNET_MEMORY_MAX_SAVES:100}
+    # ¿Ya está hecho? (MV-B): desde qué parecido con un trabajo entregado se pide confirmar al
+    # lanzar, y desde cuál se avisa al agente.
+    done-similarity: ${SKYNET_MEMORY_DONE_SIMILARITY:0.6}
+    done-hint: ${SKYNET_MEMORY_DONE_HINT:0.3}
   github:
     # La GitHub App de esta instalación (hito GH, ver docs/github.md). Sin las tres primeras,
     # Skynet no habla con GitHub.

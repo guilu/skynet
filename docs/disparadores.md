@@ -14,6 +14,7 @@ La App no necesita permisos nuevos: **Issues: lectura y escritura** y los evento
    - comprueba el **interruptor** y que **quien pone la etiqueta** y **quien escribió la issue** puedan lanzar;
    - busca el **trabajo de la issue** (`externalRef = github:guilu/demo-repo#7`) o lo crea con el título y el texto de la issue;
    - si ese trabajo ya tiene una ejecución en marcha, no lanza otra;
+   - si se parece mucho a un trabajo ya entregado del proyecto (con su PR fusionada), o es uno ya entregado, no lo lanza: comenta «No lo lanzo: parece ya hecho: DEMO-3 «…» se entregó en la PR #40…». Si hay que hacerlo igualmente, se lanza desde Skynet confirmándolo ([memoria.md](memoria.md#ya-está-hecho));
    - lanza la última versión publicada del workflow en ese repositorio.
 4. En la issue, como la App: una reacción 👀, el comentario «En marcha: **DEMO-7** con *Implementar una tarea*», con el enlace a la ejecución si está `SKYNET_PUBLIC_URL`, y la etiqueta `skynet:en-curso`.
 5. Si el workflow se para en una puerta, otro comentario: «Esperando tu aprobación en Skynet: **Aprobar el plan** de **DEMO-7**», con el enlace a la aprobación y el recordatorio de que desde GitHub se puede pedir cambios con `/skynet corrige`. Tras una corrección, cuando la puerta vuelve a preguntar, dice «(otra vez, tras la corrección)».

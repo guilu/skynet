@@ -199,6 +199,7 @@ class AgentQueue {
                 agent.getId(),
                 workItem.getProjectId(),
                 repository.getId(),
+                workItem.getId(),
                 MemoryAgents.Mode.valueOf(memory),
                 AgentProviderKind.byId(agent.getProvider())
                     .map(k -> k.supports(Capability.MEMORY_TOOLS))

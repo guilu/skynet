@@ -21,9 +21,20 @@ import org.springframework.web.bind.annotation.RestController;
 class MemoryController {
 
   private final MemoryService service;
+  private final DoneWork doneWork;
 
-  MemoryController(MemoryService service) {
+  MemoryController(MemoryService service, DoneWork doneWork) {
     this.service = service;
+    this.doneWork = doneWork;
+  }
+
+  /**
+   * ¿Ya está hecho? (MV-B): los trabajos entregados del proyecto que se parecen a este, del más
+   * parecido al menos; {@code strong} es lo que pide confirmar al lanzar.
+   */
+  @GetMapping("/api/work-items/{id}/done-matches")
+  List<DoneWork.Match> doneMatches(@PathVariable UUID id) {
+    return doneWork.matches(id);
   }
 
   /**

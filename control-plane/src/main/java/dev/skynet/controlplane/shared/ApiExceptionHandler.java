@@ -23,7 +23,9 @@ class ApiExceptionHandler {
 
   @ExceptionHandler(ConflictException.class)
   ProblemDetail conflict(ConflictException e) {
-    return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    e.properties().forEach(problem::setProperty);
+    return problem;
   }
 
   @ExceptionHandler(DuplicateKeyException.class)

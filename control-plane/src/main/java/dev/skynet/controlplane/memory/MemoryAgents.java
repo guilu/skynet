@@ -52,7 +52,12 @@ public class MemoryAgents {
 
   /** La invocación dueña de un token, con su ámbito. */
   record Caller(
-      UUID agentRunId, UUID workflowRunId, UUID projectId, UUID repositoryId, Mode mode) {}
+      UUID agentRunId,
+      UUID workflowRunId,
+      UUID projectId,
+      UUID repositoryId,
+      UUID workItemId,
+      Mode mode) {}
 
   /** Una entrada de una búsqueda, recortada. */
   record Preview(
@@ -127,6 +132,7 @@ public class MemoryAgents {
   private final MemoryService memory;
   private final MemoryContext context;
   private final MemoryProperties properties;
+  private final DoneWork doneWork;
   private final TimeSource time;
 
   MemoryAgents(
@@ -134,11 +140,13 @@ public class MemoryAgents {
       MemoryService memory,
       MemoryContext context,
       MemoryProperties properties,
+      DoneWork doneWork,
       TimeSource time) {
     this.jdbc = jdbc;
     this.memory = memory;
     this.context = context;
     this.properties = properties;
+    this.doneWork = doneWork;
     this.time = time;
   }
 
@@ -201,7 +209,7 @@ public class MemoryAgents {
     Row row =
         jdbc.sql(
                 "SELECT t.agent_run_id, t.mode, t.calls, a.status, a.repository_id,"
-                    + " s.workflow_run_id, w.project_id FROM memory_token t"
+                    + " s.workflow_run_id, w.project_id, w.id AS work_item_id FROM memory_token t"
                     + " JOIN agent_run a ON a.id = t.agent_run_id"
                     + " JOIN stage_run s ON s.id = a.stage_run_id"
                     + " JOIN workflow_run r ON r.id = s.workflow_run_id"
@@ -216,6 +224,7 @@ public class MemoryAgents {
                             rs.getObject("workflow_run_id", UUID.class),
                             rs.getObject("project_id", UUID.class),
                             rs.getObject("repository_id", UUID.class),
+                            rs.getObject("work_item_id", UUID.class),
                             Mode.valueOf(rs.getString("mode"))),
                         rs.getString("status"),
                         rs.getInt("calls")))
@@ -240,16 +249,23 @@ public class MemoryAgents {
   /**
    * El bloque de memoria de una invocación nueva de {@code mode}, que va al principio de su prompt:
    * el contexto de su repositorio y su proyecto y, si su CLI tiene las herramientas de memoria
-   * ({@code tools}), cómo usarlas. Deja en {@code memory_access} lo que recibe ({@code PROMPT}).
+   * ({@code tools}), cómo usarlas. Deja en {@code memory_access} lo que recibe ({@code PROMPT}). Si
+   * el trabajo {@code workItemId} se parece a otros ya entregados (MV-B), lo avisa.
    */
   @Transactional
   public PromptBlock promptBlock(
-      UUID agentRunId, UUID projectId, UUID repositoryId, Mode mode, boolean tools) {
+      UUID agentRunId,
+      UUID projectId,
+      UUID repositoryId,
+      UUID workItemId,
+      Mode mode,
+      boolean tools) {
     MemoryContext.Rendered rendered =
         context.render(projectId, repositoryId, properties.contextMaxChars());
     Instant now = time.now();
     rendered.included().forEach(o -> record(agentRunId, o, "PROMPT", now));
     StringBuilder text = new StringBuilder(BLOCK_START).append('\n').append(rendered.text());
+    doneWork.notice(workItemId).ifPresent(n -> text.append("\n\n").append(n));
     if (tools) {
       text.append("\n\n").append(mode == Mode.WRITE ? TOOLS_WRITE : TOOLS_READ);
     }
@@ -292,6 +308,22 @@ public class MemoryAgents {
     page.items().forEach(o -> record(caller, o, "SEARCH"));
     return new SearchResult(
         page.items().stream().map(MemoryAgents::preview).toList(), page.total());
+  }
+
+  /**
+   * ¿Ya está hecho? (MV-B): los trabajos entregados del proyecto que se parecen a su trabajo o, con
+   * {@code query}, a ese texto.
+   */
+  @Transactional(readOnly = true)
+  List<DoneWork.Match> done(Caller caller, String query) {
+    if (query == null || query.isBlank()) {
+      return doneWork.matches(caller.workItemId());
+    }
+    if (query.length() > MemoryService.MAX_QUERY) {
+      throw new InvalidRequestException(
+          "La búsqueda admite hasta " + MemoryService.MAX_QUERY + " caracteres");
+    }
+    return doneWork.matches(caller.projectId(), null, query.strip(), null);
   }
 
   /** Una observación entera, si es de su ámbito y no está archivada. */
