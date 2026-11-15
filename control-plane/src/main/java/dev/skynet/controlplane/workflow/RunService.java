@@ -7,6 +7,7 @@ import dev.skynet.controlplane.definition.StageDefinition.ChildDefinition;
 import dev.skynet.controlplane.definition.StageType;
 import dev.skynet.controlplane.definition.WorkflowDefinition;
 import dev.skynet.controlplane.definition.WorkflowDefinitions;
+import dev.skynet.controlplane.memory.DoneWork;
 import dev.skynet.controlplane.project.AgentPolicy;
 import dev.skynet.controlplane.project.CodeRepository;
 import dev.skynet.controlplane.project.ProjectService;
@@ -86,6 +87,7 @@ public class RunService {
   private final StageJudges judges;
 
   private final RunRisks risks;
+  private final DoneWork doneWork;
 
   RunService(
       WorkflowRunRepository workflowRuns,
@@ -108,7 +110,8 @@ public class RunService {
       QuotaShares quotaShares,
       RunQueue queue,
       StageJudges judges,
-      RunRisks risks) {
+      RunRisks risks,
+      DoneWork doneWork) {
     this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
     this.agentRuns = agentRuns;
@@ -130,6 +133,7 @@ public class RunService {
     this.queue = queue;
     this.judges = judges;
     this.risks = risks;
+    this.doneWork = doneWork;
   }
 
   /**
@@ -255,6 +259,49 @@ public class RunService {
     }
     publisher.publishEvent(new WorkflowRunChanged(run.getId()));
     return run;
+  }
+
+  /**
+   * Lanza como {@link #launch(UUID, Launch)}, pero antes mira si el trabajo se parece mucho a uno
+   * ya entregado en su proyecto (MV-B, {@link DoneWork}). Si se parece y no viene {@code
+   * confirmed}, no lanza nada y responde 409 con los parecidos en {@code doneMatches}. Si lanza y
+   * hay parecidos (fuertes confirmados o leves), lo deja en la ejecución con {@code
+   * memory.done_match}.
+   */
+  @Transactional
+  public WorkflowRun launchUnlessDone(UUID workItemId, Launch launch, boolean confirmed) {
+    List<DoneWork.Match> matches = doneWork.matches(workItemId);
+    List<DoneWork.Match> strong = matches.stream().filter(DoneWork.Match::strong).toList();
+    if (!strong.isEmpty() && !confirmed) {
+      throw new ConflictException(
+          "Esto parece ya hecho: "
+              + strong.getFirst().describe()
+              + ". Si hay que hacerlo igualmente, lánzalo confirmándolo",
+          Map.of("code", "DONE_MATCH", "doneMatches", strong));
+    }
+    WorkflowRun run = launch(workItemId, launch);
+    if (!matches.isEmpty()) {
+      Map<String, Object> payload = new LinkedHashMap<>();
+      payload.put("workItemId", workItemId);
+      payload.put("confirmed", !strong.isEmpty());
+      payload.put("matches", matches.stream().map(RunService::doneMatch).toList());
+      append("workflow_run", run.getId(), "memory.done_match", run.getId(), payload, time.now());
+    }
+    return run;
+  }
+
+  private static Map<String, Object> doneMatch(DoneWork.Match m) {
+    Map<String, Object> match = new LinkedHashMap<>();
+    match.put("workItemId", m.workItemId());
+    match.put("key", m.key());
+    match.put("title", m.title());
+    match.put("similarity", m.similarity());
+    match.put("strong", m.strong());
+    match.put("self", m.self());
+    if (m.pullRequestNumber() != null) {
+      match.put("pullRequest", m.pullRequestNumber());
+    }
+    return match;
   }
 
   /**

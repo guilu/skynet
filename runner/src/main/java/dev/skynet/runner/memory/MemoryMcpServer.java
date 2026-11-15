@@ -14,8 +14,9 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * Servidor MCP de memoria por stdio (JSON-RPC 2.0, un mensaje por línea), al estilo de las
  * herramientas de engram: {@code mem_context}, {@code mem_search}, {@code mem_get}, {@code
- * mem_save} y {@code mem_session_summary}. Cada llamada va al control plane con el token de la
- * invocación; el ámbito (proyecto y repositorio) lo decide el control plane, nunca el agente.
+ * mem_done}, {@code mem_save} y {@code mem_session_summary}. Cada llamada va al control plane con
+ * el token de la invocación; el ámbito (proyecto y repositorio) lo decide el control plane, nunca
+ * el agente.
  *
  * <p>Con acceso de solo lectura no ofrece las herramientas que guardan.
  */
@@ -145,6 +146,20 @@ public final class MemoryMcpServer {
     property(get, "id", "string", "Id de la observación (de mem_search o mem_context)");
     get.putArray("required").add("id");
     tool(tools, "mem_get", "Una observación entera, con todos sus campos.", get, true);
+    ObjectNode done = schema();
+    property(
+        done,
+        "query",
+        "string",
+        "Qué buscar entre lo ya entregado; sin él, se compara el trabajo de esta ejecución");
+    tool(
+        tools,
+        "mem_done",
+        "¿Ya está hecho? Los trabajos de este proyecto que ya se entregaron (con su PR fusionada)"
+            + " y se parecen a este o a lo que buscas, con su parecido de 0 a 1. Míralo antes de"
+            + " hacer algo que quizá ya se hizo.",
+        done,
+        true);
     if (writable) {
       ObjectNode save = schema();
       ArrayNode kinds = property(save, "kind", "string", "Tipo de observación").putArray("enum");
@@ -209,6 +224,7 @@ public final class MemoryMcpServer {
             text(api.call("context", JSON.createObjectNode()).path("text").asString(""));
         case "mem_search" -> json(api.call("search", copy(args, "query", "kinds", "limit")));
         case "mem_get" -> json(api.call("get", copy(args, "id")));
+        case "mem_done" -> json(api.call("done", copy(args, "query")));
         case "mem_save" -> {
           requireWritable(name);
           ObjectNode body =

@@ -194,6 +194,47 @@ class IssueTriggerIT extends IntegrationTest {
   }
 
   @Test
+  void whatLooksAlreadyDeliveredIsNotLaunchedFromGitHub() throws Exception {
+    rule(Map.of("workflowKey", "tarea"));
+    enable();
+    label("guilu/demo-repo", 7, "skynet:tarea", "guilu", "guilu", "Añadir resta()", "Con tests.");
+    String runId = awaitLaunch("LAUNCHED", 7).path("workflowRunId").asString();
+    post("/api/workflow-runs/" + runId + "/cancel", Map.of());
+    // Su PR se fusionó (MV-B la busca en github_pull_request).
+    jdbc.sql(
+            """
+            INSERT INTO github_pull_request (id, workflow_run_id, repository_id, stage_run_id,
+                agent_run_id, full_name, branch, title, body, status, number, url, created_at,
+                updated_at)
+            SELECT gen_random_uuid(), s.workflow_run_id, r.repository_id, s.id, a.id,
+                'guilu/demo-repo', 'b', 't', 'b', 'MERGED', 40,
+                'https://github.com/guilu/demo-repo/pull/40', now(), now()
+            FROM stage_run s JOIN agent_run a ON a.stage_run_id = s.id
+            JOIN workflow_run r ON r.id = s.workflow_run_id
+            WHERE s.workflow_run_id = ? LIMIT 1
+            """)
+        .param(UUID.fromString(runId))
+        .update();
+
+    label("guilu/demo-repo", 9, "skynet:tarea", "guilu", "guilu", "Añadir la resta", "");
+    assertThat(awaitLaunch("REJECTED", 9).path("reason").asString())
+        .startsWith("parece ya hecho: DEMO-1 «Añadir resta()» se entregó en la PR #40")
+        .endsWith("lanza DEMO-2 desde Skynet");
+    await(
+        () ->
+            GITHUB.comments.stream()
+                    .anyMatch(c -> c.startsWith("guilu/demo-repo#9: No lo lanzo: parece ya hecho"))
+                ? true
+                : null,
+        "el aviso de ya hecho");
+    assertThat(count("SELECT count(*) FROM workflow_run")).isEqualTo(1);
+
+    // La misma issue, ya entregada, tampoco se relanza sola.
+    label("guilu/demo-repo", 7, "skynet:tarea", "guilu", "guilu", "Añadir resta()", "Con tests.");
+    assertThat(awaitLaunch("REJECTED", 7).path("reason").asString()).contains("este mismo trabajo");
+  }
+
+  @Test
   void theDailyLimitStopsLaunchesFromGitHub() throws Exception {
     rule(Map.of("workflowKey", "tarea"));
     JsonNode settings = put("/api/triggers/settings", Map.of("enabled", true, "dailyLimit", 1));

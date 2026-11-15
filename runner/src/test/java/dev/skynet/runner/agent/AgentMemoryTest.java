@@ -148,7 +148,8 @@ class AgentMemoryTest {
     assertThat(responses).hasSize(3);
     assertThat(responses.get(0).path("result").path("tools"))
         .extracting(t -> t.path("name").asString())
-        .containsExactly("mem_context", "mem_search", "mem_get", "mem_save", "mem_session_summary");
+        .containsExactly(
+            "mem_context", "mem_search", "mem_get", "mem_done", "mem_save", "mem_session_summary");
     assertThat(responses.get(1).path("result").path("content").get(0).path("text").asString())
         .isEqualTo("Memoria de prueba");
     assertThat(responses.get(2).path("result").path("isError").asBoolean(true)).isFalse();

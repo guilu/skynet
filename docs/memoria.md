@@ -44,6 +44,22 @@ Lo que está en cuarentena no sale de ella con una fusión ni con una versión n
 
 Lo guardado antes de MV-A quedó como confirmado.
 
+## ¿Ya está hecho?
+
+Antes de lanzar un trabajo, Skynet lo compara con los **trabajos ya entregados** de su proyecto, que son los que tienen una PR fusionada (hito MV, MV-B). No usa ningún modelo:
+- toma las palabras del título y de la descripción, sin tildes ni palabras vacías;
+- corta cada palabra a sus cinco primeras letras, así que «exportar» y «exportación» cuentan como la misma;
+- calcula su parecido (Jaccard) entre 0 y 1. Usa el mayor de dos: el de los títulos solos y el de título más descripción.
+
+| Parecido | Qué pasa |
+|---|---|
+| **Fuerte**: desde `SKYNET_MEMORY_DONE_SIMILARITY` (0,6), o el propio trabajo ya entregado | Lanzarlo desde la web o la API responde **409** con `code: DONE_MATCH` y los parecidos en `doneMatches`: «Esto parece ya hecho: AKA-1 «Exportar las notas a PDF» se entregó en la PR #40 el 3/11/2026…». Se lanza igualmente con `confirmDone: true`. Un disparador de GitHub no lo lanza y lo comenta en la issue. |
+| **Leve**: desde `SKYNET_MEMORY_DONE_HINT` (0,3) | Se lanza sin preguntar. |
+
+Si se lanza con algún parecido, la ejecución deja el evento `memory.done_match` con los parecidos y si se confirmó. Además, el bloque `<memoria-del-proyecto>` de cada agente lleva «Trabajos parecidos que ya se entregaron en este proyecto», con su PR y su parecido, para que no repita lo hecho.
+
+Los disparadores programados y los de despliegue no se comparan: relanzan a propósito el mismo trabajo.
+
 ## Cómo la usan los agentes
 
 1. **Al empezar una sesión nueva**, el prompt de la fase va precedido de un bloque `<memoria-del-proyecto>`. Solo lleva lo confirmado: lo fijado, los últimos resúmenes de sesión, la bitácora y lo último guardado en el repositorio de la ejecución y en todo el proyecto, con un tope de 4 000 caracteres (`SKYNET_MEMORY_CONTEXT_MAX_CHARS`). Si no cabe todo, deja fuera entradas enteras y avisa de que hay más. Llega como contexto de referencia, no como instrucciones: si contradice el repositorio, manda el repositorio. Una continuación (mensaje, reanudación o bifurcación) no lo repite.
@@ -54,10 +70,11 @@ Lo guardado antes de MV-A quedó como confirmado.
    | `mem_context` | El mismo contexto del bloque inicial, otra vez. |
    | `mem_search` | Busca en el repositorio y en su proyecto; devuelve vistas previas. |
    | `mem_get` | Una observación entera. |
+   | `mem_done` | ¿Ya está hecho?: los trabajos entregados del proyecto que se parecen al de la ejecución o, con `query`, a ese texto. |
    | `mem_save` | Guarda una observación, con `topic_key` opcional. Solo con `memory: write`. |
    | `mem_session_summary` | El resumen de la sesión: objetivo, qué se hizo, descubrimientos, siguientes pasos y ficheros. Llamarla otra vez lo actualiza. Solo con `memory: write`. |
 
-   Las tres de lectura se anuncian con la anotación MCP `readOnlyHint: true`, así que el CLI las trata como de solo lectura también en `permissionMode: plan`. Antigravity recibe el bloque, pero todavía no las herramientas: no está comprobado que `agy` admita servidores MCP en modo headless.
+   Las cuatro de lectura se anuncian con la anotación MCP `readOnlyHint: true`, así que el CLI las trata como de solo lectura también en `permissionMode: plan`. Antigravity recibe el bloque, pero todavía no las herramientas: no está comprobado que `agy` admita servidores MCP en modo headless.
 3. **Al terminar la ejecución** (bien, mal o cancelada), Skynet deja en cada repositorio en el que trabajó una observación `RUN_LOG` con el tema `bitacora/<ejecución>`: el workflow y su versión, el trabajo, el estado de cada fase, la rama con sus commits y archivos, la salida estructurada de los agentes, el coste y el enlace a la ejecución. Se escribe sin modelo, con lo que ya está en la base de datos. Si falla, la ejecución termina igual.
 
 ### La clave `memory` de una fase
@@ -105,6 +122,7 @@ En el detalle de cada agente, la pestaña **Memoria** dice qué hizo esa invocac
 | `POST /api/memory/{id}/archive`, `…/restore`, `…/pin`, `…/unpin` | Revisión. Fijar también la confirma. |
 | `POST /api/memory/{id}/confirm` | Confirmarla: llega a los agentes, también en el bloque inicial. |
 | `POST /api/memory/{id}/quarantine` | Ponerla en cuarentena, con un `reason` opcional en el cuerpo. Deja de estar fijada. |
+| `GET /api/work-items/{id}/done-matches` | Los trabajos entregados del proyecto que se parecen a este, del más parecido al menos, con su PR y si el parecido es fuerte (`strong`). |
 | `GET /api/agent-runs/{id}/memory` | Lo que una invocación recibió, buscó, leyó y guardó, con su modo (`READ`, `WRITE` o `null`). |
 
 Cada cambio deja un evento en el historial: `memory.created`, `memory.updated`, `memory.archived`, `memory.restored`, `memory.pinned`, `memory.unpinned`, `memory.confirmed` y `memory.quarantined`, todos con la confianza (`trust`) que queda. Los que escribe una ejecución (lo que guardan sus agentes y su bitácora) salen en su línea de tiempo.
@@ -114,4 +132,4 @@ Cada cambio deja un evento en el historial: `memory.created`, `memory.updated`, 
 - Detectar duplicados y contradicciones entre entradas (`mem_judge`, `mem_compare` y `mem_consolidate` de engram).
 - Memoria global entre proyectos, búsqueda semántica y caducidad de entradas.
 - Lanzar `investigar-mejoras` de forma programada.
-- Lo que queda del hito MV «Memoria viva» ([#307](https://github.com/guilu/skynet/issues/307)–[#311](https://github.com/guilu/skynet/issues/311)): la puerta «¿ya está hecho?», las páginas de la wiki, el contexto según el trabajo, el curador y la confianza en la web.
+- Lo que queda del hito MV «Memoria viva» ([#307](https://github.com/guilu/skynet/issues/307)–[#311](https://github.com/guilu/skynet/issues/311)): las páginas de la wiki, el contexto según el trabajo, el curador y la confianza en la web.

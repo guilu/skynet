@@ -58,7 +58,9 @@ class RunController {
    * adhoc}) con sus datos de entrada. {@code prompt} es un atajo para el dato {@code prompt} de los
    * workflows que lo piden, como {@code adhoc}. Los límites son opcionales: sin ellos se aplican
    * los de {@code skynet.agent}, y valen para los agentes que no fijan los suyos. {@code provider}
-   * y {@code model} valen para las fases sin agente con nombre, como la de {@code adhoc}.
+   * y {@code model} valen para las fases sin agente con nombre, como la de {@code adhoc}. Si el
+   * trabajo se parece mucho a uno ya entregado (MV-B), responde 409 con {@code doneMatches} salvo
+   * que venga {@code confirmDone: true}.
    */
   record LaunchRun(
       @NotNull UUID repositoryId,
@@ -69,7 +71,8 @@ class RunController {
       @Positive @DecimalMax("1000") BigDecimal maxBudgetUsd,
       @Positive @Max(24 * 60) Integer timeoutMinutes,
       @Size(max = 100) String provider,
-      @Size(max = 100) String model) {
+      @Size(max = 100) String model,
+      Boolean confirmDone) {
 
     AgentLimits limits() {
       return new AgentLimits(
@@ -84,7 +87,7 @@ class RunController {
   RunView launch(@PathVariable UUID workItemId, @Valid @RequestBody LaunchRun request) {
     return service.run(
         service
-            .launch(
+            .launchUnlessDone(
                 workItemId,
                 new Launch(
                     request.repositoryId(),
@@ -93,7 +96,8 @@ class RunController {
                     request.prompt(),
                     request.limits(),
                     request.provider(),
-                    request.model()))
+                    request.model()),
+                Boolean.TRUE.equals(request.confirmDone()))
             .getId());
   }
 
