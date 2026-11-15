@@ -3,6 +3,7 @@ import {
   ArrowDown,
   ArrowUp,
   Bot,
+  ChevronRight,
   CircleAlert,
   Code,
   Ellipsis,
@@ -39,7 +40,7 @@ import { AgentsPanel, InputsPanel, WorkflowPanel } from './DefinitionPanels'
 import { StepCard } from './DefinitionOverview'
 import { applyQuickFix, quickFixOf } from './quickFix'
 import { StagePanel, type ApplyEdit } from './StagePanel'
-import { STEP_ICON } from './stepIcons'
+import { STEP_ICON, stepWho } from './stepIcons'
 import { stepsOf, type Step } from './steps'
 
 /** «Añadir paso»: cada tipo, con lo que hace en una frase. */
@@ -93,6 +94,8 @@ interface Props {
   /** Para Ctrl/Cmd+Z: los botones están en la barra del editor. */
   undo?: () => void
   redo?: () => void
+  /** Pantalla estrecha (WF-G): cada paso, el panel y «Añadir paso» se abren en una hoja. */
+  narrow?: boolean
 }
 
 function AddStep({ after, onAdd }: { after: string | null; onAdd: (kind: StepKind) => void }) {
@@ -142,16 +145,19 @@ export function StepsEditor({
   definition,
   problems,
   source,
-  reveal,
+  reveal: revealAt,
   lineOf,
   keyEditable = false,
   undo,
   redo,
+  narrow = false,
 }: Props) {
   const [selected, setSelectedState] = useState<string | null>(null)
   const [panel, setPanelState] = useState<Panel | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  // En el móvil, «Añadir paso» abre una hoja: detrás de qué paso.
+  const [adding, setAdding] = useState<{ after: string | null } | null>(null)
   const select = (id: string | null) => {
     setSelectedState(id)
     if (id) setPanelState(null)
@@ -179,6 +185,7 @@ export function StepsEditor({
       const result = addStep(text, kind, after)
       setMessage(null)
       onChange(result.text)
+      setAdding(null)
       select(result.id)
     } catch (error) {
       if (!(error instanceof EditError)) throw error
@@ -187,6 +194,14 @@ export function StepsEditor({
   }
   const move = (id: string, direction: 'up' | 'down') => {
     apply((t) => moveStage(t, id, direction))
+  }
+  // Al YAML: en el móvil, antes se cierra la hoja del paso.
+  const reveal = (line: number, column: number) => {
+    if (narrow) {
+      setSelectedState(null)
+      setPanelState(null)
+    }
+    revealAt(line, column)
   }
   const editYaml = (id: string, field?: string) => {
     const at = lineOf(id, field)
@@ -257,6 +272,47 @@ export function StepsEditor({
     </Menu.Root>
   )
 
+  const inspector =
+    panel === 'workflow' ? (
+      <WorkflowPanel text={text} problems={problems} apply={apply} keyEditable={keyEditable} />
+    ) : panel === 'agents' ? (
+      <AgentsPanel text={text} problems={problems} apply={apply} />
+    ) : panel === 'inputs' ? (
+      <InputsPanel text={text} problems={problems} apply={apply} />
+    ) : selectedStage ? (
+      <StagePanel
+        key={selectedStage}
+        text={text}
+        id={selectedStage}
+        problems={problems}
+        apply={apply}
+        onRenamed={(id) => select(id)}
+        onDelete={() => setDeleting(selectedStage)}
+        onEditYaml={(field) => editYaml(selectedStage, field)}
+        onRevealProblem={reveal}
+      />
+    ) : (
+      <section className="card stage-panel" aria-labelledby="steps-help-title">
+        <h2 id="steps-help-title">Propiedades</h2>
+        <p className="muted small">
+          Elige un paso para cambiarlo, o añade uno con «Añadir paso». El nombre, los agentes y los
+          datos al lanzar están en sus botones, encima de los pasos.
+        </p>
+      </section>
+    )
+
+  const PANEL_TITLE: Record<Panel, string> = {
+    workflow: 'Datos del workflow',
+    agents: 'Agentes',
+    inputs: 'Datos al lanzar',
+  }
+  const openStep = steps.find((st) => st.id === selectedStage)
+  const sheetTitle = panel
+    ? PANEL_TITLE[panel]
+    : openStep
+      ? `${openStep.n}. ${openStep.title}`
+      : (selectedStage ?? '')
+
   return (
     <div className="steps-editor" onKeyDown={onKeyDown}>
       <div className="steps-toolbar">
@@ -280,7 +336,7 @@ export function StepsEditor({
             </button>
           ))}
         </div>
-        <span className="muted small">Mover: Alt+↑/↓</span>
+        {!narrow && <span className="muted small">Mover: Alt+↑/↓</span>}
         <p className="graph-message" role="status">
           {message}
         </p>
@@ -337,9 +393,21 @@ export function StepsEditor({
         </section>
       )}
 
-      <div className="graph-editor-body">
+      <div className={cn(!narrow && 'graph-editor-body')}>
         <section className="wf-steps" aria-label="Pasos">
-          {steps.length === 0 && <AddStep after={null} onAdd={(kind) => add(kind, null)} />}
+          {steps.length === 0 &&
+            (narrow ? (
+              <button
+                type="button"
+                className="wf-add-step"
+                onClick={() => setAdding({ after: null })}
+              >
+                <Plus size={16} strokeWidth={2.5} aria-hidden="true" />
+                Añadir paso
+              </button>
+            ) : (
+              <AddStep after={null} onAdd={(kind) => add(kind, null)} />
+            ))}
           {groups.map((g) => (
             <div key={`${g.lane}.${g.steps[0].id}`} className="wf-step-group">
               {g.lane && <h4 className="wf-step-lane">{PHASE_LABEL[g.lane]}</h4>}
@@ -352,71 +420,153 @@ export function StepsEditor({
                       <span className="wf-step-icon" aria-hidden="true">
                         <Icon size={18} strokeWidth={2.25} />
                       </span>
-                      <div className="wf-step-slot">
-                        <StepCard
-                          step={step}
-                          onSelect={() => select(step.id)}
-                          selected={step.id === selectedStage}
-                          badge={
-                            badge && (
-                              <span
-                                className={cn(
-                                  'wf-step-badge',
-                                  badge.severity === 'ERROR' ? 'is-error' : 'is-warning',
-                                )}
-                              >
-                                <CircleAlert size={14} strokeWidth={2.5} aria-hidden="true" />
-                                {badge.label}
-                              </span>
-                            )
-                          }
-                          menu={stepMenu(step)}
-                        />
-                        <AddStep after={step.id} onAdd={(kind) => add(kind, step.id)} />
-                      </div>
+                      {narrow ? (
+                        <button
+                          type="button"
+                          className="wf-step-row"
+                          data-step={step.id}
+                          onClick={() => select(step.id)}
+                        >
+                          <span>
+                            <span className="wf-step-title">
+                              {step.n}. {step.title}
+                            </span>
+                            <span className="muted small">{stepWho(step)}</span>
+                          </span>
+                          {badge && (
+                            <span
+                              className={cn(
+                                'wf-step-badge',
+                                badge.severity === 'ERROR' ? 'is-error' : 'is-warning',
+                              )}
+                            >
+                              <CircleAlert size={14} strokeWidth={2.5} aria-hidden="true" />
+                              {badge.label}
+                            </span>
+                          )}
+                          <ChevronRight size={20} aria-hidden="true" />
+                        </button>
+                      ) : (
+                        <div className="wf-step-slot">
+                          <StepCard
+                            step={step}
+                            onSelect={() => select(step.id)}
+                            selected={step.id === selectedStage}
+                            badge={
+                              badge && (
+                                <span
+                                  className={cn(
+                                    'wf-step-badge',
+                                    badge.severity === 'ERROR' ? 'is-error' : 'is-warning',
+                                  )}
+                                >
+                                  <CircleAlert size={14} strokeWidth={2.5} aria-hidden="true" />
+                                  {badge.label}
+                                </span>
+                              )
+                            }
+                            menu={stepMenu(step)}
+                          />
+                          <AddStep after={step.id} onAdd={(kind) => add(kind, step.id)} />
+                        </div>
+                      )}
                     </li>
                   )
                 })}
               </ol>
+              {/* En el móvil, un «Añadir paso» al final de cada etapa, detrás de su último paso. */}
+              {narrow && (
+                <button
+                  type="button"
+                  className="wf-add-step"
+                  onClick={() => setAdding({ after: g.steps.at(-1)!.id })}
+                >
+                  <Plus size={16} strokeWidth={2.5} aria-hidden="true" />
+                  Añadir paso
+                  <span className="visually-hidden"> detrás de {g.steps.at(-1)!.id}</span>
+                </button>
+              )}
             </div>
           ))}
         </section>
 
-        <div className="graph-editor-panel">
-          {panel === 'workflow' ? (
-            <WorkflowPanel
-              text={text}
-              problems={problems}
-              apply={apply}
-              keyEditable={keyEditable}
-            />
-          ) : panel === 'agents' ? (
-            <AgentsPanel text={text} problems={problems} apply={apply} />
-          ) : panel === 'inputs' ? (
-            <InputsPanel text={text} problems={problems} apply={apply} />
-          ) : selectedStage ? (
-            <StagePanel
-              key={selectedStage}
-              text={text}
-              id={selectedStage}
-              problems={problems}
-              apply={apply}
-              onRenamed={(id) => select(id)}
-              onDelete={() => setDeleting(selectedStage)}
-              onEditYaml={(field) => editYaml(selectedStage, field)}
-              onRevealProblem={reveal}
-            />
-          ) : (
-            <section className="card stage-panel" aria-labelledby="steps-help-title">
-              <h2 id="steps-help-title">Propiedades</h2>
-              <p className="muted small">
-                Elige un paso para cambiarlo, o añade uno con «Añadir paso». El nombre, los agentes
-                y los datos al lanzar están en sus botones, encima de los pasos.
-              </p>
-            </section>
-          )}
-        </div>
+        {!narrow && <div className="graph-editor-panel">{inspector}</div>}
       </div>
+
+      {narrow && (
+        <Sheet
+          open={selectedStage != null || panel != null}
+          onOpenChange={(open) => {
+            if (!open) {
+              select(null)
+              setPanel(null)
+            }
+          }}
+          title={sheetTitle}
+        >
+          <div className="steps-sheet">
+            {message && (
+              <p className="graph-message" role="alert">
+                {message}
+              </p>
+            )}
+            {inspector}
+            {selectedStage && (
+              <div className="steps-sheet-actions" role="group" aria-label="Mover o quitar el paso">
+                <Button variant="secondary" onClick={() => move(selectedStage, 'up')}>
+                  <ArrowUp size={18} aria-hidden="true" />
+                  Subir
+                </Button>
+                <Button variant="secondary" onClick={() => move(selectedStage, 'down')}>
+                  <ArrowDown size={18} aria-hidden="true" />
+                  Bajar
+                </Button>
+                <Button variant="secondary-danger" onClick={() => setDeleting(selectedStage)}>
+                  <Trash2 size={18} aria-hidden="true" />
+                  Borrar paso…
+                </Button>
+              </div>
+            )}
+            <Button
+              className="steps-sheet-done"
+              onClick={() => {
+                select(null)
+                setPanel(null)
+              }}
+            >
+              Hecho
+            </Button>
+          </div>
+        </Sheet>
+      )}
+
+      <Sheet
+        open={adding != null}
+        onOpenChange={(open) => !open && setAdding(null)}
+        title="Añadir paso"
+        description={adding?.after ? `Detrás de «${adding.after}»` : 'Al final'}
+      >
+        <ul className="wf-palette-list">
+          {PALETTE.map(({ kind, label, text: what, icon: Icon }) => (
+            <li key={kind}>
+              <button
+                type="button"
+                className="wf-palette-row"
+                onClick={() => add(kind, adding?.after ?? null)}
+              >
+                <span className={cn('wf-step-icon', `wf-palette-${kind}`)} aria-hidden="true">
+                  <Icon size={18} strokeWidth={2.25} />
+                </span>
+                <span>
+                  <strong>{label}</strong>
+                  <span className="muted small">{what}</span>
+                </span>
+                <ChevronRight size={20} aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Sheet>
 
       <Sheet
         open={deleting != null}

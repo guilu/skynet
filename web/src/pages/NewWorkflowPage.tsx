@@ -75,14 +75,12 @@ export function NewWorkflowPage() {
         label="YAML del workflow nuevo"
         onSave={() => create.mutate()}
         actions={
-          <>
-            <Button onClick={() => create.mutate()} disabled={create.isPending}>
-              <Save size={18} strokeWidth={2.5} aria-hidden="true" />
-              Crear borrador
-            </Button>
-            <ImportButton onText={setText} />
-          </>
+          <Button onClick={() => create.mutate()} disabled={create.isPending}>
+            <Save size={18} strokeWidth={2.5} aria-hidden="true" />
+            Crear borrador
+          </Button>
         }
+        moreActions={<ImportButton onText={setText} />}
       />
       <ErrorMessage error={create.error} />
       {problems.length > 0 && <ProblemList problems={problems} />}

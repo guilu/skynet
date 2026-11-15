@@ -331,9 +331,9 @@
       "order": 13,
       "title": "Workflow: resumen",
       "group": "automation",
-      "route": "/workflows/:key?view=graph",
+      "route": "/workflows/:key",
       "capture": "viewport",
-      "notes": "Versión publicada, con su grafo.",
+      "notes": "Versión publicada, en «Resumen»: cifras y paso a paso (WF-E).",
       "links": [
         {
           "to": "workflow-yaml",
@@ -351,7 +351,7 @@
       "order": 14,
       "title": "Workflow: YAML",
       "group": "automation",
-      "route": "/workflows/:key",
+      "route": "/workflows/:key?view=yaml",
       "capture": "viewport",
       "links": [
         {
@@ -365,9 +365,9 @@
       "order": 15,
       "title": "Workflow: editor visual",
       "group": "automation",
-      "route": "/workflows/:key?version=:borrador&view=graph",
+      "route": "/workflows/:key?version=:borrador",
       "capture": "viewport",
-      "notes": "Borrador v2 abierto en el grafo editable. En el móvil el grafo no se edita (solo se ve).",
+      "notes": "Borrador v2 abierto en «Pasos» (WF-F); en el móvil, filas que abren cada paso en una hoja, con Guardar y Publicar abajo (WF-G).",
       "links": [
         {
           "to": "workflow-summary",

@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { CircleAlert, CircleCheck, Redo2, Undo2 } from 'lucide-react'
 import { lazy, Suspense, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router'
 import { api, type Problem, type Validation, type WorkflowModel } from '../../api'
 import { cn } from '../../lib/cn'
@@ -52,6 +53,8 @@ interface Props {
   label: string
   /** Botones sobre el editor (guardar, publicar, importar…). */
   actions?: ReactNode
+  /** Lo de menos uso (importar, descartar…): en el móvil se queda arriba, fuera de la barra fija. */
+  moreActions?: ReactNode
   /** Nombre del fichero al descargar el YAML. */
   fileName?: string
 }
@@ -79,6 +82,7 @@ export function DefinitionEditor({
   onSave,
   label,
   actions,
+  moreActions,
   fileName = 'workflow.yaml',
 }: Props) {
   const editor = useRef<YamlEditorHandle>(null)
@@ -88,9 +92,9 @@ export function DefinitionEditor({
   const narrow = useMediaQuery('(max-width: 720px)')
   const editing = !readOnly && onChange != null
   const views = editing ? EDIT_VIEWS : READ_VIEWS
-  // Una versión que solo se lee abre en «Resumen» (WF-E); un borrador, en «Pasos» (WF-F), salvo en
-  // una pantalla estrecha, donde de momento se edita en el YAML.
-  const defaultView: View = !editing ? 'summary' : narrow ? 'yaml' : 'steps'
+  // Una versión que solo se lee abre en «Resumen» (WF-E); un borrador, en «Pasos» (WF-F), también
+  // en el móvil (WF-G).
+  const defaultView: View = editing ? 'steps' : 'summary'
   const asked = params.get('view')
   const view: View = views.find((v) => v.id === asked)?.id ?? defaultView
   const selectView = (next: View) =>
@@ -196,13 +200,25 @@ export function DefinitionEditor({
             )}
             {current ? barStatus(problems).label : 'Validando…'}
           </span>
-          {actions && <div className="definition-actions">{actions}</div>}
+          {(narrow ? moreActions : actions || moreActions) && (
+            <div className="definition-actions">
+              {!narrow && actions}
+              {moreActions}
+            </div>
+          )}
         </div>
       ) : (
         actions && <div className="definition-actions">{actions}</div>
       )}
+      {/* En el móvil, Guardar y Publicar quedan fijos abajo (WF-G). Fuera del árbol: un antepasado
+          con transform recortaría un `position: fixed`. */}
+      {editing &&
+        narrow &&
+        actions &&
+        createPortal(<div className="definition-dock">{actions}</div>, document.body)}
       <div
         className={cn(
+          editing && narrow && actions && 'has-dock',
           'definition-editor',
           (view === 'graph' || view === 'steps') && 'definition-editor-graph',
         )}
@@ -215,7 +231,7 @@ export function DefinitionEditor({
               labelledBy="definition-view-steps"
               className="definition-steps"
             >
-              {definition && !narrow && onChange ? (
+              {definition && onChange ? (
                 <StepsEditor
                   text={text}
                   onChange={onChange}
@@ -227,15 +243,10 @@ export function DefinitionEditor({
                   keyEditable={validateAs == null}
                   undo={touchOnly ? undefined : () => editor.current?.undo?.()}
                   redo={touchOnly ? undefined : () => editor.current?.redo?.()}
+                  narrow={narrow}
                 />
               ) : definition ? (
-                <>
-                  <p className="muted small">
-                    En una pantalla estrecha los pasos son de solo lectura: edita en la pestaña
-                    YAML.
-                  </p>
-                  <DefinitionOverview definition={definition} />
-                </>
+                <DefinitionOverview definition={definition} />
               ) : (
                 <p className="muted">
                   {current

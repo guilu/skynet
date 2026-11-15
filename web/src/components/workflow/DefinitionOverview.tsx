@@ -30,7 +30,7 @@ import type { WorkflowModel } from '../../api'
 import { providerName } from '../../format'
 import { cn } from '../../lib/cn'
 import { useMediaQuery } from '../../useMediaQuery'
-import { STEP_ICON } from './stepIcons'
+import { STEP_ICON, stepWho } from './stepIcons'
 import { PHASE_LABEL } from '../graph/layout'
 import { Sheet } from '../ui/Sheet'
 import { providerInfo } from './overview'
@@ -242,13 +242,7 @@ export function DefinitionOverview({ definition }: { definition: WorkflowModel }
                           <span className="wf-step-title">
                             {step.n}. {step.title}
                           </span>
-                          <span className="muted small">
-                            {step.workers[0]
-                              ? `${providerInfo(step.workers[0].provider).name}${
-                                  step.workers[0].agent ? ` · ${step.workers[0].agent}` : ''
-                                }`
-                              : step.kind}
-                          </span>
+                          <span className="muted small">{stepWho(step)}</span>
                         </span>
                         <ChevronRight size={20} aria-hidden="true" />
                       </button>

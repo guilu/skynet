@@ -283,6 +283,12 @@ function VersionPanel({
                 <Rocket size={18} strokeWidth={2.5} aria-hidden="true" />
                 Publicar…
               </Button>
+            </>
+          )
+        }
+        moreActions={
+          editable && (
+            <>
               <ImportButton onText={setText} />
               <Button variant="secondary-danger" onClick={() => setDiscarding(true)}>
                 <Trash2 size={18} strokeWidth={2.5} aria-hidden="true" />
