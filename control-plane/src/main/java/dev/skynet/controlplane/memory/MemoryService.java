@@ -342,6 +342,46 @@ public class MemoryService {
         .list();
   }
 
+  /**
+   * Quién vio una entrada (MV-F): las invocaciones que la recibieron, buscaron, leyeron o
+   * guardaron, de la más reciente a la más antigua, hasta 200.
+   */
+  @Transactional(readOnly = true)
+  public List<MemoryReader> readers(UUID id) {
+    // Sin llamar a get(): es @Transactional y desde aquí no pasaría por el proxy.
+    if (jdbc.sql("SELECT count(*) FROM memory_observation WHERE id = ?")
+            .param(id)
+            .query(Long.class)
+            .single()
+        == 0) {
+      throw new NotFoundException("Observación", id);
+    }
+    return jdbc.sql(
+            "SELECT a.agent_run_id, s.workflow_run_id, s.stage_key, w.key, ar.provider, a.version,"
+                + " a.via, count(*) AS times, min(a.accessed_at) AS first_at FROM memory_access a"
+                + " JOIN agent_run ar ON ar.id = a.agent_run_id"
+                + " JOIN stage_run s ON s.id = ar.stage_run_id"
+                + " JOIN workflow_run r ON r.id = s.workflow_run_id"
+                + " JOIN work_item w ON w.id = r.work_item_id"
+                + " WHERE a.observation_id = ?"
+                + " GROUP BY a.agent_run_id, s.workflow_run_id, s.stage_key, w.key, ar.provider,"
+                + " a.version, a.via ORDER BY min(a.accessed_at) DESC, min(a.id) DESC LIMIT 200")
+        .param(id)
+        .query(
+            (rs, n) ->
+                new MemoryReader(
+                    rs.getObject("agent_run_id", UUID.class),
+                    rs.getObject("workflow_run_id", UUID.class),
+                    rs.getString("stage_key"),
+                    rs.getString("key"),
+                    rs.getString("provider"),
+                    rs.getInt("version"),
+                    rs.getString("via"),
+                    rs.getInt("times"),
+                    rs.getTimestamp("first_at").toInstant()))
+        .list();
+  }
+
   /** Lo que una invocación hizo con la memoria, en el orden en que lo hizo. */
   @Transactional(readOnly = true)
   public AgentMemory agentMemory(UUID agentRunId) {

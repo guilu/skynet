@@ -108,6 +108,21 @@ class MemoryAgentIT extends IntegrationTest {
         .extracting(a -> a.path("via").asString() + " v" + a.path("version").asInt())
         .containsExactly("SEARCH v1", "GET v1", "CONTEXT v1");
     assertStatus(() -> get("/api/agent-runs/" + UUID.randomUUID() + "/memory"), 404);
+
+    // «¿Quién lo vio?» (MV-F): desde la entrada, cada invocación con lo que hizo con ella.
+    JsonNode readers = get("/api/memory/" + id + "/readers");
+    assertThat(readers)
+        .extracting(
+            r ->
+                (r.path("agentRunId").asString().equals(firstAgent.toString()) ? "1ª " : "2ª ")
+                    + r.path("via").asString()
+                    + " v"
+                    + r.path("version").asInt())
+        .containsExactlyInAnyOrder("1ª SAVE v1", "2ª SEARCH v1", "2ª GET v1", "2ª CONTEXT v1");
+    assertThat(readers.get(0).path("workItemKey").asString()).isEqualTo("ALPHA-1");
+    assertThat(readers.get(0).path("stageKey").asString()).isNotBlank();
+    assertThat(readers.get(0).path("workflowRunId").asString()).isNotBlank();
+    assertStatus(() -> get("/api/memory/" + UUID.randomUUID() + "/readers"), 404);
   }
 
   @Test

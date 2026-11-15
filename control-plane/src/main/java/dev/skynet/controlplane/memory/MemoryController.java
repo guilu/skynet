@@ -134,6 +134,12 @@ class MemoryController {
     return service.get(id);
   }
 
+  /** Quién la vio: las invocaciones que la recibieron, buscaron, leyeron o guardaron (MV-F). */
+  @GetMapping("/api/memory/{id}/readers")
+  List<MemoryReader> readers(@PathVariable UUID id) {
+    return service.readers(id);
+  }
+
   /** Lo que una invocación de agente recibió, buscó, leyó y guardó. */
   @GetMapping("/api/agent-runs/{id}/memory")
   AgentMemory agentMemory(@PathVariable UUID id) {
