@@ -6623,6 +6623,110 @@
     color: var(--ok-ink);
   }
 
+  /* El editor por pasos en el móvil (WF-G). */
+  .definition-dock {
+    position: fixed;
+    right: 0;
+    bottom: calc(var(--mobile-nav-h, 72px) + env(safe-area-inset-bottom, 0px));
+    left: 0;
+    z-index: 20;
+    display: flex;
+    gap: 10px;
+    padding: 10px 16px;
+    border-top: var(--border-w) solid var(--border);
+    background: var(--bg);
+  }
+
+  .definition-dock > .btn {
+    flex: 1;
+    min-height: 48px;
+    justify-content: center;
+  }
+
+  .definition-editor.has-dock {
+    padding-bottom: 80px;
+  }
+
+  .wf-step-row .wf-step-badge {
+    flex-shrink: 0;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  .steps-sheet {
+    display: grid;
+    gap: 14px;
+  }
+
+  .steps-sheet .stage-panel {
+    padding: 0;
+    border: 0;
+  }
+
+  .steps-sheet-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .btn.steps-sheet-done {
+    width: 100%;
+    min-height: 48px;
+    justify-content: center;
+  }
+
+  .wf-palette-list {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .wf-palette-list li + li {
+    border-top: var(--border-w) solid var(--border);
+  }
+
+  .wf-palette-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 60px;
+    padding: 8px 0;
+    border: 0;
+    background: none;
+    color: var(--fg);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .wf-palette-row > span:nth-child(2) {
+    display: grid;
+    flex: 1;
+    gap: 2px;
+  }
+
+  @media (max-width: 720px) {
+    .definition-bar {
+      position: static;
+    }
+
+    .definition-bar .definition-actions {
+      margin: 0;
+    }
+
+    .wf-add-step,
+    .steps-toolbar .chip,
+    .steps-alert .btn {
+      min-height: 44px;
+    }
+
+    .wf-step-group > .wf-add-step {
+      margin: 10px 0 0 48px;
+    }
+  }
+
   .ready-items {
     display: grid;
     gap: 6px;

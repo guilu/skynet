@@ -66,7 +66,7 @@ const typo: Problem = {
 const stagesOf = (text: string) =>
   (parse(text) as { stages: { id: string; dependsOn?: string[] }[] }).stages
 
-function Harness({ problems = [] }: { problems?: Problem[] }) {
+function Harness({ problems = [], narrow = false }: { problems?: Problem[]; narrow?: boolean }) {
   const [text, setText] = useState(TEXT)
   return (
     <>
@@ -78,6 +78,7 @@ function Harness({ problems = [] }: { problems?: Problem[] }) {
         source={TEXT}
         reveal={() => {}}
         lineOf={() => ({ line: 6, column: 5 })}
+        narrow={narrow}
       />
       <pre data-testid="yaml">{text}</pre>
     </>
@@ -117,5 +118,29 @@ describe('el editor por pasos (WF-F)', () => {
     expect(stagesOf(yaml()).map((s) => s.id)).toEqual(['build', 'plan'])
     fireEvent.keyDown(build, { key: 'ArrowUp', altKey: true })
     expect(screen.getByRole('status')).toHaveTextContent('Ya es el primer paso')
+  })
+
+  it('en el móvil, cada paso se edita en una hoja y «Añadir paso» abre la paleta en otra (WF-G)', () => {
+    render(<Harness problems={[typo]} narrow />)
+    const steps = screen.getByRole('region', { name: 'Pasos' })
+    const row = within(steps).getByRole('button', { name: /2\. build/ })
+    expect(row).toHaveTextContent('1 error')
+    fireEvent.click(row)
+    const sheet = screen.getByRole('dialog', { name: '2. build' })
+    expect(within(sheet).getByRole('heading', { name: 'Fase build' })).toBeInTheDocument()
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Subir' }))
+    expect(stagesOf(yaml()).map((s) => s.id)).toEqual(['build', 'plan'])
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Hecho' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    fireEvent.click(
+      within(steps)
+        .getAllByRole('button', { name: /Añadir paso/ })
+        .at(-1)!,
+    )
+    const palette = screen.getByRole('dialog', { name: 'Añadir paso' })
+    fireEvent.click(within(palette).getByRole('button', { name: /Comando/ }))
+    expect(stagesOf(yaml()).map((s) => s.id)).toContain('comando')
+    expect(screen.getByRole('dialog', { name: /comando/ })).toBeInTheDocument()
   })
 })

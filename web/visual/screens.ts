@@ -72,11 +72,11 @@ export const PREPARERS: Record<string, Preparer> = {
   'work-item': (page, { fx }) => goto(page, `/work-items/${fx.workItemId}`, 'La suma de totales'),
   workflows: (page) => goto(page, '/workflows', 'Documentar el repositorio'),
   'workflow-summary': (page, { fx }) =>
-    goto(page, `/workflows/${fx.workflowKey}?version=${fx.publishedVersionId}&view=graph`),
-  'workflow-yaml': (page, { fx }) =>
     goto(page, `/workflows/${fx.workflowKey}?version=${fx.publishedVersionId}`),
+  'workflow-yaml': (page, { fx }) =>
+    goto(page, `/workflows/${fx.workflowKey}?version=${fx.publishedVersionId}&view=yaml`),
   'workflow-editor': (page, { fx }) =>
-    goto(page, `/workflows/${fx.workflowKey}?version=${fx.draftVersionId}&view=graph`),
+    goto(page, `/workflows/${fx.workflowKey}?version=${fx.draftVersionId}`),
   'workflow-new': (page) => goto(page, '/workflows/new'),
   'launch-workflow': async (page, { fx, viewport }) => {
     await goto(page, `/work-items/${fx.workItemId}`, 'La suma de totales')
