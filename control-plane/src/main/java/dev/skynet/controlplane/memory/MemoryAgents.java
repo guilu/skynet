@@ -44,7 +44,9 @@ public class MemoryAgents {
   /** Acceso de una invocación a la memoria. */
   public enum Mode {
     READ,
-    WRITE
+    WRITE,
+    /** El curador (MV-E): busca y lee como {@code READ}; escribe con su salida estructurada. */
+    CURATE
   }
 
   /** Token recién emitido; solo existe en claro en esta respuesta. */
@@ -105,6 +107,21 @@ public class MemoryAgents {
           + " `topic_key` estable si actualiza un tema; no guardes salidas de herramientas, cada"
           + " paso ni secretos. Antes de terminar, llama a `mem_session_summary`.";
 
+  /** Lo que devuelve el curador (MV-E): el motor lo aplica al terminar bien la fase. */
+  static final String CURATE_OUTPUT =
+      "Eres el curador de la memoria: no cambias el repositorio ni guardas entradas. Lo que"
+          + " escribes va en tu salida estructurada, y Skynet lo aplica al terminar: `summary` (el"
+          + " resumen de la curación); `pages`, páginas de la wiki de este repositorio"
+          + " (`{slug, title, body, sources}`, con `scope: \"project\"` para el proyecto entero;"
+          + " `sources` son ids de entradas), como `arquitectura`, `modulos` o `convenciones`; y"
+          + " `proposals`, propuestas de archivar entradas duplicadas, contradichas o caducadas"
+          + " (`{action: \"archive\", observations: [ids], reason}`) o de fusionarlas en una"
+          + " (`{action: \"merge\", into: id, observations: [ids], reason}`). Las propuestas las"
+          + " decide una persona. Las páginas que genera Skynet (indice, lo-hecho,"
+          + " errores-conocidos, decisiones-y-restricciones) y las de una persona no se tocan.";
+
+  static final String INBOX_TITLE = "## Para curar: lo confirmado desde la última curación";
+
   static final String TOOLS_READ =
       "Tienes las herramientas de memoria `skynet_memoria` en modo de solo lectura. Antes de"
           + " decidir algo que pueda estar ya resuelto, mira la wiki del proyecto con `wiki_index`"
@@ -136,6 +153,7 @@ public class MemoryAgents {
   private final MemoryProperties properties;
   private final DoneWork doneWork;
   private final WikiPages wiki;
+  private final MemoryCuration curation;
   private final TimeSource time;
 
   MemoryAgents(
@@ -145,6 +163,7 @@ public class MemoryAgents {
       MemoryProperties properties,
       DoneWork doneWork,
       WikiPages wiki,
+      MemoryCuration curation,
       TimeSource time) {
     this.jdbc = jdbc;
     this.memory = memory;
@@ -152,6 +171,7 @@ public class MemoryAgents {
     this.properties = properties;
     this.doneWork = doneWork;
     this.wiki = wiki;
+    this.curation = curation;
     this.time = time;
   }
 
@@ -197,7 +217,8 @@ public class MemoryAgents {
         .param("mode", mode.name())
         .param("now", Timestamp.from(time.now()))
         .update();
-    return new IssuedToken(token, mode);
+    // El puente MCP del curador es de solo lectura.
+    return new IssuedToken(token, mode == Mode.CURATE ? Mode.READ : mode);
   }
 
   /**
@@ -274,6 +295,10 @@ public class MemoryAgents {
     }
     StringBuilder text = new StringBuilder(BLOCK_START).append('\n').append(rendered.text());
     doneWork.notice(workItemId).ifPresent(n -> text.append("\n\n").append(n));
+    if (mode == Mode.CURATE) {
+      text.append("\n\n").append(inbox(projectId, repositoryId)).append("\n\n");
+      text.append(CURATE_OUTPUT);
+    }
     if (tools) {
       text.append("\n\n").append(mode == Mode.WRITE ? TOOLS_WRITE : TOOLS_READ);
     }
@@ -282,6 +307,37 @@ public class MemoryAgents {
         text.toString(),
         rendered.included().stream().map(o -> new Ref(o.id(), o.version())).toList(),
         rendered.omitted());
+  }
+
+  /** Lo que el curador tiene que mirar: lo confirmado desde la última curación. */
+  private String inbox(UUID projectId, UUID repositoryId) {
+    MemoryCuration.Inbox inbox = curation.inbox(projectId, repositoryId);
+    StringBuilder s = new StringBuilder(INBOX_TITLE);
+    if (inbox.items().isEmpty()) {
+      return s.append("\n\nNo hay nada confirmado nuevo")
+          .append(inbox.since() == null ? "." : " desde la última curación.")
+          .append(" Revisa igualmente duplicados, contradicciones y entradas caducadas.")
+          .toString();
+    }
+    s.append(inbox.since() == null ? " (es la primera)" : "").append('\n');
+    for (MemoryObservation o : inbox.items()) {
+      s.append("\n- [")
+          .append(o.kind())
+          .append("] ")
+          .append(o.title())
+          .append(" (")
+          .append(o.repositoryId() == null ? "proyecto" : "repositorio")
+          .append(", v")
+          .append(o.version())
+          .append(", id ")
+          .append(o.id())
+          .append(')');
+    }
+    int more = inbox.total() - inbox.items().size();
+    if (more > 0) {
+      s.append("\n\n(").append(more).append(" más").append(": búscalas con mem_search.)");
+    }
+    return s.append("\n\nLéelas enteras con mem_get antes de decidir.").toString();
   }
 
   /** El contexto con el que empieza el agente. */

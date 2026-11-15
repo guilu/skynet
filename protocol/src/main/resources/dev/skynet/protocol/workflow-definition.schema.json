@@ -472,8 +472,8 @@
           "type": "boolean"
         },
         "memory": {
-          "description": "Acceso del agente (o de los hijos de una parallel) a la memoria del proyecto: write (por defecto) lee y guarda, read solo lee (contexto inicial, mem_search y mem_get) y off no recibe ni el bloque de memoria ni las herramientas. Solo vale en fases agent y parallel.",
-          "enum": ["off", "read", "write"]
+          "description": "Acceso del agente (o de los hijos de una parallel) a la memoria del proyecto: write (por defecto) lee y guarda, read solo lee (contexto inicial, mem_search y mem_get), curate es el curador (lee y su salida escribe páginas de la wiki y propone archivar o fusionar entradas; solo en fases agent) y off no recibe ni el bloque de memoria ni las herramientas. Solo vale en fases agent y parallel.",
+          "enum": ["off", "read", "write", "curate"]
         },
         "timeout": {
           "description": "Tiempo máximo de cada intento de la fase, desde que está lista hasta que termina (s, m o h; hasta 168 h). Al vencer se paran sus agentes y la fase falla con `timeout`; en una human-approval, la petición caduca. Una github-check sin timeout espera la CI como mucho 60 m. No vale en fases conditional.",

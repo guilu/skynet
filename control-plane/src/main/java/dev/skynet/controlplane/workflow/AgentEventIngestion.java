@@ -2,6 +2,7 @@ package dev.skynet.controlplane.workflow;
 
 import dev.skynet.controlplane.event.EventDraft;
 import dev.skynet.controlplane.event.EventStore;
+import dev.skynet.controlplane.memory.MemoryAgents;
 import dev.skynet.controlplane.shared.PayloadRedactor;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.controlplane.usage.QuotaAttributor;
@@ -269,6 +270,11 @@ public class AgentEventIngestion {
               .ifPresent(b -> failed.reclassifyAsQuota(b.window(), b.resetsAt(), now));
         }
         agent = transitions.advanceAgent(agent, outcome, runId, "process-exited", now);
+        if (outcome == AgentObservableStatus.COMPLETED
+            && MemoryAgents.Mode.CURATE.name().equals(agent.getMemory())) {
+          // El curador terminó bien: su salida se aplica después del commit (MV-E).
+          publisher.publishEvent(new CuratorFinished(agent.getId()));
+        }
         // Con comprobaciones, la fase sigue «Verificando» hasta que pasan (W4-B).
         stageVerifications.afterAgent(agent, stage, now);
       }

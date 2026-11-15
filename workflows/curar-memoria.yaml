@@ -1,0 +1,65 @@
+id: curar-memoria
+name: Curar la memoria
+description: Repasa la memoria del proyecto como una wiki viva. Escribe las páginas Arquitectura, Módulos y Convenciones del repositorio y propone archivar o fusionar entradas duplicadas, contradichas o caducadas. No cambia el repositorio; las propuestas las decide una persona.
+
+inputs:
+  foco:
+    type: string
+    required: false
+    description: En qué fijarse más (un módulo o un tema). Vacío, la memoria entera.
+
+agents:
+  curador:
+    description: Cura la memoria del proyecto sin cambiar el repositorio.
+    model: ${CLAUDE_FUERTE}
+    fallback:
+      provider: codex
+      model: ${CODEX_FUERTE}
+    permissionMode: plan
+    output:
+      type: object
+      required: [summary]
+      properties:
+        summary: {type: string}
+        pages:
+          type: array
+          items:
+            type: object
+            required: [slug, title, body]
+            properties:
+              slug: {type: string}
+              title: {type: string}
+              body: {type: string}
+              scope: {type: string, enum: [repository, project]}
+              sources: {type: array, items: {type: string}}
+        proposals:
+          type: array
+          items:
+            type: object
+            required: [action, observations, reason]
+            properties:
+              action: {type: string, enum: [archive, merge]}
+              into: {type: string}
+              observations: {type: array, items: {type: string}}
+              reason: {type: string}
+
+stages:
+  - id: curar
+    name: Cura la memoria del proyecto
+    type: agent
+    agent: curador
+    phase: review
+    # El curador: lee como `read` y lo que devuelve escribe la wiki y propone cambios (MV-E).
+    memory: curate
+    prompt: |
+      Cura la memoria de este proyecto ({{workItem.key}}). Foco: {{inputs.foco}}.
+
+      1. Ingiere: el bloque del principio lista lo confirmado desde la última curación. Lee cada entrada con mem_get y mira la wiki con wiki_index y wiki_read.
+      2. Escribe o pon al día tres páginas de este repositorio, en markdown, con lo que dicen la memoria y el código:
+         - `arquitectura` («Arquitectura»): las piezas del sistema, cómo se hablan y por qué son así;
+         - `modulos` («Módulos»): cada módulo o directorio importante, qué hace y qué tener en cuenta al tocarlo;
+         - `convenciones` («Convenciones»): cómo se trabaja aquí (estilo, ramas, pruebas, nombres), con las decisiones y restricciones que lo explican.
+         Comprueba en el código lo que escribas. En `sources` pon los ids de las entradas en las que te basas. Si una página ya existe, parte de lo que dice y cámbiala solo donde haga falta.
+      3. Revisa: busca con mem_search entradas duplicadas, que se contradicen o que ya no son verdad en el código. Propón archivarlas o fusionarlas en la que mejor lo cuenta, con el motivo y lo que viste. No propongas nada que no hayas comprobado.
+
+      No cambies ningún fichero. Devuelve el resumen de la curación, las páginas y las propuestas en tu salida.

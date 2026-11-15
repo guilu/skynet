@@ -85,8 +85,15 @@ public record StageDefinition(
   /** Lee y guarda: lo predeterminado. */
   public static final String MEMORY_WRITE = "write";
 
+  /**
+   * El curador (MV-E): lee como {@code read} y su salida estructurada escribe páginas de la wiki y
+   * propone archivar o fusionar entradas. Solo en fases {@code agent}.
+   */
+  public static final String MEMORY_CURATE = "curate";
+
   /** Los valores que admite {@code memory}. */
-  public static final List<String> MEMORY_MODES = List.of(MEMORY_OFF, MEMORY_READ, MEMORY_WRITE);
+  public static final List<String> MEMORY_MODES =
+      List.of(MEMORY_OFF, MEMORY_READ, MEMORY_WRITE, MEMORY_CURATE);
 
   public StageDefinition {
     dependsOn = List.copyOf(dependsOn);

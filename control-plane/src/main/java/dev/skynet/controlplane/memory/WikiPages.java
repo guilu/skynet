@@ -37,6 +37,12 @@ public class WikiPages {
   public static final int MAX_BODY = 60_000;
 
   private static final Pattern SLUG = Pattern.compile("^[a-z0-9]++(?:-[a-z0-9]++)*+$");
+
+  /** Si vale como nombre de página: minúsculas y cifras, separadas por guiones. */
+  static boolean validSlug(String slug) {
+    return slug != null && SLUG.matcher(slug).matches();
+  }
+
   private static final String TITLE = "title";
   private static final String SOURCES = "sources";
   private static final String ORIGIN = "origin";

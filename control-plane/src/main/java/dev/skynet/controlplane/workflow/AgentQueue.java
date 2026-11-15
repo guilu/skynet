@@ -249,7 +249,7 @@ class AgentQueue {
                 invocation.command(),
                 outputSchema,
                 agent.isCommand() ? null : agent.getProvider(),
-                memory == null ? null : memory.toLowerCase(Locale.ROOT),
+                runnerMemory(memory),
                 invocation.push(),
                 protectedPaths,
                 risk),
@@ -351,6 +351,19 @@ class AgentQueue {
       return null;
     }
     return mode.toUpperCase(Locale.ROOT);
+  }
+
+  /**
+   * El acceso que ve el runner: el curador busca y lee como {@code read}; lo que escribe sale de su
+   * salida estructurada (MV-E).
+   */
+  private static String runnerMemory(String memory) {
+    if (memory == null) {
+      return null;
+    }
+    return MemoryAgents.Mode.CURATE.name().equals(memory)
+        ? StartAgent.MEMORY_READ
+        : memory.toLowerCase(Locale.ROOT);
   }
 
   /**

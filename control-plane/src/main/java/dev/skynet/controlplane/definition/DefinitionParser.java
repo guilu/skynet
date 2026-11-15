@@ -1852,6 +1852,13 @@ public final class DefinitionParser {
                 + String.join(", ", StageDefinition.MEMORY_MODES));
         return null;
       }
+      if (StageDefinition.MEMORY_CURATE.equals(value) && type != StageType.AGENT) {
+        error(
+            entry.value(),
+            path + ".memory",
+            "`memory: curate` solo vale en fases `agent`: el curador es un único agente");
+        return null;
+      }
       return value;
     }
 

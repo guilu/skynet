@@ -96,6 +96,7 @@ Los proyectos y los repositorios no se siembran.
 | `revisar-codigo` | Una auditoría sin cambios, con un `foco` opcional | arquitectura (Claude Code), tests (Codex) y seguridad (Antigravity) a la vez → un informe con los hallazgos por prioridad, como salida estructurada (Claude Code) |
 | `especificar-planificar-implementar` | Una funcionalidad que conviene pensar antes | especificación (Antigravity), que tiene que pasar el check `spec` → plan (Claude Code) → **tu aprobación** → implementar (Claude Code) → juez contra la propuesta (Codex), con escépticos → si suspende, implementar corrige y se vuelve a juzgar |
 | `investigar-mejoras` | Decidir qué hacer después, con un `foco` opcional | lee la memoria del proyecto (bitácora, decisiones y hallazgos), comprueba en el código qué sigue abierto y propone mejoras por prioridad, sin cambiar nada (Claude Code, `memory: read`) |
+| `curar-memoria` | Repasar la memoria, a mano o con un cron semanal | escribe las páginas Arquitectura, Módulos y Convenciones de la wiki y propone archivar o fusionar entradas, sin cambiar el repositorio (Claude Code, `memory: curate`); las propuestas las decides tú |
 
 Las plantillas de la web siguen ahí para crear workflows nuevos: Dos fases, Revisión en paralelo, Revisión con Codex y Antigravity, Especificar-planificar-implementar y Desde cero.
 
