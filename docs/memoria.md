@@ -77,7 +77,7 @@ Skynet genera cuatro páginas de todo el proyecto **sin modelo**, a partir de lo
 - **Lo que no cambia no crea versión.** Si el título y el contenido son los de ahora, la página se queda en su versión.
 - **No entra lo que no está confirmado** ni lo que está en cuarentena o archivado.
 
-Los agentes reciben el índice en su bloque inicial y leen las páginas con `wiki_index` y `wiki_read` (MV-D, abajo). El curador (MV-E) escribirá otras páginas, y la web (MV-F) las enseñará.
+Los agentes reciben el índice en su bloque inicial y leen las páginas con `wiki_index` y `wiki_read` (MV-D, abajo). El curador escribe otras páginas ([El curador](#el-curador)), y la web (MV-F) las enseñará.
 
 ## Cómo la usan los agentes
 
@@ -126,8 +126,35 @@ En las fases `agent` y `parallel` ([workflows.md](workflows.md#memoria-del-proye
 | `write` (por defecto) | sí | sí | sí |
 | `read` | sí | sí | no (403) |
 | `off` | no | no | no |
+| `curate` | sí, con lo nuevo para curar | sí | no: escribe páginas y propuestas con su salida |
 
-Un revisor o un investigador que no debe dejar nada va con `read`; un paso que no tiene que ver nada del pasado, con `off`.
+Un revisor o un investigador que no debe dejar nada va con `read`; un paso que no tiene que ver nada del pasado, con `off`. `curate` es el curador: solo en fases `agent`.
+
+## El curador
+
+El workflow `curar-memoria` (en `workflows/`) repasa la memoria del proyecto como una wiki viva (MV-E). Se lanza a mano o con un disparador programado semanal ([disparadores.md](disparadores.md#6-disparadores-programados-cron)). Su fase va con `memory: curate` y `permissionMode: plan`: lee el repositorio y la memoria, pero no cambia ningún fichero ni guarda entradas.
+
+1. **Ingiere.** Su bloque inicial lleva, además del contexto de siempre, «Para curar: lo confirmado desde la última curación»: las entradas confirmadas y sin archivar de su repositorio y del proyecto que cambiaron desde la última curación del proyecto (todas, la primera vez), sin la bitácora, hasta 40. Las lee con `mem_get` y mira la wiki con `wiki_index` y `wiki_read`.
+2. **Escribe páginas** de la wiki de su repositorio, con origen `CURATOR`: `arquitectura`, `modulos` y `convenciones` en el workflow de serie. Con `scope: project`, la página es del proyecto entero.
+3. **Revisa** duplicados, contradicciones y entradas caducadas, y **propone** archivarlas o fusionarlas en la que mejor lo cuenta.
+
+Todo eso va en su **salida estructurada**, y Skynet lo aplica cuando la invocación termina bien:
+
+```json
+{
+  "summary": "Dos decisiones repetidas y una configuración vieja.",
+  "pages": [{"slug": "arquitectura", "title": "Arquitectura", "body": "…", "sources": ["<id de entrada>"]}],
+  "proposals": [
+    {"action": "merge", "into": "<id>", "observations": ["<id>"], "reason": "Dicen lo mismo"},
+    {"action": "archive", "observations": ["<id>"], "reason": "Ya es Java 21"}
+  ]
+}
+```
+
+- **Lo que no puede tocar:** las páginas que genera Skynet (`indice`, `lo-hecho`, `errores-conocidos`, `decisiones-y-restricciones`) y las que escribió una persona. Tampoco vale un slug que no sea de minúsculas y cifras con guiones. Lo que no vale no hace fallar la ejecución: queda en el informe, en `rejected`, con el motivo.
+- **Límites:** 10 páginas y 30 propuestas por curación. Una propuesta solo vale con entradas del proyecto sin archivar y un motivo; si ya hay una igual pendiente, no se repite.
+- **Las propuestas no se aplican solas.** Quedan `PENDING` hasta que una persona las acepta (archivar archiva sus entradas; fusionar archiva las de `observations` y deja `into` como está) o las rechaza, que no cambia nada.
+- **El informe** de cada curación (resumen, páginas escritas, lo rechazado y las propuestas) queda en `memory_curation`, y la curación siguiente parte de su fecha. Después de escribir páginas, el índice de la wiki se regenera para nombrarlas.
 
 ## El puente MCP
 
@@ -168,13 +195,16 @@ En el detalle de cada agente, la pestaña **Memoria** dice qué hizo esa invocac
 | `GET /api/projects/{id}/wiki/{slug}/revisions`, `…/revisions/{version}` | Sus versiones, de la más reciente a la más antigua, o una de ellas. |
 | `POST /api/projects/{id}/wiki/refresh` | Regenera las páginas que genera Skynet y devuelve la lista. |
 | `POST /api/runner/memory/wiki-index`, `…/wiki-read` | Lo que usan `wiki_index` y `wiki_read`, con el token de memoria de la invocación. `wiki-read` pide `slug`: sin él, 400; si no existe, 404. |
-| `GET /api/agent-runs/{id}/memory` | Lo que una invocación recibió, buscó, leyó y guardó, con su modo (`READ`, `WRITE` o `null`). |
+| `GET /api/projects/{id}/memory/curations` | Los informes del curador, del más reciente al más antiguo (`limit`, 10 por defecto): resumen, páginas escritas, lo rechazado y las propuestas. |
+| `GET /api/projects/{id}/memory/proposals` | Las propuestas del curador; con `status` (`PENDING`, `ACCEPTED` o `REJECTED`), solo esas. |
+| `POST /api/memory/proposals/{id}/accept`, `…/reject` | Decidir una propuesta pendiente: aceptar archiva sus entradas; rechazar no cambia nada. Una ya decidida da 409. |
+| `GET /api/agent-runs/{id}/memory` | Lo que una invocación recibió, buscó, leyó y guardó, con su modo (`READ`, `WRITE`, `CURATE` o `null`). |
 
 Cada cambio deja un evento en el historial: `memory.created`, `memory.updated`, `memory.archived`, `memory.restored`, `memory.pinned`, `memory.unpinned`, `memory.confirmed` y `memory.quarantined`, todos con la confianza (`trust`) que queda. Los que escribe una ejecución (lo que guardan sus agentes y su bitácora) salen en su línea de tiempo.
 
 ## Fuera de esta versión
 
-- Detectar duplicados y contradicciones entre entradas (`mem_judge`, `mem_compare` y `mem_consolidate` de engram).
+- Detectar duplicados y contradicciones entre entradas sin modelo (`mem_judge`, `mem_compare` y `mem_consolidate` de engram): hoy lo propone el curador.
 - Memoria global entre proyectos, búsqueda semántica y caducidad de entradas.
 - Lanzar `investigar-mejoras` de forma programada.
-- Lo que queda del hito MV «Memoria viva» ([#310](https://github.com/guilu/skynet/issues/310)–[#311](https://github.com/guilu/skynet/issues/311)): el curador y la confianza en la web.
+- Lo que queda del hito MV «Memoria viva» ([#311](https://github.com/guilu/skynet/issues/311)): la wiki, la confianza y las propuestas del curador en la web.

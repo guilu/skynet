@@ -2583,8 +2583,41 @@ class DefinitionParserTest {
             """);
     assertThat(messages(wrong, Severity.ERROR))
         .containsExactlyInAnyOrder(
-            "`memory: raed` no se conoce; ¿quisiste decir `read`?. Admite: off, read, write",
+            "`memory: raed` no se conoce; ¿quisiste decir `read`?. Admite: off, read, write,"
+                + " curate",
             "`memory` solo vale en fases `agent` y `parallel`: las demás no tienen agente");
+  }
+
+  @Test
+  void theCuratorIsASingleAgent() {
+    WorkflowDefinition definition =
+        parse(
+                """
+                id: curar
+                stages:
+                  - id: curar
+                    type: agent
+                    prompt: Cura
+                    memory: curate
+                """)
+            .definition();
+    assertThat(definition.stage("curar").orElseThrow().memory()).isEqualTo("curate");
+    Parsed wrong =
+        parse(
+            """
+            id: curar
+            agents:
+              uno:
+                prompt: Cura
+            stages:
+              - id: curar
+                type: parallel
+                memory: curate
+                children:
+                  - agent: uno
+            """);
+    assertThat(messages(wrong, Severity.ERROR))
+        .contains("`memory: curate` solo vale en fases `agent`: el curador es un único agente");
   }
 
   @Test

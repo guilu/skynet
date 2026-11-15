@@ -49,7 +49,7 @@ public final class MemoryMcpMain {
     PrintStream out = new PrintStream(System.out, true, StandardCharsets.UTF_8);
     // Nada más que JSON-RPC por stdout: lo que escriba otro código va a stderr.
     System.setOut(System.err);
-    new MemoryMcpServer(new HttpApi(URI.create(url), token), !"read".equals(mode), version)
+    new MemoryMcpServer(new HttpApi(URI.create(url), token), "write".equals(mode), version)
         .serve(new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8)), out);
   }
 
