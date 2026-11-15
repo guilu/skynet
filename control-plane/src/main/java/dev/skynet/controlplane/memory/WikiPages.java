@@ -117,15 +117,13 @@ public class WikiPages {
         .query((rs, n) -> 1)
         .list();
     Instant now = time.now();
-    Optional<Page> current = find(projectId, repositoryId, slug);
-    if (current.isPresent()
-        && current.get().title().equals(title)
-        && current.get().body().equals(text)) {
-      return new Written(current.get(), false);
+    Page current = find(projectId, repositoryId, slug).orElse(null);
+    if (current != null && current.title().equals(title) && current.body().equals(text)) {
+      return new Written(current, false);
     }
     UUID id;
     int version;
-    if (current.isEmpty()) {
+    if (current == null) {
       id = UUID.randomUUID();
       version = 1;
       jdbc.sql(
@@ -147,8 +145,8 @@ public class WikiPages {
               actor)
           .update();
     } else {
-      id = current.get().id();
-      version = current.get().version() + 1;
+      id = current.id();
+      version = current.version() + 1;
       jdbc.sql(
               "UPDATE wiki_page SET title = ?, body = ?, sources = ?::jsonb, origin = ?,"
                   + " version = ?, updated_at = ?, updated_by = ? WHERE id = ?")

@@ -272,7 +272,7 @@ class WikiWriter {
               artifacts.bytes(artifacts.download(artifact.get())),
               new TypeReference<Map<String, Object>>() {});
       List<String> files = new ArrayList<>();
-      if (changes.get("files") instanceof List<?> list) {
+      if (changes != null && changes.get("files") instanceof List<?> list) {
         for (Object file : list) {
           if (file instanceof Map<?, ?> map && map.get("path") instanceof String path) {
             files.add(path);
