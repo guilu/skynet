@@ -77,11 +77,11 @@ Skynet genera cuatro páginas de todo el proyecto **sin modelo**, a partir de lo
 - **Lo que no cambia no crea versión.** Si el título y el contenido son los de ahora, la página se queda en su versión.
 - **No entra lo que no está confirmado** ni lo que está en cuarentena o archivado.
 
-Los agentes todavía no reciben la wiki: llega con MV-D. El curador (MV-E) escribirá otras páginas, y la web (MV-F) las enseñará.
+Los agentes reciben el índice en su bloque inicial y leen las páginas con `wiki_index` y `wiki_read` (MV-D, abajo). El curador (MV-E) escribirá otras páginas, y la web (MV-F) las enseñará.
 
 ## Cómo la usan los agentes
 
-1. **Al empezar una sesión nueva**, el prompt de la fase va precedido de un bloque `<memoria-del-proyecto>`. Solo lleva lo confirmado: lo fijado, los últimos resúmenes de sesión, la bitácora y lo último guardado en el repositorio de la ejecución y en todo el proyecto, con un tope de 4 000 caracteres (`SKYNET_MEMORY_CONTEXT_MAX_CHARS`). Si no cabe todo, deja fuera entradas enteras y avisa de que hay más. Llega como contexto de referencia, no como instrucciones: si contradice el repositorio, manda el repositorio. Una continuación (mensaje, reanudación o bifurcación) no lo repite.
+1. **Al empezar una sesión nueva**, el prompt de la fase va precedido de un bloque `<memoria-del-proyecto>`, con un tope de 4 000 caracteres (`SKYNET_MEMORY_CONTEXT_MAX_CHARS`). Solo lleva lo confirmado, del repositorio de la ejecución y del proyecto entero. Llega como contexto de referencia, no como instrucciones: si contradice el repositorio, manda el repositorio. Una continuación (mensaje, reanudación o bifurcación) no lo repite. Ver [Qué recibe cada agente](#qué-recibe-cada-agente).
 2. **Mientras trabajan**, Claude Code y Codex tienen las herramientas MCP del servidor `skynet_memoria`:
 
    | Herramienta | Qué hace |
@@ -90,11 +90,32 @@ Los agentes todavía no reciben la wiki: llega con MV-D. El curador (MV-E) escri
    | `mem_search` | Busca en el repositorio y en su proyecto; devuelve vistas previas. |
    | `mem_get` | Una observación entera. |
    | `mem_done` | ¿Ya está hecho?: los trabajos entregados del proyecto que se parecen al de la ejecución o, con `query`, a ese texto. |
+   | `wiki_index` | El índice de la wiki y la lista de sus páginas (las del proyecto y las de su repositorio). |
+   | `wiki_read` | Una página entera de la wiki, por su `slug`: la de su repositorio si la hay y, si no, la del proyecto. |
    | `mem_save` | Guarda una observación, con `topic_key` opcional. Solo con `memory: write`. |
    | `mem_session_summary` | El resumen de la sesión: objetivo, qué se hizo, descubrimientos, siguientes pasos y ficheros. Llamarla otra vez lo actualiza. Solo con `memory: write`. |
 
-   Las cuatro de lectura se anuncian con la anotación MCP `readOnlyHint: true`, así que el CLI las trata como de solo lectura también en `permissionMode: plan`. Antigravity recibe el bloque, pero todavía no las herramientas: no está comprobado que `agy` admita servidores MCP en modo headless.
+   Las seis de lectura se anuncian con la anotación MCP `readOnlyHint: true`, así que el CLI las trata como de solo lectura también en `permissionMode: plan`. Antigravity recibe el bloque, pero todavía no las herramientas: no está comprobado que `agy` admita servidores MCP en modo headless.
 3. **Al terminar la ejecución** (bien, mal o cancelada), Skynet deja en cada repositorio en el que trabajó una observación `RUN_LOG` con el tema `bitacora/<ejecución>`: el workflow y su versión, el trabajo, el estado de cada fase, la rama con sus commits y archivos, la salida estructurada de los agentes, el coste y el enlace a la ejecución. Se escribe sin modelo, con lo que ya está en la base de datos. Si falla, la ejecución termina igual.
+
+### Qué recibe cada agente
+
+El bloque se reparte el tope en secciones, en este orden (MV-D):
+
+| Sección | Qué lleva | Hasta |
+|---|---|---|
+| Índice de la wiki | Las líneas de la página `indice` que nombran páginas, para que el agente sepa qué puede leer con `wiki_read`. Entra entero o no entra. | 20 % |
+| Errores conocidos que tocan este trabajo | Las trampas (`PITFALL`) y bugs (`BUGFIX`) confirmados y los hallazgos de los jueces que se corrigieron en el repositorio, si tienen que ver con el trabajo. | 20 % |
+| Lo más pertinente para este trabajo | Las demás entradas confirmadas que más se parecen al trabajo. | 25 % |
+| Lo fijado y lo último | Lo de siempre: lo fijado, los últimos resúmenes de sesión, la bitácora y lo último guardado. | lo que quede |
+
+- **Qué es tener que ver con el trabajo:** compartir palabras con el título y la descripción del trabajo (dos o más, o una si el trabajo tiene pocas), o nombrar un fichero que el trabajo nombra (`src/Pdf.java`, `index.css`), que cuenta como tres. Van primero las que más se parecen, hasta ocho por sección.
+- **Cada entrada va una sola vez:** lo que ya salió en una sección no se repite en otra.
+- **Lo que no cabe** se deja fuera entero, nunca a medias, y el bloque avisa de cuántas entradas más hay para buscarlas con `mem_search`.
+- **Sin wiki o sin trabajo** el bloque es el de siempre: solo las secciones que tienen algo.
+- Si el trabajo se parece a otros ya entregados, el bloque lo avisa también ([¿Ya está hecho?](#ya-está-hecho)).
+
+`memory_access` registra también la wiki: la página del índice cuando va en el bloque (`PROMPT`) o en `mem_context` (`CONTEXT`), y cada página que el agente lee con `wiki_index` o `wiki_read` (`GET`), en la versión que vio.
 
 ### La clave `memory` de una fase
 
@@ -127,7 +148,7 @@ En cada proyecto, la pestaña **Memoria** enseña la memoria como una línea de 
 - **Detalle**, en un panel lateral: el contenido, el tema, si se enmascaró algún secreto, la procedencia (con enlaces a la ejecución y a la invocación) y todas las versiones.
 - **Revisión:** editar (crea una versión nueva y conserva la procedencia), fijar o desfijar, y archivar o restaurar. Lo archivado no sale en las búsquedas ni llega a los agentes. Solo las personas fijan y archivan; los agentes no borran nada. Ninguna entrada puede pasar a ser bitácora, y en la web la bitácora conserva su tipo.
 
-En el detalle de cada agente, la pestaña **Memoria** dice qué hizo esa invocación con ella: lo que recibió (en el bloque o con `mem_context`), lo que buscó o leyó y lo que guardó, cada entrada en la versión que vio y enlazada a la pestaña del proyecto.
+En el detalle de cada agente, la pestaña **Memoria** dice qué hizo esa invocación con ella: lo que recibió (en el bloque o con `mem_context`), lo que buscó o leyó y lo que guardó, cada entrada en la versión que vio y enlazada a la pestaña del proyecto. `GET /api/agent-runs/{id}/memory` trae además, en `wiki`, las páginas de la wiki que recibió o leyó.
 
 ## API
 
@@ -146,6 +167,7 @@ En el detalle de cada agente, la pestaña **Memoria** dice qué hizo esa invocac
 | `GET /api/projects/{id}/wiki/{slug}` | Una página con su markdown (`body`) y sus fuentes (`sources`: `kind`, `id`, `label` y `url`). Con `repositoryId`, la de ese repositorio. |
 | `GET /api/projects/{id}/wiki/{slug}/revisions`, `…/revisions/{version}` | Sus versiones, de la más reciente a la más antigua, o una de ellas. |
 | `POST /api/projects/{id}/wiki/refresh` | Regenera las páginas que genera Skynet y devuelve la lista. |
+| `POST /api/runner/memory/wiki-index`, `…/wiki-read` | Lo que usan `wiki_index` y `wiki_read`, con el token de memoria de la invocación. `wiki-read` pide `slug`: sin él, 400; si no existe, 404. |
 | `GET /api/agent-runs/{id}/memory` | Lo que una invocación recibió, buscó, leyó y guardó, con su modo (`READ`, `WRITE` o `null`). |
 
 Cada cambio deja un evento en el historial: `memory.created`, `memory.updated`, `memory.archived`, `memory.restored`, `memory.pinned`, `memory.unpinned`, `memory.confirmed` y `memory.quarantined`, todos con la confianza (`trust`) que queda. Los que escribe una ejecución (lo que guardan sus agentes y su bitácora) salen en su línea de tiempo.
@@ -155,4 +177,4 @@ Cada cambio deja un evento en el historial: `memory.created`, `memory.updated`, 
 - Detectar duplicados y contradicciones entre entradas (`mem_judge`, `mem_compare` y `mem_consolidate` de engram).
 - Memoria global entre proyectos, búsqueda semántica y caducidad de entradas.
 - Lanzar `investigar-mejoras` de forma programada.
-- Lo que queda del hito MV «Memoria viva» ([#309](https://github.com/guilu/skynet/issues/309)–[#311](https://github.com/guilu/skynet/issues/311)): la wiki en el contexto de los agentes, el curador y la confianza en la web.
+- Lo que queda del hito MV «Memoria viva» ([#310](https://github.com/guilu/skynet/issues/310)–[#311](https://github.com/guilu/skynet/issues/311)): el curador y la confianza en la web.

@@ -383,7 +383,28 @@ public class MemoryService {
                         rs.getInt("times"),
                         rs.getTimestamp("first_at").toInstant()))
             .list();
-    return new AgentMemory(agentRunId, agent.getKey(), agent.getValue().orElse(null), accesses);
+    List<AgentMemory.WikiAccess> wiki =
+        jdbc.sql(
+                "SELECT a.wiki_page_id, p.slug, p.title, p.repository_id, a.version, a.via,"
+                    + " count(*) AS times, min(a.accessed_at) AS first_at FROM memory_access a"
+                    + " JOIN wiki_page p ON p.id = a.wiki_page_id WHERE a.agent_run_id = ?"
+                    + " GROUP BY a.wiki_page_id, p.slug, p.title, p.repository_id, a.version, a.via"
+                    + " ORDER BY min(a.id)")
+            .param(agentRunId)
+            .query(
+                (rs, n) ->
+                    new AgentMemory.WikiAccess(
+                        rs.getObject("wiki_page_id", UUID.class),
+                        rs.getString("slug"),
+                        rs.getString("title"),
+                        rs.getObject("repository_id", UUID.class),
+                        rs.getInt("version"),
+                        rs.getString("via"),
+                        rs.getInt("times"),
+                        rs.getTimestamp("first_at").toInstant()))
+            .list();
+    return new AgentMemory(
+        agentRunId, agent.getKey(), agent.getValue().orElse(null), accesses, wiki);
   }
 
   /**

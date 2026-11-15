@@ -108,6 +108,24 @@ class MemoryAgentController {
     return new DoneResult(agents.done(caller, request == null ? null : request.query()));
   }
 
+  /** El índice de la wiki del proyecto (MV-D): las páginas que hay y el texto del índice. */
+  @PostMapping("/wiki-index")
+  MemoryAgents.WikiIndex wikiIndex(
+      @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
+    return agents.wikiIndex(agents.authenticate(authorization));
+  }
+
+  record WikiReadRequest(String slug) {}
+
+  /** Una página de la wiki, por su {@code slug} (MV-D). */
+  @PostMapping("/wiki-read")
+  MemoryAgents.WikiRead wikiRead(
+      @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+      @RequestBody(required = false) WikiReadRequest request) {
+    MemoryAgents.Caller caller = agents.authenticate(authorization);
+    return agents.wikiRead(caller, request == null ? null : request.slug());
+  }
+
   @PostMapping("/save")
   MemoryAgents.Saved save(
       @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,

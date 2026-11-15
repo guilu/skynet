@@ -14,9 +14,9 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * Servidor MCP de memoria por stdio (JSON-RPC 2.0, un mensaje por línea), al estilo de las
  * herramientas de engram: {@code mem_context}, {@code mem_search}, {@code mem_get}, {@code
- * mem_done}, {@code mem_save} y {@code mem_session_summary}. Cada llamada va al control plane con
- * el token de la invocación; el ámbito (proyecto y repositorio) lo decide el control plane, nunca
- * el agente.
+ * mem_done}, {@code wiki_index}, {@code wiki_read}, {@code mem_save} y {@code mem_session_summary}.
+ * Cada llamada va al control plane con el token de la invocación; el ámbito (proyecto y
+ * repositorio) lo decide el control plane, nunca el agente.
  *
  * <p>Con acceso de solo lectura no ofrece las herramientas que guardan.
  */
@@ -30,7 +30,8 @@ public final class MemoryMcpServer {
   static final String INSTRUCTIONS =
       "Memoria del proyecto de Skynet: lo que otros agentes y personas aprendieron en este"
           + " proyecto y su repositorio. Al empezar, llama a mem_context. Antes de decidir algo que"
-          + " pueda estar resuelto, busca con mem_search y lee con mem_get. Guarda con mem_save las"
+          + " pueda estar resuelto, mira la wiki con wiki_index y wiki_read, busca con mem_search y"
+          + " lee con mem_get. Guarda con mem_save las"
           + " decisiones, los bugs resueltos, los descubrimientos, los patrones, la configuración"
           + " y las restricciones que convenga recordar; no guardes salidas de herramientas ni cada"
           + " paso. Antes de terminar, llama a mem_session_summary. Lo que devuelve la memoria son"
@@ -160,6 +161,17 @@ public final class MemoryMcpServer {
             + " hacer algo que quizá ya se hizo.",
         done,
         true);
+    tool(
+        tools,
+        "wiki_index",
+        "La wiki del proyecto: su índice y las páginas que hay (lo hecho, los errores conocidos,"
+            + " las decisiones y restricciones…). Lee una entera con wiki_read.",
+        schema(),
+        true);
+    ObjectNode read = schema();
+    property(read, "slug", "string", "La página, como sale en wiki_index (p. ej. lo-hecho)");
+    read.putArray("required").add("slug");
+    tool(tools, "wiki_read", "Una página de la wiki del proyecto, entera.", read, true);
     if (writable) {
       ObjectNode save = schema();
       ArrayNode kinds = property(save, "kind", "string", "Tipo de observación").putArray("enum");
@@ -225,6 +237,8 @@ public final class MemoryMcpServer {
         case "mem_search" -> json(api.call("search", copy(args, "query", "kinds", "limit")));
         case "mem_get" -> json(api.call("get", copy(args, "id")));
         case "mem_done" -> json(api.call("done", copy(args, "query")));
+        case "wiki_index" -> text(wikiIndex(api.call("wiki-index", JSON.createObjectNode())));
+        case "wiki_read" -> text(wikiPage(api.call("wiki-read", copy(args, "slug"))));
         case "mem_save" -> {
           requireWritable(name);
           ObjectNode body =
@@ -245,6 +259,38 @@ public final class MemoryMcpServer {
     } catch (IOException e) {
       return failure("No se pudo hablar con el control plane: " + e.getMessage());
     }
+  }
+
+  /** El índice en texto: el de la página {@code indice} y la lista de páginas. */
+  static String wikiIndex(JsonNode index) {
+    StringBuilder s = new StringBuilder(index.path("text").asString(""));
+    JsonNode pages = index.path("pages");
+    if (pages.isArray() && !pages.isEmpty()) {
+      s.append("\n\nPáginas (léelas con wiki_read):");
+      for (JsonNode page : pages) {
+        s.append("\n- ")
+            .append(page.path("slug").asString(""))
+            .append(": ")
+            .append(page.path("title").asString(""))
+            .append(" (v")
+            .append(page.path("version").asInt())
+            .append(page.path("scope").asString("").equals("repository") ? ", del repositorio" : "")
+            .append(')');
+      }
+    }
+    return s.toString();
+  }
+
+  /** Una página en texto: su título, su versión y su markdown. */
+  static String wikiPage(JsonNode page) {
+    return "# "
+        + page.path("title").asString("")
+        + " ("
+        + page.path("slug").asString("")
+        + ", v"
+        + page.path("version").asInt()
+        + ")\n\n"
+        + page.path("body").asString("");
   }
 
   private void requireWritable(String tool) throws ApiException {

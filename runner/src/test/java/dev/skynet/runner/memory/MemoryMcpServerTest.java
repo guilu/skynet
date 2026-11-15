@@ -60,9 +60,17 @@ class MemoryMcpServerTest {
   void readOnlyOffersNoToolThatSaves() throws Exception {
     assertThat(names(server(true).tools()))
         .containsExactly(
-            "mem_context", "mem_search", "mem_get", "mem_done", "mem_save", "mem_session_summary");
+            "mem_context",
+            "mem_search",
+            "mem_get",
+            "mem_done",
+            "wiki_index",
+            "wiki_read",
+            "mem_save",
+            "mem_session_summary");
     assertThat(names(server(false).tools()))
-        .containsExactly("mem_context", "mem_search", "mem_get", "mem_done");
+        .containsExactly(
+            "mem_context", "mem_search", "mem_get", "mem_done", "wiki_index", "wiki_read");
     // Las de lectura se anuncian como tales, para que el CLI las deje usar en modo plan.
     assertThat(server(true).tools().path("tools"))
         .extracting(
@@ -72,6 +80,8 @@ class MemoryMcpServerTest {
             "mem_search=true",
             "mem_get=true",
             "mem_done=true",
+            "wiki_index=true",
+            "wiki_read=true",
             "mem_save=false",
             "mem_session_summary=false");
 
