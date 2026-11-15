@@ -105,7 +105,7 @@ class WikiWriter {
           .param(runId)
           .query(UUID.class)
           .optional()
-          .ifPresent(this::refresh);
+          .ifPresent(this::generate);
     } catch (RuntimeException e) {
       log.warn("No se pudo actualizar la wiki tras la ejecución {}", runId, e);
     }
@@ -114,6 +114,11 @@ class WikiWriter {
   /** Regenera las páginas del proyecto; devuelve cuántas cambiaron. */
   @Transactional
   public int refresh(UUID projectId) {
+    return generate(projectId);
+  }
+
+  /** Lo de {@link #refresh}, dentro de la transacción en curso. */
+  private int generate(UUID projectId) {
     String project =
         jdbc.sql("SELECT name FROM project WHERE id = ?")
             .param(projectId)

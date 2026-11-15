@@ -202,15 +202,13 @@ public class WikiPages {
   /** La página {@code slug} del proyecto (o de {@code repositoryId}). */
   @Transactional(readOnly = true)
   public Page get(UUID projectId, UUID repositoryId, String slug) {
-    projects.get(projectId);
-    return find(projectId, repositoryId, slug)
-        .orElseThrow(() -> new NotFoundException("Página de la wiki", slug));
+    return existing(projectId, repositoryId, slug);
   }
 
   /** Las versiones de una página, de la más reciente a la más antigua. */
   @Transactional(readOnly = true)
   public List<Revision> history(UUID projectId, UUID repositoryId, String slug) {
-    Page page = get(projectId, repositoryId, slug);
+    Page page = existing(projectId, repositoryId, slug);
     return jdbc.sql(
             "SELECT version, title, body, CAST(sources AS text) AS sources, origin, created_at,"
                 + " created_by FROM wiki_page_revision WHERE page_id = ? ORDER BY version DESC")
@@ -222,7 +220,7 @@ public class WikiPages {
   /** La versión {@code version} de una página. */
   @Transactional(readOnly = true)
   public Revision revision(UUID projectId, UUID repositoryId, String slug, int version) {
-    Page page = get(projectId, repositoryId, slug);
+    Page page = existing(projectId, repositoryId, slug);
     return jdbc.sql(
             "SELECT version, title, body, CAST(sources AS text) AS sources, origin, created_at,"
                 + " created_by FROM wiki_page_revision WHERE page_id = ? AND version = ?")
@@ -230,6 +228,12 @@ public class WikiPages {
         .query(this::revision)
         .optional()
         .orElseThrow(() -> new NotFoundException("Versión de la página " + slug, version));
+  }
+
+  private Page existing(UUID projectId, UUID repositoryId, String slug) {
+    projects.get(projectId);
+    return find(projectId, repositoryId, slug)
+        .orElseThrow(() -> new NotFoundException("Página de la wiki", slug));
   }
 
   private Optional<Page> find(UUID projectId, UUID repositoryId, String slug) {
