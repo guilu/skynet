@@ -30,6 +30,9 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 public class WikiPages {
 
+  /** La página del índice, la que reciben los agentes al empezar (MV-D). */
+  public static final String INDEX = "indice";
+
   /** El tope de una página, en caracteres. */
   public static final int MAX_BODY = 60_000;
 
@@ -180,6 +183,10 @@ public class WikiPages {
   /** Las páginas del proyecto, primero las del proyecto entero y luego las de cada repositorio. */
   @Transactional(readOnly = true)
   public List<Summary> list(UUID projectId) {
+    return summaries(projectId);
+  }
+
+  private List<Summary> summaries(UUID projectId) {
     projects.get(projectId);
     return jdbc.sql(
             "SELECT id, repository_id, slug, title, origin, version,"
@@ -205,6 +212,30 @@ public class WikiPages {
   @Transactional(readOnly = true)
   public Page get(UUID projectId, UUID repositoryId, String slug) {
     return existing(projectId, repositoryId, slug);
+  }
+
+  /**
+   * La página {@code slug} que ve un agente que trabaja en {@code repositoryId}: la de su
+   * repositorio si la hay y, si no, la del proyecto entero.
+   */
+  @Transactional(readOnly = true)
+  public Optional<Page> forAgent(UUID projectId, UUID repositoryId, String slug) {
+    if (slug == null || !SLUG.matcher(slug).matches()) {
+      return Optional.empty();
+    }
+    Optional<Page> own =
+        repositoryId == null ? Optional.empty() : find(projectId, repositoryId, slug);
+    return own.isPresent() ? own : find(projectId, null, slug);
+  }
+
+  /**
+   * Las páginas que ve un agente que trabaja en {@code repositoryId}: las del proyecto y las suyas.
+   */
+  @Transactional(readOnly = true)
+  public List<Summary> forAgent(UUID projectId, UUID repositoryId) {
+    return summaries(projectId).stream()
+        .filter(p -> p.repositoryId() == null || p.repositoryId().equals(repositoryId))
+        .toList();
   }
 
   /** Las versiones de una página, de la más reciente a la más antigua. */

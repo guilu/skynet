@@ -96,7 +96,8 @@ public class MemoryAgents {
 
   static final String TOOLS_WRITE =
       "Tienes las herramientas de memoria `skynet_memoria`. Antes de decidir algo que pueda estar"
-          + " ya resuelto, busca con `mem_search` y lee la entrada entera con `mem_get`; lo que"
+          + " ya resuelto, mira la wiki del proyecto con `wiki_index` y `wiki_read`, busca con"
+          + " `mem_search` y lee la entrada entera con `mem_get`; lo que"
           + " lleve `trust: UNCONFIRMED` no lo ha aceptado nadie todavía: compruébalo antes de"
           + " fiarte. Guarda con"
           + " `mem_save` las decisiones, los bugs resueltos, los descubrimientos, los patrones, la"
@@ -106,7 +107,8 @@ public class MemoryAgents {
 
   static final String TOOLS_READ =
       "Tienes las herramientas de memoria `skynet_memoria` en modo de solo lectura. Antes de"
-          + " decidir algo que pueda estar ya resuelto, busca con `mem_search` y lee la entrada"
+          + " decidir algo que pueda estar ya resuelto, mira la wiki del proyecto con `wiki_index`"
+          + " y `wiki_read`, busca con `mem_search` y lee la entrada"
           + " entera con `mem_get`; lo que lleve `trust: UNCONFIRMED` no lo ha aceptado nadie"
           + " todavía: compruébalo antes de fiarte. Esta fase no guarda en la memoria.";
 
@@ -133,6 +135,7 @@ public class MemoryAgents {
   private final MemoryContext context;
   private final MemoryProperties properties;
   private final DoneWork doneWork;
+  private final WikiPages wiki;
   private final TimeSource time;
 
   MemoryAgents(
@@ -141,12 +144,14 @@ public class MemoryAgents {
       MemoryContext context,
       MemoryProperties properties,
       DoneWork doneWork,
+      WikiPages wiki,
       TimeSource time) {
     this.jdbc = jdbc;
     this.memory = memory;
     this.context = context;
     this.properties = properties;
     this.doneWork = doneWork;
+    this.wiki = wiki;
     this.time = time;
   }
 
@@ -261,9 +266,12 @@ public class MemoryAgents {
       Mode mode,
       boolean tools) {
     MemoryContext.Rendered rendered =
-        context.render(projectId, repositoryId, properties.contextMaxChars());
+        context.render(projectId, repositoryId, workItemId, properties.contextMaxChars());
     Instant now = time.now();
     rendered.included().forEach(o -> record(agentRunId, o, "PROMPT", now));
+    if (rendered.wikiPage() != null) {
+      record(agentRunId, rendered.wikiPage(), "PROMPT", now);
+    }
     StringBuilder text = new StringBuilder(BLOCK_START).append('\n').append(rendered.text());
     doneWork.notice(workItemId).ifPresent(n -> text.append("\n\n").append(n));
     if (tools) {
@@ -280,8 +288,15 @@ public class MemoryAgents {
   @Transactional
   Context context(Caller caller) {
     MemoryContext.Rendered rendered =
-        context.render(caller.projectId(), caller.repositoryId(), properties.contextMaxChars());
+        context.render(
+            caller.projectId(),
+            caller.repositoryId(),
+            caller.workItemId(),
+            properties.contextMaxChars());
     rendered.included().forEach(o -> record(caller, o, "CONTEXT"));
+    if (rendered.wikiPage() != null) {
+      record(caller.agentRunId(), rendered.wikiPage(), "CONTEXT", time.now());
+    }
     return new Context(
         rendered.text(),
         rendered.included().stream().map(o -> new Ref(o.id(), o.version())).toList(),
@@ -324,6 +339,74 @@ public class MemoryAgents {
           "La búsqueda admite hasta " + MemoryService.MAX_QUERY + " caracteres");
     }
     return doneWork.matches(caller.projectId(), null, query.strip(), null);
+  }
+
+  /** Una página de la wiki, sin su contenido, como la ve un agente. */
+  record WikiEntry(
+      String slug, String title, String scope, int version, WikiOrigin origin, Instant updatedAt) {}
+
+  /** El índice de la wiki: el texto de la página {@code indice} y las páginas que hay. */
+  record WikiIndex(String text, List<WikiEntry> pages) {}
+
+  /** Una página entera, como la ve un agente. */
+  record WikiRead(
+      String slug,
+      String title,
+      String scope,
+      int version,
+      WikiOrigin origin,
+      Instant updatedAt,
+      String body,
+      List<WikiSource> sources) {}
+
+  /** Las páginas de la wiki de su proyecto y de su repositorio, con el texto del índice. */
+  @Transactional
+  WikiIndex wikiIndex(Caller caller) {
+    List<WikiEntry> pages =
+        wiki.forAgent(caller.projectId(), caller.repositoryId()).stream()
+            .map(
+                p ->
+                    new WikiEntry(
+                        p.slug(),
+                        p.title(),
+                        p.repositoryId() == null ? "project" : "repository",
+                        p.version(),
+                        p.origin(),
+                        p.updatedAt()))
+            .toList();
+    String text =
+        wiki.forAgent(caller.projectId(), caller.repositoryId(), WikiPages.INDEX)
+            .map(
+                index -> {
+                  record(caller.agentRunId(), index, "GET", time.now());
+                  return index.body();
+                })
+            .orElse(
+                pages.isEmpty()
+                    ? "La wiki de este proyecto todavía está vacía."
+                    : "Esta wiki no tiene índice todavía: abajo están sus páginas.");
+    return new WikiIndex(text, pages);
+  }
+
+  /** Una página de la wiki: la de su repositorio si la hay y, si no, la del proyecto. */
+  @Transactional
+  WikiRead wikiRead(Caller caller, String slug) {
+    if (slug == null || slug.isBlank()) {
+      throw new InvalidRequestException("Falta la página (slug); mira cuáles hay con wiki_index");
+    }
+    WikiPages.Page page =
+        wiki.forAgent(caller.projectId(), caller.repositoryId(), slug.strip())
+            .orElseThrow(() -> new NotFoundException("Página de la wiki", slug.strip()));
+    record(caller.agentRunId(), page, "GET", time.now());
+    return new WikiRead(
+        page.slug(),
+        page.title(),
+        page.repositoryId() == null ? "project" : "repository",
+        page.version(),
+        page.origin(),
+        page.updatedAt(),
+        page.body(),
+        page.sources());
   }
 
   /** Una observación entera, si es de su ámbito y no está archivada. */
@@ -462,6 +545,14 @@ public class MemoryAgents {
             "INSERT INTO memory_access (agent_run_id, observation_id, version, via, accessed_at)"
                 + " VALUES (?, ?, ?, ?, ?)")
         .params(agentRunId, o.id(), o.version(), via, Timestamp.from(now))
+        .update();
+  }
+
+  private void record(UUID agentRunId, WikiPages.Page page, String via, Instant now) {
+    jdbc.sql(
+            "INSERT INTO memory_access (agent_run_id, wiki_page_id, version, via, accessed_at)"
+                + " VALUES (?, ?, ?, ?, ?)")
+        .params(agentRunId, page.id(), page.version(), via, Timestamp.from(now))
         .update();
   }
 
