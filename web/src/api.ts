@@ -1808,6 +1808,24 @@ export interface LaunchRequest {
   provider?: string
   /** Modelo de esas fases; sin él, el predeterminado del proveedor. */
   model?: string
+  /** Lanzarlo aunque se parezca mucho a un trabajo ya entregado (MV-B). */
+  confirmDone?: boolean
+}
+
+/** Un trabajo ya entregado (con su PR fusionada) que se parece al que se lanza (MV-B). */
+export interface DoneMatch {
+  workItemId: string
+  key: string
+  title: string
+  /** De 0 a 1. */
+  similarity: number
+  /** Parecido fuerte: lanzarlo pide confirmarlo. */
+  strong: boolean
+  /** Es el mismo trabajo, ya entregado. */
+  self: boolean
+  pullRequestNumber: number | null
+  pullRequestUrl: string | null
+  deliveredAt: string | null
 }
 
 /** Paleta guardada en el servidor: un color base `#rrggbb` por pieza, o `null` para el de Skynet. */
@@ -2216,11 +2234,22 @@ export class ApiError extends Error {
   readonly status: number
   /** Problemas de un YAML rechazado (p. ej. al publicar un borrador con errores). */
   readonly problems: Problem[]
+  /** El `code` del problema, p. ej. `DONE_MATCH` al lanzar algo que parece ya hecho. */
+  readonly code: string | null
+  /** Con `DONE_MATCH`, los trabajos entregados que se parecen. */
+  readonly doneMatches: DoneMatch[]
 
-  constructor(status: number, message: string, problems: Problem[] = []) {
+  constructor(
+    status: number,
+    message: string,
+    problems: Problem[] = [],
+    extra: { code?: string | null; doneMatches?: DoneMatch[] } = {},
+  ) {
     super(message)
     this.status = status
     this.problems = problems
+    this.code = extra.code ?? null
+    this.doneMatches = extra.doneMatches ?? []
   }
 }
 
@@ -2257,18 +2286,22 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (!res.ok) {
     let message = `${res.status} ${res.statusText}`
     let problems: Problem[] = []
+    let extra: { code?: string; doneMatches?: DoneMatch[] } = {}
     try {
       const problem = (await res.json()) as {
         detail?: string
         title?: string
         problems?: Problem[]
+        code?: string
+        doneMatches?: DoneMatch[]
       }
       message = problem.detail ?? problem.title ?? message
       problems = problem.problems ?? []
+      extra = { code: problem.code, doneMatches: problem.doneMatches }
     } catch {
       // Respuesta sin cuerpo JSON.
     }
-    throw new ApiError(res.status, message, problems)
+    throw new ApiError(res.status, message, problems, extra)
   }
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
