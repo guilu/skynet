@@ -48,7 +48,7 @@ describe('página Uso', () => {
     renderAt('/usage', <App />)
     expect(await screen.findByRole('heading', { level: 1, name: 'Consumo' })).toBeVisible()
     expect(
-      within(screen.getByRole('navigation', { name: 'Navegación principal' })).getByRole('link', {
+      within(screen.getByRole('navigation', { name: 'Agentes' })).getByRole('link', {
         name: 'Consumo',
       }),
     ).toHaveAttribute('aria-current', 'page')

@@ -190,18 +190,29 @@ describe('App', () => {
     const nav = await screen.findByRole('navigation', { name: 'Navegación principal' })
     for (const [area, links] of [
       ['Espacio de trabajo', ['Inicio', 'Proyectos', 'Trabajos', 'Actividad']],
-      ['Fábrica', ['En curso', 'Workflows', 'Aprobaciones', 'Resultados']],
-      ['Administración', ['Proveedores', 'Runners', 'Consumo', 'Ajustes', 'Mantenimiento']],
+      ['Fábrica', ['En curso', 'Workflows', 'Memoria', 'Evaluaciones']],
+      ['Administración', ['Agentes', 'Ajustes', 'Mantenimiento']],
     ] as const) {
       const group = within(nav).getByRole('group', { name: area })
       for (const name of links) {
         expect(within(group).getByRole('link', { name })).toBeInTheDocument()
       }
     }
-    expect(within(nav).getByRole('link', { name: 'Runners' })).toHaveAttribute(
+    // Runners es una pestaña de «Agentes»: la entrada de la barra queda marcada.
+    expect(within(nav).getByRole('link', { name: 'Agentes' })).toHaveAttribute(
       'aria-current',
       'page',
     )
+    const tabs = screen.getByRole('navigation', { name: 'Agentes' })
+    expect(within(tabs).getByRole('link', { name: 'Runners' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(tabs).getByRole('link', { name: 'Proveedores' })).toHaveAttribute(
+      'href',
+      '/providers',
+    )
+    expect(within(tabs).getByRole('link', { name: 'Consumo' })).toHaveAttribute('href', '/usage')
     expect(screen.getByRole('link', { name: 'Skynet: ir al Inicio' })).toHaveAttribute('href', '/')
     expect(screen.getByRole('link', { name: 'Saltar al contenido' })).toHaveAttribute(
       'href',
@@ -911,6 +922,7 @@ describe('App', () => {
     renderAt('/runners', <App />)
     const crumbs = await screen.findByRole('navigation', { name: 'Migas' })
     expect(within(crumbs).getByText('Administración')).toBeInTheDocument()
+    expect(within(crumbs).getByText('Agentes')).toBeInTheDocument()
     expect(within(crumbs).getByText('Runners')).toHaveAttribute('aria-current', 'page')
     expect(within(crumbs).queryByRole('link', { name: /^Volver a/ })).toBeNull()
   })
@@ -927,11 +939,11 @@ describe('App', () => {
     fireEvent.click(within(mobile).getByRole('button', { name: 'Más' }))
     const all = await screen.findByRole('navigation', { name: 'Todas las secciones' })
     const admin = within(all).getByRole('group', { name: 'Administración' })
-    expect(within(admin).getByRole('link', { name: 'Runners' })).toHaveAttribute(
+    expect(within(admin).getByRole('link', { name: 'Agentes' })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    expect(within(all).getByRole('link', { name: 'Consumo' })).toHaveAttribute('href', '/usage')
+    expect(within(all).getByRole('link', { name: /^Memoria/ })).toHaveAttribute('href', '/results')
   })
 
   it('⌘K busca un trabajo por su clave y lo abre', async () => {

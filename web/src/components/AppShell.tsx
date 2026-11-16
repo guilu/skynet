@@ -14,6 +14,7 @@ import { Toasts } from './companion/Toasts'
 import { Breadcrumbs } from './shell/Breadcrumbs'
 import { ThemeMenu, UserMenu } from './shell/Menus'
 import { MobileNav } from './shell/MobileNav'
+import { SectionTabs } from './shell/SectionTabs'
 import { Sidebar } from './shell/Sidebar'
 import { Icon } from './icons/Icon'
 
@@ -138,6 +139,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </header>
           <main id="main" className="content" tabIndex={-1}>
             {/* Con la clave, cada página nueva entra con una animación corta (UI-F). */}
+            <SectionTabs />
             <div key={pathname} className="page">
               <SkynyPaused.Provider value={chatOpen}>{children}</SkynyPaused.Provider>
             </div>

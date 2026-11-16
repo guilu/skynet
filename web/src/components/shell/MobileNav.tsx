@@ -1,9 +1,10 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useState } from 'react'
-import { NavLink } from 'react-router'
+import { NavLink, useLocation } from 'react-router'
+import { cn } from '../../lib/cn'
 import { HealthIndicator } from '../../HealthIndicator'
 import { PendingCount } from '../approval/PendingCount'
-import { MOBILE_NAV, NAV_AREAS } from './nav'
+import { isActive, MOBILE_NAV, NAV_AREAS } from './nav'
 import { RunnerSummary } from './Sidebar'
 import { Icon } from '../icons/Icon'
 
@@ -15,6 +16,7 @@ import { Icon } from '../icons/Icon'
 export function MobileNav() {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
+  const { pathname } = useLocation()
   return (
     <nav className="mobile-nav" aria-label="Navegación móvil">
       {MOBILE_NAV.map((n) => (
@@ -57,7 +59,13 @@ export function MobileNav() {
                   <ul>
                     {area.items.map((n) => (
                       <li key={n.to}>
-                        <NavLink to={n.to} end={n.end} onClick={close} className="area-tile">
+                        <NavLink
+                          to={n.to}
+                          end={n.end}
+                          onClick={close}
+                          className={() => cn('area-tile', isActive(n, pathname) && 'active')}
+                          aria-current={isActive(n, pathname) ? 'page' : undefined}
+                        >
                           <Icon name={n.icon} size={24} strokeWidth={1.9} />
                           {n.label}
                           {n.pendingApprovals && <PendingCount />}

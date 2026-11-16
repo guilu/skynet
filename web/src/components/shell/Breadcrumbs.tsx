@@ -86,7 +86,9 @@ export function Breadcrumbs() {
   else {
     const section = sectionOf(pathname)
     area = section?.area
-    crumbs = [{ label: section?.label ?? 'Página no encontrada' }]
+    crumbs = section?.group
+      ? [{ label: section.group.label }, { label: section.label }]
+      : [{ label: section?.label ?? 'Página no encontrada' }]
   }
   const parent = crumbs.slice(0, -1).findLast((c) => c.to)
 

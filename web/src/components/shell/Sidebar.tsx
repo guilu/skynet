@@ -1,12 +1,12 @@
 import * as Tooltip from '@radix-ui/react-tooltip'
 import { useQuery } from '@tanstack/react-query'
 import type { ReactElement } from 'react'
-import { Link, NavLink } from 'react-router'
+import { Link, NavLink, useLocation } from 'react-router'
 import { api } from '../../api'
 import { HealthIndicator } from '../../HealthIndicator'
 import { PendingCount } from '../approval/PendingCount'
 import { BrandMark } from '../brand/Logo'
-import { NAV_AREAS } from './nav'
+import { isActive, NAV_AREAS } from './nav'
 import { Icon } from '../icons/Icon'
 
 /**
@@ -15,6 +15,7 @@ import { Icon } from '../icons/Icon'
  * y aparece como pista al pasar o enfocar.
  */
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  const { pathname } = useLocation()
   return (
     <aside className="sidebar" data-collapsed={collapsed || undefined}>
       <Link to="/" className="brand" aria-label="Skynet: ir al Inicio">
@@ -36,7 +37,12 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
               {area.items.map((item) => (
                 <li key={item.to}>
                   <Hint label={item.label} enabled={collapsed}>
-                    <NavLink to={item.to} end={item.end}>
+                    <NavLink
+                      to={item.to}
+                      end={item.end}
+                      className={() => (isActive(item, pathname) ? 'active' : undefined)}
+                      aria-current={isActive(item, pathname) ? 'page' : undefined}
+                    >
                       <Icon name={item.icon} size={24} strokeWidth={1.9} />
                       <span className="nav-label">{item.label}</span>
                       {item.pendingApprovals && <PendingCount />}
