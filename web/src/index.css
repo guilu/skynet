@@ -11488,15 +11488,19 @@
     animation: curtain-fade 0.25s ease;
   }
 
+  /*
+   * Ocupa casi toda la web, bajo la barra superior. Baja desde el borde inferior de la barra: a la
+   * vez que se desplaza, se recorta por arriba lo mismo, así que nunca se ve por encima de ella.
+   */
   .curtain {
     --curtain-top: 73px;
+    --curtain-gap: 16px;
     position: fixed;
     z-index: 41;
     top: var(--curtain-top);
-    left: 50%;
-    translate: -50% 0;
-    width: min(880px, calc(100vw - 32px));
-    max-height: calc(100dvh - var(--curtain-top) - 32px);
+    left: var(--curtain-gap);
+    right: var(--curtain-gap);
+    height: calc(100dvh - var(--curtain-top) - var(--curtain-gap));
     display: flex;
     flex-direction: column;
     border: var(--border-w) solid var(--border);
@@ -11505,6 +11509,8 @@
     background: var(--surface);
     box-sizing: border-box;
     outline: none;
+    /* Explícito: entre `none` y un recorte no hay transición. */
+    clip-path: inset(0 0 0 0);
     animation: curtain-down 0.45s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
@@ -11512,19 +11518,33 @@
     animation: curtain-up 0.25s ease-in forwards;
   }
 
-  .curtain[data-talking] {
-    height: calc(100dvh - var(--curtain-top) - 32px);
+  /* El contenido, a un ancho cómodo de leer y centrado. */
+  .curtain > * {
+    width: min(880px, 100%);
+    margin-inline: auto;
+    box-sizing: border-box;
+  }
+
+  /* Sin conversación, Skyny, el saludo y el prompt quedan en el centro. */
+  .curtain:not([data-talking]) .curtain-skyny {
+    margin-top: auto;
+  }
+
+  .curtain:not([data-talking]) .curtain-grip {
+    margin-top: auto;
   }
 
   @keyframes curtain-down {
     from {
-      transform: translateY(-105%);
+      transform: translateY(-100%);
+      clip-path: inset(100% 0 0 0);
     }
   }
 
   @keyframes curtain-up {
     to {
-      transform: translateY(-105%);
+      transform: translateY(-100%);
+      clip-path: inset(100% 0 0 0);
     }
   }
 
@@ -11540,6 +11560,10 @@
     .curtain-overlay {
       animation: none;
     }
+  }
+
+  .curtain > .curtain-head {
+    width: 100%;
   }
 
   .curtain-head {
@@ -11592,7 +11616,7 @@
   }
 
   .curtain-status {
-    margin: 0 0 6px;
+    margin: 0 auto 6px;
     color: var(--muted);
     font-size: 0.9rem;
     text-align: center;
@@ -11755,15 +11779,17 @@
     font-size: 0.85rem;
   }
 
-  .curtain .error {
-    margin: 8px 24px 0;
+  .curtain > .error {
+    width: min(832px, calc(100% - 48px));
+    margin: 8px auto 0;
   }
 
   .curtain-prompt {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin: 12px 24px 0;
+    width: min(832px, calc(100% - 48px));
+    margin: 12px auto 0;
     padding: 6px 6px 6px 18px;
     border: var(--border-w) solid var(--border-strong);
     border-radius: 28px;
@@ -11823,7 +11849,7 @@
   }
 
   .curtain-meta {
-    margin: 8px 0 0;
+    margin: 8px auto 0;
     color: var(--muted);
     font-size: 0.78rem;
     text-align: center;
@@ -11894,15 +11920,8 @@
 
     .curtain {
       --curtain-top: 65px;
-      left: 0;
-      translate: none;
-      width: 100%;
-      max-height: calc(100dvh - var(--curtain-top));
+      --curtain-gap: 8px;
       border-radius: 0 0 24px 24px;
-    }
-
-    .curtain[data-talking] {
-      height: calc(100dvh - var(--curtain-top));
     }
 
     .curtain-hero h2 {
@@ -11910,7 +11929,7 @@
     }
 
     .curtain-prompt {
-      margin: 12px 14px 0;
+      width: calc(100% - 28px);
     }
 
     .curtain-thread {

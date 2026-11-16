@@ -21,7 +21,7 @@ Lo que se decidió antes de empezar (estudio de viabilidad y boceto, 15 de novie
 
 ## La cortina
 
-En la web (CH-D), «Pregúntale a Skyny» en la barra superior, o **⌘J / Ctrl+J** desde cualquier página, baja la cortina sobre la página atenuada; Escape, la ✕ o un clic fuera la cierran. En el móvil ocupa la pantalla bajo la barra.
+En la web (CH-D), «Pregúntale a Skyny» en la barra superior, o **⌘J / Ctrl+J** desde cualquier página, baja la cortina desde el borde inferior de esa barra (nunca pasa por encima de ella) y ocupa casi toda la web, con el contenido a un ancho cómodo en el centro; Escape, la ✕ o un clic en el margen atenuado la cierran. En el móvil, igual, con un margen más estrecho.
 
 - **Skyny grande** arriba y centrado (240 px; 180 en el móvil, 150 con conversación), con lo que hace debajo: «Pensando…», «Esperando tu confirmación», «Ningún runner me atiende ahora». En CH-D no cambia de cara: eso llega con CH-E.
 - **Sin conversación:** «¿En qué te ayudo?», el prompt y tres sugerencias según la página (un trabajo, un proyecto, una ejecución o cualquier otra). La primera pregunta crea la conversación, ligada al trabajo o al proyecto que se estaba viendo.

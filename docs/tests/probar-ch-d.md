@@ -31,7 +31,7 @@ npx tsc -b && npx oxlint && npx prettier --check . && npx vitest run src/compone
 Con Skynet en marcha y ningún runner que declare el chat (o todos con `SKYNET_RUNNER_CHAT=false`):
 
 1. En cualquier página, pulsa **Ctrl+J** (⌘J en el Mac).
-   **Esperado:** la cortina baja desde la barra superior, que se queda sin atenuar; el resto de la página queda atenuado. Skyny sale grande y centrado, con «¿En qué te ayudo?», el prompt con el foco y tres sugerencias. En la barra, «Pregúntale a Skyny» queda marcado.
+   **Esperado:** la cortina baja desde el borde inferior de la barra superior (no aparece por encima de la barra en ningún momento), que se queda sin atenuar, y ocupa casi toda la web dejando un margen atenuado alrededor. Skyny sale grande y centrado, con «¿En qué te ayudo?», el prompt con el foco y tres sugerencias. En la barra, «Pregúntale a Skyny» queda marcado.
 2. Pulsa **Escape**. Ábrela otra vez con el botón «Pregúntale a Skyny». Ciérrala con un clic en la parte atenuada.
 3. Abre un trabajo de `demo-repo` y abre la cortina.
    **Esperado:** las sugerencias hablan de «este trabajo».
@@ -42,7 +42,7 @@ Con Skynet en marcha y ningún runner que declare el chat (o todos con `SKYNET_R
 6. Pulsa «Conversaciones».
    **Esperado:** sale la conversación con la clave del trabajo y la fecha. «Nueva» vuelve al saludo.
 7. Repite 1 y 4 con el tema oscuro y en el móvil (o con la ventana estrecha).
-   **Esperado:** en el móvil la cortina ocupa todo el ancho y llega hasta abajo; Skyny es más pequeño (180 px, 150 con conversación) y sigue centrado arriba.
+   **Esperado:** en el móvil la cortina ocupa casi toda la pantalla bajo la barra; Skyny es más pequeño (180 px, 150 con conversación) y sigue centrado arriba.
 
 ## 3. Con un runner del chat (tres preguntas a Haiku)
 
