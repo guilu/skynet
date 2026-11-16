@@ -186,6 +186,7 @@ En el detalle de cada agente, la pestaña **Memoria** dice qué hizo esa invocac
 | `GET /api/memory/{id}` | Una observación. |
 | `PUT /api/memory/{id}` | Una versión nueva con lo que cambie una persona. |
 | `GET /api/memory/{id}/history` | Todas las versiones, de la más reciente a la más antigua. |
+| `GET /api/memory/{id}/readers` | «¿Quién lo vio?»: las invocaciones que la recibieron, buscaron, leyeron o guardaron, de la más reciente a la más antigua (hasta 200), con la ejecución, la fase, el trabajo, el proveedor, la versión que vieron y cuántas veces. |
 | `POST /api/memory/{id}/archive`, `…/restore`, `…/pin`, `…/unpin` | Revisión. Fijar también la confirma. |
 | `POST /api/memory/{id}/confirm` | Confirmarla: llega a los agentes, también en el bloque inicial. |
 | `POST /api/memory/{id}/quarantine` | Ponerla en cuarentena, con un `reason` opcional en el cuerpo. Deja de estar fijada. |
