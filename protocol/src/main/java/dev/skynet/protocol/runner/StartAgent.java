@@ -40,6 +40,8 @@ import java.util.UUID;
  *     no hay ninguno
  * @param risk si hay que medir el nivel de riesgo del cambio al terminar (AU-A), con lo que suman
  *     el workflow y el repositorio; {@code null} si no
+ * @param chat un turno del chat con Skyny (CH-C): sin ejecución, repositorio ni worktree; {@code
+ *     null} en un agente de un workflow
  */
 public record StartAgent(
     UUID workflowRunId,
@@ -61,7 +63,8 @@ public record StartAgent(
     String memory,
     PushBranch push,
     List<String> protectedPaths,
-    RiskRequest risk) {
+    RiskRequest risk,
+    ChatTurn chat) {
 
   public static final String MEMORY_READ = "read";
 
@@ -89,8 +92,21 @@ public record StartAgent(
   public static final String MEMORY_WRITE = "write";
 
   public StartAgent {
-    Objects.requireNonNull(workflowRunId, "workflowRunId");
-    Objects.requireNonNull(repositoryPath, "repositoryPath");
+    if (chat == null) {
+      Objects.requireNonNull(workflowRunId, "workflowRunId");
+      Objects.requireNonNull(repositoryPath, "repositoryPath");
+    } else if (workflowRunId != null
+        || repositoryPath != null
+        || workspace != null
+        || command != null
+        || outputSchema != null
+        || memory != null
+        || push != null
+        || risk != null) {
+      throw new IllegalArgumentException(
+          "Un turno del chat no tiene ejecución, repositorio, worktree, comando, salida, memoria,"
+              + " push ni riesgo");
+    }
     Objects.requireNonNull(sessionId, "sessionId");
     Objects.requireNonNull(prompt, "prompt");
     allowedTools = allowedTools == null ? List.of() : List.copyOf(allowedTools);
@@ -121,6 +137,93 @@ public record StartAgent(
       throw new IllegalArgumentException(
           "Un push solo sube un worktree existente: sin comando, reanudación, salida ni memoria");
     }
+  }
+
+  /** Invocación de un workflow (no un turno del chat). */
+  public StartAgent(
+      UUID workflowRunId,
+      String workItemKey,
+      String repositoryPath,
+      String baseBranch,
+      UUID sessionId,
+      String prompt,
+      List<String> allowedTools,
+      String permissionMode,
+      String model,
+      AgentLimits limits,
+      ResumeFrom resume,
+      List<String> environment,
+      WorkspaceRef workspace,
+      String command,
+      String outputSchema,
+      String provider,
+      String memory,
+      PushBranch push,
+      List<String> protectedPaths,
+      RiskRequest risk) {
+    this(
+        workflowRunId,
+        workItemKey,
+        repositoryPath,
+        baseBranch,
+        sessionId,
+        prompt,
+        allowedTools,
+        permissionMode,
+        model,
+        limits,
+        resume,
+        environment,
+        workspace,
+        command,
+        outputSchema,
+        provider,
+        memory,
+        push,
+        protectedPaths,
+        risk,
+        null);
+  }
+
+  /**
+   * Un turno del chat con Skyny (CH-C): Claude Code, sin worktree, con las herramientas que se
+   * indican; con {@code resume}, continúa la sesión del turno anterior.
+   */
+  public static StartAgent chatTurn(
+      ChatTurn chat,
+      UUID sessionId,
+      String prompt,
+      List<String> allowedTools,
+      String model,
+      AgentLimits limits,
+      ResumeFrom resume) {
+    return new StartAgent(
+        null,
+        null,
+        null,
+        null,
+        sessionId,
+        prompt,
+        allowedTools,
+        "dontAsk",
+        model,
+        limits,
+        resume,
+        List.of(),
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        List.of(),
+        null,
+        Objects.requireNonNull(chat, "chat"));
+  }
+
+  /** Si es un turno del chat con Skyny. */
+  public boolean isChatTurn() {
+    return chat != null;
   }
 
   /** Invocación sin medir el riesgo. */
@@ -345,7 +448,8 @@ public record StartAgent(
         memory,
         push,
         protectedPaths,
-        risk);
+        risk,
+        chat);
   }
 
   /** La misma invocación con otro prompt (el runner pone los criterios del repositorio, ES-B). */
@@ -370,7 +474,8 @@ public record StartAgent(
         memory,
         push,
         protectedPaths,
-        risk);
+        risk,
+        chat);
   }
 
   /** Proveedor efectivo: {@code claude-code} si no se indica. */

@@ -4,21 +4,26 @@ import dev.skynet.controlplane.event.EventDraft;
 import dev.skynet.controlplane.event.EventStore;
 import dev.skynet.controlplane.project.Project;
 import dev.skynet.controlplane.project.ProjectService;
+import dev.skynet.controlplane.runner.RunnerDirectory;
 import dev.skynet.controlplane.shared.Archived;
 import dev.skynet.controlplane.shared.ConflictException;
 import dev.skynet.controlplane.shared.InvalidRequestException;
 import dev.skynet.controlplane.shared.NotFoundException;
 import dev.skynet.controlplane.shared.PayloadRedactor;
 import dev.skynet.controlplane.shared.TimeSource;
+import dev.skynet.controlplane.workflow.ChatAgents;
+import dev.skynet.controlplane.workflow.ChatTurnFinished;
 import dev.skynet.controlplane.workitem.WorkItem;
 import dev.skynet.controlplane.workitem.WorkItemService;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -30,8 +35,10 @@ import tools.jackson.databind.json.JsonMapper;
  * Las conversaciones del chat con Skyny (CH-A, docs/chat.md): crearlas, listarlas, leerlas con sus
  * mensajes, escribir en ellas y archivarlas.
  *
- * <p>Todavía no contesta nadie: cada mensaje de la persona deja la conversación en {@link
- * ConversationState#OFFLINE}. Los textos se guardan con los secretos enmascarados, como la memoria.
+ * <p>Cada mensaje de la persona lo contesta un turno de Skyny en un runner (CH-C, {@link
+ * ChatAgents}): la conversación queda en {@link ConversationState#ANSWERING} hasta que llega su
+ * respuesta. Sin un runner del chat en línea, queda en {@link ConversationState#OFFLINE}. Los
+ * textos se guardan con los secretos enmascarados, como la memoria.
  */
 @Service
 public class Conversations {
@@ -52,6 +59,9 @@ public class Conversations {
   public static final int MAX_LIST = 100;
 
   static final String AGGREGATE = "conversation";
+
+  /** Cuánto espera un turno en cola a que lo reclame un runner antes de darlo por perdido. */
+  static final Duration QUEUE_TIMEOUT = Duration.ofMinutes(2);
 
   private static final String COLUMNS =
       "c.id, c.title, c.project_id, p.key AS project_key, p.name AS project_name, c.work_item_id,"
@@ -102,6 +112,8 @@ public class Conversations {
   private final EventStore events;
   private final PayloadRedactor redactor;
   private final TimeSource time;
+  private final ChatAgents chats;
+  private final RunnerDirectory runners;
   private final JsonMapper json = JsonMapper.builder().build();
 
   Conversations(
@@ -110,13 +122,17 @@ public class Conversations {
       WorkItemService workItems,
       EventStore events,
       PayloadRedactor redactor,
-      TimeSource time) {
+      TimeSource time,
+      ChatAgents chats,
+      RunnerDirectory runners) {
     this.jdbc = jdbc;
     this.projects = projects;
     this.workItems = workItems;
     this.events = events;
     this.redactor = redactor;
     this.time = time;
+    this.chats = chats;
+    this.runners = runners;
   }
 
   /**
@@ -171,7 +187,8 @@ public class Conversations {
     payload.put("actor", actor);
     events.append(EventDraft.of(AGGREGATE, id, "chat.conversation.created", null, payload, now));
     if (text != null) {
-      append(id, MessageAuthor.USER, text, List.of(), now);
+      Message first = append(id, MessageAuthor.USER, text, List.of(), now);
+      setState(id, answer(get(id), first));
     }
     return thread(id);
   }
@@ -234,12 +251,118 @@ public class Conversations {
       throw new ConflictException("La conversación está archivada");
     }
     if (conversation.state() == ConversationState.ANSWERING) {
-      throw new ConflictException("Skyny todavía está contestando el mensaje anterior");
+      // Un turno que nadie reclamó a tiempo no bloquea la conversación.
+      chats.withdrawStale(id, time.now().minus(QUEUE_TIMEOUT));
+      if (chats.answering(id)) {
+        throw new ConflictException("Skyny todavía está contestando el mensaje anterior");
+      }
+      conversation = get(id);
     }
     Message message = append(id, MessageAuthor.USER, body(body), List.of(), time.now());
-    // CH-A: nadie contesta todavía (el turno en el runner llega con CH-C).
-    setState(id, ConversationState.OFFLINE);
+    setState(id, answer(conversation, message));
     return new Posted(message, get(id));
+  }
+
+  /**
+   * Para el turno en curso, si lo hay (CH-C). La respuesta, o que no la hubo, llega con el fin del
+   * turno.
+   */
+  @Transactional
+  public Conversation stop(UUID id) {
+    lock(id);
+    chats.cancel(id);
+    return get(id);
+  }
+
+  /**
+   * Pone en cola el turno de Skyny que contesta a {@code message}: continúa la sesión del turno
+   * anterior si su runner sigue en línea, o empieza una nueva con lo hablado hasta ahora. Sin
+   * runner del chat en línea, nadie contesta.
+   */
+  private ConversationState answer(Conversation conversation, Message message) {
+    Optional<ChatAgents.Previous> previous =
+        chats.previous(conversation.id()).filter(p -> runners.chatAvailable(p.runnerId()));
+    if (previous.isEmpty() && !runners.chatAvailable()) {
+      return ConversationState.OFFLINE;
+    }
+    String prompt =
+        previous.isPresent()
+            ? message.body()
+            : SkynyPrompt.fresh(
+                context(conversation), history(conversation.id(), message.seq()), message.body());
+    chats.queue(
+        conversation.id(), message.id(), conversation.model(), prompt, previous.orElse(null));
+    return ConversationState.ANSWERING;
+  }
+
+  /**
+   * Llega lo que dijo Skyny en un turno (CH-C): su mensaje, con las acciones que propuso mientras
+   * contestaba como tarjetas, y la conversación vuelve a {@link ConversationState#IDLE}.
+   */
+  @Transactional
+  public Message answered(ChatTurnFinished finished) {
+    lock(finished.conversationId());
+    Instant now = time.now();
+    String text;
+    if (finished.completed()) {
+      text =
+          finished.text() == null || finished.text().isBlank()
+              ? "No tengo nada que añadir."
+              : finished.text().strip();
+    } else {
+      text =
+          "No he podido contestar"
+              + (finished.error() == null || finished.error().isBlank()
+                  ? "."
+                  : ": " + finished.error().strip());
+    }
+    if (text.length() > MAX_BODY) {
+      text = text.substring(0, MAX_BODY - 1).strip() + "…";
+    }
+    Message message =
+        append(
+            finished.conversationId(),
+            MessageAuthor.SKYNY,
+            redactor.redact(text),
+            proposals(finished),
+            now);
+    setState(finished.conversationId(), ConversationState.IDLE);
+    return message;
+  }
+
+  /** Las acciones que propuso Skyny durante el turno y siguen esperando, como tarjetas. */
+  private List<ChatCard> proposals(ChatTurnFinished finished) {
+    return jdbc.sql(
+            "SELECT a.id, a.summary FROM conversation_action a JOIN chat_turn t"
+                + " ON t.conversation_id = a.conversation_id WHERE t.agent_run_id = ?"
+                + " AND a.status = 'PENDING' AND a.created_at >= t.created_at"
+                + " ORDER BY a.created_at")
+        .param(finished.agentRunId())
+        .query((rs, n) -> new ChatCard("action", rs.getString("id"), rs.getString("summary"), null))
+        .list();
+  }
+
+  private static SkynyPrompt.Context context(Conversation c) {
+    return new SkynyPrompt.Context(
+        c.projectId() == null ? null : c.projectId().toString(),
+        c.projectKey(),
+        c.projectName(),
+        c.workItemId() == null ? null : c.workItemId().toString(),
+        c.workItemKey(),
+        c.workItemTitle());
+  }
+
+  /** Los mensajes anteriores a {@code beforeSeq}, en orden. */
+  private List<SkynyPrompt.Line> history(UUID conversationId, int beforeSeq) {
+    return jdbc.sql(
+            "SELECT author, body FROM conversation_message WHERE conversation_id = ? AND seq < ?"
+                + " ORDER BY seq")
+        .params(conversationId, beforeSeq)
+        .query(
+            (rs, n) ->
+                new SkynyPrompt.Line(
+                    MessageAuthor.valueOf(rs.getString("author")), rs.getString("body")))
+        .list();
   }
 
   /** Archiva una conversación: sale de la lista y ya no se puede escribir en ella. */

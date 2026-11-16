@@ -68,6 +68,12 @@ class ConversationController {
     return conversations.post(id, request.body());
   }
 
+  /** Para el turno de Skyny en curso, si lo hay (CH-C). */
+  @PostMapping("/api/conversations/{id}/stop")
+  Conversations.Conversation stop(@PathVariable UUID id) {
+    return conversations.stop(id);
+  }
+
   @PostMapping("/api/conversations/{id}/archive")
   Conversations.Conversation archive(@PathVariable UUID id, Principal principal) {
     return conversations.archive(id, principal.getName());

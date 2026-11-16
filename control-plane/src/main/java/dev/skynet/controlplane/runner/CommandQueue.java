@@ -9,6 +9,7 @@ import dev.skynet.controlplane.workflow.AgentRunWithdrawn;
 import dev.skynet.controlplane.workflow.RunService;
 import dev.skynet.controlplane.workflow.VerificationQueued;
 import dev.skynet.controlplane.workflow.WorkspaceCleanupRequested;
+import dev.skynet.protocol.runner.ChatTurn;
 import dev.skynet.protocol.runner.CleanupWorkspace;
 import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
@@ -200,9 +201,13 @@ class CommandQueue {
       List<Row> invocations =
           jdbc.sql(
                   "SELECT * FROM runner_command WHERE status = ? AND ((runner_id IS NULL AND type"
-                      + " = ? AND agent_run_id IN (SELECT a.id FROM agent_run a WHERE a.provider"
+                      + " = ? AND agent_run_id IN (SELECT a.id FROM agent_run a WHERE (a.provider"
                       + " = ? OR a.provider IN (SELECT p.provider FROM runner_provider p"
-                      + " WHERE p.runner_id = ?))) OR (runner_id = ? AND type IN (?, ?)"
+                      + " WHERE p.runner_id = ?))"
+                      // Un turno del chat (CH-C), solo para un runner que sabe ejecutarlo.
+                      + " AND (a.role IS DISTINCT FROM 'chat' OR EXISTS (SELECT 1 FROM"
+                      + " runner_provider f WHERE f.runner_id = ? AND f.provider = ?))))"
+                      + " OR (runner_id = ? AND type IN (?, ?)"
                       + " AND delivery_count = 0)) ORDER BY created_at LIMIT ? FOR UPDATE SKIP"
                       + " LOCKED")
               .params(
@@ -210,6 +215,8 @@ class CommandQueue {
                   RunnerCommandType.START.name(),
                   AgentRun.PROVIDER_COMMAND,
                   runnerId,
+                  runnerId,
+                  ChatTurn.RUNNER_FEATURE,
                   runnerId,
                   RunnerCommandType.START.name(),
                   RunnerCommandType.RESUME.name(),

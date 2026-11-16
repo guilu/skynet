@@ -62,6 +62,7 @@ public class AgentEventIngestion {
   private final JdbcClient jdbc;
   private final PullRequests pullRequests;
   private final QuotaWaits quotaWaits;
+  private final ChatAgents chats;
 
   AgentEventIngestion(
       AgentRunRepository agentRuns,
@@ -78,7 +79,8 @@ public class AgentEventIngestion {
       TimeSource time,
       JdbcClient jdbc,
       PullRequests pullRequests,
-      QuotaWaits quotaWaits) {
+      QuotaWaits quotaWaits,
+      ChatAgents chats) {
     this.agentRuns = agentRuns;
     this.stageRuns = stageRuns;
     this.publisher = publisher;
@@ -94,6 +96,7 @@ public class AgentEventIngestion {
     this.jdbc = jdbc;
     this.pullRequests = pullRequests;
     this.quotaWaits = quotaWaits;
+    this.chats = chats;
   }
 
   @Transactional
@@ -105,7 +108,11 @@ public class AgentEventIngestion {
     if (!runnerId.equals(agent.getRunnerId())) {
       return Outcome.NOT_ASSIGNED_TO_RUNNER;
     }
-    StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
+    // Un turno del chat con Skyny (CH-C) no tiene fase ni ejecución.
+    StageRun stage =
+        agent.getStageRunId() == null
+            ? null
+            : stageRuns.findById(agent.getStageRunId()).orElseThrow();
     // Los secretos se ocultan antes de guardar nada: ni el event store ni agent_run los ven.
     Map<String, Object> redacted = redactor.redact(event.payload());
     Map<String, Object> payload = new LinkedHashMap<>(redacted);
@@ -126,7 +133,7 @@ public class AgentEventIngestion {
                     verificationRunId == null ? "agent_run" : "verification_run",
                     verificationRunId == null ? agent.getId() : verificationRunId,
                     event.type().wireName(),
-                    stage.getWorkflowRunId(),
+                    stage == null ? null : stage.getWorkflowRunId(),
                     payload,
                     event.eventId().toString(),
                     event.occurredAt()))
@@ -145,7 +152,7 @@ public class AgentEventIngestion {
       NormalizedEvent event,
       Map<String, Object> redacted,
       UUID verificationRunId) {
-    if (verificationRunId != null) {
+    if (verificationRunId != null && stage != null) {
       // La verificación llega cuando el agente ya ha terminado y no cambia su estado.
       verifications.apply(verificationRunId, event.type(), redacted, event.occurredAt());
       if (event.type() == AgentEventType.VERIFICATION_COMPLETED) {
@@ -175,7 +182,7 @@ public class AgentEventIngestion {
 
   private void apply(AgentRun agent, StageRun stage, NormalizedEvent event, Map<String, Object> p) {
     Instant now = time.now();
-    UUID runId = stage.getWorkflowRunId();
+    UUID runId = stage == null ? null : stage.getWorkflowRunId();
     agent.touch(event.occurredAt());
     agent.recordActivity(
         event.type().wireName(),
@@ -191,7 +198,7 @@ public class AgentEventIngestion {
         String branch = string(p, "branch");
         agent.recordBaseCommit(string(p, "baseCommit"));
         agent.recordBaseSnapshot(string(p, "snapshot"));
-        if (path != null && branch != null) {
+        if (path != null && branch != null && !agent.isChat()) {
           agent.useWorkspace(
               workspaces.register(
                   agent.getRepositoryId(),
@@ -275,14 +282,19 @@ public class AgentEventIngestion {
           // El curador terminó bien: su salida se aplica después del commit (MV-E).
           publisher.publishEvent(new CuratorFinished(agent.getId()));
         }
-        // Con comprobaciones, la fase sigue «Verificando» hasta que pasan (W4-B).
-        stageVerifications.afterAgent(agent, stage, now);
+        if (stage == null) {
+          // Un turno del chat: lo que dijo va a su conversación (CH-C).
+          chats.finished(agent);
+        } else {
+          // Con comprobaciones, la fase sigue «Verificando» hasta que pasan (W4-B).
+          stageVerifications.afterAgent(agent, stage, now);
+        }
       }
       default -> {}
     }
     // Actividad, sesión, resultado o código de salida aunque no haya habido transición.
     agentRuns.save(agent);
-    if (event.type() == AgentEventType.PROCESS_EXITED) {
+    if (event.type() == AgentEventType.PROCESS_EXITED && runId != null) {
       // Después de poner en cola la verificación: una fase que continúe este worktree espera a
       // que termine.
       publisher.publishEvent(new WorkflowRunChanged(runId));
@@ -292,6 +304,9 @@ public class AgentEventIngestion {
   /** Pasa el agente a un estado activo y, con él, su fase a {@code RUNNING}. */
   private AgentRun active(
       AgentRun agent, StageRun stage, AgentObservableStatus next, String reason, Instant now) {
+    if (stage == null) {
+      return transitions.advanceAgent(agent, next, null, reason, now);
+    }
     agent = transitions.advanceAgent(agent, next, stage.getWorkflowRunId(), reason, now);
     transitions.advanceStage(stage, StageStatus.RUNNING, "agent-active", now);
     return agent;

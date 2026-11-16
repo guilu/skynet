@@ -35,7 +35,7 @@ Sus **mensajes** (tabla `conversation_message`) van en orden (`seq`, desde 1). C
 
 Mientras Skyny contesta, no se puede escribir otro mensaje en la misma conversación: va uno cada vez.
 
-**En CH-A todavía no contesta nadie:** cada mensaje deja la conversación en `OFFLINE`.
+Cada mensaje de la persona lo contesta un **turno de Skyny** en un runner (CH-C, ver «El turno de Skyny»). Sin un runner del chat en línea, el mensaje se guarda y la conversación queda en `OFFLINE`.
 
 ## API
 
@@ -45,6 +45,7 @@ Mientras Skyny contesta, no se puede escribir otro mensaje en la misma conversac
 | `GET /api/conversations` | Las conversaciones, la de actividad más reciente primero. `projectId` filtra por proyecto; `archived` es `false` (por defecto), `true` o `all`; `limit` va de 1 a 100 (20 por defecto). |
 | `GET /api/conversations/{id}` | La conversación con todos sus mensajes. |
 | `POST /api/conversations/{id}/messages` | Escribe un mensaje: `{"body": "…"}`. Devuelve `{message, conversation}`. 409 si está archivada o si Skyny aún contesta el anterior. |
+| `POST /api/conversations/{id}/stop` | Para el turno de Skyny en curso, si lo hay (CH-C). |
 | `POST /api/conversations/{id}/archive` | La archiva. Archivar una ya archivada no hace nada. |
 
 ## Eventos
@@ -121,3 +122,18 @@ Skyny no cambia nada por su cuenta. Cuando la persona le pide algo que cambia Sk
 El token de la conversación no llega a las rutas de la web: Skyny no puede confirmar lo que propone (403).
 
 Cada paso deja su evento, con la conversación como agregado: `chat.action.proposed` (con el resumen), `chat.action.confirmed` (con el actor y la tarjeta del resultado), `chat.action.rejected` y `chat.action.failed` (con el motivo). Todos llevan `conversationId`, `actionId` y `kind`.
+
+## El turno de Skyny
+
+Cada mensaje de la persona lo contesta un agente de Claude Code en un runner (CH-C). Es una invocación en `agent_run`, como las de los workflows (la cuota, el coste, la auditoría y la cancelación de siempre), pero con `role = 'chat'` y **sin fase, ejecución ni repositorio**. La tabla `chat_turn` dice de qué conversación es cada turno y a qué mensaje contesta.
+
+- **Quién lo ejecuta:** un runner en línea que tiene Claude Code y declara entre sus proveedores `skyny-chat` (`ChatTurn.RUNNER_FEATURE`). Un runner que no lo declara no recibe turnos. Sin ninguno, la conversación queda en `OFFLINE`.
+- **Primer turno:** una sesión nueva. Su prompt dice quién es Skyny y qué puede hacer, el proyecto y el trabajo de la conversación, lo hablado hasta ahora (los últimos 20 mensajes, hasta 24 000 caracteres) y el mensaje.
+- **Los siguientes:** continúan la sesión del último turno que terminó bien (`RESUME`), en su runner, solo con el mensaje nuevo. Si ese runner ya no está en línea, empieza una sesión nueva en otro, con lo hablado.
+- **Lo que puede usar:** solo las herramientas del MCP de Skynet (`allowedTools = ["mcp__skynet"]`), con el token de la conversación que el runner pide al arrancar (`POST /api/runner/agent-runs/{turno}/chat-token`, solo para un turno suyo que no ha terminado). El token deja de valer al terminar el turno.
+- **Modelo y límites:** el de la conversación (Haiku), 30 turnos del agente, 0,50 $ y 5 minutos como mucho.
+- **La respuesta:** al terminar, lo último que dijo el agente (su `agent.result`) se guarda como mensaje de Skyny, con las acciones que propuso durante el turno como tarjetas (`action`), y la conversación vuelve a `IDLE`. Si el turno falla, el mensaje lo dice: «No he podido contestar: …».
+- **Parar:** `POST /api/conversations/{id}/stop` cancela el turno en cola en el acto; uno en marcha recibe la orden de parar y su fin llega con el proceso.
+- **Un turno que nadie recoge:** si lleva más de 2 minutos en cola cuando la persona vuelve a escribir, se retira («ningún runner del chat lo recogió a tiempo») y no bloquea la conversación.
+- **En Uso**, los turnos salen como un agente más: «skyny», de «Chat con Skyny». No salen entre las ejecuciones ni en «En curso».
+- Un turno no se continúa, reintenta ni bifurca desde la vista de un agente (409): se sigue escribiendo en la conversación.
