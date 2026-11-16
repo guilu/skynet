@@ -6,6 +6,7 @@ import {
   MEMORY_KINDS,
   type MemoryKind,
   type MemoryObservation,
+  type MemoryTrust,
   type Repository,
 } from '../../api'
 import { formatDateTime, truncate } from '../../format'
@@ -17,7 +18,7 @@ import { ListToolbar, SearchField } from '../list/Toolbar'
 import { CardsSkeleton } from '../ui/Skeleton'
 import { Sheet } from '../ui/Sheet'
 import { MemoryDetail } from './MemoryDetail'
-import { dayLabel, kindLabel, ORIGIN_LABEL } from './memoryText'
+import { dayLabel, kindLabel, ORIGIN_LABEL, TRUST_FILTERS, TRUST_LABEL } from './memoryText'
 
 const PAGE_SIZE = 50
 
@@ -50,12 +51,14 @@ export function ProjectMemory({
   const [repository, setRepository] = useState('')
   const [kind, setKind] = useState<MemoryKind | ''>('')
   const [pinned, setPinned] = useState(false)
+  const [trust, setTrust] = useState<MemoryTrust | ''>('')
   const [page, setPage] = useState(0)
   const filters = {
     q,
     repository: repository || undefined,
     kind: kind || undefined,
     pinned: pinned || undefined,
+    trust: trust || undefined,
     archived: archived ? ('true' as const) : undefined,
     page,
     size: PAGE_SIZE,
@@ -77,7 +80,7 @@ export function ProjectMemory({
   const items = memory.data?.items ?? []
   // Sin texto la lista va por fecha; con texto, por pertinencia, así que no se agrupa por días.
   const groups = q ? [{ label: null, items }] : byDay(items)
-  const filtered = !!(q || repository || kind || pinned)
+  const filtered = !!(q || repository || kind || pinned || trust)
 
   return (
     <>
@@ -107,6 +110,20 @@ export function ProjectMemory({
             {MEMORY_KINDS.map((k) => (
               <option key={k.value} value={k.value}>
                 {k.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="inline-field">
+          <span className="visually-hidden">Confianza</span>
+          <select
+            value={trust}
+            onChange={(e) => filter(setTrust)(e.target.value as MemoryTrust | '')}
+          >
+            <option value="">Toda la confianza</option>
+            {TRUST_FILTERS.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
               </option>
             ))}
           </select>
@@ -200,6 +217,11 @@ function MemoryCard({
       <span className="memory-item-head">
         <span className={o.kind === 'RUN_LOG' ? 'tag tag-on' : 'tag'}>{kindLabel(o.kind)}</span>
         <strong>{o.title}</strong>
+        {o.trust !== 'CONFIRMED' && (
+          <span className={o.trust === 'QUARANTINED' ? 'tag tag-warn' : 'tag'}>
+            {TRUST_LABEL[o.trust]}
+          </span>
+        )}
         {o.pinned && <Pin size={16} strokeWidth={2.5} aria-label="Fijada" />}
         {o.redacted && <ShieldAlert size={16} strokeWidth={2.5} aria-label="Secreto enmascarado" />}
       </span>

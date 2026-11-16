@@ -1627,6 +1627,12 @@ export const MEMORY_KINDS: { value: MemoryKind; label: string }[] = [
 
 export type MemoryOrigin = 'AGENT' | 'HUMAN' | 'SYSTEM'
 
+/**
+ * Cuánto se fía Skynet de una entrada (MV-A): lo confirmado llega a los agentes al empezar; lo sin
+ * confirmar solo se encuentra buscando, marcado; lo que está en cuarentena no llega a ninguno.
+ */
+export type MemoryTrust = 'CONFIRMED' | 'UNCONFIRMED' | 'QUARANTINED'
+
 /** Una observación de la memoria del proyecto, en su versión actual. */
 export interface MemoryObservation {
   id: string
@@ -1653,6 +1659,9 @@ export interface MemoryObservation {
   updatedAt: string
   updatedBy: string | null
   archivedAt: string | null
+  trust: MemoryTrust
+  /** Por qué tiene esa confianza, p. ej. «Confirmada por diego» o lo que pareció una orden. */
+  trustReason: string | null
 }
 
 export interface MemoryPage {
@@ -1693,6 +1702,7 @@ export interface MemoryQuery {
   origin?: MemoryOrigin
   pinned?: boolean
   archived?: ArchivedFilter
+  trust?: MemoryTrust
   q?: string
   page?: number
   size?: number
@@ -1705,7 +1715,7 @@ export interface AgentMemory {
   agentRunId: string
   projectId: string
   /** `null`: la invocación no usó la memoria. */
-  mode: 'READ' | 'WRITE' | null
+  mode: 'READ' | 'WRITE' | 'CURATE' | null
   accesses: {
     observationId: string
     version: number
@@ -1718,6 +1728,20 @@ export interface AgentMemory {
     times: number
     firstAt: string
   }[]
+}
+
+/** Una invocación que vio una entrada (MV-F, «¿Quién lo vio?»), en la versión que vio. */
+export interface MemoryReader {
+  agentRunId: string
+  workflowRunId: string
+  stageKey: string
+  /** El trabajo de la ejecución, p. ej. `DEMO-3`. */
+  workItemKey: string
+  provider: string
+  version: number
+  via: MemoryVia
+  times: number
+  firstAt: string
 }
 
 /** Un repositorio git que un runner encontró en sus carpetas raíz (IP-A). */
@@ -2610,6 +2634,7 @@ export const api = {
         origin: q.origin,
         pinned: q.pinned == null ? undefined : String(q.pinned),
         archived: q.archived && q.archived !== 'false' ? q.archived : undefined,
+        trust: q.trust,
         q: q.q || undefined,
         page: q.page ? String(q.page) : undefined,
         size: q.size == null ? undefined : String(q.size),
@@ -2620,9 +2645,16 @@ export const api = {
   /** Guarda una versión nueva con lo que cambie una persona. */
   editMemory: (id: string, content: MemoryContent) =>
     request<MemoryObservation>('PUT', `/api/memory/${id}`, content),
-  /** Archivar, restaurar, fijar o desfijar una observación. */
-  memoryAction: (id: string, action: 'archive' | 'restore' | 'pin' | 'unpin') =>
+  /** Archivar, restaurar, fijar, desfijar o confirmar una observación. */
+  memoryAction: (id: string, action: 'archive' | 'restore' | 'pin' | 'unpin' | 'confirm') =>
     request<MemoryObservation>('POST', `/api/memory/${id}/${action}`),
+  /** La aparta: no llega a ningún agente hasta que alguien la confirme. */
+  quarantineMemory: (id: string, reason: string) =>
+    request<MemoryObservation>('POST', `/api/memory/${id}/quarantine`, {
+      reason: reason.trim() || null,
+    }),
+  /** «¿Quién lo vio?»: las invocaciones que la recibieron, buscaron, leyeron o guardaron. */
+  memoryReaders: (id: string) => request<MemoryReader[]>('GET', `/api/memory/${id}/readers`),
   agentMemory: (agentId: string) =>
     request<AgentMemory>('GET', `/api/agent-runs/${agentId}/memory`),
   /** Verificaciones del agente, la más reciente primero. */
