@@ -1,21 +1,18 @@
 package dev.skynet.runner.chat;
 
-import java.io.BufferedReader;
+import dev.skynet.runner.mcp.McpLaunch;
+import dev.skynet.runner.mcp.StdioMcpServer;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintStream;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
-import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -32,39 +29,9 @@ public final class SkynetMcpMain {
   private SkynetMcpMain() {}
 
   public static void run(String[] args, String version) throws IOException, InterruptedException {
-    String url = null;
-    Path tokenFile = null;
-    for (int i = 0; i < args.length; i++) {
-      switch (args[i]) {
-        case "--url" -> url = value(args, ++i);
-        case "--token-file" -> tokenFile = Path.of(value(args, ++i));
-        default -> usage("argumento desconocido: " + args[i]);
-      }
-    }
-    if (url == null || tokenFile == null) {
-      usage("faltan --url y --token-file");
-    }
-    String token = Files.readString(tokenFile, StandardCharsets.UTF_8).strip();
-    PrintStream out = new PrintStream(System.out, true, StandardCharsets.UTF_8);
-    // Nada más que JSON-RPC por stdout: lo que escriba otro código va a stderr.
-    System.setOut(System.err);
-    new SkynetMcpServer(new HttpApi(URI.create(url), token), version)
-        .serve(new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8)), out);
-  }
-
-  private static String value(String[] args, int i) {
-    if (i >= args.length) {
-      usage("falta el valor de " + args[i - 1]);
-    }
-    return args[i];
-  }
-
-  private static void usage(String problem) {
-    System.err.println(
-        "skynet-runner skynet-mcp: "
-            + problem
-            + "\nUso: skynet-runner skynet-mcp --url <control plane> --token-file <fichero>");
-    System.exit(2);
+    McpLaunch launch = McpLaunch.parse(args, "skynet-mcp", Set.of(), "");
+    McpLaunch.serve(
+        new SkynetMcpServer(new HttpApi(URI.create(launch.url()), launch.token()), version));
   }
 
   /** Los {@code GET} a la API con el token de la conversación. */
@@ -92,7 +59,10 @@ public final class SkynetMcpMain {
       HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
         throw new SkynetMcpServer.ToolException(
-            "Skynet respondió " + response.statusCode() + ": " + detail(response.body()));
+            "Skynet respondió "
+                + response.statusCode()
+                + ": "
+                + StdioMcpServer.problemDetail(response.body()));
       }
       return JSON.readTree(response.body());
     }
@@ -109,16 +79,6 @@ public final class SkynetMcpMain {
                           + "="
                           + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
               .collect(Collectors.joining("&"));
-    }
-
-    /** El {@code detail} de un ProblemDetail, o el cuerpo tal cual. */
-    private static String detail(String body) {
-      try {
-        String detail = JSON.readTree(body).path("detail").asString("");
-        return detail.isBlank() ? body : detail;
-      } catch (JacksonException e) {
-        return body;
-      }
     }
   }
 }
