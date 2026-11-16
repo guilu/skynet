@@ -8,7 +8,7 @@ import { formatTime } from '../../format'
 import { ErrorMessage } from '../ErrorMessage'
 import { safeLink } from '../run/artifacts'
 import { Button } from '../ui/Button'
-import { ACTION_CONFIRM, ACTION_QUESTION, DANGEROUS } from './chatContext'
+import { ACTION_CONFIRM, ACTION_QUESTION, DANGEROUS, DECIDE_KEY } from './chatContext'
 
 /**
  * Los mensajes de una conversación con Skyny: los de la persona a la derecha, los de Skyny en
@@ -22,6 +22,7 @@ export function ChatMessages({
   pending,
   offline,
   onNavigate,
+  onDecided,
 }: {
   conversationId: string | null
   messages: ChatMessage[]
@@ -29,6 +30,8 @@ export function ChatMessages({
   pending: string | null
   offline: boolean
   onNavigate: () => void
+  /** Una acción recién confirmada o rechazada, con cómo ha quedado. */
+  onDecided?: (action: ChatAction) => void
 }) {
   return (
     <>
@@ -48,6 +51,7 @@ export function ChatMessages({
                   card={card}
                   action={actions?.find((a) => a.id === card.id)}
                   onNavigate={onNavigate}
+                  onDecided={onDecided}
                 />
               ) : (
                 <ResultCard key={card.id} card={card} onNavigate={onNavigate} />
@@ -125,14 +129,17 @@ function ActionCard({
   card,
   action,
   onNavigate,
+  onDecided,
 }: {
   conversationId: string
   card: ChatCard
   action: ChatAction | undefined
   onNavigate: () => void
+  onDecided?: (action: ChatAction) => void
 }) {
   const queryClient = useQueryClient()
   const decide = useMutation({
+    mutationKey: DECIDE_KEY,
     mutationFn: (confirm: boolean) =>
       confirm
         ? api.confirmChatAction(conversationId, card.id)
@@ -141,6 +148,7 @@ function ActionCard({
       queryClient.setQueryData<ChatAction[]>(['chat-actions', conversationId], (list) =>
         list?.map((a) => (a.id === updated.id ? updated : a)),
       )
+      onDecided?.(updated)
     },
   })
   const pending = action?.status === 'PENDING'

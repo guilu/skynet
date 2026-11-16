@@ -1,4 +1,11 @@
-import type { ChatAction, ChatActionKind, ChatConversation, ChatThread } from '../../api'
+import type {
+  ChatAction,
+  ChatActionKind,
+  ChatConversation,
+  ChatMessage,
+  ChatThread,
+} from '../../api'
+import type { CompanionState } from '../companion/state'
 
 /** De qué va una conversación nueva según la página: el proyecto o el trabajo que se está viendo. */
 export interface ChatContext {
@@ -59,16 +66,69 @@ export function modelName(model: string | undefined): string {
   return model.charAt(0).toUpperCase() + model.slice(1)
 }
 
-/** Lo que dice Skyny debajo de su cara, con conversación. */
-export function chatStatus(
-  conversation: ChatConversation | undefined,
-  actions: ChatAction[] | undefined,
-  sending: boolean,
-): string {
-  if (sending || conversation?.state === 'ANSWERING') return 'Pensando…'
-  if (conversation?.state === 'OFFLINE') return 'Ningún runner me atiende ahora'
-  if (actions?.some((a) => a.status === 'PENDING')) return 'Esperando tu confirmación'
-  return 'En reposo'
+/** Lo que acaba de pasar y Skyny celebra o lamenta un momento: una acción hecha o que falló. */
+export type ChatMoment = 'success' | 'error'
+
+/** Lo que dura ese momento antes de volver a lo de siempre. */
+export const MOMENT_MS = 4000
+
+/**
+ * La cara de Skyny en la cortina (CH-E), de lo más urgente a lo más tranquilo: un error al
+ * enviar, el turno en marcha, una acción que se está haciendo, lo que acaba de pasar, sin runner,
+ * una acción esperando y, si no, en reposo.
+ */
+export function chatExpression({
+  conversation,
+  actions,
+  sending,
+  deciding,
+  failed,
+  moment,
+}: {
+  conversation: ChatConversation | undefined
+  actions: ChatAction[] | undefined
+  sending: boolean
+  deciding: boolean
+  failed: boolean
+  moment: ChatMoment | null
+}): CompanionState {
+  if (failed) return 'error'
+  if (sending || conversation?.state === 'ANSWERING') return 'thinking'
+  if (deciding) return 'running'
+  if (moment) return moment
+  if (conversation?.state === 'OFFLINE') return 'offline'
+  if (actions?.some((a) => a.status === 'PENDING')) return 'waiting'
+  return 'calm'
+}
+
+/** La clave de las confirmaciones en curso: mientras haya una, Skyny está «haciéndolo». */
+export const DECIDE_KEY = ['chat-decide']
+
+/** Lo que dice Skyny debajo de su cara. */
+const STATUS: Partial<Record<CompanionState, string>> = {
+  thinking: 'Pensando…',
+  running: 'Haciéndolo…',
+  waiting: 'Esperando tu confirmación',
+  success: 'Hecho',
+  error: 'Algo ha fallado',
+  offline: 'Ningún runner me atiende ahora',
+}
+
+export const chatStatus = (state: CompanionState): string => STATUS[state] ?? 'En reposo'
+
+/** Los letreros de la pantalla de Skyny que cambian en el chat; el resto, los de siempre. */
+export const CHAT_LED: Partial<Record<CompanionState, string>> = {
+  waiting: 'CONFIRMA',
+  success: 'HECHO',
+}
+
+/** El control plane contesta así cuando el turno no ha podido terminar (CH-C). */
+const FAILED_TURN = 'No he podido contestar'
+
+/** Si lo último de la conversación es un turno de Skyny que falló. */
+export function failedTurn(messages: ChatMessage[]): boolean {
+  const last = messages.at(-1)
+  return last?.author === 'SKYNY' && last.body.startsWith(FAILED_TURN)
 }
 
 /** Si algún mensaje trae una acción, hace falta saber cómo está cada una. */

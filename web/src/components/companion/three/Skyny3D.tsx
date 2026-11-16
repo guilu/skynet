@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useContext, useEffect, useRef } from 'react'
 import { prefersReducedMotion } from '../look'
+import { SkynyPaused } from '../pause'
 import type { CompanionState } from '../state'
 import { SkynyScene, type Pose3D } from './scene'
 import { onThemeChange, readColors } from './tokens'
@@ -19,7 +20,7 @@ export interface LiveInfo {
  * (`cover`) o mira de reojo (`peek`). Con `live` (SV-B), escribe en la pantalla lo que hace al
  * cambiar de estado, enseña el contador y solo sigue al cursor cuando pasa cerca de la cara. Va en
  * un trozo aparte (React.lazy) con three; si WebGL falla al arrancar o se pierde el contexto,
- * avisa con `onFail` para volver al 2D.
+ * avisa con `onFail` para volver al 2D. Bajo la cortina del chat (`SkynyPaused`), se para.
  */
 export default function Skyny3D({
   state = 'calm',
@@ -37,10 +38,11 @@ export default function Skyny3D({
   const canvas = useRef<HTMLCanvasElement>(null)
   const scene = useRef<SkynyScene | null>(null)
   const fail = useRef(onFail)
-  const latest = useRef({ state, live })
+  const paused = useContext(SkynyPaused)
+  const latest = useRef({ state, live, paused })
   useEffect(() => {
     fail.current = onFail
-    latest.current = { state, live }
+    latest.current = { state, live, paused }
   })
   const isLive = live !== undefined
 
@@ -65,7 +67,7 @@ export default function Skyny3D({
       skyny.setProgress(first.live.progress?.[0] ?? null, first.live.progress?.[1])
       skyny.setState(first.state, { message: first.live.message })
     } else if (first.state !== 'calm') skyny.setState(first.state)
-    skyny.play()
+    if (!first.paused) skyny.play()
 
     const lost = (e: Event) => {
       e.preventDefault()
@@ -103,6 +105,11 @@ export default function Skyny3D({
       scene.current = null
     }
   }, [size, isLive])
+
+  useEffect(() => {
+    if (paused) scene.current?.stop()
+    else scene.current?.play()
+  }, [paused])
 
   const message = live?.message
   useEffect(() => {
