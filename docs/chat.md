@@ -56,6 +56,7 @@ Cada cambio deja un evento en el registro, con `aggregate_type = conversation` y
 | `chat.conversation.created` | Al crearla | `conversationId`, `title`, `projectId`, `workItemId`, `actor` |
 | `chat.message.created` | Con cada mensaje | `conversationId`, `messageId`, `seq`, `author` |
 | `chat.conversation.archived` | Al archivarla | `conversationId`, `actor` |
+| `chat.action.*` | Con cada acción por confirmar (ver abajo) | `conversationId`, `actionId`, `kind` |
 
 Los eventos no llevan el texto de los mensajes: la web lo lee de la API.
 
@@ -90,3 +91,33 @@ El MCP llama con `Authorization: Bearer skc_…`, el **token de la conversación
 - La API del runner (`/api/runner/**`) no pasa por este filtro: comprueba sus propios tokens.
 
 El turno de Skyny (CH-C) lo pedirá al empezar y lo revocará al terminar. Para probar el MCP a mano, `POST /api/conversations/{id}/chat-token` da uno desde la web.
+
+## Acciones por confirmar
+
+Skyny no cambia nada por su cuenta. Cuando la persona le pide algo que cambia Skynet, Skyny lo **propone**, y la propuesta espera en la conversación hasta que la persona la confirma o la rechaza en la web (tabla `conversation_action`).
+
+| Herramienta del MCP | Qué propone | Tipo |
+|---|---|---|
+| `lanzar` | Lanzar la última versión de un workflow sobre un trabajo, en su repositorio o en otro del proyecto | `LAUNCH` |
+| `crear_trabajo` | Crear un trabajo en un proyecto | `CREATE_WORK_ITEM` |
+| `cancelar` | Cancelar una ejecución que no ha terminado | `CANCEL_RUN` |
+| `reintentar` | Reintentar una fase de una ejecución | `RETRY_STAGE` |
+| `decidir` | Aprobar, rechazar o pedir cambios en una aprobación pendiente (las dos últimas, con comentario) | `DECIDE_APPROVAL` |
+| `memoria_guardar` | Guardar una entrada en la memoria del proyecto | `SAVE_MEMORY` |
+
+- **Al proponer** se comprueba lo que pide: que el trabajo, el workflow, la ejecución o la aprobación existen y que la acción tiene sentido (no se propone cancelar una ejecución terminada). Si no, Skyny recibe el motivo y lo corrige. Queda un resumen para la tarjeta, como «Lanzar implementar-tarea (v3) en AKA-12 «Exportar notas»».
+- **Al confirmar** se hace con el servicio de siempre, como si se hiciera desde su pantalla, a nombre de «`<persona> vía chat`» para la auditoría. El resultado queda en la acción como tarjeta (la ejecución, el trabajo, la aprobación o la entrada de memoria, con su enlace). Si el servicio la rechaza en ese momento (por ejemplo, la fase no se puede reintentar), queda `FAILED` con el motivo; no se reintenta.
+- Una entrada de memoria que guarda Skyny entra **sin confirmar**, como la de cualquier agente, aunque la persona haya pulsado Confirmar en la tarjeta.
+- Una propuesta **caduca** a la hora (`EXPIRED`), y una conversación tiene como mucho **5** pendientes a la vez. En una conversación archivada no se confirma nada.
+- Estados: `PENDING`, `CONFIRMED`, `REJECTED`, `EXPIRED` y `FAILED`.
+
+| Llamada | Quién | Qué hace |
+|---|---|---|
+| `POST /api/runner/chat/actions` | Skyny, con el token de la conversación | Propone: `{"kind": "LAUNCH", "input": {…}}`. 401 sin un token que valga; 400, 404 o 409 si lo que pide no vale. |
+| `GET /api/conversations/{id}/actions` | La web | Las acciones de la conversación, de la más antigua a la más nueva. |
+| `POST /api/conversations/{id}/actions/{acción}/confirm` | La web | La confirma y la hace. 409 si ya no está pendiente. |
+| `POST /api/conversations/{id}/actions/{acción}/reject` | La web | La rechaza. 409 si ya no está pendiente. |
+
+El token de la conversación no llega a las rutas de la web: Skyny no puede confirmar lo que propone (403).
+
+Cada paso deja su evento, con la conversación como agregado: `chat.action.proposed` (con el resumen), `chat.action.confirmed` (con el actor y la tarjeta del resultado), `chat.action.rejected` y `chat.action.failed` (con el motivo). Todos llevan `conversationId`, `actionId` y `kind`.

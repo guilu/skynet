@@ -34,7 +34,7 @@ public final class SkynetMcpMain {
         new SkynetMcpServer(new HttpApi(URI.create(launch.url()), launch.token()), version));
   }
 
-  /** Los {@code GET} a la API con el token de la conversación. */
+  /** Las llamadas a la API con el token de la conversación. */
   static final class HttpApi implements SkynetMcpServer.Api {
 
     private final URI base;
@@ -49,13 +49,26 @@ public final class SkynetMcpMain {
     @Override
     public JsonNode get(String path, Map<String, String> query)
         throws IOException, InterruptedException {
-      HttpRequest request =
-          HttpRequest.newBuilder(base.resolve(path + queryString(query)))
-              .timeout(TIMEOUT)
-              .header("Accept", "application/json")
-              .header("Authorization", "Bearer " + token)
-              .GET()
-              .build();
+      return send(request(path + queryString(query)).GET().build());
+    }
+
+    @Override
+    public JsonNode post(String path, JsonNode body) throws IOException, InterruptedException {
+      return send(
+          request(path)
+              .header("Content-Type", "application/json")
+              .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body)))
+              .build());
+    }
+
+    private HttpRequest.Builder request(String pathAndQuery) {
+      return HttpRequest.newBuilder(base.resolve(pathAndQuery))
+          .timeout(TIMEOUT)
+          .header("Accept", "application/json")
+          .header("Authorization", "Bearer " + token);
+    }
+
+    private JsonNode send(HttpRequest request) throws IOException, InterruptedException {
       HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
         throw new SkynetMcpServer.ToolException(
