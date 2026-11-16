@@ -4405,6 +4405,28 @@
     gap: var(--space-1);
   }
 
+  .memory-views {
+    margin-bottom: var(--space-3);
+  }
+
+  .wiki-groups,
+  .curation {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .curation h4 {
+    margin: 0;
+  }
+
+  .curation-head {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
   .memory-timeline,
   .memory-list,
   .memory-revisions {

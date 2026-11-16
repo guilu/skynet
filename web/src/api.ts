@@ -1728,6 +1728,17 @@ export interface AgentMemory {
     times: number
     firstAt: string
   }[]
+  /** Las páginas de la wiki que recibió o leyó (MV-D). */
+  wiki?: {
+    pageId: string
+    slug: string
+    title: string
+    repositoryId: string | null
+    version: number
+    via: 'PROMPT' | 'CONTEXT' | 'GET'
+    times: number
+    firstAt: string
+  }[]
 }
 
 /** Una invocación que vio una entrada (MV-F, «¿Quién lo vio?»), en la versión que vio. */
@@ -1742,6 +1753,88 @@ export interface MemoryReader {
   via: MemoryVia
   times: number
   firstAt: string
+}
+
+/** Quién escribió la versión actual de una página de la wiki (MV-C, MV-E). */
+export type WikiOrigin = 'GENERATED' | 'CURATOR' | 'HUMAN'
+
+/** De dónde sale lo que dice una página: una PR, un hallazgo, una lección, una entrada… */
+export interface WikiSource {
+  kind: 'pull_request' | 'finding' | 'lesson' | 'memory' | 'escape' | string
+  id: string
+  label: string
+  url: string | null
+}
+
+/** Una página de la wiki sin su contenido, para el índice. */
+export interface WikiSummary {
+  id: string
+  /** `null`: la página es de todo el proyecto. */
+  repositoryId: string | null
+  slug: string
+  title: string
+  origin: WikiOrigin
+  version: number
+  sources: number
+  updatedAt: string
+  updatedBy: string | null
+}
+
+export interface WikiPage {
+  id: string
+  projectId: string
+  repositoryId: string | null
+  slug: string
+  title: string
+  /** Markdown. */
+  body: string
+  sources: WikiSource[]
+  origin: WikiOrigin
+  version: number
+  createdAt: string
+  updatedAt: string
+  updatedBy: string | null
+}
+
+export interface WikiRevision {
+  version: number
+  title: string
+  body: string
+  sources: WikiSource[]
+  origin: WikiOrigin
+  createdAt: string
+  createdBy: string | null
+}
+
+export type MemoryProposalStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED'
+
+/** Una propuesta del curador de archivar entradas o fusionarlas en otra (MV-E). */
+export interface MemoryProposal {
+  id: string
+  curationId: string
+  action: 'ARCHIVE' | 'MERGE'
+  observationIds: string[]
+  /** Al fusionar, la entrada que se queda. */
+  intoId: string | null
+  reason: string
+  status: MemoryProposalStatus
+  decidedBy: string | null
+  decidedAt: string | null
+  createdAt: string
+}
+
+/** El informe de una curación de la memoria (MV-E). */
+export interface MemoryCurationReport {
+  id: string
+  projectId: string
+  repositoryId: string | null
+  workflowRunId: string | null
+  agentRunId: string | null
+  summary: string
+  pages: { slug: string; title: string; scope: string; version: number; changed: boolean }[]
+  rejected: { item: string; reason: string }[]
+  proposals: MemoryProposal[]
+  createdAt: string
 }
 
 /** Un repositorio git que un runner encontró en sus carpetas raíz (IP-A). */
@@ -2655,6 +2748,33 @@ export const api = {
     }),
   /** «¿Quién lo vio?»: las invocaciones que la recibieron, buscaron, leyeron o guardaron. */
   memoryReaders: (id: string) => request<MemoryReader[]>('GET', `/api/memory/${id}/readers`),
+  /** El índice de la wiki del proyecto: sus páginas, sin el contenido. */
+  wiki: (projectId: string) => request<WikiSummary[]>('GET', `/api/projects/${projectId}/wiki`),
+  /** Una página; con `repositoryId`, la de ese repositorio. */
+  wikiPage: (projectId: string, slug: string, repositoryId: string | null) =>
+    request<WikiPage>(
+      'GET',
+      `/api/projects/${projectId}/wiki/${encodeURIComponent(slug)}${query({
+        repositoryId: repositoryId ?? undefined,
+      })}`,
+    ),
+  /** Las versiones de una página, la más reciente primero. */
+  wikiRevisions: (projectId: string, slug: string, repositoryId: string | null) =>
+    request<WikiRevision[]>(
+      'GET',
+      `/api/projects/${projectId}/wiki/${encodeURIComponent(slug)}/revisions${query({
+        repositoryId: repositoryId ?? undefined,
+      })}`,
+    ),
+  /** Vuelve a generar las páginas de Skynet, como al terminar una ejecución. */
+  refreshWiki: (projectId: string) =>
+    request<WikiSummary[]>('POST', `/api/projects/${projectId}/wiki/refresh`),
+  /** Los informes del curador, el más reciente primero. */
+  memoryCurations: (projectId: string) =>
+    request<MemoryCurationReport[]>('GET', `/api/projects/${projectId}/memory/curations`),
+  /** Aceptar archiva sus entradas; rechazar no cambia nada. */
+  decideProposal: (id: string, decision: 'accept' | 'reject') =>
+    request<MemoryProposal>('POST', `/api/memory/proposals/${id}/${decision}`),
   agentMemory: (agentId: string) =>
     request<AgentMemory>('GET', `/api/agent-runs/${agentId}/memory`),
   /** Verificaciones del agente, la más reciente primero. */

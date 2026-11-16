@@ -17,6 +17,12 @@ const GROUPS: { title: string; vias: MemoryVia[]; empty: string }[] = [
   { title: 'Lo que guardó', vias: ['SAVE'], empty: 'No guardó nada.' },
 ]
 
+const WIKI_VIA: Record<'PROMPT' | 'CONTEXT' | 'GET', string> = {
+  PROMPT: 'en el bloque del prompt',
+  CONTEXT: 'con mem_context',
+  GET: 'con wiki_read',
+}
+
 const MODE_TEXT = {
   WRITE: 'Esta invocación leía y guardaba en la memoria del proyecto.',
   READ: 'Esta invocación solo leía la memoria del proyecto (memory: read).',
@@ -35,7 +41,7 @@ export function MemoryTab({ agent }: { agent: AgentRun }) {
   })
   if (memory.error) return <ErrorMessage error={memory.error} />
   if (!memory.data) return <LinesSkeleton label="la memoria del agente" />
-  const { mode, accesses, projectId } = memory.data
+  const { mode, accesses, projectId, wiki = [] } = memory.data
   if (mode == null) {
     return (
       <p className="muted">
@@ -68,6 +74,24 @@ export function MemoryTab({ agent }: { agent: AgentRun }) {
           </section>
         )
       })}
+      <section className="memory-access-group" aria-label="Páginas de la wiki">
+        <h3>Páginas de la wiki</h3>
+        {wiki.length === 0 ? (
+          <p className="small muted">No recibió ni leyó ninguna página.</p>
+        ) : (
+          <ul className="repo-facts small">
+            {wiki.map((w) => (
+              <li key={`${w.via}-${w.pageId}-${w.version}`}>
+                <Link to={`/projects/${projectId}?tab=memory&view=wiki`}>{w.title}</Link>{' '}
+                <span className="muted">
+                  · <code>{w.slug}</code> · v{w.version} · {WIKI_VIA[w.via]}
+                  {w.times > 1 && ` (${w.times} veces)`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </>
   )
 }
