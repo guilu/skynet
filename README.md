@@ -16,6 +16,7 @@ La definición funcional y técnica inicial se encuentra en:
 - [`docs/despliegues.md`](docs/despliegues.md): qué versión de cada repositorio hay en cada entorno, con el estado del despliegue y su salud por separado (hito DL, en curso).
 - [`docs/importar-proyecto.md`](docs/importar-proyecto.md): crear un proyecto a partir de un repositorio ya clonado en el disco del runner, con lo que el runner deduce de él (hito IP, en curso).
 - [`docs/arranque-local.md`](docs/arranque-local.md): empezar de cero en local y los workflows iniciales, con qué proveedor y modelo hace cada fase.
+- [`docs/chat.md`](docs/chat.md): el chat con Skyny, una cortina con un prompt para usar Skynet hablando (hito CH, en curso).
 
 ## Arquitectura prevista
 
