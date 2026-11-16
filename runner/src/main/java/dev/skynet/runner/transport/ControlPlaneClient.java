@@ -2,6 +2,7 @@ package dev.skynet.runner.transport;
 
 import dev.skynet.protocol.runner.ArtifactStored;
 import dev.skynet.protocol.runner.ArtifactUpload;
+import dev.skynet.protocol.runner.ChatToken;
 import dev.skynet.protocol.runner.EventBatch;
 import dev.skynet.protocol.runner.EventBatchResult;
 import dev.skynet.protocol.runner.HeartbeatReply;
@@ -88,6 +89,14 @@ public class ControlPlaneClient {
     return send(
         post("/api/runner/agent-runs/" + agentRunId + "/memory-token", null, true),
         MemoryToken.class,
+        TIMEOUT);
+  }
+
+  /** Token del chat de un turno de Skyny de este runner, para el MCP de Skynet (CH-C). */
+  public ChatToken chatToken(UUID agentRunId) throws IOException, InterruptedException {
+    return send(
+        post("/api/runner/agent-runs/" + agentRunId + "/chat-token", null, true),
+        ChatToken.class,
         TIMEOUT);
   }
 

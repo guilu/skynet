@@ -118,7 +118,7 @@ public class ClaudeCodeProvider implements AgentProvider {
     Path config = Path.of(files + ".mcp.json");
     Files.createDirectories(config.getParent());
     ObjectNode root = JSON.createObjectNode();
-    ObjectNode server = root.putObject("mcpServers").putObject(MemoryBridge.SERVER);
+    ObjectNode server = root.putObject("mcpServers").putObject(memory.server());
     server.put("type", "stdio");
     server.put("command", memory.executable());
     memory.args().forEach(server.putArray("args")::add);
@@ -127,16 +127,16 @@ public class ClaudeCodeProvider implements AgentProvider {
     List<String> options = new ArrayList<>(List.of("--mcp-config", config.toString()));
     int allowed = command.indexOf("--allowedTools");
     if (allowed >= 0 && allowed < command.size() - 2) {
-      command.set(allowed + 1, command.get(allowed + 1) + "," + MEMORY_TOOLS);
+      List<String> tools = List.of(command.get(allowed + 1).split(","));
+      if (!tools.contains(memory.tools())) {
+        command.set(allowed + 1, command.get(allowed + 1) + "," + memory.tools());
+      }
     } else {
-      options.addAll(List.of("--allowedTools", MEMORY_TOOLS));
+      options.addAll(List.of("--allowedTools", memory.tools()));
     }
     command.addAll(command.size() - 2, options);
     return command;
   }
-
-  /** Las herramientas del servidor de memoria, para {@code --allowedTools}. */
-  static final String MEMORY_TOOLS = "mcp__" + MemoryBridge.SERVER;
 
   public List<String> command(StartAgent start) {
     List<String> command = new ArrayList<>();

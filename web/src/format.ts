@@ -546,6 +546,8 @@ const PROVIDER_NAMES: Record<string, string> = {
   'claude-code': 'Claude Code',
   codex: 'Codex',
   antigravity: 'Antigravity CLI',
+  // No es un CLI: el runner lo declara si atiende el chat con Skyny (CH-C).
+  'skyny-chat': 'Chat con Skyny',
   // Retirado en AR-B: solo sale en el histórico.
   gemini: 'Gemini CLI (retirado)',
 }

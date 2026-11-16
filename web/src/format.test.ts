@@ -463,6 +463,7 @@ describe('formatCompact', () => {
 describe('providerName', () => {
   it('marca Gemini CLI como retirado y conoce Antigravity', () => {
     expect(providerName('antigravity')).toBe('Antigravity CLI')
+    expect(providerName('skyny-chat')).toBe('Chat con Skyny')
     expect(providerName('gemini')).toBe('Gemini CLI (retirado)')
     expect(providerName('otro')).toBe('otro')
   })
