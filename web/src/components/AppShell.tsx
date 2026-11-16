@@ -4,6 +4,7 @@ import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 import { api, SESSION_KEY, type Session } from '../api'
 import { useTheme } from '../theme'
+import { Companion } from './companion/Companion'
 import { CompanionMenu } from './companion/CompanionMenu'
 import { CompanionProvider } from './companion/CompanionProvider'
 import { NoticeBell } from './companion/NoticeBell'
@@ -20,6 +21,11 @@ const CommandPalette = lazy(() =>
   import('./shell/CommandPalette').then((m) => ({ default: m.CommandPalette })),
 )
 
+// La cortina del chat con Skyny (CH-D) también se descarga la primera vez que se abre.
+const ChatCurtain = lazy(() =>
+  import('./chat/ChatCurtain').then((m) => ({ default: m.ChatCurtain })),
+)
+
 const COLLAPSED_KEY = 'skynet.sidebar.collapsed'
 
 function readCollapsed(): boolean {
@@ -32,7 +38,7 @@ function readCollapsed(): boolean {
 
 /**
  * Estructura común: barra lateral (plegable) con las secciones, barra superior con migas,
- * búsqueda ⌘K, companion, avisos, tema y cuenta, y el contenido. En el móvil la barra lateral pasa a una barra
+ * búsqueda ⌘K, el chat con Skyny ⌘J, companion, avisos, tema y cuenta, y el contenido. En el móvil la barra lateral pasa a una barra
  * inferior con un cajón para el resto.
  */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -40,6 +46,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useTheme()
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
+  // Montada desde la primera vez que se abre: al cerrarla conserva el borrador y la conversación.
+  const [chatLoaded, setChatLoaded] = useState(false)
   const [noticesOpen, setNoticesOpen] = useState(false)
   const companion = useCompanionPrefs()
   const queryClient = useQueryClient()
@@ -57,6 +66,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setPaletteOpen((o) => !o)
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault()
+        setChatLoaded(true)
+        setChatOpen((o) => !o)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -95,6 +109,21 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="search-label">Buscar ejecución, trabajo o runner…</span>
               <kbd className="kbd">⌘K</kbd>
             </button>
+            <button
+              type="button"
+              className="skyny-btn"
+              onClick={() => {
+                setChatLoaded(true)
+                setChatOpen(true)
+              }}
+              aria-label="Pregúntale a Skyny"
+              aria-expanded={chatOpen}
+              aria-keyshortcuts="Meta+J Control+J"
+            >
+              <Companion state="calm" size={26} still />
+              <span className="skyny-btn-label">Pregúntale a Skyny</span>
+              <kbd className="kbd">⌘J</kbd>
+            </button>
             {companion.mascot && <CompanionMenu onOpenNotices={() => setNoticesOpen(true)} />}
             <NoticeBell open={noticesOpen} onOpenChange={setNoticesOpen} />
             <ThemeMenu theme={theme} onChange={setTheme} />
@@ -116,6 +145,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           {paletteOpen && (
             <Suspense fallback={null}>
               <CommandPalette open onOpenChange={setPaletteOpen} onTheme={setTheme} />
+            </Suspense>
+          )}
+          {chatLoaded && (
+            <Suspense fallback={null}>
+              <ChatCurtain open={chatOpen} onOpenChange={setChatOpen} />
             </Suspense>
           )}
           <Toasts />
