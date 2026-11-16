@@ -28,7 +28,7 @@ import { AccessPill } from '../components/github/GitHubSettings'
 import { useGitHub } from '../components/github/github'
 import { DataTable, EmptyState, type Column } from '../components/list/DataTable'
 import { ListToolbar } from '../components/list/Toolbar'
-import { ProjectMemory } from '../components/memory/ProjectMemory'
+import { ProjectMemory, type MemoryView } from '../components/memory/ProjectMemory'
 import {
   AgentPolicyForm,
   RegisterRepositoryForm,
@@ -52,6 +52,8 @@ import { groupExpression } from '../components/companion/peek'
 
 type ProjectTab =
   'summary' | 'work' | 'runs' | 'changes' | 'deployments' | 'workflows' | 'memory' | 'config'
+
+const MEMORY_VIEWS: MemoryView[] = ['entries', 'wiki', 'curations']
 
 const TABS: ProjectTab[] = [
   'summary',
@@ -109,6 +111,7 @@ export function ProjectPage() {
   const asked = params.get('tab') === 'repos' ? 'config' : params.get('tab')
   const tab = TABS.find((t) => t === asked) ?? 'summary'
   const entryId = tab === 'memory' ? params.get('entry') : null
+  const memoryView = MEMORY_VIEWS.find((v) => v === params.get('view')) ?? 'entries'
   const showArchived = params.get('archived') === 'true'
   const navigate = useNavigate()
   const [sheet, setSheet] = useState<SheetKind | null>(null)
@@ -130,13 +133,20 @@ export function ProjectPage() {
     queryFn: () => api.projectOverview(projectId),
     refetchInterval: 15_000,
   })
-  const setView = (next: { tab?: ProjectTab; archived?: boolean; entry?: string | null }) => {
+  const setView = (next: {
+    tab?: ProjectTab
+    archived?: boolean
+    entry?: string | null
+    view?: MemoryView
+  }) => {
     const p = new URLSearchParams()
     const nextTab = next.tab ?? tab
     if (nextTab !== 'summary') p.set('tab', nextTab)
     if (next.archived ?? showArchived) p.set('archived', 'true')
     const entry = next.entry === undefined ? entryId : next.entry
     if (nextTab === 'memory' && entry) p.set('entry', entry)
+    const view = next.view ?? memoryView
+    if (nextTab === 'memory' && view !== 'entries') p.set('view', view)
     setParams(p, { replace: true })
   }
   const selectTab = (next: ProjectTab) => setView({ tab: next })
@@ -233,6 +243,8 @@ export function ProjectPage() {
             onArchived={(on) => setView({ archived: on })}
             entryId={entryId}
             onEntry={(entry) => setView({ entry })}
+            view={memoryView}
+            onView={(view) => setView({ view, entry: null })}
           />
         ) : tab === 'work' ? (
           <>

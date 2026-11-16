@@ -77,7 +77,7 @@ Skynet genera cuatro páginas de todo el proyecto **sin modelo**, a partir de lo
 - **Lo que no cambia no crea versión.** Si el título y el contenido son los de ahora, la página se queda en su versión.
 - **No entra lo que no está confirmado** ni lo que está en cuarentena o archivado.
 
-Los agentes reciben el índice en su bloque inicial y leen las páginas con `wiki_index` y `wiki_read` (MV-D, abajo). El curador escribe otras páginas ([El curador](#el-curador)), y la web (MV-F) las enseñará.
+Los agentes reciben el índice en su bloque inicial y leen las páginas con `wiki_index` y `wiki_read` (MV-D, abajo). El curador escribe otras páginas ([El curador](#el-curador)). La web las enseña en la vista **Wiki** de la pestaña Memoria (MV-F).
 
 ## Cómo la usan los agentes
 
@@ -169,13 +169,19 @@ El servidor MCP es el propio runner: `skynet-runner memory-mcp --url <control pl
 
 ## La pestaña Memoria
 
-En cada proyecto, la pestaña **Memoria** enseña la memoria como una línea de tiempo: primero lo fijado y después por días, de lo último que cambió a lo más antiguo. Con texto en la búsqueda, los resultados van por pertinencia.
+En cada proyecto, la pestaña **Memoria** tiene tres vistas (MV-F), y la elegida va en la URL (`view=wiki` o `view=curations`).
 
-- **Filtros:** repositorio (todo, solo lo de todo el proyecto o un repositorio), tipo, fijadas y archivadas.
-- **Detalle**, en un panel lateral: el contenido, el tema, si se enmascaró algún secreto, la procedencia (con enlaces a la ejecución y a la invocación) y todas las versiones.
-- **Revisión:** editar (crea una versión nueva y conserva la procedencia), fijar o desfijar, y archivar o restaurar. Lo archivado no sale en las búsquedas ni llega a los agentes. Solo las personas fijan y archivan; los agentes no borran nada. Ninguna entrada puede pasar a ser bitácora, y en la web la bitácora conserva su tipo.
+**Entradas** enseña la memoria como una línea de tiempo: primero lo fijado y después por días, de lo último que cambió a lo más antiguo. Con texto en la búsqueda, los resultados van por pertinencia.
 
-En el detalle de cada agente, la pestaña **Memoria** dice qué hizo esa invocación con ella: lo que recibió (en el bloque o con `mem_context`), lo que buscó o leyó y lo que guardó, cada entrada en la versión que vio y enlazada a la pestaña del proyecto. `GET /api/agent-runs/{id}/memory` trae además, en `wiki`, las páginas de la wiki que recibió o leyó.
+- **Filtros:** repositorio (todo, solo lo de todo el proyecto o un repositorio), tipo, confianza, fijadas y archivadas. Lo que no está confirmado lleva una etiqueta.
+- **Detalle**, en un panel lateral: el contenido, el tema, si se enmascaró algún secreto, la confianza y su motivo, la procedencia (con enlaces a la ejecución y a la invocación), **¿Quién lo vio?** (las invocaciones que la recibieron, buscaron, leyeron o guardaron) y todas las versiones.
+- **Revisión:** editar (crea una versión nueva y conserva la procedencia), fijar o desfijar, confirmar (también saca de cuarentena), poner en cuarentena con un motivo, y archivar o restaurar. Lo archivado no sale en las búsquedas ni llega a los agentes. Solo las personas fijan y archivan; los agentes no borran nada. Ninguna entrada puede pasar a ser bitácora, y en la web la bitácora conserva su tipo.
+
+**Wiki** enseña las páginas, primero las de todo el proyecto (con el índice delante) y después las de cada repositorio, con quién las escribió (Skynet, el curador o una persona), su versión y cuántas fuentes citan. Cada página se abre en un panel con su contenido en markdown (sin HTML ni imágenes), sus fuentes (las entradas se abren en su panel; las PRs, en GitHub) y sus versiones. Un enlace a otra página la abre en el mismo panel. **Regenerar las páginas de Skynet** hace lo mismo que `POST …/wiki/refresh`.
+
+**Curador** enseña los informes del curador, el más reciente primero: el resumen, las páginas que escribió (y si cambiaron), sus propuestas con las entradas por su título y lo que no se aplicó. Una propuesta pendiente se **acepta** (archiva sus entradas) o se **rechaza** (no cambia nada); las decididas dicen quién y cuándo.
+
+En el detalle de cada agente, la pestaña **Memoria** dice qué hizo esa invocación con ella: lo que recibió (en el bloque o con `mem_context`), lo que buscó o leyó y lo que guardó, cada entrada en la versión que vio y enlazada a la pestaña del proyecto. También lista las páginas de la wiki que recibió o leyó (`wiki` en `GET /api/agent-runs/{id}/memory`), con su versión y cómo.
 
 ## API
 
@@ -208,4 +214,4 @@ Cada cambio deja un evento en el historial: `memory.created`, `memory.updated`, 
 - Detectar duplicados y contradicciones entre entradas sin modelo (`mem_judge`, `mem_compare` y `mem_consolidate` de engram): hoy lo propone el curador.
 - Memoria global entre proyectos, búsqueda semántica y caducidad de entradas.
 - Lanzar `investigar-mejoras` de forma programada.
-- Lo que queda del hito MV «Memoria viva» ([#311](https://github.com/guilu/skynet/issues/311)): la wiki, la confianza y las propuestas del curador en la web.
+- Editar las páginas de la wiki desde la web: hoy las escriben Skynet y el curador.

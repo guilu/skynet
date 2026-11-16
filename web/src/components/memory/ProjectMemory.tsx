@@ -17,16 +17,25 @@ import { Pager } from '../list/Pager'
 import { ListToolbar, SearchField } from '../list/Toolbar'
 import { CardsSkeleton } from '../ui/Skeleton'
 import { Sheet } from '../ui/Sheet'
+import { MemoryCurations } from './MemoryCurations'
 import { MemoryDetail } from './MemoryDetail'
+import { ProjectWiki } from './ProjectWiki'
 import { dayLabel, kindLabel, ORIGIN_LABEL, TRUST_FILTERS, TRUST_LABEL } from './memoryText'
 
 const PAGE_SIZE = 50
 
+export type MemoryView = 'entries' | 'wiki' | 'curations'
+
+const VIEWS: { id: MemoryView; label: string }[] = [
+  { id: 'entries', label: 'Entradas' },
+  { id: 'wiki', label: 'Wiki' },
+  { id: 'curations', label: 'Curador' },
+]
+
 /**
- * La memoria del proyecto (ME-D): lo que guardan los agentes, las personas y la bitácora de Skynet,
- * como una línea de tiempo que se puede buscar y filtrar por repositorio, tipo y fijadas. Cada
- * entrada se abre en un panel lateral con su procedencia y sus versiones, y ahí se edita, se fija
- * o se archiva. La entrada abierta va en la URL para poder enlazarla desde una invocación.
+ * La memoria del proyecto en tres vistas: las entradas (ME-D), la wiki (MV-C) y los informes del
+ * curador (MV-E). La vista y la entrada abierta van en la URL para poder enlazarlas desde una
+ * invocación; la entrada se abre en un panel lateral desde cualquiera de ellas.
  */
 export function ProjectMemory({
   projectId,
@@ -36,6 +45,8 @@ export function ProjectMemory({
   onArchived,
   entryId,
   onEntry,
+  view,
+  onView,
 }: {
   projectId: string
   repositories: Repository[]
@@ -46,6 +57,75 @@ export function ProjectMemory({
   onArchived: (on: boolean) => void
   entryId: string | null
   onEntry: (id: string | null) => void
+  view: MemoryView
+  onView: (view: MemoryView) => void
+}) {
+  const repoName = (id: string | null) =>
+    id == null
+      ? 'Todo el proyecto'
+      : (repositories.find((r) => r.id === id)?.name ?? 'Otro repositorio')
+  return (
+    <>
+      <div className="segmented memory-views" role="group" aria-label="Ver la memoria como">
+        {VIEWS.map((v) => (
+          <button
+            key={v.id}
+            type="button"
+            aria-pressed={v.id === view}
+            onClick={() => onView(v.id)}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+      {view === 'wiki' && (
+        <ProjectWiki projectId={projectId} scope={repoName} editable={editable} onEntry={onEntry} />
+      )}
+      {view === 'curations' && (
+        <MemoryCurations projectId={projectId} editable={editable} onEntry={onEntry} />
+      )}
+      {view === 'entries' && (
+        <MemoryEntries
+          projectId={projectId}
+          repositories={repositories}
+          scope={repoName}
+          archived={archived}
+          onArchived={onArchived}
+          onEntry={onEntry}
+        />
+      )}
+
+      <Sheet
+        open={entryId != null}
+        onOpenChange={(o) => !o && onEntry(null)}
+        title="Entrada de la memoria"
+      >
+        {entryId && (
+          <MemoryDetail id={entryId} projectId={projectId} scope={repoName} editable={editable} />
+        )}
+      </Sheet>
+    </>
+  )
+}
+
+/**
+ * Las entradas (ME-D): lo que guardan los agentes, las personas y la bitácora de Skynet, como una
+ * línea de tiempo que se puede buscar y filtrar por repositorio, tipo, confianza y fijadas.
+ */
+function MemoryEntries({
+  projectId,
+  repositories,
+  scope: repoName,
+  archived,
+  onArchived,
+  onEntry,
+}: {
+  projectId: string
+  repositories: Repository[]
+  scope: (repositoryId: string | null) => string
+  archived: boolean
+  onArchived: (on: boolean) => void
+  onEntry: (id: string) => void
 }) {
   const [q, setQ] = useState('')
   const [repository, setRepository] = useState('')
@@ -67,10 +147,6 @@ export function ProjectMemory({
     queryKey: ['memory', projectId, filters],
     queryFn: () => api.memory(projectId, filters),
   })
-  const repoName = (id: string | null) =>
-    id == null
-      ? 'Todo el proyecto'
-      : (repositories.find((r) => r.id === id)?.name ?? 'Otro repositorio')
   const filter =
     <T,>(set: (v: T) => void) =>
     (v: T) => {
@@ -189,16 +265,6 @@ export function ProjectMemory({
           onPage={setPage}
         />
       )}
-
-      <Sheet
-        open={entryId != null}
-        onOpenChange={(o) => !o && onEntry(null)}
-        title="Entrada de la memoria"
-      >
-        {entryId && (
-          <MemoryDetail id={entryId} projectId={projectId} scope={repoName} editable={editable} />
-        )}
-      </Sheet>
     </>
   )
 }
