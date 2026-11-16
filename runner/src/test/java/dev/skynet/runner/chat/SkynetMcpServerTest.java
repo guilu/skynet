@@ -2,9 +2,11 @@ package dev.skynet.runner.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -17,30 +19,45 @@ class SkynetMcpServerTest {
 
   private final List<String> calls = new ArrayList<>();
 
+  private final List<String> proposals = new ArrayList<>();
+
   private final SkynetMcpServer.Api api =
-      (path, query) -> {
-        calls.add(path + (query.isEmpty() ? "" : " " + new java.util.TreeMap<>(query)));
-        return switch (path) {
-          case "/api/projects" ->
-              JSON.readTree(
-                  "[{\"id\":\"p1\",\"key\":\"AKA\",\"name\":\"akademia\"},"
-                      + "{\"id\":\"p2\",\"key\":\"OTR\",\"name\":\"otro\"}]");
-          case "/api/work-items" ->
-              JSON.readTree(
-                  "[{\"id\":\"w1\",\"key\":\"AKA-1\",\"title\":\"Exportar notas\"},"
-                      + "{\"id\":\"w2\",\"key\":\"OTR-1\",\"title\":\"Login\"}]");
-          case "/api/workflow-runs" -> JSON.readTree("{\"items\":[{\"id\":\"r1\"}],\"total\":1}");
-          case "/api/memory/" + ID ->
-              throw new SkynetMcpServer.ToolException("Skynet respondió 404: no");
-          case "/api/dashboard" -> JSON.readTree("{\"big\":\"" + "x".repeat(40_000) + "\"}");
-          default -> JSON.readTree("{\"ok\":true}");
-        };
+      new SkynetMcpServer.Api() {
+        @Override
+        public JsonNode get(String path, Map<String, String> query) throws IOException {
+          calls.add(path + (query.isEmpty() ? "" : " " + new TreeMap<>(query)));
+          return switch (path) {
+            case "/api/projects" ->
+                JSON.readTree(
+                    "[{\"id\":\"p1\",\"key\":\"AKA\",\"name\":\"akademia\"},"
+                        + "{\"id\":\"p2\",\"key\":\"OTR\",\"name\":\"otro\"}]");
+            case "/api/work-items" ->
+                JSON.readTree(
+                    "[{\"id\":\"w1\",\"key\":\"AKA-1\",\"title\":\"Exportar notas\"},"
+                        + "{\"id\":\"w2\",\"key\":\"OTR-1\",\"title\":\"Login\"}]");
+            case "/api/workflow-runs" -> JSON.readTree("{\"items\":[{\"id\":\"r1\"}],\"total\":1}");
+            case "/api/memory/" + ID ->
+                throw new SkynetMcpServer.ToolException("Skynet respondió 404: no");
+            case "/api/dashboard" -> JSON.readTree("{\"big\":\"" + "x".repeat(40_000) + "\"}");
+            default -> JSON.readTree("{\"ok\":true}");
+          };
+        }
+
+        @Override
+        public JsonNode post(String path, JsonNode body) throws IOException {
+          proposals.add(path + " " + JSON.writeValueAsString(body));
+          if (body.path("input").path("stageKey").asString("").equals("no-existe")) {
+            throw new SkynetMcpServer.ToolException(
+                "Skynet respondió 400: La ejecución no tiene la fase no-existe");
+          }
+          return JSON.readTree("{\"id\":\"a1\",\"summary\":\"Cancelar la ejecución de AKA-1\"}");
+        }
       };
 
   private final SkynetMcpServer server = new SkynetMcpServer(api, "1.0");
 
   @Test
-  void offersOnlyReadOnlyTools() {
+  void offersQueriesThatOnlyReadAndActionsThatOnlyPropose() {
     JsonNode tools = server.tools().path("tools");
     assertThat(tools)
         .extracting(t -> t.path("name").asString())
@@ -57,10 +74,24 @@ class SkynetMcpServerTest {
             "uso",
             "memoria_buscar",
             "memoria_leer",
-            "wiki");
+            "wiki",
+            "lanzar",
+            "crear_trabajo",
+            "cancelar",
+            "reintentar",
+            "decidir",
+            "memoria_guardar");
     assertThat(tools)
         .allSatisfy(
-            t -> assertThat(t.path("annotations").path("readOnlyHint").asBoolean()).isTrue());
+            t ->
+                assertThat(t.path("annotations").path("readOnlyHint").asBoolean())
+                    .isEqualTo(!SkynetMcpServer.ACTIONS.containsKey(t.path("name").asString())));
+    assertThat(tools)
+        .filteredOn(t -> SkynetMcpServer.ACTIONS.containsKey(t.path("name").asString()))
+        .allSatisfy(
+            t ->
+                assertThat(t.path("description").asString())
+                    .contains("hasta que la persona lo confirme"));
   }
 
   @Test
@@ -142,6 +173,57 @@ class SkynetMcpServerTest {
     String state = text(call("estado", Map.of()));
     assertThat(state).endsWith("(recortado: pide algo más concreto)");
     assertThat(state.length()).isLessThan(SkynetMcpServer.MAX_TEXT + 100);
+  }
+
+  @Test
+  void actionsOnlyLeaveAProposal() throws Exception {
+    JsonNode cancel = call("cancelar", Map.of("ejecucion", ID));
+    assertThat(cancel.path("isError").asBoolean()).isFalse();
+    assertThat(text(cancel))
+        .startsWith("Propuesta: Cancelar la ejecución de AKA-1. No está hecha")
+        .contains("a1");
+    call(
+        "decidir",
+        Map.of("aprobacion", ID, "decision", "pedir_cambios", "comentario", "Más tests"));
+    call("crear_trabajo", Map.of("proyecto", ID, "titulo", "Notas en PDF", "tipo", "bug"));
+    call("lanzar", Map.of("trabajo", ID, "workflow", "implementar-tarea"));
+    call(
+        "memoria_guardar",
+        Map.of("proyecto", ID, "tipo", "decision", "titulo", "Sesión", "que", "Sin JWT"));
+    assertThat(proposals)
+        .containsExactly(
+            "/api/runner/chat/actions {\"kind\":\"CANCEL_RUN\",\"input\":{\"workflowRunId\":\""
+                + ID
+                + "\"}}",
+            "/api/runner/chat/actions {\"kind\":\"DECIDE_APPROVAL\",\"input\":{\"approvalId\":\""
+                + ID
+                + "\",\"decision\":\"REQUEST_CHANGES\",\"comment\":\"Más tests\"}}",
+            "/api/runner/chat/actions {\"kind\":\"CREATE_WORK_ITEM\",\"input\":{\"projectId\":\""
+                + ID
+                + "\",\"title\":\"Notas en PDF\",\"type\":\"BUG\"}}",
+            "/api/runner/chat/actions {\"kind\":\"LAUNCH\",\"input\":{\"workItemId\":\""
+                + ID
+                + "\",\"workflow\":\"implementar-tarea\"}}",
+            "/api/runner/chat/actions {\"kind\":\"SAVE_MEMORY\",\"input\":{\"projectId\":\""
+                + ID
+                + "\",\"kind\":\"DECISION\",\"title\":\"Sesión\",\"what\":\"Sin JWT\"}}");
+    assertThat(calls).isEmpty();
+  }
+
+  @Test
+  void aBadProposalComesBackAsAnErrorForSkyny() throws Exception {
+    // Lo que no vale ni llega a Skynet.
+    assertThat(text(call("cancelar", Map.of("ejecucion", "../runners")))).contains("no es un id");
+    assertThat(text(call("decidir", Map.of("aprobacion", ID, "decision", "borrar"))))
+        .contains("aprobar, rechazar o pedir_cambios");
+    assertThat(text(call("lanzar", Map.of("trabajo", ID, "workflow", "../x")))).contains("no vale");
+    assertThat(text(call("memoria_guardar", Map.of("proyecto", ID, "tipo", "otro"))))
+        .contains("desconocido");
+    assertThat(proposals).isEmpty();
+    // Lo que Skynet rechaza vuelve con su motivo.
+    JsonNode refused = call("reintentar", Map.of("ejecucion", ID, "fase", "no-existe"));
+    assertThat(refused.path("isError").asBoolean()).isTrue();
+    assertThat(text(refused)).contains("no tiene la fase no-existe");
   }
 
   @Test
