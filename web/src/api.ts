@@ -291,6 +291,77 @@ export interface ConversationMessage {
   text: string
 }
 
+/** Chat con Skyny (CH): si alguien está contestando. */
+export type ChatState = 'IDLE' | 'ANSWERING' | 'OFFLINE'
+
+/** Una conversación con Skyny, sin sus mensajes. */
+export interface ChatConversation {
+  id: string
+  title: string
+  projectId: string | null
+  projectKey: string | null
+  projectName: string | null
+  workItemId: string | null
+  workItemKey: string | null
+  workItemTitle: string | null
+  provider: string
+  model: string
+  state: ChatState
+  messageCount: number
+  createdAt: string
+  createdBy: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
+/** Lo que acompaña a un mensaje: una acción por confirmar, una ejecución, un trabajo… */
+export interface ChatCard {
+  kind: 'action' | 'workflow_run' | 'work_item' | 'approval' | 'memory' | string
+  id: string
+  label: string
+  url: string | null
+}
+
+export interface ChatMessage {
+  id: string
+  conversationId: string
+  seq: number
+  author: 'USER' | 'SKYNY'
+  body: string
+  cards: ChatCard[]
+  createdAt: string
+}
+
+export interface ChatThread {
+  conversation: ChatConversation
+  messages: ChatMessage[]
+}
+
+export interface ChatPosted {
+  message: ChatMessage
+  conversation: ChatConversation
+}
+
+export type ChatActionKind =
+  'LAUNCH' | 'CREATE_WORK_ITEM' | 'CANCEL_RUN' | 'RETRY_STAGE' | 'DECIDE_APPROVAL' | 'SAVE_MEMORY'
+
+export type ChatActionStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'EXPIRED' | 'FAILED'
+
+/** Una acción que Skyny propone y la persona confirma o rechaza (CH-B). */
+export interface ChatAction {
+  id: string
+  conversationId: string
+  kind: ChatActionKind
+  input: Record<string, unknown>
+  summary: string
+  status: ChatActionStatus
+  result: ChatCard | null
+  error: string | null
+  createdAt: string
+  decidedAt: string | null
+  decidedBy: string | null
+}
+
 /** Dependencia de una fase; una opcional también se cumple si esa fase se omite. */
 export interface StageDependency {
   stage: string
@@ -2434,6 +2505,19 @@ async function artifactChunk(id: string, offset: number, limit: number): Promise
 }
 
 export const api = {
+  chatConversations: (limit = 20) =>
+    request<ChatConversation[]>('GET', `/api/conversations?limit=${limit}`),
+  chatThread: (id: string) => request<ChatThread>('GET', `/api/conversations/${id}`),
+  startChat: (message: string, context: { projectId?: string; workItemId?: string } = {}) =>
+    request<ChatThread>('POST', '/api/conversations', { message, ...context }),
+  sendChat: (id: string, body: string) =>
+    request<ChatPosted>('POST', `/api/conversations/${id}/messages`, { body }),
+  stopChat: (id: string) => request<ChatConversation>('POST', `/api/conversations/${id}/stop`),
+  chatActions: (id: string) => request<ChatAction[]>('GET', `/api/conversations/${id}/actions`),
+  confirmChatAction: (id: string, actionId: string) =>
+    request<ChatAction>('POST', `/api/conversations/${id}/actions/${actionId}/confirm`),
+  rejectChatAction: (id: string, actionId: string) =>
+    request<ChatAction>('POST', `/api/conversations/${id}/actions/${actionId}/reject`),
   session: () => request<Session>('GET', '/api/auth/session'),
   appearance: () => request<Appearance>('GET', '/api/settings/appearance'),
   saveAppearance: (colors: Appearance['colors']) =>

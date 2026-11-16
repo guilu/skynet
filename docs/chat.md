@@ -19,6 +19,17 @@ Lo que se decidió antes de empezar (estudio de viabilidad y boceto, 15 de novie
 | CH-E ([#339](https://github.com/guilu/skynet/issues/339)) | Skyny vivo en la cortina. |
 | CH-F ([#340](https://github.com/guilu/skynet/issues/340)) | El resumen a la memoria del proyecto. |
 
+## La cortina
+
+En la web (CH-D), «Pregúntale a Skyny» en la barra superior, o **⌘J / Ctrl+J** desde cualquier página, baja la cortina desde el borde inferior de esa barra (nunca pasa por encima de ella) y ocupa casi toda la web, con el contenido a un ancho cómodo en el centro; Escape, la ✕ o un clic en el margen atenuado la cierran. En el móvil, igual, con un margen más estrecho.
+
+- **Skyny grande** arriba y centrado (240 px; 180 en el móvil, 150 con conversación), con lo que hace debajo: «Pensando…», «Esperando tu confirmación», «Ningún runner me atiende ahora». En CH-D no cambia de cara: eso llega con CH-E.
+- **Sin conversación:** «¿En qué te ayudo?», el prompt y tres sugerencias según la página (un trabajo, un proyecto, una ejecución o cualquier otra). La primera pregunta crea la conversación, ligada al trabajo o al proyecto que se estaba viendo.
+- **Con conversación:** los mensajes de la persona a la derecha y los de Skyny en markdown (sin HTML ni imágenes; los enlaces internos llevan a la página y cierran la cortina). Mientras Skyny contesta no se puede escribir, pero sí **parar** el turno.
+- **Tarjetas:** cada acción propuesta sale como una pregunta con su resumen y los botones Confirmar (con el verbo de la acción) y Cancelar. Ya decidida, dice cómo quedó y enlaza lo que se hizo (la ejecución, el trabajo, la aprobación…).
+- **Al día:** la cortina escucha el stream de eventos de la conversación (`/api/events/stream?aggregateId=<conversación>&types=chat.*`) y, mientras Skyny contesta, pregunta además cada 4 s.
+- **Conversaciones:** la lista de las recientes para retomar una; «Nueva» empieza otra. La cortina recuerda la última (`skynet.chat.conversation` en el navegador) y sigue en ella al volver a abrirla.
+
 ## Conversaciones
 
 Una **conversación** (tabla `conversation`) tiene:

@@ -936,7 +936,8 @@
 
   /* ---------- Paleta de órdenes ---------- */
   .palette-overlay,
-  .drawer-overlay {
+  .drawer-overlay,
+  .curtain-overlay {
     position: fixed;
     inset: 0;
     z-index: 40;
@@ -11443,4 +11444,501 @@
 .escape-band p {
   margin: 0;
   flex: 1 1 16rem;
+}
+
+/* ---------- Chat con Skyny (CH-D): la cortina que baja desde la barra superior ---------- */
+@layer components {
+  .skyny-btn {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    padding: 0 10px 0 6px;
+    border: var(--border-w) solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--fg);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .skyny-btn:hover {
+    border-color: var(--border-strong);
+  }
+
+  .skyny-btn[aria-expanded='true'] {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+
+  /* Con poco ancho, solo Skyny: la búsqueda necesita el sitio. */
+  @media (max-width: 1100px) {
+    .skyny-btn-label {
+      display: none;
+    }
+  }
+
+  /* Debajo de la barra superior, que queda sin atenuar: de ella baja la cortina. */
+  .curtain-overlay {
+    inset: 73px 0 0;
+    z-index: 40;
+    animation: curtain-fade 0.25s ease;
+  }
+
+  /*
+   * Ocupa casi toda la web, bajo la barra superior. Baja desde el borde inferior de la barra: a la
+   * vez que se desplaza, se recorta por arriba lo mismo, así que nunca se ve por encima de ella.
+   */
+  .curtain {
+    --curtain-top: 73px;
+    --curtain-gap: 16px;
+    position: fixed;
+    z-index: 41;
+    top: var(--curtain-top);
+    left: var(--curtain-gap);
+    right: var(--curtain-gap);
+    height: calc(100dvh - var(--curtain-top) - var(--curtain-gap));
+    display: flex;
+    flex-direction: column;
+    border: var(--border-w) solid var(--border);
+    border-top: 0;
+    border-radius: 0 0 28px 28px;
+    background: var(--surface);
+    box-sizing: border-box;
+    outline: none;
+    /* Explícito: entre `none` y un recorte no hay transición. */
+    clip-path: inset(0 0 0 0);
+    animation: curtain-down 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .curtain[data-state='closed'] {
+    animation: curtain-up 0.25s ease-in forwards;
+  }
+
+  /* El contenido, a un ancho cómodo de leer y centrado. */
+  .curtain > * {
+    width: min(880px, 100%);
+    margin-inline: auto;
+    box-sizing: border-box;
+  }
+
+  /* Sin conversación, Skyny, el saludo y el prompt quedan en el centro. */
+  .curtain:not([data-talking]) .curtain-skyny {
+    margin-top: auto;
+  }
+
+  .curtain:not([data-talking]) .curtain-grip {
+    margin-top: auto;
+  }
+
+  @keyframes curtain-down {
+    from {
+      transform: translateY(-100%);
+      clip-path: inset(100% 0 0 0);
+    }
+  }
+
+  @keyframes curtain-up {
+    to {
+      transform: translateY(-100%);
+      clip-path: inset(100% 0 0 0);
+    }
+  }
+
+  @keyframes curtain-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .curtain,
+    .curtain[data-state='closed'],
+    .curtain-overlay {
+      animation: none;
+    }
+  }
+
+  .curtain > .curtain-head {
+    width: 100%;
+  }
+
+  .curtain-head {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 40px;
+    padding: 12px 16px 0 24px;
+  }
+
+  .curtain-title {
+    margin: 0 auto 0 0;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .curtain:not([data-talking]) .curtain-title {
+    visibility: hidden;
+  }
+
+  .curtain-ghost {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+
+  .curtain-ghost:hover,
+  .curtain-ghost[aria-pressed='true'] {
+    background: var(--surface-2);
+    color: var(--fg);
+  }
+
+  /* Skyny siempre grande y centrado arriba, con lo que hace debajo. */
+  .curtain-skyny {
+    display: grid;
+    flex: none;
+    place-items: center;
+    margin: -16px auto -8px;
+  }
+
+  .curtain-status {
+    margin: 0 auto 6px;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: center;
+  }
+
+  .curtain-hero {
+    padding: 0 24px 6px;
+    text-align: center;
+  }
+
+  .curtain-hero h2 {
+    margin: 0 0 6px;
+    font-size: 1.6rem;
+    font-weight: 600;
+  }
+
+  .curtain-hero p {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .curtain-thread {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 0;
+    padding: 8px 28px;
+    overflow-y: auto;
+  }
+
+  .chat-user {
+    align-self: flex-end;
+    max-width: 75%;
+    padding: 10px 14px;
+    border-radius: 18px 18px 4px 18px;
+    background: var(--surface-2);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .chat-sending {
+    opacity: 0.6;
+  }
+
+  .chat-skyny {
+    max-width: 92%;
+    line-height: 1.5;
+  }
+
+  .chat-text.markdown {
+    padding: 0;
+    border: 0;
+    background: none;
+    overflow-wrap: anywhere;
+  }
+
+  .chat-text.markdown > :first-child {
+    margin-top: 0;
+  }
+
+  .chat-text.markdown > :last-child {
+    margin-bottom: 0;
+  }
+
+  .chat-note {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  .chat-card {
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 14px 16px;
+    border: var(--border-w) solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--surface);
+  }
+
+  .chat-card h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .chat-card-ask {
+    border-color: var(--warn);
+    background: color-mix(in srgb, var(--warn-soft) 55%, var(--surface));
+  }
+
+  .chat-card-summary {
+    margin: 0;
+  }
+
+  .chat-card-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .chat-card-foot small {
+    margin-left: auto;
+    color: var(--muted);
+  }
+
+  .chat-card-link {
+    color: var(--primary-ink);
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  .chat-card-link:hover {
+    text-decoration: underline;
+  }
+
+  .curtain-history {
+    flex: 1;
+    min-height: 0;
+    padding: 0 24px 8px;
+    overflow-y: auto;
+  }
+
+  .curtain-history h2 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .curtain-history ul {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .curtain-history button {
+    display: grid;
+    gap: 2px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: none;
+    color: var(--fg);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .curtain-history button:hover,
+  .curtain-history button[aria-current] {
+    background: var(--surface-2);
+  }
+
+  .curtain-history .muted {
+    font-size: 0.85rem;
+  }
+
+  .curtain > .error {
+    width: min(832px, calc(100% - 48px));
+    margin: 8px auto 0;
+  }
+
+  .curtain-prompt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: min(832px, calc(100% - 48px));
+    margin: 12px auto 0;
+    padding: 6px 6px 6px 18px;
+    border: var(--border-w) solid var(--border-strong);
+    border-radius: 28px;
+    background: var(--surface);
+  }
+
+  .curtain-prompt:focus-within {
+    border-color: var(--primary);
+  }
+
+  .curtain-prompt textarea {
+    flex: 1;
+    min-width: 0;
+    max-height: 160px;
+    padding: 6px 0;
+    border: 0;
+    border-radius: 0;
+    outline: 0;
+    background: none;
+    color: var(--fg);
+    font: inherit;
+    font-size: 1rem;
+    field-sizing: content;
+    resize: none;
+  }
+
+  /* El borde y el foco son los del prompt entero. */
+  .curtain-prompt textarea:focus {
+    border: 0;
+    box-shadow: none;
+    background: none;
+  }
+
+  .curtain-model {
+    padding: 4px 8px;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  .curtain-send {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-size: 1.1rem;
+    cursor: pointer;
+  }
+
+  .curtain-send:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .curtain-meta {
+    margin: 8px auto 0;
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-align: center;
+  }
+
+  .curtain-suggest {
+    display: grid;
+    gap: 2px;
+    width: 100%;
+    max-width: 620px;
+    margin: 14px auto 0;
+    padding: 0 24px;
+    box-sizing: border-box;
+    list-style: none;
+  }
+
+  .curtain-suggest button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .curtain-suggest button:hover {
+    background: var(--surface-2);
+    color: var(--fg);
+  }
+
+  .curtain-suggest i {
+    width: 22px;
+    font-style: normal;
+    text-align: center;
+  }
+
+  .curtain-grip {
+    flex: none;
+    width: 44px;
+    height: 5px;
+    margin: 14px auto 12px;
+    border-radius: 999px;
+    background: var(--border-strong);
+  }
+
+  /* Móvil: a lo ancho y hasta abajo. */
+  @media (max-width: 720px) {
+    .skyny-btn {
+      width: 44px;
+      padding: 0;
+      justify-content: center;
+    }
+
+    .skyny-btn-label,
+    .skyny-btn .kbd {
+      display: none;
+    }
+
+    .curtain-overlay {
+      inset: 65px 0 0;
+    }
+
+    .curtain {
+      --curtain-top: 65px;
+      --curtain-gap: 8px;
+      border-radius: 0 0 24px 24px;
+    }
+
+    .curtain-hero h2 {
+      font-size: 1.35rem;
+    }
+
+    .curtain-prompt {
+      width: calc(100% - 28px);
+    }
+
+    .curtain-thread {
+      padding: 8px 16px;
+    }
+
+    .curtain-suggest,
+    .curtain-history {
+      padding: 0 12px;
+    }
+  }
 }
