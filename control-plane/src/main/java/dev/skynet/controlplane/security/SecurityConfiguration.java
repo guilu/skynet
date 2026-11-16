@@ -1,5 +1,6 @@
 package dev.skynet.controlplane.security;
 
+import dev.skynet.controlplane.chat.ChatTokens;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -32,6 +33,7 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
@@ -42,10 +44,10 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
  * Todo exige sesión salvo la salud, el login, leer la paleta, la API del runner, que lleva su
- * propio token, y los webhooks de GitHub, que van firmados. Las peticiones con cabecera {@code
- * Authorization} (HTTP Basic de un script, o el runner) no usan cookies y no necesitan CSRF. Un 401
- * nunca lleva {@code WWW-Authenticate}, para que el navegador no abra su diálogo de usuario y
- * contraseña.
+ * propio token, y los webhooks de GitHub, que van firmados. El MCP de Skynet lee con el token de
+ * una conversación ({@link ChatTokenFilter}). Las peticiones con cabecera {@code Authorization}
+ * (HTTP Basic de un script, o el runner) no usan cookies y no necesitan CSRF. Un 401 nunca lleva
+ * {@code WWW-Authenticate}, para que el navegador no abra su diálogo de usuario y contraseña.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(SecurityProperties.class)
@@ -55,7 +57,8 @@ class SecurityConfiguration {
   private static final SecureRandom RANDOM = new SecureRandom();
 
   @Bean
-  SecurityFilterChain securityFilterChain(HttpSecurity http, SecurityContextRepository contexts) {
+  SecurityFilterChain securityFilterChain(
+      HttpSecurity http, SecurityContextRepository contexts, ChatTokens chatTokens) {
     HttpStatusEntryPoint unauthorized = new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED);
     http.authorizeHttpRequests(
             requests ->
@@ -82,6 +85,8 @@ class SecurityConfiguration {
                     .ignoringRequestMatchers(
                         new RequestHeaderRequestMatcher(HttpHeaders.AUTHORIZATION)))
         .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
+        // El MCP de Skynet con el token de una conversación (CH-B): solo lectura.
+        .addFilterBefore(new ChatTokenFilter(chatTokens), BasicAuthenticationFilter.class)
         .cors(Customizer.withDefaults())
         .logout(
             logout ->
