@@ -7,6 +7,7 @@ import dev.skynet.runner.agent.ArtifactSpool;
 import dev.skynet.runner.agent.EventSender;
 import dev.skynet.runner.catalog.RepositoryCatalogPublisher;
 import dev.skynet.runner.catalog.RepositoryScanner;
+import dev.skynet.runner.chat.SkynetMcpMain;
 import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.memory.MemoryMcpMain;
 import dev.skynet.runner.memory.MemorySessions;
@@ -42,6 +43,11 @@ public final class RunnerMain {
   public static void main(String[] args) throws Exception {
     if (args.length > 0 && "--version".equals(args[0])) {
       System.out.println("skynet-runner " + version());
+      return;
+    }
+    if (args.length > 0 && "skynet-mcp".equals(args[0])) {
+      // El MCP de Skynet que lanza el CLI del chat con Skyny (CH-B).
+      SkynetMcpMain.run(java.util.Arrays.copyOfRange(args, 1, args.length), version());
       return;
     }
     if (args.length > 0 && "memory-mcp".equals(args[0])) {

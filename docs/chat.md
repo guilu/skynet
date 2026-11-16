@@ -58,3 +58,35 @@ Cada cambio deja un evento en el registro, con `aggregate_type = conversation` y
 | `chat.conversation.archived` | Al archivarla | `conversationId`, `actor` |
 
 Los eventos no llevan el texto de los mensajes: la web lo lee de la API.
+
+## El MCP de Skynet
+
+Skyny consulta Skynet con el **MCP de Skynet**, `skynet-runner skynet-mcp --url <control plane> --token-file <fichero>`, un servidor MCP por stdio como el de memoria (CH-B). Cada herramienta es una o varias llamadas `GET` a la API de siempre, así que Skyny ve lo mismo que la web:
+
+| Herramienta | Qué devuelve | Llama a |
+|---|---|---|
+| `estado` | Lo que está en marcha, lo que espera, lo que falló y los avisos | `/api/dashboard` |
+| `buscar` | Proyectos, trabajos y ejecuciones que casan con un texto (hasta 10 de cada) | `/api/projects`, `/api/work-items`, `/api/workflow-runs?q=` |
+| `proyecto` | Un proyecto y cómo va | `/api/projects/{id}/overview` |
+| `trabajo` | Un trabajo y sus ejecuciones | `/api/work-items/{id}/summary` y `/runs` |
+| `ejecuciones` | Las últimas 10, por estado, proyecto o texto | `/api/workflow-runs` |
+| `ejecucion` | Una ejecución con sus hallazgos | `/api/workflow-runs/{id}` y `/findings` |
+| `aprobaciones` | Las que esperan una decisión | `/api/approvals?status=PENDING` |
+| `workflows` y `workflow` | Los publicados, o uno con sus fases | `/api/workflows`, `/api/workflows/{clave}` |
+| `uso` | La cuota de cada proveedor y el coste por agente en 24h, 7d o 30d | `/api/usage/windows`, `/api/usage/agents` |
+| `memoria_buscar` y `memoria_leer` | La memoria de un proyecto, o una entrada | `/api/projects/{id}/memory`, `/api/memory/{id}` |
+| `wiki` | Las páginas de la wiki de un proyecto, o una entera | `/api/projects/{id}/wiki[/{página}]` |
+
+Los ids se comprueban antes de ponerlos en la ruta y lo que pasa de 30 000 caracteres se recorta.
+
+### El token de una conversación
+
+El MCP llama con `Authorization: Bearer skc_…`, el **token de la conversación** (tabla `conversation_token`, solo su hash):
+
+- **Solo lee:** vale para `GET` en una lista cerrada de rutas (`ChatTokens.READABLE`, las de la tabla de arriba). Cualquier otra petición, también un `POST`, da 403 antes de llegar a la API.
+- **Caduca** a los 30 minutos y tiene un tope de 200 llamadas.
+- Deja de valer al pedir otro para la misma conversación, al revocarlo y al archivar la conversación.
+- No abre sesión: no deja cookie de sesión.
+- La API del runner (`/api/runner/**`) no pasa por este filtro: comprueba sus propios tokens.
+
+El turno de Skyny (CH-C) lo pedirá al empezar y lo revocará al terminar. Para probar el MCP a mano, `POST /api/conversations/{id}/chat-token` da uno desde la web.

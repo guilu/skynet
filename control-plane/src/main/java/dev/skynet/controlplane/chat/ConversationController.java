@@ -18,9 +18,11 @@ import org.springframework.web.bind.annotation.RestController;
 class ConversationController {
 
   private final Conversations conversations;
+  private final ChatTokens tokens;
 
-  ConversationController(Conversations conversations) {
+  ConversationController(Conversations conversations, ChatTokens tokens) {
     this.conversations = conversations;
+    this.tokens = tokens;
   }
 
   /**
@@ -69,5 +71,14 @@ class ConversationController {
   @PostMapping("/api/conversations/{id}/archive")
   Conversations.Conversation archive(@PathVariable UUID id, Principal principal) {
     return conversations.archive(id, principal.getName());
+  }
+
+  /**
+   * Un token de la conversación para el MCP de Skynet (CH-B), para probarlo a mano: solo lee. El
+   * turno de Skyny (CH-C) pide el suyo por la API del runner.
+   */
+  @PostMapping("/api/conversations/{id}/chat-token")
+  ChatTokens.Issued chatToken(@PathVariable UUID id) {
+    return tokens.issue(id);
   }
 }
