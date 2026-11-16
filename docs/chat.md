@@ -137,3 +137,11 @@ Cada mensaje de la persona lo contesta un agente de Claude Code en un runner (CH
 - **Un turno que nadie recoge:** si lleva más de 2 minutos en cola cuando la persona vuelve a escribir, se retira («ningún runner del chat lo recogió a tiempo») y no bloquea la conversación.
 - **En Uso**, los turnos salen como un agente más: «skyny», de «Chat con Skyny». No salen entre las ejecuciones ni en «En curso».
 - Un turno no se continúa, reintenta ni bifurca desde la vista de un agente (409): se sigue escribiendo en la conversación.
+
+### En el runner
+
+- Un runner con Claude Code declara `skyny-chat` sin más; con `SKYNET_RUNNER_CHAT=false` no lo declara y no recibe turnos. En **Runners** sale como «Chat con Skyny», con la etiqueta de simulado si su Claude Code lo es.
+- **Sin worktree:** cada conversación tiene su carpeta vacía y fija, `<SKYNET_RUNNER_HOME>/chat/<conversación>`, que nunca es un repositorio. Claude Code guarda la sesión por carpeta, así que el siguiente turno la reanuda allí con `--resume`.
+- **El MCP de Skynet:** el runner pide el token del turno, lo deja en `logs/<turno>.memory-token` (`0600`) y escribe `logs/<turno>.mcp.json` con el servidor `skynet` (`skynet-runner skynet-mcp --url … --token-file …`). El token nunca va en la línea de comandos ni en el prompt, y el fichero se borra al terminar. Sin token, el turno no arranca (`failure: start`): sin el MCP, Skyny no puede consultar nada.
+- **Sin artefactos ni evento de worktree:** la respuesta va a la conversación. El NDJSON del turno se queda en `logs/` como el de cualquier agente.
+- El entorno del agente: las variables básicas y las de Claude Code, ninguna de `SKYNET_AGENT_ENV`.

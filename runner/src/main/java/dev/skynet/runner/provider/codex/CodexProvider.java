@@ -91,7 +91,7 @@ public class CodexProvider implements AgentProvider {
       throws IOException {
     List<String> command = new ArrayList<>(List.of(executable, "exec", "--json"));
     if (memory != null) {
-      String prefix = "mcp_servers." + MemoryBridge.SERVER + ".";
+      String prefix = "mcp_servers." + memory.server() + ".";
       command.addAll(List.of("-c", prefix + "command=" + toml(memory.executable())));
       command.addAll(
           List.of(

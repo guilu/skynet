@@ -49,14 +49,8 @@ public final class MemorySessions {
         java, "-cp", System.getProperty("java.class.path"), "dev.skynet.runner.RunnerMain");
   }
 
-  /**
-   * Pide el token y lo escribe en {@code tokenFile} ({@code 0600}).
-   *
-   * @return el puente para la configuración del CLI
-   */
-  public MemoryBridge open(UUID agentRunId, Path tokenFile)
-      throws IOException, InterruptedException {
-    MemoryToken token = tokens.issue(agentRunId);
+  /** Escribe un token en un fichero que solo puede leer el usuario del runner ({@code 0600}). */
+  public static void writeToken(Path tokenFile, String token) throws IOException {
     Files.createDirectories(tokenFile.toAbsolutePath().getParent());
     Files.deleteIfExists(tokenFile);
     try {
@@ -67,7 +61,18 @@ public final class MemorySessions {
       Files.createFile(tokenFile);
     }
     Files.writeString(
-        tokenFile, token.token(), StandardCharsets.UTF_8, StandardOpenOption.TRUNCATE_EXISTING);
+        tokenFile, token, StandardCharsets.UTF_8, StandardOpenOption.TRUNCATE_EXISTING);
+  }
+
+  /**
+   * Pide el token y lo escribe en {@code tokenFile} ({@code 0600}).
+   *
+   * @return el puente para la configuración del CLI
+   */
+  public MemoryBridge open(UUID agentRunId, Path tokenFile)
+      throws IOException, InterruptedException {
+    MemoryToken token = tokens.issue(agentRunId);
+    writeToken(tokenFile, token.token());
     List<String> command = new ArrayList<>(runner);
     command.addAll(
         List.of(

@@ -4,6 +4,7 @@ import dev.skynet.protocol.AgentEventType;
 import dev.skynet.protocol.AgentFailure;
 import dev.skynet.protocol.SafeIds;
 import dev.skynet.protocol.runner.ArtifactType;
+import dev.skynet.protocol.runner.ChatTurn;
 import dev.skynet.protocol.runner.CleanupWorkspace;
 import dev.skynet.protocol.runner.PushBranch;
 import dev.skynet.protocol.runner.ResumeFrom;
@@ -11,6 +12,7 @@ import dev.skynet.protocol.runner.RiskRequest;
 import dev.skynet.protocol.runner.RunVerification;
 import dev.skynet.protocol.runner.RunnerCommand;
 import dev.skynet.protocol.runner.StartAgent;
+import dev.skynet.runner.chat.ChatSessions;
 import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.memory.MemoryBridge;
 import dev.skynet.runner.memory.MemorySessions;
@@ -99,6 +101,7 @@ public final class AgentExecutor implements AutoCloseable {
   }
 
   private volatile PushTokens pushTokens;
+  private volatile ChatSessions chats;
 
   public AgentExecutor(
       Journal journal,
@@ -180,6 +183,15 @@ public final class AgentExecutor implements AutoCloseable {
   /** De dónde saca el token del push de una fase {@code github-pr}; sin él, el push falla. */
   public AgentExecutor pushTokens(PushTokens tokens) {
     this.pushTokens = tokens;
+    return this;
+  }
+
+  /**
+   * Prepara los turnos del chat con Skyny (CH-C); sin él, un turno que llegue termina con error. El
+   * runner solo los recibe si declara {@link ChatTurn#RUNNER_FEATURE}.
+   */
+  public AgentExecutor chats(ChatSessions chats) {
+    this.chats = chats;
     return this;
   }
 
@@ -305,6 +317,10 @@ public final class AgentExecutor implements AutoCloseable {
           return;
         }
       }
+      if (start.isChatTurn()) {
+        runChat(id, start, provider, execution);
+        return;
+      }
       Workspace workspace = prepareOrFinish(id, start, provider);
       if (workspace != null) {
         runExclusively(id, start, provider, execution, workspace);
@@ -316,6 +332,40 @@ public final class AgentExecutor implements AutoCloseable {
       finish(id, failure(AgentFailure.ERROR, "Fallo interno del runner: " + e));
     } finally {
       executions.remove(id);
+    }
+  }
+
+  /**
+   * Un turno del chat con Skyny: sin worktree ni artefactos, en la carpeta fija de su conversación
+   * (la sesión de Claude Code se guarda por directorio y el siguiente turno la reanuda allí) y con
+   * el MCP de Skynet como única herramienta.
+   */
+  private void runChat(UUID id, StartAgent start, AgentProvider provider, Execution execution)
+      throws InterruptedException {
+    ChatSessions sessions = chats;
+    if (sessions == null) {
+      finish(id, failure(AgentFailure.START, "Este runner no atiende el chat con Skyny"));
+      return;
+    }
+    Path folder;
+    try {
+      folder = sessions.folder(start.chat());
+    } catch (IOException e) {
+      finish(
+          id,
+          failure(
+              AgentFailure.START,
+              "No se pudo preparar la carpeta de la conversación: " + e.getMessage()));
+      return;
+    }
+    if (busyWorkspaces.putIfAbsent(folder, id) != null) {
+      finish(id, failure(AgentFailure.START, "Ya hay otro turno en curso en esta conversación"));
+      return;
+    }
+    try {
+      launch(id, start, provider, execution, new Workspace(folder, null, null));
+    } finally {
+      busyWorkspaces.remove(folder, id);
     }
   }
 
@@ -463,7 +513,19 @@ public final class AgentExecutor implements AutoCloseable {
                   + refused);
     }
     Path memoryToken = logs.resolve(id + ".memory-token");
-    MemoryBridge bridge = memoryBridge(id, start, provider, memoryToken);
+    MemoryBridge bridge;
+    try {
+      bridge =
+          start.isChatTurn()
+              ? chats.open(id, memoryToken)
+              : memoryBridge(id, start, provider, memoryToken);
+    } catch (IOException | RuntimeException e) {
+      // Sin el MCP de Skynet, Skyny no puede consultar nada: el turno no arranca.
+      deleteQuietly(memoryToken);
+      finish(
+          id, failure(AgentFailure.START, "No se pudo pedir el token del chat: " + e.getMessage()));
+      return;
+    }
     EventParser parser = provider.newParser(start);
     BigDecimal budget = start.limits().maxBudgetUsd();
     CostMeter cost = provider.newCostMeter(start);
@@ -515,8 +577,11 @@ public final class AgentExecutor implements AutoCloseable {
     deleteQuietly(memoryToken);
     // Lo que el CLI no dice en su salida (la cuota de Codex), antes del fin.
     provider.afterExit(parser, runnerEnv).forEach(e -> emit(id, e));
-    // Antes del fin: así el agente termina con sus artefactos ya en cola.
-    collectArtifacts(id, start, workspace, logs.resolve(id + ".ndjson"));
+    // Antes del fin: así el agente termina con sus artefactos ya en cola. Un turno del chat no
+    // tiene: su respuesta va a la conversación.
+    if (!start.isChatTurn()) {
+      collectArtifacts(id, start, workspace, logs.resolve(id + ".ndjson"));
+    }
 
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put(EXIT_CODE, exit.exitCode());

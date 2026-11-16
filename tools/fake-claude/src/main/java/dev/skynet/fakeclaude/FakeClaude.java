@@ -64,7 +64,8 @@ import tools.jackson.databind.node.ObjectNode;
  *       pruebas, recorre las guías que cambian y pasa todos sus pasos; si el fichero existe, falla
  *       el paso que diga y lo borra ({@link FakeGuide}).
  *   <li>{@code FAKE_MCP_CALLS} y {@code FAKE_MCP_LOG}: con {@code --mcp-config}, llamadas de guion
- *       al servidor de memoria {@code skynet_memoria} ({@link McpScript}).
+ *       al servidor de memoria {@code skynet_memoria} ({@link McpScript}), o al que diga {@code
+ *       FAKE_MCP_SERVER} (el de Skynet, {@code skynet}, en los turnos del chat).
  *   <li>{@code CLAUDE_CONFIG_DIR}: si está definida, guarda cada sesión en {@code
  *       <dir>/projects/<cwd>/<sesión>.jsonl}, como el CLI real, y {@code --resume} falla si no
  *       encuentra la sesión en el directorio de trabajo actual. Sin ella no comprueba nada.
@@ -132,9 +133,13 @@ public final class FakeClaude {
       }
     }
     if (inv.mcpConfig() != null) {
-      // Las llamadas de FAKE_MCP_CALLS al servidor de memoria, antes de la sesión grabada.
+      // Las llamadas de FAKE_MCP_CALLS al servidor MCP, antes de la sesión grabada.
       McpScript.run(
-          McpScript.fromClaudeConfig(Path.of(inv.mcpConfig()), "skynet_memoria"), env, cwd, err);
+          McpScript.fromClaudeConfig(
+              Path.of(inv.mcpConfig()), env.getOrDefault("FAKE_MCP_SERVER", "skynet_memoria")),
+          env,
+          cwd,
+          err);
     }
     long delayMs = Long.parseLong(env.getOrDefault("FAKE_CLAUDE_DELAY_MS", "10"));
     ToolApplier applier =

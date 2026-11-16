@@ -255,6 +255,7 @@ Para actualizarlo, repite los cinco primeros comandos de la instalación y reini
 | `SKYNET_CLAUDE_BIN` | `claude` | Ejecutable de Claude Code (o fake-claude para probar) |
 | `SKYNET_CODEX_BIN` | `codex` | Ejecutable de Codex (o fake-codex para probar) |
 | `SKYNET_AGY_BIN` | `agy` | Ejecutable de Antigravity CLI (o fake-agy para probar) |
+| `SKYNET_RUNNER_CHAT` | `true` | Con `false`, el runner no atiende el chat con Skyny aunque tenga Claude Code (ver [docs/chat.md](docs/chat.md)) |
 | `SKYNET_PROVIDERS` | — | Proveedores de agentes que declara el runner, separados por comas (p. ej. `claude-code,codex,antigravity`). Sin definir, los que respondan a `--version` |
 | `SKYNET_AGENT_ENV` | — | Variables extra que hereda el agente, separadas por comas |
 | `SKYNET_MODEL_PRICES` | — | Fichero que amplía la tabla de precios con la que se estima el coste (ver abajo) |

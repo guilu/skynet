@@ -1,12 +1,15 @@
 package dev.skynet.runner;
 
 import dev.skynet.protocol.AgentProviderKind;
+import dev.skynet.protocol.runner.ChatTurn;
+import dev.skynet.protocol.runner.ProviderInfo;
 import dev.skynet.runner.agent.AgentExecutor;
 import dev.skynet.runner.agent.ArtifactSender;
 import dev.skynet.runner.agent.ArtifactSpool;
 import dev.skynet.runner.agent.EventSender;
 import dev.skynet.runner.catalog.RepositoryCatalogPublisher;
 import dev.skynet.runner.catalog.RepositoryScanner;
+import dev.skynet.runner.chat.ChatSessions;
 import dev.skynet.runner.chat.SkynetMcpMain;
 import dev.skynet.runner.journal.Journal;
 import dev.skynet.runner.memory.MemoryMcpMain;
@@ -114,7 +117,13 @@ public final class RunnerMain {
                     config.declaredFiles(),
                     new MemorySessions(
                         client::memoryToken, config.controlPlane(), MemorySessions.currentRunner()))
-                .pushTokens(id -> client.pushToken(id).token());
+                .pushTokens(id -> client.pushToken(id).token())
+                .chats(
+                    new ChatSessions(
+                        client::chatToken,
+                        config.controlPlane(),
+                        MemorySessions.currentRunner(),
+                        config.home().resolve("chat")));
         RunnerDaemon daemon =
             new RunnerDaemon(
                 config,
@@ -124,7 +133,7 @@ public final class RunnerMain {
                 sender,
                 artifactSender,
                 supervisor,
-                providers.available(),
+                declared(providers, System.getenv()),
                 quotaPoller(config, providers, codex),
                 new RepositoryCatalogPublisher(
                     new RepositoryScanner(config.repoRoots(), config.home()),
@@ -147,6 +156,24 @@ public final class RunnerMain {
               + ")");
       stopRequested.await();
     }
+  }
+
+  /**
+   * Los proveedores que declara el runner: los disponibles y, si tiene Claude Code, el chat con
+   * Skyny ({@link ChatTurn#RUNNER_FEATURE}, CH-C), salvo con {@code SKYNET_RUNNER_CHAT=false}. Sin
+   * versión: es el mismo CLI. Si el de Claude Code es un simulador, el chat también lo es.
+   */
+  static List<ProviderInfo> declared(ProviderRegistry providers, Map<String, String> env) {
+    List<ProviderInfo> declared = new ArrayList<>(providers.available());
+    boolean chat =
+        !"false".equalsIgnoreCase(env.getOrDefault("SKYNET_RUNNER_CHAT", "true").strip());
+    declared.stream()
+        .filter(p -> AgentProviderKind.CLAUDE_CODE.id().equals(p.id()))
+        .findFirst()
+        .filter(p -> chat)
+        .ifPresent(
+            p -> declared.add(new ProviderInfo(ChatTurn.RUNNER_FEATURE, null, p.simulated())));
+    return declared;
   }
 
   /**

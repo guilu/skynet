@@ -41,7 +41,8 @@ public final class TestAgents {
             "FAKE_CLAUDE_DELAY_MS",
             "FAKE_CLAUDE_APPLY",
             "FAKE_MCP_CALLS",
-            "FAKE_MCP_LOG"),
+            "FAKE_MCP_LOG",
+            "FAKE_MCP_SERVER"),
         ModelPrices.defaults(),
         ClaudeSessions.of(runnerEnv).orElse(null));
   }
