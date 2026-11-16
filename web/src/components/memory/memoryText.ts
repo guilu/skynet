@@ -1,4 +1,10 @@
-import { MEMORY_KINDS, type MemoryKind, type MemoryOrigin, type MemoryVia } from '../../api'
+import {
+  MEMORY_KINDS,
+  type MemoryKind,
+  type MemoryOrigin,
+  type MemoryTrust,
+  type MemoryVia,
+} from '../../api'
 
 const KIND_LABEL = Object.fromEntries(MEMORY_KINDS.map((k) => [k.value, k.label])) as Record<
   MemoryKind,
@@ -12,6 +18,20 @@ export const ORIGIN_LABEL: Record<MemoryOrigin, string> = {
   HUMAN: 'una persona',
   SYSTEM: 'Skynet',
 }
+
+/** La confianza de una entrada, como la enseña la web (MV-A). */
+export const TRUST_LABEL: Record<MemoryTrust, string> = {
+  CONFIRMED: 'confirmada',
+  UNCONFIRMED: 'sin confirmar',
+  QUARANTINED: 'en cuarentena',
+}
+
+/** Los filtros de confianza de la pestaña Memoria. */
+export const TRUST_FILTERS: { value: MemoryTrust; label: string }[] = [
+  { value: 'CONFIRMED', label: 'Confirmadas' },
+  { value: 'UNCONFIRMED', label: 'Sin confirmar' },
+  { value: 'QUARANTINED', label: 'En cuarentena' },
+]
 
 /** Qué hizo una invocación con una observación, para el apartado «Memoria» del agente. */
 export const VIA_LABEL: Record<MemoryVia, string> = {

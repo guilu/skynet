@@ -1,5 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Archive, ArchiveRestore, Pencil, Pin, PinOff, ShieldAlert } from 'lucide-react'
+import {
+  Archive,
+  ArchiveRestore,
+  CircleCheck,
+  Pencil,
+  Pin,
+  PinOff,
+  ShieldAlert,
+  ShieldOff,
+} from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import {
@@ -7,6 +16,7 @@ import {
   type MemoryContent,
   type MemoryKind,
   type MemoryObservation,
+  type MemoryReader,
   type MemoryRevision,
 } from '../../api'
 import { formatDateTime } from '../../format'
@@ -14,7 +24,7 @@ import { ErrorMessage } from '../ErrorMessage'
 import { LongText } from '../run/LongText'
 import { Button } from '../ui/Button'
 import { LinesSkeleton } from '../ui/Skeleton'
-import { EDITABLE_KINDS, kindLabel, ORIGIN_LABEL } from './memoryText'
+import { EDITABLE_KINDS, kindLabel, ORIGIN_LABEL, TRUST_LABEL, VIA_LABEL } from './memoryText'
 
 /**
  * Una entrada de la memoria: su contenido, de dónde sale (la ejecución y la invocación), sus
@@ -35,10 +45,16 @@ export function MemoryDetail({
 }) {
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
+  const [quarantining, setQuarantining] = useState(false)
+  const [reason, setReason] = useState('')
   const entry = useQuery({ queryKey: ['memory-entry', id], queryFn: () => api.memoryEntry(id) })
   const history = useQuery({
     queryKey: ['memory-history', id],
     queryFn: () => api.memoryHistory(id),
+  })
+  const readers = useQuery({
+    queryKey: ['memory-readers', id],
+    queryFn: () => api.memoryReaders(id),
   })
   const refresh = async (o: MemoryObservation) => {
     queryClient.setQueryData(['memory-entry', id], o)
@@ -48,15 +64,23 @@ export function MemoryDetail({
     ])
   }
   const action = useMutation({
-    mutationFn: (a: 'archive' | 'restore' | 'pin' | 'unpin') => api.memoryAction(id, a),
+    mutationFn: (a: 'archive' | 'restore' | 'pin' | 'unpin' | 'confirm') => api.memoryAction(id, a),
     onSuccess: refresh,
+  })
+  const quarantine = useMutation({
+    mutationFn: () => api.quarantineMemory(id, reason),
+    onSuccess: async (o: MemoryObservation) => {
+      await refresh(o)
+      setQuarantining(false)
+      setReason('')
+    },
   })
 
   if (entry.error) return <ErrorMessage error={entry.error} />
   if (!entry.data) return <LinesSkeleton label="la entrada" />
   const o = entry.data
   const archived = o.archivedAt != null
-  const busy = action.isPending
+  const busy = action.isPending || quarantine.isPending
 
   if (editing) {
     return (
@@ -79,6 +103,11 @@ export function MemoryDetail({
         <span className="tag">v{o.version}</span>
         {o.pinned && <span className="tag tag-on">fijada</span>}
         {archived && <span className="tag">archivada</span>}
+        {o.trust !== 'CONFIRMED' && (
+          <span className={o.trust === 'QUARANTINED' ? 'tag tag-warn' : 'tag'}>
+            {TRUST_LABEL[o.trust]}
+          </span>
+        )}
       </p>
       <h2 id="memory-title">{o.title}</h2>
       {o.topicKey && (
@@ -93,8 +122,16 @@ export function MemoryDetail({
         </p>
       )}
 
+      {o.trust !== 'CONFIRMED' && <TrustNote observation={o} />}
+
       {editable && (
         <div className="memory-actions">
+          {!archived && o.trust !== 'CONFIRMED' && (
+            <Button size="sm" disabled={busy} onClick={() => action.mutate('confirm')}>
+              <CircleCheck size={16} strokeWidth={2.5} aria-hidden="true" />
+              Confirmar
+            </Button>
+          )}
           {!archived && (
             <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
               <Pencil size={16} strokeWidth={2.5} aria-hidden="true" />
@@ -129,7 +166,57 @@ export function MemoryDetail({
             )}
             {archived ? 'Restaurar' : 'Archivar'}
           </Button>
+          {!archived && o.trust !== 'QUARANTINED' && !quarantining && (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => setQuarantining(true)}
+            >
+              <ShieldOff size={16} strokeWidth={2.5} aria-hidden="true" />
+              Poner en cuarentena
+            </Button>
+          )}
         </div>
+      )}
+      {quarantining && (
+        <form
+          className="form"
+          aria-label="Poner en cuarentena"
+          onSubmit={(e) => {
+            e.preventDefault()
+            quarantine.mutate()
+          }}
+        >
+          <label>
+            Motivo (opcional)
+            <input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Lo que tiene de raro"
+            />
+          </label>
+          <p className="small muted">
+            En cuarentena no llega a ningún agente hasta que alguien la confirme.
+          </p>
+          <div className="form-actions">
+            <Button type="submit" size="sm" disabled={busy}>
+              {quarantine.isPending ? 'Apartando…' : 'Apartar'}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setQuarantining(false)
+                setReason('')
+              }}
+            >
+              Cancelar
+            </Button>
+          </div>
+          <ErrorMessage error={quarantine.error} />
+        </form>
       )}
       <ErrorMessage error={action.error} />
       {archived && (
@@ -172,10 +259,53 @@ export function MemoryDetail({
         )}
       </dl>
 
+      <h3>¿Quién lo vio?</h3>
+      <ErrorMessage error={readers.error} />
+      {readers.data && <Readers readers={readers.data} />}
+
       <h3>Versiones</h3>
       <ErrorMessage error={history.error} />
       {history.data && <Revisions revisions={history.data} />}
     </article>
+  )
+}
+
+/** Por qué una entrada no está confirmada y qué pasa con ella mientras tanto. */
+function TrustNote({ observation: o }: { observation: MemoryObservation }) {
+  return (
+    <div className="memory-trust small" role="note">
+      <p>
+        <strong>{TRUST_LABEL[o.trust]}</strong>
+        {o.trustReason && `: ${o.trustReason}`}
+      </p>
+      <p>
+        {o.trust === 'QUARANTINED'
+          ? 'No llega a ningún agente hasta que una persona la confirme, la edite o la fije.'
+          : 'No va en el bloque inicial; en las búsquedas sale marcada para que el agente la compruebe.'}
+      </p>
+    </div>
+  )
+}
+
+/** Las invocaciones que la recibieron, buscaron, leyeron o guardaron, la más reciente primero. */
+function Readers({ readers }: { readers: MemoryReader[] }) {
+  if (readers.length === 0) {
+    return <p className="small muted">Ningún agente la ha visto todavía.</p>
+  }
+  return (
+    <ul className="memory-readers memory-list small" aria-label="Quién lo vio">
+      {readers.map((r) => (
+        <li key={`${r.agentRunId}-${r.via}`}>
+          <Link to={`/agent-runs/${r.agentRunId}`}>
+            {[r.workItemKey, r.stageKey, r.provider].filter(Boolean).join(' · ')}
+          </Link>{' '}
+          <span className="muted">
+            · {VIA_LABEL[r.via]} · v{r.version}
+            {r.times > 1 && ` · ${r.times} veces`} · {formatDateTime(r.firstAt)}
+          </span>
+        </li>
+      ))}
+    </ul>
   )
 }
 

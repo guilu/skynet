@@ -20,6 +20,8 @@ const GROUPS: { title: string; vias: MemoryVia[]; empty: string }[] = [
 const MODE_TEXT = {
   WRITE: 'Esta invocación leía y guardaba en la memoria del proyecto.',
   READ: 'Esta invocación solo leía la memoria del proyecto (memory: read).',
+  CURATE:
+    'Esta invocación era el curador (memory: curate): leía la memoria y su salida escribió en la wiki y propuso cambios.',
 }
 
 /**
