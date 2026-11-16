@@ -46,6 +46,8 @@ public class AgentRun {
 
   public static final String ROLE_EVAL = "eval";
 
+  public static final String ROLE_CHAT = "chat";
+
   @Id private final UUID id;
   private final UUID stageRunId;
   private final UUID parentAgentRunId;
@@ -296,6 +298,28 @@ public class AgentRun {
         workspaceId,
         limits,
         now);
+  }
+
+  /**
+   * Un turno del chat con Skyny en cola (CH-C): sin fase ni repositorio. Con {@code parent},
+   * continúa la sesión del turno anterior ({@link AgentRunKind#RESUME}); sin él, empieza una nueva.
+   */
+  static AgentRun chatTurn(
+      AgentRun parent, String provider, UUID sessionId, AgentLimits limits, Instant now) {
+    AgentRun turn =
+        create(
+            null,
+            new Origin(
+                parent == null ? null : parent.getId(),
+                null,
+                parent == null ? AgentRunKind.START : AgentRunKind.RESUME,
+                provider),
+            sessionId,
+            null,
+            limits,
+            now);
+    turn.role = ROLE_CHAT;
+    return turn;
   }
 
   /** De dónde sale una invocación nueva. */
@@ -713,6 +737,11 @@ public class AgentRun {
 
   void asEval() {
     this.role = ROLE_EVAL;
+  }
+
+  /** Es un turno del chat con Skyny (CH-C): no tiene fase, ni ejecución, ni repositorio. */
+  public boolean isChat() {
+    return ROLE_CHAT.equals(role);
   }
 
   public String getBaseCommit() {

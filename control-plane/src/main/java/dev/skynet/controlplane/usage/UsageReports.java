@@ -137,6 +137,35 @@ public class UsageReports {
 
   private record AgentKey(String workflowKey, String agent, String provider) {}
 
+  /** Los turnos del chat con Skyny (CH-C), como un agente más: «Chat con Skyny». */
+  static final String CHAT_KEY = "chat";
+
+  static final String CHAT_AGENT = "skyny";
+
+  static final String CHAT_NAME = "Chat con Skyny";
+
+  private static final String CHAT_ROLE = "chat";
+
+  private static void tally(
+      AgentKey key,
+      java.sql.ResultSet rs,
+      Map<AgentKey, long[]> counts,
+      Map<AgentKey, double[]> shares,
+      Map<AgentKey, Long[]> tokens)
+      throws java.sql.SQLException {
+    long[] c = counts.computeIfAbsent(key, k -> new long[2]);
+    c[0]++;
+    if (AgentObservableStatus.COMPLETED.name().equals(rs.getString("status"))) {
+      c[1]++;
+    }
+    double[] s = shares.computeIfAbsent(key, k -> new double[2]);
+    s[0] += rs.getDouble("five_hour");
+    s[1] += rs.getDouble("seven_day");
+    Long[] t = tokens.computeIfAbsent(key, k -> new Long[2]);
+    t[0] = add(t[0], rs.getObject("input_tokens", Long.class));
+    t[1] = add(t[1], rs.getObject("output_tokens", Long.class));
+  }
+
   /**
    * Lo que cuesta cada agente (decisión 5 de CU): sus invocaciones lanzadas en el periodo, de la
    * que más semana gasta a la que menos.
@@ -150,16 +179,18 @@ public class UsageReports {
     Map<AgentKey, String> names = new HashMap<>();
     Map<UUID, PublishedDefinition> published = new HashMap<>();
     jdbc.sql(
-            "SELECT a.provider, a.status, a.input_tokens, a.output_tokens, s.stage_key,"
+            "SELECT a.provider, a.status, a.role, a.input_tokens, a.output_tokens, s.stage_key,"
                 + " r.definition_id, d.key AS definition_key,"
                 + " (SELECT coalesce(sum(q.share), 0) FROM agent_run_quota q"
                 + "   WHERE q.agent_run_id = a.id AND q.window_kind = 'five_hour') AS five_hour,"
                 + " (SELECT coalesce(sum(q.share), 0) FROM agent_run_quota q"
                 + "   WHERE q.agent_run_id = a.id AND q.window_kind = 'seven_day') AS seven_day"
-                + " FROM agent_run a JOIN stage_run s ON s.id = a.stage_run_id"
-                + " JOIN workflow_run r ON r.id = s.workflow_run_id"
-                + " JOIN workflow_definition d ON d.id = r.definition_id"
+                // Los turnos del chat con Skyny (CH-C) no tienen fase: van aparte.
+                + " FROM agent_run a LEFT JOIN stage_run s ON s.id = a.stage_run_id"
+                + " LEFT JOIN workflow_run r ON r.id = s.workflow_run_id"
+                + " LEFT JOIN workflow_definition d ON d.id = r.definition_id"
                 + " WHERE a.created_at >= :since"
+                + " AND (a.stage_run_id IS NOT NULL OR a.role = 'chat')"
                 + (runnerId == null ? "" : " AND a.runner_id = :runner"))
         .params(
             runnerId == null
@@ -167,6 +198,12 @@ public class UsageReports {
                 : Map.of("since", Timestamp.from(since), "runner", runnerId))
         .query(
             rs -> {
+              if (CHAT_ROLE.equals(rs.getString("role"))) {
+                AgentKey chat = new AgentKey(CHAT_KEY, CHAT_AGENT, rs.getString("provider"));
+                names.putIfAbsent(chat, CHAT_NAME);
+                tally(chat, rs, counts, shares, tokens);
+                return;
+              }
               UUID definitionId = rs.getObject("definition_id", UUID.class);
               PublishedDefinition definition =
                   published.computeIfAbsent(definitionId, this::publishedOrNull);
@@ -181,17 +218,7 @@ public class UsageReports {
               if (definition != null) {
                 names.putIfAbsent(agentKey, definition.definition().name());
               }
-              long[] c = counts.computeIfAbsent(agentKey, k -> new long[2]);
-              c[0]++;
-              if (AgentObservableStatus.COMPLETED.name().equals(rs.getString("status"))) {
-                c[1]++;
-              }
-              double[] s = shares.computeIfAbsent(agentKey, k -> new double[2]);
-              s[0] += rs.getDouble("five_hour");
-              s[1] += rs.getDouble("seven_day");
-              Long[] t = tokens.computeIfAbsent(agentKey, k -> new Long[2]);
-              t[0] = add(t[0], rs.getObject("input_tokens", Long.class));
-              t[1] = add(t[1], rs.getObject("output_tokens", Long.class));
+              tally(agentKey, rs, counts, shares, tokens);
             });
     List<AgentUsage> rows = new ArrayList<>();
     counts.forEach(

@@ -3,6 +3,7 @@ package dev.skynet.controlplane.runner;
 import dev.skynet.controlplane.shared.Archived;
 import dev.skynet.controlplane.shared.TimeSource;
 import dev.skynet.protocol.AgentProviderKind;
+import dev.skynet.protocol.runner.ChatTurn;
 import dev.skynet.protocol.runner.ProviderInfo;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -101,6 +102,43 @@ public class RunnerDirectory {
                         .orElse(rs.getString("provider")),
                     rs.getInt("queued")))
         .list();
+  }
+
+  /**
+   * Si hay un runner en línea que sabe ejecutar los turnos del chat con Skyny (CH-C): declara
+   * {@link ChatTurn#RUNNER_FEATURE} y tiene Claude Code.
+   */
+  @Transactional(readOnly = true)
+  public boolean chatAvailable() {
+    return chatRunners(null) > 0;
+  }
+
+  /** Si {@code runnerId} está en línea y sabe ejecutar los turnos del chat. */
+  @Transactional(readOnly = true)
+  public boolean chatAvailable(UUID runnerId) {
+    return runnerId != null && chatRunners(runnerId) > 0;
+  }
+
+  private int chatRunners(UUID runnerId) {
+    return jdbc.sql(
+            "SELECT count(*) FROM runner r WHERE r.archived_at IS NULL AND r.last_heartbeat_at >= ?"
+                + (runnerId == null ? "" : " AND r.id = ?")
+                + " AND EXISTS (SELECT 1 FROM runner_provider f WHERE f.runner_id = r.id"
+                + " AND f.provider = ?) AND EXISTS (SELECT 1 FROM runner_provider c"
+                + " WHERE c.runner_id = r.id AND c.provider = ?)")
+        .params(
+            runnerId == null
+                ? List.of(
+                    Timestamp.from(time.now().minus(properties.staleAfter())),
+                    ChatTurn.RUNNER_FEATURE,
+                    AgentProviderKind.CLAUDE_CODE.id())
+                : List.of(
+                    Timestamp.from(time.now().minus(properties.staleAfter())),
+                    runnerId,
+                    ChatTurn.RUNNER_FEATURE,
+                    AgentProviderKind.CLAUDE_CODE.id()))
+        .query(Integer.class)
+        .single();
   }
 
   /** Los proveedores que Skynet sabe ejecutar, con cuántos runners en línea tiene cada uno. */

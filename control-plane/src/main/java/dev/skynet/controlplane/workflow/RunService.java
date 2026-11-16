@@ -88,6 +88,7 @@ public class RunService {
 
   private final RunRisks risks;
   private final DoneWork doneWork;
+  private final ChatAgents chats;
 
   RunService(
       WorkflowRunRepository workflowRuns,
@@ -111,7 +112,8 @@ public class RunService {
       RunQueue queue,
       StageJudges judges,
       RunRisks risks,
-      DoneWork doneWork) {
+      DoneWork doneWork,
+      ChatAgents chats) {
     this.workflowRuns = workflowRuns;
     this.stageRuns = stageRuns;
     this.agentRuns = agentRuns;
@@ -134,6 +136,7 @@ public class RunService {
     this.judges = judges;
     this.risks = risks;
     this.doneWork = doneWork;
+    this.chats = chats;
   }
 
   /**
@@ -664,6 +667,7 @@ public class RunService {
 
   /** El proveedor confirmó la sesión: sin eso no hay nada que reanudar. */
   private boolean sessionStarted(AgentRun agent) {
+    requireWorkflowAgent(agent);
     StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
     return jdbc.sql(
                 "SELECT count(*) FROM event WHERE workflow_run_id = ? AND aggregate_id = ?"
@@ -712,7 +716,19 @@ public class RunService {
     }
   }
 
+  /**
+   * Un turno del chat con Skyny (CH-C) no se continúa, reintenta ni bifurca como un agente de un
+   * workflow: se sigue escribiendo en su conversación.
+   */
+  private static void requireWorkflowAgent(AgentRun agent) {
+    if (agent.getStageRunId() == null) {
+      throw new ConflictException(
+          "Es un turno del chat con Skyny: se sigue escribiendo en su conversación");
+    }
+  }
+
   private WorkflowRun runOf(AgentRun agent) {
+    requireWorkflowAgent(agent);
     StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
     return workflowRuns.findById(stage.getWorkflowRunId()).orElseThrow();
   }
@@ -771,6 +787,9 @@ public class RunService {
   @Transactional
   public AgentRun cancelAgent(UUID agentRunId) {
     AgentRun agent = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
+    if (agent.getStageRunId() == null) {
+      return chats.cancelTurn(agent, "cancelled-by-user");
+    }
     StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
     WorkflowRun run = workflowRuns.findById(stage.getWorkflowRunId()).orElseThrow();
     Instant now = time.now();
@@ -1153,6 +1172,20 @@ public class RunService {
     if (agent.getStatus().isTerminal() || agent.getCancelRequestedAt() == null) {
       return false;
     }
+    if (agent.getStageRunId() == null) {
+      // Un turno del chat (CH-C): se cierra y su conversación lo sabe.
+      Instant now = time.now();
+      AgentObservableStatus outcome = agent.exited(null, null, null);
+      append(
+          "agent_run",
+          agent.getId(),
+          "agent.cancel.forced",
+          null,
+          Map.of("runnerId", agent.getRunnerId(), "requestedAt", agent.getCancelRequestedAt()),
+          now);
+      chats.finished(transitions.advanceAgent(agent, outcome, null, "cancel-unconfirmed", now));
+      return true;
+    }
     StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
     WorkflowRun run = workflowRuns.findById(stage.getWorkflowRunId()).orElseThrow();
     Instant now = time.now();
@@ -1197,9 +1230,14 @@ public class RunService {
     if (agent.getStatus() != AgentObservableStatus.QUEUED) {
       return false;
     }
-    StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
     Instant now = time.now();
     agent.assignRunner(runnerId);
+    if (agent.getStageRunId() == null) {
+      // Un turno del chat con Skyny (CH-C): no tiene fase.
+      transitions.agent(agent, AgentObservableStatus.STARTING, null, "assigned", now);
+      return true;
+    }
+    StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
     transitions.agent(
         agent, AgentObservableStatus.STARTING, stage.getWorkflowRunId(), "assigned", now);
     transitions.advanceStage(stage, StageStatus.STARTING, "agent-assigned", now);
@@ -1217,9 +1255,17 @@ public class RunService {
     if (agent.getStatus().isTerminal()) {
       return false;
     }
+    Instant now = time.now();
+    if (agent.getStageRunId() == null) {
+      AgentObservableStatus outcome =
+          agent.exited(null, null, "El proceso ya no existe en el runner", AgentFailure.LOST);
+      agent = transitions.advanceAgent(agent, outcome, null, "process-lost", now);
+      agentRuns.save(agent);
+      chats.finished(agent);
+      return true;
+    }
     StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
     WorkflowRun run = workflowRuns.findById(stage.getWorkflowRunId()).orElseThrow();
-    Instant now = time.now();
     AgentObservableStatus outcome =
         agent.exited(null, null, "El proceso ya no existe en el runner", AgentFailure.LOST);
     agent = transitions.advanceAgent(agent, outcome, run.getId(), "process-lost", now);
@@ -1244,13 +1290,11 @@ public class RunService {
     if (!silent) {
       return false;
     }
-    StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
-    transitions.agent(
-        agent,
-        AgentObservableStatus.UNRESPONSIVE,
-        stage.getWorkflowRunId(),
-        "no-activity",
-        time.now());
+    UUID runId =
+        agent.getStageRunId() == null
+            ? null
+            : stageRuns.findById(agent.getStageRunId()).orElseThrow().getWorkflowRunId();
+    transitions.agent(agent, AgentObservableStatus.UNRESPONSIVE, runId, "no-activity", time.now());
     return true;
   }
 
@@ -1332,13 +1376,17 @@ public class RunService {
   @Transactional(readOnly = true)
   public AgentRunDetail agent(UUID agentRunId) {
     AgentRun agent = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
-    StageRun stage = stageRuns.findById(agent.getStageRunId()).orElseThrow();
+    // Un turno del chat (CH-C) no tiene ejecución.
+    UUID runId =
+        agent.getStageRunId() == null
+            ? null
+            : stageRuns.findById(agent.getStageRunId()).orElseThrow().getWorkflowRunId();
     return new AgentRunDetail(
         AgentRunView.of(
             agent,
             workspaces.find(agent.getWorkspaceId()).orElse(null),
             quotaShares.ofAgent(agent.getId())),
-        stage.getWorkflowRunId(),
+        runId,
         prompts.findByAgentRunIdOrderByCreatedAtAsc(agentRunId).stream()
             .map(PromptView::of)
             .toList());
@@ -1351,6 +1399,7 @@ public class RunService {
   @Transactional(readOnly = true)
   public ConversationView conversation(UUID agentRunId) {
     AgentRun agent = agentRuns.findById(agentRunId).orElseThrow(() -> notFound(agentRunId));
+    requireWorkflowAgent(agent);
     LinkedList<AgentRun> chain = new LinkedList<>();
     AgentRun current = agent;
     while (current.getParentAgentRunId() != null

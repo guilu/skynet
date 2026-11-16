@@ -13,6 +13,7 @@ import dev.skynet.controlplane.workflow.PullRequests;
 import dev.skynet.protocol.NormalizedEvent;
 import dev.skynet.protocol.runner.ArtifactStored;
 import dev.skynet.protocol.runner.ArtifactUpload;
+import dev.skynet.protocol.runner.ChatToken;
 import dev.skynet.protocol.runner.EventBatch;
 import dev.skynet.protocol.runner.EventBatchResult;
 import dev.skynet.protocol.runner.HeartbeatReply;
@@ -71,6 +72,7 @@ class RunnerController {
   private final PullRequests pullRequests;
   private final RepositoryCatalogs catalogs;
   private final RepositoryCatalogRefresh catalogRefresh;
+  private final ChatTurnTokens chatTokens;
 
   RunnerController(
       RunnerRegistry registry,
@@ -85,7 +87,8 @@ class RunnerController {
       MemoryAgents memory,
       PullRequests pullRequests,
       RepositoryCatalogs catalogs,
-      RepositoryCatalogRefresh catalogRefresh) {
+      RepositoryCatalogRefresh catalogRefresh,
+      ChatTurnTokens chatTokens) {
     this.registry = registry;
     this.commands = commands;
     this.signal = signal;
@@ -99,6 +102,18 @@ class RunnerController {
     this.pullRequests = pullRequests;
     this.catalogs = catalogs;
     this.catalogRefresh = catalogRefresh;
+    this.chatTokens = chatTokens;
+  }
+
+  /**
+   * Token de la conversación de un turno del chat de este runner (CH-C), para el MCP de Skynet del
+   * agente. Pedirlo otra vez invalida el anterior; deja de valer al terminar el turno.
+   */
+  @PostMapping("/agent-runs/{id}/chat-token")
+  ChatToken chatToken(
+      @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+      @PathVariable UUID id) {
+    return chatTokens.issue(registry.authenticate(authorization), id);
   }
 
   /**
