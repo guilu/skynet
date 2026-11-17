@@ -88,6 +88,7 @@ Cada cambio deja un evento en el registro, con `aggregate_type = conversation` y
 | `chat.message.created` | Con cada mensaje | `conversationId`, `messageId`, `seq`, `author` |
 | `chat.conversation.archived` | Al archivarla | `conversationId`, `actor` |
 | `chat.action.*` | Con cada acción por confirmar (ver abajo) | `conversationId`, `actionId`, `kind` |
+| `chat.conversation.summarized` | Al terminar el turno que la resume (CH-F) | `conversationId`, `agentRunId`, `outcome` (`saved`, `nothing` o `failed`), `observationId` si se guardó |
 
 Los eventos no llevan el texto de los mensajes: la web lo lee de la API.
 
@@ -175,3 +176,35 @@ Cada mensaje de la persona lo contesta un agente de Claude Code en un runner (CH
 - **El MCP de Skynet:** el runner pide el token del turno, lo deja en `logs/<turno>.memory-token` (`0600`) y escribe `logs/<turno>.mcp.json` con el servidor `skynet` (`skynet-runner skynet-mcp --url … --token-file …`). El token nunca va en la línea de comandos ni en el prompt, y el fichero se borra al terminar. Sin token, el turno no arranca (`failure: start`): sin el MCP, Skyny no puede consultar nada.
 - **Sin artefactos ni evento de worktree:** la respuesta va a la conversación. El NDJSON del turno se queda en `logs/` como el de cualquier agente.
 - El entorno del agente: las variables básicas y las de Claude Code, ninguna de `SKYNET_AGENT_ENV`.
+
+## Resumen a la memoria
+
+Lo que se decide hablando con Skyny no se pierde al cerrar la cortina (CH-F). Una conversación **con proyecto** se resume para la memoria de ese proyecto:
+
+- **al archivarla**, o
+- cuando lleva **30 minutos sin mensajes** (`skynet.chat.summary-idle`, variable `SKYNET_CHAT_SUMMARY_IDLE`). Skynet lo mira cada 5 minutos (`skynet.chat.summary-interval`).
+
+Solo si Skyny ha contestado algo desde el último resumen y hay un runner del chat en línea; si no hay ninguno, lo intenta en la pasada siguiente. Las conversaciones sin proyecto no se resumen.
+
+El resumen lo escribe un **turno corto de Skyny** (`chat_turn.purpose = summary`), con el mismo modelo y límites que el resto. Es una sesión nueva, con lo hablado en el prompt (hasta 24 000 caracteres, lo más reciente) y la orden de no usar herramientas y contestar con este formato:
+
+```
+TÍTULO: <una línea>
+QUÉ: <lo decidido o aprendido>
+POR QUÉ: <si se dijo>
+```
+
+o solo `NADA` si no hay nada que guardar. Mientras se resume, la conversación está en `ANSWERING` como con cualquier turno: no se escribe en ella, pero se puede parar. El turno de resumen no deja mensaje en la conversación, y el siguiente mensaje continúa la sesión de la última respuesta, no la del resumen.
+
+Lo que contesta se guarda como observación de la memoria del proyecto:
+
+| Campo | Valor |
+|---|---|
+| Tipo | `SESSION_SUMMARY` |
+| Tema | `chat/<conversación>`: el siguiente resumen de la misma conversación es una versión nueva de la misma observación |
+| Dónde | «Chat con Skyny: «título» (conversación <id>)» |
+| Etiquetas | `chat` |
+| Origen | `AGENT`, con la invocación del turno de resumen |
+| Confianza | **sin confirmar** (MV-A): no llega a los agentes en el bloque inicial hasta que una persona la confirme en la memoria del proyecto |
+
+Una respuesta sin el formato cuenta como «nada que guardar». Si guardarla falla (p. ej. el proyecto se archivó), el turno termina igual y la conversación vuelve a reposo; el evento `chat.conversation.summarized` dice qué pasó.

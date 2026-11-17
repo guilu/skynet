@@ -7,10 +7,11 @@ import java.util.UUID;
  *
  * @param agentRunId el turno
  * @param conversationId su conversación
- * @param messageId el mensaje al que contestaba
+ * @param messageId el mensaje al que contestaba, o el último que resumía
  * @param completed si terminó bien
  * @param text lo último que dijo el agente, o {@code null} si no dijo nada
  * @param error por qué no terminó bien, o {@code null}
+ * @param summary si resumía la conversación para la memoria (CH-F) en vez de contestar
  */
 public record ChatTurnFinished(
     UUID agentRunId,
@@ -18,4 +19,5 @@ public record ChatTurnFinished(
     UUID messageId,
     boolean completed,
     String text,
-    String error) {}
+    String error,
+    boolean summary) {}

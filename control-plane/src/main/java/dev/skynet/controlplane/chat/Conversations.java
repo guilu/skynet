@@ -21,6 +21,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -384,7 +385,100 @@ public class Conversations {
             null,
             Map.of("conversationId", id.toString(), "actor", actor),
             now));
+    // Lo que quedó sin resumir va a la memoria del proyecto (CH-F).
+    summarize(id);
     return get(id);
+  }
+
+  /**
+   * Pone en cola el turno que resume la conversación para la memoria de su proyecto (CH-F), si hace
+   * falta: tiene proyecto, nadie está contestando y Skyny ha dicho algo desde el último resumen.
+   * Sin runner del chat en línea, lo deja para otra vez. Mientras se resume, la conversación está
+   * en {@link ConversationState#ANSWERING}, como con cualquier turno.
+   *
+   * @return si lo puso en cola
+   */
+  @Transactional
+  public boolean summarize(UUID id) {
+    Conversation conversation = lock(id);
+    if (conversation.projectId() == null
+        || conversation.state() == ConversationState.ANSWERING
+        || chats.answering(id)) {
+      return false;
+    }
+    int summarized =
+        jdbc.sql("SELECT summarized_count FROM conversation WHERE id = ?")
+            .param(id)
+            .query(Integer.class)
+            .single();
+    boolean news =
+        jdbc.sql(
+                "SELECT EXISTS (SELECT 1 FROM conversation_message WHERE conversation_id = ?"
+                    + " AND author = 'SKYNY' AND seq > ?)")
+            .params(id, summarized)
+            .query(Boolean.class)
+            .single();
+    if (!news || !runners.chatAvailable()) {
+      return false;
+    }
+    List<SkynyPrompt.Line> lines = history(id, Integer.MAX_VALUE);
+    UUID last =
+        jdbc.sql(
+                "SELECT id FROM conversation_message WHERE conversation_id = ?"
+                    + " ORDER BY seq DESC LIMIT 1")
+            .param(id)
+            .query(UUID.class)
+            .single();
+    jdbc.sql("UPDATE conversation SET summarized_count = message_count WHERE id = ?")
+        .param(id)
+        .update();
+    chats.queueSummary(
+        id,
+        last,
+        conversation.model(),
+        ChatSummary.prompt(
+            conversation.projectKey(), conversation.projectName(), conversation.title(), lines));
+    setState(id, ConversationState.ANSWERING);
+    return true;
+  }
+
+  /**
+   * Las conversaciones con proyecto, sin archivar y en reposo, que llevan desde antes de {@code
+   * before} sin mensajes y tienen algo sin resumir: las que toca resumir (CH-F).
+   */
+  @Transactional(readOnly = true)
+  public List<UUID> idleToSummarize(Instant before, int limit) {
+    return jdbc.sql(
+            "SELECT c.id FROM conversation c WHERE c.project_id IS NOT NULL"
+                + " AND c.archived_at IS NULL AND c.state = 'IDLE' AND c.updated_at < ?"
+                + " AND EXISTS (SELECT 1 FROM conversation_message m WHERE m.conversation_id = c.id"
+                + " AND m.author = 'SKYNY' AND m.seq > c.summarized_count)"
+                + " ORDER BY c.updated_at LIMIT ?")
+        .params(Timestamp.from(before), limit)
+        .query(UUID.class)
+        .list();
+  }
+
+  /**
+   * El turno de resumen ha terminado (CH-F): la conversación vuelve a {@link
+   * ConversationState#IDLE} y queda dicho qué pasó con el resumen.
+   *
+   * @param observationId la observación guardada, o {@code null} si no se guardó
+   * @param outcome {@code saved}, {@code nothing} (no había nada que guardar) o {@code failed}
+   */
+  @Transactional
+  public void summarized(UUID id, UUID agentRunId, UUID observationId, String outcome) {
+    lock(id);
+    setState(id, ConversationState.IDLE);
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("conversationId", id.toString());
+    payload.put("agentRunId", agentRunId.toString());
+    payload.put("outcome", outcome);
+    if (observationId != null) {
+      payload.put("observationId", observationId.toString());
+    }
+    events.append(
+        EventDraft.of(AGGREGATE, id, "chat.conversation.summarized", null, payload, time.now()));
   }
 
   /** Añade un mensaje al final de la conversación y lo anuncia. */
