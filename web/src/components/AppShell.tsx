@@ -8,6 +8,7 @@ import { Companion } from './companion/Companion'
 import { CompanionMenu } from './companion/CompanionMenu'
 import { CompanionProvider } from './companion/CompanionProvider'
 import { NoticeBell } from './companion/NoticeBell'
+import { SkynyPaused } from './companion/pause'
 import { useCompanionPrefs } from './companion/prefs'
 import { Toasts } from './companion/Toasts'
 import { Breadcrumbs } from './shell/Breadcrumbs'
@@ -138,7 +139,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <main id="main" className="content" tabIndex={-1}>
             {/* Con la clave, cada página nueva entra con una animación corta (UI-F). */}
             <div key={pathname} className="page">
-              {children}
+              <SkynyPaused.Provider value={chatOpen}>{children}</SkynyPaused.Provider>
             </div>
           </main>
           <MobileNav />

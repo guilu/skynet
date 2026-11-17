@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { chatContext, chatStatus, modelName, suggestions } from './chatContext'
+import type { ChatAction, ChatConversation, ChatMessage } from '../../api'
+import { LED_GLYPHS } from '../companion/three/led'
+import {
+  CHAT_LED,
+  chatContext,
+  chatExpression,
+  chatStatus,
+  failedTurn,
+  modelName,
+  suggestions,
+} from './chatContext'
 
 const ID = '11111111-1111-4111-8111-111111111111'
 
@@ -21,7 +31,42 @@ describe('chatContext', () => {
   it('el estado de Skyny y el nombre del modelo', () => {
     expect(modelName('haiku')).toBe('Haiku')
     expect(modelName(undefined)).toBe('Haiku')
-    expect(chatStatus(undefined, undefined, true)).toBe('Pensando…')
-    expect(chatStatus(undefined, undefined, false)).toBe('En reposo')
+    expect(chatStatus('thinking')).toBe('Pensando…')
+    expect(chatStatus('calm')).toBe('En reposo')
+  })
+
+  it('la cara de Skyny sigue al turno, de lo más urgente a lo más tranquilo', () => {
+    const conv = (state: ChatConversation['state']) => ({ state }) as ChatConversation
+    const pending = [{ status: 'PENDING' }] as ChatAction[]
+    const base = {
+      conversation: conv('IDLE'),
+      actions: undefined,
+      sending: false,
+      deciding: false,
+      failed: false,
+      moment: null,
+    }
+    expect(chatExpression(base)).toBe('calm')
+    expect(chatExpression({ ...base, actions: pending })).toBe('waiting')
+    expect(chatExpression({ ...base, conversation: conv('OFFLINE') })).toBe('offline')
+    expect(chatExpression({ ...base, actions: pending, moment: 'success' })).toBe('success')
+    expect(chatExpression({ ...base, moment: 'success', deciding: true })).toBe('running')
+    expect(chatExpression({ ...base, conversation: conv('ANSWERING'), deciding: true })).toBe(
+      'thinking',
+    )
+    expect(chatExpression({ ...base, conversation: conv('OFFLINE'), sending: true })).toBe(
+      'thinking',
+    )
+    expect(chatExpression({ ...base, sending: true, failed: true })).toBe('error')
+  })
+
+  it('reconoce un turno que no pudo contestar y los letreros se pueden escribir', () => {
+    const msg = (author: ChatMessage['author'], body: string) => ({ author, body }) as ChatMessage
+    expect(failedTurn([msg('SKYNY', 'No he podido contestar: se acabó el tiempo')])).toBe(true)
+    expect(failedTurn([msg('SKYNY', 'Hay dos ejecuciones en marcha.')])).toBe(false)
+    expect(failedTurn([msg('USER', 'No he podido contestar')])).toBe(false)
+    expect(failedTurn([])).toBe(false)
+    for (const text of Object.values(CHAT_LED))
+      for (const char of text) if (char !== ' ') expect(LED_GLYPHS[char], char).toBeDefined()
   })
 })

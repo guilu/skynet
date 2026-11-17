@@ -124,11 +124,24 @@ describe('La cortina del chat con Skyny', () => {
     expect(await screen.findByText('¿Lo lanzo?', { selector: 'strong' })).toBeVisible()
     expect(await screen.findByRole('heading', { name: '¿Lo lanzo?' })).toBeVisible()
     expect(screen.getByText('Esperando tu confirmación')).toBeVisible()
+    await waitFor(() =>
+      expect(document.querySelector('.curtain-skyny [data-state]')).toHaveAttribute(
+        'data-state',
+        'waiting',
+      ),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar y lanzar' }))
 
     const link = await screen.findByRole('link', { name: 'DEMO-4 · implementar-tarea →' })
     expect(link).toHaveAttribute('href', `/runs/${RUN}`)
     expect(screen.getByText(/^Confirmada · /)).toBeVisible()
+    expect(screen.getByText('Hecho')).toBeVisible()
+    await waitFor(() =>
+      expect(document.querySelector('.curtain-skyny [data-state]')).toHaveAttribute(
+        'data-state',
+        'success',
+      ),
+    )
     expect(posted(fetch, `/api/conversations/${ID}/actions/${ACTION}/confirm`)).toHaveLength(1)
     fireEvent.click(link)
     expect(close).toHaveBeenCalledWith(false)

@@ -23,12 +23,31 @@ Lo que se decidió antes de empezar (estudio de viabilidad y boceto, 15 de novie
 
 En la web (CH-D), «Pregúntale a Skyny» en la barra superior, o **⌘J / Ctrl+J** desde cualquier página, baja la cortina desde el borde inferior de esa barra (nunca pasa por encima de ella) y ocupa casi toda la web, con el contenido a un ancho cómodo en el centro; Escape, la ✕ o un clic en el margen atenuado la cierran. En el móvil, igual, con un margen más estrecho.
 
-- **Skyny grande** arriba y centrado (240 px; 180 en el móvil, 150 con conversación), con lo que hace debajo: «Pensando…», «Esperando tu confirmación», «Ningún runner me atiende ahora». En CH-D no cambia de cara: eso llega con CH-E.
+- **Skyny grande** arriba y centrado (240 px; 180 en el móvil, 150 con conversación), con lo que hace debajo. Con conversación, pone cara de lo que pasa (CH-E, ver «Skyny en la cortina»).
 - **Sin conversación:** «¿En qué te ayudo?», el prompt y tres sugerencias según la página (un trabajo, un proyecto, una ejecución o cualquier otra). La primera pregunta crea la conversación, ligada al trabajo o al proyecto que se estaba viendo.
 - **Con conversación:** los mensajes de la persona a la derecha y los de Skyny en markdown (sin HTML ni imágenes; los enlaces internos llevan a la página y cierran la cortina). Mientras Skyny contesta no se puede escribir, pero sí **parar** el turno.
 - **Tarjetas:** cada acción propuesta sale como una pregunta con su resumen y los botones Confirmar (con el verbo de la acción) y Cancelar. Ya decidida, dice cómo quedó y enlaza lo que se hizo (la ejecución, el trabajo, la aprobación…).
 - **Al día:** la cortina escucha el stream de eventos de la conversación (`/api/events/stream?aggregateId=<conversación>&types=chat.*`) y, mientras Skyny contesta, pregunta además cada 4 s.
 - **Conversaciones:** la lista de las recientes para retomar una; «Nueva» empieza otra. La cortina recuerda la última (`skynet.chat.conversation` en el navegador) y sigue en ella al volver a abrirla.
+
+### Skyny en la cortina
+
+Con conversación, la cara de Skyny, el letrero de su pantalla y lo que dice debajo siguen al turno (CH-E). Si pasan varias cosas a la vez, manda la primera de la tabla:
+
+| Qué pasa | Cara | Letrero | Debajo |
+|---|---|---|---|
+| No se pudo enviar el mensaje o parar el turno | Error | ERROR | «Algo ha fallado» |
+| Se está enviando el mensaje o Skyny contesta | Pensando | PENSANDO... | «Pensando…» |
+| Se está confirmando una acción | Ejecutando | EN MARCHA | «Haciéndolo…» |
+| Una acción se acaba de hacer (4 s) | Éxito | HECHO | «Hecho» |
+| Una acción acaba de fallar, o el turno no pudo contestar (4 s) | Error | ERROR | «Algo ha fallado» |
+| Ningún runner atiende el chat | Sin conexión | SIN RED | «Ningún runner me atiende ahora» |
+| Hay una acción esperando | Te necesita | CONFIRMA | «Esperando tu confirmación» |
+| Nada de lo anterior | Reposo | HOLA | «En reposo» |
+
+Cada cara se queda un mínimo en pantalla, como en el resto de la web; las urgentes (te necesita, error, sin conexión) entran enseguida. El turno que no pudo contestar se reconoce porque el mensaje de Skyny empieza por «No he podido contestar»; solo cuenta si llega con la cortina abierta, no al retomar una conversación antigua. Sin conversación, Skyny está en reposo.
+
+Mientras la cortina está abierta, los Skyny 3D de la página (Inicio, En curso, la ejecución) se quedan quietos bajo el fondo atenuado y vuelven a moverse al cerrarla.
 
 ## Conversaciones
 

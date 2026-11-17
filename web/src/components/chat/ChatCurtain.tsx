@@ -1,8 +1,8 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useLocation } from 'react-router'
-import { api, ApiError, type ChatThread } from '../../api'
+import { api, ApiError, type ChatAction, type ChatThread } from '../../api'
 import { formatDateTime } from '../../format'
 import { useMediaQuery } from '../../useMediaQuery'
 import { Companion } from '../companion/Companion'
@@ -10,7 +10,19 @@ import { SkynyLive } from '../companion/SkynyLive'
 import { ErrorMessage } from '../ErrorMessage'
 import { Icon } from '../icons/Icon'
 import { ChatMessages } from './ChatMessages'
-import { chatContext, chatStatus, hasActions, modelName, suggestions } from './chatContext'
+import {
+  CHAT_LED,
+  chatContext,
+  chatExpression,
+  chatStatus,
+  DECIDE_KEY,
+  failedTurn,
+  hasActions,
+  MOMENT_MS,
+  modelName,
+  suggestions,
+  type ChatMoment,
+} from './chatContext'
 
 /** La última conversación abierta: al volver a abrir la cortina, sigue en ella. */
 const LAST_KEY = 'skynet.chat.conversation'
@@ -39,7 +51,8 @@ const ANSWERING_POLL_MS = 4000
  * La cortina del chat con Skyny (CH-D): baja desde la barra superior sobre la web atenuada, con
  * Skyny grande y un prompt. Cada mensaje lo contesta un turno de Skyny en un runner (CH-C); lo que
  * cambie algo llega como una tarjeta que la persona confirma o cancela. Las conversaciones se
- * guardan en Skynet y se retoman desde «Conversaciones».
+ * guardan en Skynet y se retoman desde «Conversaciones». Skyny pone cara de lo que pasa (CH-E):
+ * piensa mientras contesta, avisa si espera una confirmación, celebra lo hecho y lamenta lo fallido.
  */
 export function ChatCurtain({
   open,
@@ -136,6 +149,29 @@ export function ChatCurtain({
   const answering = conversation?.state === 'ANSWERING'
   const talking = view === 'chat' && (messages.length > 0 || pending != null)
 
+  // Lo que acaba de pasar (una acción hecha o fallida, un turno que no pudo contestar) se ve un
+  // momento en la cara de Skyny y luego vuelve a lo de siempre.
+  const [moment, setMoment] = useState<{ state: ChatMoment; key: number } | null>(null)
+  const flash = (state: ChatMoment) => setMoment((m) => ({ state, key: (m?.key ?? 0) + 1 }))
+  useEffect(() => {
+    if (!moment) return
+    const timer = setTimeout(() => setMoment(null), MOMENT_MS)
+    return () => clearTimeout(timer)
+  }, [moment])
+  // Solo cuenta un mensaje que llega con la cortina delante, no el de una conversación retomada.
+  const lastId = thread.data?.messages.at(-1)?.id
+  const [seen, setSeen] = useState({ conversation: activeId, last: lastId })
+  if (seen.conversation !== activeId || seen.last !== lastId) {
+    setSeen({ conversation: activeId, last: lastId })
+    if (seen.conversation === activeId && seen.last !== undefined && failedTurn(messages))
+      flash('error')
+  }
+  const onDecided = (action: ChatAction) => {
+    if (action.status === 'CONFIRMED') flash('success')
+    else if (action.status === 'FAILED') flash('error')
+  }
+  const deciding = useIsMutating({ mutationKey: DECIDE_KEY }) > 0
+
   useEffect(() => {
     bottom.current?.scrollIntoView?.({ block: 'end' })
   }, [messages.length, pending, actions.data])
@@ -164,7 +200,14 @@ export function ChatCurtain({
   }
 
   const size = mobile ? (talking ? 150 : 180) : 240
-  const status = chatStatus(conversation, actions.data, send.isPending)
+  const expression = chatExpression({
+    conversation,
+    actions: actions.data,
+    sending: send.isPending,
+    deciding,
+    failed: send.error != null || stop.error != null,
+    moment: moment?.state ?? null,
+  })
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -207,9 +250,12 @@ export function ChatCurtain({
 
           <div className="curtain-skyny">
             <SkynyLive
-              state="calm"
+              state={talking ? expression : 'calm'}
               size={size}
-              fallback={<Companion state="calm" size={Math.round(size * 0.8)} />}
+              message={talking ? CHAT_LED[expression] : undefined}
+              fallback={
+                <Companion state={talking ? expression : 'calm'} size={Math.round(size * 0.8)} />
+              }
             />
           </div>
 
@@ -243,7 +289,7 @@ export function ChatCurtain({
           ) : talking ? (
             <>
               <p className="curtain-status" role="status">
-                {status}
+                {chatStatus(expression)}
               </p>
               <div className="curtain-thread" aria-live="polite">
                 <ChatMessages
@@ -253,6 +299,7 @@ export function ChatCurtain({
                   pending={pending}
                   offline={conversation?.state === 'OFFLINE' && !send.isPending}
                   onNavigate={() => onOpenChange(false)}
+                  onDecided={onDecided}
                 />
                 <div ref={bottom} />
               </div>
