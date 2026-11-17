@@ -22,6 +22,9 @@ class ChatTurnListener {
   @EventListener
   void on(ChatTurnFinished finished) {
     tokens.revoke(finished.conversationId());
-    conversations.answered(finished);
+    // El de un resumen no deja mensaje: lo guarda ChatSummaries en la memoria.
+    if (!finished.summary()) {
+      conversations.answered(finished);
+    }
   }
 }

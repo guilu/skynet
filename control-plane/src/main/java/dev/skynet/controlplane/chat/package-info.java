@@ -11,5 +11,9 @@
  * el que el MCP de Skynet lee la API en nombre de Skyny, y las acciones por confirmar ({@link
  * dev.skynet.controlplane.chat.ChatActions}): Skyny las propone y la persona las confirma desde la
  * web.
+ *
+ * <p>CH-F resume las conversaciones con proyecto para su memoria ({@link
+ * dev.skynet.controlplane.chat.ChatSummaries}): al archivarlas o tras un rato sin mensajes, un
+ * turno corto de Skyny escribe lo decidido y se guarda como observación sin confirmar.
  */
 package dev.skynet.controlplane.chat;

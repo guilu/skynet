@@ -10,6 +10,7 @@ import dev.skynet.protocol.runner.EventBatch;
 import dev.skynet.protocol.runner.ProviderInfo;
 import dev.skynet.protocol.runner.RunnerRegistration;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.web.client.RestClient;
@@ -27,6 +29,8 @@ import tools.jackson.databind.JsonNode;
  * repositorio; el primero empieza una sesión y los siguientes la continúan en el mismo runner.
  */
 class ChatTurnsIT extends IntegrationTest {
+
+  @Autowired private ChatSummaries summaries;
 
   @Test
   void withoutAChatRunnerNobodyAnswers() {
@@ -232,6 +236,134 @@ class ChatTurnsIT extends IntegrationTest {
     mine.answer(turn, "6f1c1d1e-0000-4000-8000-000000000005", "Hola.");
     // Terminado, ya no recibe token.
     assertThat(mine.chatTokenStatus(turn)).isEqualTo(404);
+  }
+
+  @Test
+  void archivingSummarizesTheConversationIntoTheProjectMemory() {
+    Runner runner = chatRunner("portatil");
+    String project =
+        post("/api/projects", Map.of("key", "SUM", "name", "resumen")).path("id").asString();
+    String conversation =
+        post(
+                "/api/conversations",
+                Map.of("projectId", project, "message", "¿Cuánto duran las sesiones?"))
+            .path("conversation")
+            .path("id")
+            .asString();
+    String turn = only(runner.claim()).path("agentRunId").asString();
+    runner.answer(turn, "6f1c1d1e-0000-4000-8000-000000000010", "Quedamos en 30 minutos.");
+
+    post("/api/conversations/" + conversation + "/archive", Map.of());
+    JsonNode thread = get("/api/conversations/" + conversation);
+    assertThat(thread.path("conversation").path("state").asString()).isEqualTo("ANSWERING");
+
+    // Un turno nuevo, que no continúa la sesión: lleva lo hablado y pide el formato.
+    JsonNode start = only(runner.claim());
+    assertThat(start.path("type").asString()).isEqualTo("START");
+    assertThat(start.path("start").path("prompt").asString())
+        .contains("proyecto SUM «resumen»")
+        .contains("TÍTULO:")
+        .contains("Persona: ¿Cuánto duran las sesiones?\nSkyny: Quedamos en 30 minutos.\n");
+    String summary = start.path("agentRunId").asString();
+    runner.answer(
+        summary,
+        "6f1c1d1e-0000-4000-8000-000000000011",
+        "TÍTULO: Sesiones de 30 minutos\nQUÉ: Las sesiones duran 30 minutos.\nPOR QUÉ: Lo pidió"
+            + " el equipo.");
+
+    // No deja mensaje: la conversación vuelve a reposo y el resumen está en la memoria.
+    thread = get("/api/conversations/" + conversation);
+    assertThat(thread.path("conversation").path("state").asString()).isEqualTo("IDLE");
+    assertThat(thread.path("messages")).hasSize(2);
+    Map<String, Object> saved =
+        jdbc.sql(
+                "SELECT kind, title, topic_key, what, why, location, tags::text AS tags, origin,"
+                    + " trust, source_agent_run_id::text AS agent FROM memory_observation"
+                    + " WHERE project_id = ?")
+            .param(UUID.fromString(project))
+            .query()
+            .singleRow();
+    assertThat(saved)
+        .containsEntry("kind", "SESSION_SUMMARY")
+        .containsEntry("title", "Sesiones de 30 minutos")
+        .containsEntry("topic_key", "chat/" + conversation)
+        .containsEntry("what", "Las sesiones duran 30 minutos.")
+        .containsEntry("why", "Lo pidió el equipo.")
+        .containsEntry("tags", "{chat}")
+        .containsEntry("origin", "AGENT")
+        .containsEntry("trust", "UNCONFIRMED")
+        .containsEntry("agent", summary);
+    assertThat((String) saved.get("location")).contains(conversation);
+    assertThat(
+            jdbc.sql(
+                    "SELECT payload->>'outcome' FROM event WHERE aggregate_id = ?"
+                        + " AND event_type = 'chat.conversation.summarized'")
+                .param(UUID.fromString(conversation))
+                .query(String.class)
+                .single())
+        .isEqualTo("saved");
+  }
+
+  @Test
+  void anIdleConversationIsSummarizedOnceAndOnlyWithAProject() {
+    Runner runner = chatRunner("portatil");
+    String project =
+        post("/api/projects", Map.of("key", "IDL", "name", "quieta")).path("id").asString();
+    String conversation =
+        post("/api/conversations", Map.of("projectId", project, "message", "Hola"))
+            .path("conversation")
+            .path("id")
+            .asString();
+    runner.answer(
+        only(runner.claim()).path("agentRunId").asString(),
+        "6f1c1d1e-0000-4000-8000-000000000012",
+        "Hola.");
+    String loose =
+        post("/api/conversations", Map.of("message", "Hola"))
+            .path("conversation")
+            .path("id")
+            .asString();
+    runner.answer(
+        only(runner.claim()).path("agentRunId").asString(),
+        "6f1c1d1e-0000-4000-8000-000000000013",
+        "Hola.");
+
+    // Recién hablada, todavía no toca.
+    summaries.summarizeIdle();
+    assertThat(runner.claim()).isEmpty();
+
+    jdbc.sql("UPDATE conversation SET updated_at = ?")
+        .param(Timestamp.from(Instant.now().minus(Duration.ofHours(1))))
+        .update();
+    summaries.summarizeIdle();
+    JsonNode start = only(runner.claim());
+    assertThat(start.path("start").path("chat").path("conversationId").asString())
+        .isEqualTo(conversation);
+    runner.answer(
+        start.path("agentRunId").asString(), "6f1c1d1e-0000-4000-8000-000000000014", "NADA");
+    assertThat(count("SELECT count(*) FROM memory_observation")).isZero();
+    assertThat(
+            jdbc.sql(
+                    "SELECT payload->>'outcome' FROM event WHERE aggregate_id = ?"
+                        + " AND event_type = 'chat.conversation.summarized'")
+                .param(UUID.fromString(conversation))
+                .query(String.class)
+                .single())
+        .isEqualTo("nothing");
+
+    // Ya resumida, no vuelve a resumirse hasta que haya algo nuevo; la que no tiene proyecto,
+    // nunca.
+    summaries.summarizeIdle();
+    assertThat(runner.claim()).isEmpty();
+    post("/api/conversations/" + loose + "/archive", Map.of());
+    assertThat(runner.claim()).isEmpty();
+
+    // Y el turno siguiente de la conversación continúa la sesión de la respuesta, no la del
+    // resumen.
+    post("/api/conversations/" + conversation + "/messages", Map.of("body", "¿Sigues?"));
+    JsonNode resume = only(runner.claim());
+    assertThat(resume.path("start").path("resume").path("sessionId").asString())
+        .isEqualTo("6f1c1d1e-0000-4000-8000-000000000012");
   }
 
   private static JsonNode only(List<JsonNode> commands) {

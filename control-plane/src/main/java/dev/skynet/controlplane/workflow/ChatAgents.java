@@ -41,6 +41,12 @@ public class ChatAgents {
   /** Sus herramientas: las del MCP de Skynet, y nada más. */
   public static final List<String> ALLOWED_TOOLS = List.of("mcp__skynet");
 
+  /** Un turno que contesta a un mensaje de la persona. */
+  static final String PURPOSE_ANSWER = "answer";
+
+  /** Un turno que resume la conversación para la memoria del proyecto (CH-F). */
+  static final String PURPOSE_SUMMARY = "summary";
+
   /** El turno anterior de una conversación, del que puede continuar el siguiente. */
   public record Previous(UUID agentRunId, UUID runnerId, String sessionId) {}
 
@@ -72,6 +78,7 @@ public class ChatAgents {
     return jdbc.sql(
             "SELECT a.id, a.runner_id, a.provider_session_id FROM chat_turn t"
                 + " JOIN agent_run a ON a.id = t.agent_run_id WHERE t.conversation_id = ?"
+                + " AND t.purpose = 'answer'"
                 + " AND a.status = 'COMPLETED' AND a.provider_session_id IS NOT NULL"
                 + " AND a.runner_id IS NOT NULL ORDER BY t.created_at DESC LIMIT 1")
         .param(conversationId)
@@ -117,6 +124,25 @@ public class ChatAgents {
   @Transactional
   public UUID queue(
       UUID conversationId, UUID messageId, String model, String prompt, Previous previous) {
+    return queue(conversationId, messageId, model, prompt, previous, PURPOSE_ANSWER);
+  }
+
+  /**
+   * Pone en cola el turno que resume la conversación hasta {@code lastMessageId} para la memoria
+   * (CH-F): una sesión nueva, con lo hablado en el prompt, que no continúa ningún turno.
+   */
+  @Transactional
+  public UUID queueSummary(UUID conversationId, UUID lastMessageId, String model, String prompt) {
+    return queue(conversationId, lastMessageId, model, prompt, null, PURPOSE_SUMMARY);
+  }
+
+  private UUID queue(
+      UUID conversationId,
+      UUID messageId,
+      String model,
+      String prompt,
+      Previous previous,
+      String purpose) {
     Instant now = time.now();
     AgentRun parent =
         previous == null ? null : agentRuns.findById(previous.agentRunId()).orElse(null);
@@ -126,9 +152,9 @@ public class ChatAgents {
             AgentRun.chatTurn(parent, AgentRun.PROVIDER_CLAUDE_CODE, sessionId, LIMITS, now));
     Prompt saved = prompts.save(Prompt.of(turn.getId(), Prompt.ROLE_USER, prompt, now));
     jdbc.sql(
-            "INSERT INTO chat_turn (agent_run_id, conversation_id, message_id, created_at)"
-                + " VALUES (?, ?, ?, ?)")
-        .params(turn.getId(), conversationId, messageId, Timestamp.from(now))
+            "INSERT INTO chat_turn (agent_run_id, conversation_id, message_id, purpose,"
+                + " created_at) VALUES (?, ?, ?, ?, ?)")
+        .params(turn.getId(), conversationId, messageId, purpose, Timestamp.from(now))
         .update();
     ResumeFrom resume =
         parent == null
@@ -138,6 +164,7 @@ public class ChatAgents {
     spawned.put("conversationId", conversationId);
     spawned.put("messageId", messageId);
     spawned.put("role", AgentRun.ROLE_CHAT);
+    spawned.put("purpose", purpose);
     spawned.put("provider", turn.getProvider());
     spawned.put("kind", turn.getKind());
     spawned.put("status", turn.getStatus());
@@ -270,25 +297,21 @@ public class ChatAgents {
   }
 
   private void finished(AgentRun turn, String error) {
-    jdbc.sql("SELECT conversation_id, message_id FROM chat_turn WHERE agent_run_id = ?")
+    boolean completed = turn.getStatus() == AgentObservableStatus.COMPLETED;
+    jdbc.sql("SELECT conversation_id, message_id, purpose FROM chat_turn WHERE agent_run_id = ?")
         .param(turn.getId())
         .query(
             (rs, n) ->
-                new UUID[] {
-                  rs.getObject("conversation_id", UUID.class),
-                  rs.getObject("message_id", UUID.class)
-                })
+                new ChatTurnFinished(
+                    turn.getId(),
+                    rs.getObject("conversation_id", UUID.class),
+                    rs.getObject("message_id", UUID.class),
+                    completed,
+                    resultText(turn.getId()),
+                    completed ? null : error,
+                    PURPOSE_SUMMARY.equals(rs.getString("purpose"))))
         .optional()
-        .ifPresent(
-            ids ->
-                publisher.publishEvent(
-                    new ChatTurnFinished(
-                        turn.getId(),
-                        ids[0],
-                        ids[1],
-                        turn.getStatus() == AgentObservableStatus.COMPLETED,
-                        resultText(turn.getId()),
-                        turn.getStatus() == AgentObservableStatus.COMPLETED ? null : error)));
+        .ifPresent(publisher::publishEvent);
   }
 
   private String resultText(UUID agentRunId) {
