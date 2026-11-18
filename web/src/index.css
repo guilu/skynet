@@ -9352,31 +9352,12 @@
     margin-block: -10px;
   }
 
-  .companion-hello {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    margin-top: var(--space-6);
-    padding: 16px 20px;
-    background: color-mix(in oklab, var(--primary-soft) 75%, var(--surface));
-    border-color: color-mix(in oklab, var(--primary) 16%, var(--border));
-  }
-
-  .companion-hello-text {
-    display: grid;
-    gap: 10px;
-    min-width: 0;
-  }
-
-  .companion-hello-text p {
-    margin: 0;
-    font-size: 1.0625rem;
-  }
-
-  .companion-hello-links {
+  /* Atajos de Inicio, bajo el saludo: revisar, lanzar y ver las ejecuciones. */
+  .home-links {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    margin-top: var(--space-4);
   }
 
   .run-band {
@@ -9441,17 +9422,6 @@
 
     .peek-bubble {
       margin-bottom: 20px;
-    }
-
-    /* SV-C: en el móvil, Skyny va encima del texto, centrado. */
-    .companion-hello {
-      flex-direction: column;
-      align-items: stretch;
-      gap: var(--space-2);
-    }
-
-    .companion-hello > .skyny-poke {
-      align-self: center;
     }
   }
 
@@ -11564,9 +11534,16 @@
   }
 
   /*
-   * Ocupa casi toda la web, bajo la barra superior. Baja desde el borde inferior de la barra: a la
-   * vez que se desplaza, se recorta por arriba lo mismo, así que nunca se ve por encima de ella.
+   * Con la cortina abierta, la barra superior pasa por delante de ella y se vuelve opaca: la
+   * cortina sale de detrás de la barra, como una persiana.
    */
+  body:has(.curtain) .topbar {
+    z-index: 42;
+    background: var(--bg);
+    backdrop-filter: none;
+  }
+
+  /* Ocupa casi toda la web, bajo la barra superior, y baja desde detrás de ella. */
   .curtain {
     --curtain-top: calc(44px + 2 * 14px + var(--border-w));
     --curtain-gap: 16px;
@@ -11584,8 +11561,6 @@
     background: var(--surface);
     box-sizing: border-box;
     outline: none;
-    /* Explícito: entre `none` y un recorte no hay transición. */
-    clip-path: inset(0 0 0 0);
     animation: curtain-down 0.45s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
@@ -11612,14 +11587,12 @@
   @keyframes curtain-down {
     from {
       transform: translateY(-100%);
-      clip-path: inset(100% 0 0 0);
     }
   }
 
   @keyframes curtain-up {
     to {
       transform: translateY(-100%);
-      clip-path: inset(100% 0 0 0);
     }
   }
 

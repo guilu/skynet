@@ -219,7 +219,8 @@ export function ChatCurtain({
           aria-describedby={undefined}
           onOpenAutoFocus={(e) => {
             e.preventDefault()
-            input.current?.focus()
+            // En el móvil no: el teclado saldría a media bajada y movería la página.
+            if (!mobile) input.current?.focus({ preventScroll: true })
           }}
         >
           <div className="curtain-head">

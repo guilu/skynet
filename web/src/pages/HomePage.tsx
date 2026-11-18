@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRight, Plus } from 'lucide-react'
+import { ArrowRight, CirclePlay, ListChecks, Plus, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import {
@@ -15,7 +15,7 @@ import {
 import { RISK_LABEL } from '../components/approval/approvalFormat'
 import { usePendingApprovals } from '../components/approval/usePendingApprovals'
 import { AttentionList, type Alert } from '../components/AttentionList'
-import { CompanionHello } from '../components/companion/CompanionHello'
+import { useCompanion } from '../components/companion/context'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { Icon } from '../components/icons/Icon'
 import type { IconName } from '../components/icons/registry'
@@ -121,10 +121,7 @@ export function HomePage() {
         </div>
       </div>
       <ErrorMessage error={summary.error} />
-      <CompanionHello
-        approvals={approvals.data ?? []}
-        sweat={(data?.quotaWarnings.length ?? 0) > 0}
-      />
+      <HomeLinks approvals={approvals.data ?? []} />
       <AttentionList alerts={alerts} className="dash-section" title="Necesita tu intervención" />
 
       <section className="dash-section" aria-labelledby="projects-title">
@@ -451,5 +448,35 @@ function ActivityList({ entries, now }: { entries: ActivityEntry[]; now: number 
         </li>
       ))}
     </ul>
+  )
+}
+
+/**
+ * Atajos bajo el saludo: revisar lo que espera aprobación, lanzar un workflow y ver la última
+ * ejecución (o todas). Skyny ya está en la barra superior, así que aquí van solos.
+ */
+function HomeLinks({ approvals }: { approvals: ApprovalSummary[] }) {
+  const { activeRuns } = useCompanion()
+  const latest = activeRuns[0]
+  return (
+    <nav className="home-links" aria-label="Atajos">
+      {approvals.length > 0 && (
+        <Link
+          className="btn btn-sm btn-secondary"
+          to={approvals.length === 1 ? `/approvals/${approvals[0].id}` : '/approvals'}
+        >
+          <ShieldCheck size={16} strokeWidth={2.5} aria-hidden="true" />
+          {approvals.length === 1 ? 'Revisar la aprobación' : 'Revisar las aprobaciones'}
+        </Link>
+      )}
+      <Link className="btn btn-sm btn-secondary" to="/projects">
+        <CirclePlay size={16} strokeWidth={2.5} aria-hidden="true" />
+        Lanzar un workflow
+      </Link>
+      <Link className="btn btn-sm btn-secondary" to={latest ? `/runs/${latest.id}` : '/runs'}>
+        <ListChecks size={16} strokeWidth={2.5} aria-hidden="true" />
+        {latest ? 'Ver la última ejecución' : 'Ver las ejecuciones'}
+      </Link>
+    </nav>
   )
 }
