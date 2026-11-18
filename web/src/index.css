@@ -11498,9 +11498,9 @@
     display: flex;
     flex: none;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     height: 44px;
-    padding: 0 10px 0 6px;
+    padding: 0 10px 0 12px;
     border: var(--border-w) solid var(--border);
     border-radius: 999px;
     background: var(--surface);
@@ -11527,9 +11527,12 @@
     }
   }
 
-  /* Debajo de la barra superior, que queda sin atenuar: de ella baja la cortina. */
+  /*
+   * Debajo de la barra superior, que queda sin atenuar: de ella baja la cortina. Su alto es el
+   * botón (44 px), el relleno (14 px arriba y abajo) y el borde inferior, que tiene que verse.
+   */
   .curtain-overlay {
-    inset: 73px 0 0;
+    inset: calc(44px + 2 * 14px + var(--border-w)) 0 0;
     z-index: 40;
     animation: curtain-fade 0.25s ease;
   }
@@ -11539,7 +11542,7 @@
    * vez que se desplaza, se recorta por arriba lo mismo, así que nunca se ve por encima de ella.
    */
   .curtain {
-    --curtain-top: 73px;
+    --curtain-top: calc(44px + 2 * 14px + var(--border-w));
     --curtain-gap: 16px;
     position: fixed;
     z-index: 41;
@@ -11961,11 +11964,11 @@
     }
 
     .curtain-overlay {
-      inset: 65px 0 0;
+      inset: calc(44px + 2 * 10px + var(--border-w)) 0 0;
     }
 
     .curtain {
-      --curtain-top: 65px;
+      --curtain-top: calc(44px + 2 * 10px + var(--border-w));
       --curtain-gap: 8px;
       border-radius: 0 0 24px 24px;
     }
