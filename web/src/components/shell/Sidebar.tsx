@@ -55,8 +55,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         ))}
       </nav>
       <div className="sidebar-foot">
-        <RunnerSummary />
-        <HealthIndicator />
+        <StatusBox />
         <Hint label="Desplegar la barra" enabled={collapsed}>
           <button
             type="button"
@@ -78,6 +77,16 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   )
 }
 
+/** Un solo recuadro con el estado de los runners y el del control plane. */
+export function StatusBox() {
+  return (
+    <div className="status-box" role="group" aria-label="Estado de runners y control plane">
+      <RunnerSummary />
+      <HealthIndicator />
+    </div>
+  )
+}
+
 /** Resumen de los runners: cuántos están en línea y cuántos agentes llevan. */
 export function RunnerSummary() {
   const runners = useQuery({
@@ -96,7 +105,7 @@ export function RunnerSummary() {
       className="runner-mini"
       data-state={stale > 0 || simulated > 0 ? 'warn' : 'ok'}
     >
-      <span className="runner-mini-dot" aria-hidden="true" />
+      <span className="status-dot" aria-hidden="true" />
       <span className="runner-mini-text">
         <b>
           {online.length} {online.length === 1 ? 'runner en línea' : 'runners en línea'}

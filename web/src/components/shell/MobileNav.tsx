@@ -2,10 +2,9 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router'
 import { cn } from '../../lib/cn'
-import { HealthIndicator } from '../../HealthIndicator'
 import { PendingCount } from '../approval/PendingCount'
 import { isActive, MOBILE_NAV, NAV_AREAS } from './nav'
-import { RunnerSummary } from './Sidebar'
+import { StatusBox } from './Sidebar'
 import { Icon } from '../icons/Icon'
 
 /**
@@ -77,8 +76,7 @@ export function MobileNav() {
               ))}
             </nav>
             <div className="sidebar-foot">
-              <RunnerSummary />
-              <HealthIndicator />
+              <StatusBox />
             </div>
           </Dialog.Content>
         </Dialog.Portal>
