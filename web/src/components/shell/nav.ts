@@ -44,18 +44,18 @@ export const NAV_AREAS: NavArea[] = [
       { to: '/runs', label: 'En curso', icon: 'runs' },
       { to: '/workflows', label: 'Workflows', icon: 'workflows' },
       {
-        to: '/results',
+        to: '/approvals',
         label: 'Memoria',
         icon: 'memory',
         pendingApprovals: true,
         tabs: [
+          { to: '/approvals', label: 'Aprobaciones', icon: 'approvals', pendingApprovals: true },
           { to: '/results', label: 'Resultados', icon: 'branch' },
           { to: '/judges', label: 'Jueces', icon: 'verification' },
           { to: '/lessons', label: 'Lecciones', icon: 'memory' },
-          { to: '/approvals', label: 'Aprobaciones', icon: 'approvals', pendingApprovals: true },
+          { to: '/evals', label: 'Evaluaciones', icon: 'circle-ok' },
         ],
       },
-      { to: '/evals', label: 'Evaluaciones', icon: 'circle-ok' },
     ],
   },
   {

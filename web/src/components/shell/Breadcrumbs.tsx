@@ -86,9 +86,8 @@ export function Breadcrumbs() {
   else {
     const section = sectionOf(pathname)
     area = section?.area
-    crumbs = section?.group
-      ? [{ label: section.group.label }, { label: section.label }]
-      : [{ label: section?.label ?? 'Página no encontrada' }]
+    // En una sección con pestañas, la miga es la sección: la pestaña ya dice dónde estás.
+    crumbs = [{ label: section?.group?.label ?? section?.label ?? 'Página no encontrada' }]
   }
   const parent = crumbs.slice(0, -1).findLast((c) => c.to)
 

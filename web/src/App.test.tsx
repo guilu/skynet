@@ -190,7 +190,7 @@ describe('App', () => {
     const nav = await screen.findByRole('navigation', { name: 'Navegación principal' })
     for (const [area, links] of [
       ['Espacio de trabajo', ['Inicio', 'Proyectos', 'Trabajos', 'Actividad']],
-      ['Fábrica', ['En curso', 'Workflows', 'Memoria', 'Evaluaciones']],
+      ['Fábrica', ['En curso', 'Workflows', 'Memoria']],
       ['Administración', ['Agentes', 'Ajustes', 'Mantenimiento']],
     ] as const) {
       const group = within(nav).getByRole('group', { name: area })
@@ -922,8 +922,7 @@ describe('App', () => {
     renderAt('/runners', <App />)
     const crumbs = await screen.findByRole('navigation', { name: 'Migas' })
     expect(within(crumbs).getByText('Administración')).toBeInTheDocument()
-    expect(within(crumbs).getByText('Agentes')).toBeInTheDocument()
-    expect(within(crumbs).getByText('Runners')).toHaveAttribute('aria-current', 'page')
+    expect(within(crumbs).getByText('Agentes')).toHaveAttribute('aria-current', 'page')
     expect(within(crumbs).queryByRole('link', { name: /^Volver a/ })).toBeNull()
   })
 
@@ -943,7 +942,10 @@ describe('App', () => {
       'aria-current',
       'page',
     )
-    expect(within(all).getByRole('link', { name: /^Memoria/ })).toHaveAttribute('href', '/results')
+    expect(within(all).getByRole('link', { name: /^Memoria/ })).toHaveAttribute(
+      'href',
+      '/approvals',
+    )
   })
 
   it('⌘K busca un trabajo por su clave y lo abre', async () => {
