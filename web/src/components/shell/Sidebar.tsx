@@ -1,16 +1,15 @@
 import * as Tooltip from '@radix-ui/react-tooltip'
 import { useQuery } from '@tanstack/react-query'
 import type { ReactElement } from 'react'
-import { Link, NavLink, useLocation } from 'react-router'
+import { NavLink, useLocation } from 'react-router'
 import { api } from '../../api'
 import { HealthIndicator } from '../../HealthIndicator'
 import { PendingCount } from '../approval/PendingCount'
-import { BrandMark } from '../brand/Logo'
 import { isActive, NAV_AREAS } from './nav'
 import { Icon } from '../icons/Icon'
 
 /**
- * Barra lateral del escritorio: marca, secciones agrupadas por área (espacio de trabajo, fábrica y
+ * Barra lateral del escritorio, bajo la barra superior: secciones agrupadas por área (espacio de trabajo, fábrica y
  * administración) y, al pie, el estado del control plane y de los runners. Plegada solo enseña los iconos; el nombre sigue siendo el nombre accesible del enlace
  * y aparece como pista al pasar o enfocar.
  */
@@ -18,10 +17,6 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const { pathname } = useLocation()
   return (
     <aside className="sidebar" data-collapsed={collapsed || undefined}>
-      <Link to="/" className="brand" aria-label="Skynet: ir al Inicio">
-        <BrandMark />
-        <span className="brand-name">Skynet</span>
-      </Link>
       <nav className="sidenav" aria-label="Navegación principal">
         {NAV_AREAS.map((area) => (
           <div

@@ -213,7 +213,7 @@ describe('App', () => {
       '/providers',
     )
     expect(within(tabs).getByRole('link', { name: 'Consumo' })).toHaveAttribute('href', '/usage')
-    expect(screen.getByRole('link', { name: 'Skynet: ir al Inicio' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('button', { name: 'Pregúntale a Skyny' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Saltar al contenido' })).toHaveAttribute(
       'href',
       '#main',

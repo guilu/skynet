@@ -4,7 +4,7 @@ import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 import { api, SESSION_KEY, type Session } from '../api'
 import { useTheme } from '../theme'
-import { Companion } from './companion/Companion'
+import { BrandMark } from './brand/Logo'
 import { CompanionMenu } from './companion/CompanionMenu'
 import { CompanionProvider } from './companion/CompanionProvider'
 import { NoticeBell } from './companion/NoticeBell'
@@ -39,8 +39,9 @@ function readCollapsed(): boolean {
 }
 
 /**
- * Estructura común: barra lateral (plegable) con las secciones, barra superior con migas,
- * búsqueda ⌘K, el chat con Skyny ⌘J, companion, avisos, tema y cuenta, y el contenido. En el móvil la barra lateral pasa a una barra
+ * Estructura común: barra superior a todo lo ancho (la marca, que abre el chat con Skyny ⌘J, migas,
+ * búsqueda ⌘K, companion, avisos, tema y cuenta) y, debajo, la barra lateral (plegable) con las
+ * secciones y el contenido. En el móvil la barra lateral pasa a una barra
  * inferior con un cajón para el resto.
  */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -99,6 +100,29 @@ export function AppShell({ children }: { children: ReactNode }) {
           </a>
           <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} />
           <header className="topbar">
+            <Tooltip.Root>
+              <Tooltip.Trigger asChild>
+                <button
+                  type="button"
+                  className="brand"
+                  onClick={() => {
+                    setChatLoaded(true)
+                    setChatOpen(true)
+                  }}
+                  aria-label="Pregúntale a Skyny"
+                  aria-expanded={chatOpen}
+                  aria-keyshortcuts="Meta+J Control+J"
+                >
+                  <BrandMark />
+                  <span className="brand-name">Skynet</span>
+                </button>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content className="tooltip" side="bottom" align="start" sideOffset={8}>
+                  Pregúntale a Skyny <kbd className="kbd">⌘J</kbd>
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
             <Breadcrumbs />
             <button
               type="button"
@@ -110,21 +134,6 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Icon name="search" size={20} strokeWidth={2.5} />
               <span className="search-label">Buscar ejecución, trabajo o runner…</span>
               <kbd className="kbd">⌘K</kbd>
-            </button>
-            <button
-              type="button"
-              className="skyny-btn"
-              onClick={() => {
-                setChatLoaded(true)
-                setChatOpen(true)
-              }}
-              aria-label="Pregúntale a Skyny"
-              aria-expanded={chatOpen}
-              aria-keyshortcuts="Meta+J Control+J"
-            >
-              <Companion state="calm" size={26} still />
-              <span className="skyny-btn-label">Pregúntale a Skyny</span>
-              <kbd className="kbd">⌘J</kbd>
             </button>
             {companion.mascot && <CompanionMenu onOpenNotices={() => setNoticesOpen(true)} />}
             <NoticeBell open={noticesOpen} onOpenChange={setNoticesOpen} />

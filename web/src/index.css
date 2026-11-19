@@ -88,6 +88,8 @@
   --radius: var(--r-sm);
   --radius-lg: var(--r-lg);
   --sidenav-width: 232px;
+  /* Alto de la barra superior: el botón (44 px), el relleno y el borde inferior. */
+  --topbar-h: calc(44px + 2 * 14px + var(--border-w));
 
   /* Monogramas de los proveedores en las tarjetas de workflow (WF-C): tinta y fondo suave */
   --prov-claude: #a8481f;
@@ -442,7 +444,7 @@
     grid-template-columns: var(--sidenav-width) minmax(0, 1fr);
     grid-template-rows: auto 1fr;
     grid-template-areas:
-      'side top'
+      'top top'
       'side main';
     min-height: 100vh;
   }
@@ -454,8 +456,8 @@
   .sidebar {
     grid-area: side;
     position: sticky;
-    top: 0;
-    height: 100vh;
+    top: var(--topbar-h);
+    height: calc(100vh - var(--topbar-h));
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -465,13 +467,21 @@
     background: var(--surface);
   }
 
+  /*
+   * La marca, a la izquierda de la barra superior y tan ancha como la barra lateral: las migas
+   * empiezan donde el contenido. Abre el chat con Skyny.
+   */
   .brand {
+    flex: none;
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 10px;
+    width: calc(var(--sidenav-width) - 4px);
     padding: 4px 8px;
+    border: 0;
     border-radius: var(--r-md);
+    background: none;
+    cursor: pointer;
     font-family: var(--font-display);
     font-weight: 600;
     font-size: 1.5rem;
@@ -732,8 +742,12 @@
     padding: 20px 12px;
   }
 
-  .sidebar[data-collapsed] .brand {
+  .shell[data-collapsed] .topbar .brand {
     padding: 4px 0;
+  }
+
+  .shell[data-collapsed] .topbar .brand-name {
+    display: none;
   }
 
   .sidebar[data-collapsed] .sidenav a,
@@ -742,7 +756,7 @@
     padding: 9px;
   }
 
-  .sidebar[data-collapsed] :is(.nav-label, .brand-name, .runner-mini-text, .health-text) {
+  .sidebar[data-collapsed] :is(.nav-label, .runner-mini-text, .health-text) {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -1163,6 +1177,10 @@
         'main';
     }
 
+    :root {
+      --topbar-h: calc(44px + 2 * 10px + var(--border-w));
+    }
+
     .sidebar {
       display: none;
     }
@@ -1170,6 +1188,15 @@
     .topbar {
       padding: 10px var(--space-4);
       gap: var(--space-2);
+    }
+
+    .topbar .brand {
+      width: auto;
+      padding: 0;
+    }
+
+    .topbar .brand-name {
+      display: none;
     }
 
     .crumbs li:not(:last-child) {
@@ -11490,45 +11517,12 @@
 
 /* ---------- Chat con Skyny (CH-D): la cortina que baja desde la barra superior ---------- */
 @layer components {
-  .skyny-btn {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 10px;
-    height: 44px;
-    padding: 0 10px 0 12px;
-    border: var(--border-w) solid var(--border);
-    border-radius: 999px;
-    background: var(--surface);
-    color: var(--fg);
-    font: inherit;
-    font-weight: 500;
-    cursor: pointer;
-  }
-
-  .skyny-btn:hover {
-    border-color: var(--border-strong);
-  }
-
-  .skyny-btn[aria-expanded='true'] {
-    border-color: var(--primary);
-    background: var(--primary-soft);
-    color: var(--primary-ink);
-  }
-
-  /* Con poco ancho, solo Skyny: la búsqueda necesita el sitio. */
-  @media (max-width: 1100px) {
-    .skyny-btn-label {
-      display: none;
-    }
-  }
-
   /*
-   * Debajo de la barra superior, que queda sin atenuar: de ella baja la cortina. Su alto es el
-   * botón (44 px), el relleno (14 px arriba y abajo) y el borde inferior, que tiene que verse.
+   * Debajo de la barra superior (`--topbar-h`, con su borde inferior a la vista), que queda sin
+   * atenuar: de ella baja la cortina.
    */
   .curtain-overlay {
-    inset: calc(44px + 2 * 14px + var(--border-w)) 0 0;
+    inset: var(--topbar-h) 0 0;
     z-index: 40;
     animation: curtain-fade 0.25s ease;
   }
@@ -11545,7 +11539,7 @@
 
   /* Ocupa casi toda la web, bajo la barra superior, y baja desde detrás de ella. */
   .curtain {
-    --curtain-top: calc(44px + 2 * 14px + var(--border-w));
+    --curtain-top: var(--topbar-h);
     --curtain-gap: 16px;
     position: fixed;
     z-index: 41;
@@ -11951,23 +11945,7 @@
 
   /* Móvil: a lo ancho y hasta abajo. */
   @media (max-width: 720px) {
-    .skyny-btn {
-      width: 44px;
-      padding: 0;
-      justify-content: center;
-    }
-
-    .skyny-btn-label,
-    .skyny-btn .kbd {
-      display: none;
-    }
-
-    .curtain-overlay {
-      inset: calc(44px + 2 * 10px + var(--border-w)) 0 0;
-    }
-
     .curtain {
-      --curtain-top: calc(44px + 2 * 10px + var(--border-w));
       --curtain-gap: 8px;
       border-radius: 0 0 24px 24px;
     }
