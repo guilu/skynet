@@ -1,52 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { Folder, HardDrive, Plus } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { api, type Project } from '../api'
-import { ArchiveMenu, ArchivedToggle } from '../components/archive/Archive'
+import { ArchivedToggle } from '../components/archive/Archive'
 import { ErrorMessage } from '../components/ErrorMessage'
-import { DataTable, EmptyState, type Column } from '../components/list/DataTable'
+import { EmptyState } from '../components/list/DataTable'
 import { ListToolbar, SearchField } from '../components/list/Toolbar'
 import { Button } from '../components/ui/Button'
 import { Sheet } from '../components/ui/Sheet'
-import { formatDateTime } from '../format'
-import { TableSkeleton } from '../components/ui/Skeleton'
-
-const COLUMNS: Column<Project>[] = [
-  {
-    id: 'project',
-    header: 'Proyecto',
-    hideable: false,
-    cell: (p) => (
-      <Link to={`/projects/${p.id}`} className="row-link">
-        <span className="key">{p.key}</span> {p.name}
-      </Link>
-    ),
-  },
-  { id: 'description', header: 'Descripción', cardWide: true, cell: (p) => p.description ?? '—' },
-  { id: 'created', header: 'Creado', cell: (p) => formatDateTime(p.createdAt) },
-  {
-    id: 'actions',
-    header: 'Acciones',
-    hiddenHeader: true,
-    hideable: false,
-    cell: (p) => (
-      <ArchiveMenu
-        size="sm"
-        target={{ kind: 'project', id: p.id }}
-        name={`${p.key} · ${p.name}`}
-        archivedAt={p.archivedAt}
-      />
-    ),
-  },
-]
+import { ProjectRow } from '../components/work/ProjectRow'
+import { CardsSkeleton } from '../components/ui/Skeleton'
 
 const matches = (p: Project, text: string) =>
   `${p.key} ${p.name} ${p.description ?? ''}`.toLowerCase().includes(text.toLowerCase())
 
 /**
  * Proyectos, con búsqueda por clave, nombre o descripción y el chip «Archivados» (en la URL). El
- * alta se hace en un panel lateral que abre «Nuevo proyecto»; en el móvil, la lista va en tarjetas.
+ * alta se hace en un panel lateral que abre «Nuevo proyecto». Cada proyecto es una tarjeta ancha
+ * con lo que tiene en marcha en pequeñas etiquetas.
  */
 export function ProjectsPage() {
   const queryClient = useQueryClient()
@@ -105,14 +77,10 @@ export function ProjectsPage() {
             </span>
           </ListToolbar>
           <ErrorMessage error={projects.error} />
-          {projects.isPending && <TableSkeleton label="los proyectos" columns={3} />}
+          {projects.isPending && <CardsSkeleton label="los proyectos" count={3} />}
           {projects.data && (
-            <DataTable
-              label="Proyectos"
-              columns={COLUMNS}
-              rows={projects.data.filter((p) => !q || matches(p, q))}
-              rowKey={(p) => p.id}
-              cards
+            <ProjectList
+              projects={projects.data.filter((p) => !q || matches(p, q))}
               empty={
                 <EmptyState
                   icon={Folder}
@@ -176,5 +144,18 @@ export function ProjectsPage() {
         </form>
       </Sheet>
     </>
+  )
+}
+
+function ProjectList({ projects, empty }: { projects: Project[]; empty: ReactNode }) {
+  if (projects.length === 0) return empty
+  return (
+    <ul className="proj-rows" aria-label="Proyectos">
+      {projects.map((p) => (
+        <li key={p.id}>
+          <ProjectRow project={p} />
+        </li>
+      ))}
+    </ul>
   )
 }

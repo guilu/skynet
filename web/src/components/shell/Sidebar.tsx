@@ -1,26 +1,22 @@
 import * as Tooltip from '@radix-ui/react-tooltip'
 import { useQuery } from '@tanstack/react-query'
 import type { ReactElement } from 'react'
-import { Link, NavLink } from 'react-router'
+import { NavLink, useLocation } from 'react-router'
 import { api } from '../../api'
 import { HealthIndicator } from '../../HealthIndicator'
 import { PendingCount } from '../approval/PendingCount'
-import { BrandMark } from '../brand/Logo'
-import { NAV_AREAS } from './nav'
+import { isActive, NAV_AREAS } from './nav'
 import { Icon } from '../icons/Icon'
 
 /**
- * Barra lateral del escritorio: marca, secciones agrupadas por área (espacio de trabajo, fábrica y
+ * Barra lateral del escritorio, bajo la barra superior: secciones agrupadas por área (espacio de trabajo, fábrica y
  * administración) y, al pie, el estado del control plane y de los runners. Plegada solo enseña los iconos; el nombre sigue siendo el nombre accesible del enlace
  * y aparece como pista al pasar o enfocar.
  */
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  const { pathname } = useLocation()
   return (
     <aside className="sidebar" data-collapsed={collapsed || undefined}>
-      <Link to="/" className="brand" aria-label="Skynet: ir al Inicio">
-        <BrandMark />
-        <span className="brand-name">Skynet</span>
-      </Link>
       <nav className="sidenav" aria-label="Navegación principal">
         {NAV_AREAS.map((area) => (
           <div
@@ -36,7 +32,12 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
               {area.items.map((item) => (
                 <li key={item.to}>
                   <Hint label={item.label} enabled={collapsed}>
-                    <NavLink to={item.to} end={item.end}>
+                    <NavLink
+                      to={item.to}
+                      end={item.end}
+                      className={() => (isActive(item, pathname) ? 'active' : undefined)}
+                      aria-current={isActive(item, pathname) ? 'page' : undefined}
+                    >
                       <Icon name={item.icon} size={24} strokeWidth={1.9} />
                       <span className="nav-label">{item.label}</span>
                       {item.pendingApprovals && <PendingCount />}
@@ -49,8 +50,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         ))}
       </nav>
       <div className="sidebar-foot">
-        <RunnerSummary />
-        <HealthIndicator />
+        <StatusBox />
         <Hint label="Desplegar la barra" enabled={collapsed}>
           <button
             type="button"
@@ -72,6 +72,16 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   )
 }
 
+/** Un solo recuadro con el estado de los runners y el del control plane. */
+export function StatusBox() {
+  return (
+    <div className="status-box" role="group" aria-label="Estado de runners y control plane">
+      <RunnerSummary />
+      <HealthIndicator />
+    </div>
+  )
+}
+
 /** Resumen de los runners: cuántos están en línea y cuántos agentes llevan. */
 export function RunnerSummary() {
   const runners = useQuery({
@@ -90,7 +100,7 @@ export function RunnerSummary() {
       className="runner-mini"
       data-state={stale > 0 || simulated > 0 ? 'warn' : 'ok'}
     >
-      <span className="runner-mini-dot" aria-hidden="true" />
+      <span className="status-dot" aria-hidden="true" />
       <span className="runner-mini-text">
         <b>
           {online.length} {online.length === 1 ? 'runner en línea' : 'runners en línea'}

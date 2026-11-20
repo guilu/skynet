@@ -155,6 +155,52 @@ describe('App', () => {
     expect(await screen.findByText('disponible')).toBeInTheDocument()
   })
 
+  it('cada proyecto es una tarjeta con su resumen en etiquetas', async () => {
+    stubApi({
+      '/api/projects': [
+        {
+          id: 'p1',
+          key: 'TKM',
+          name: 'TokenMeter',
+          description: 'Mide tokens',
+          createdAt: '2026-11-07T19:09:06Z',
+        },
+      ],
+      '/api/projects/p1/overview': {
+        projectId: 'p1',
+        since: '2026-10-21T00:00:00Z',
+        openWorkItems: 4,
+        activeRuns: 1,
+        openPullRequests: 2,
+        mergedPullRequests: 3,
+        pendingApprovals: 1,
+        costUsd: 18.3,
+        repositories: [{ id: 'r1' }],
+        workItems: [],
+      },
+    })
+    renderAt('/projects', <App />)
+    const card = await screen.findByRole('article', { name: 'TKM · TokenMeter' })
+    expect(within(card).getByRole('link', { name: 'TKM TokenMeter' })).toHaveAttribute(
+      'href',
+      '/projects/p1',
+    )
+    const bullets = await within(card).findByRole('list', { name: 'Resumen' })
+    expect(
+      within(bullets)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual([
+      '1 repositorio',
+      '4 trabajos abiertos',
+      '1 ejecución en marcha',
+      '2 PRs abiertas · 3 fusionadas',
+      '1 aprobación pendiente',
+    ])
+    expect(card).toHaveTextContent('18,30 US$ en 30 días')
+    expect(card).toHaveTextContent('Creado el 07/11/2026')
+  })
+
   it('«Nuevo proyecto» abre el formulario en un panel lateral y lo cierra al crear', async () => {
     const project = { id: 'p2', key: 'NEW', name: 'Nuevo', description: null, createdAt: '' }
     const fetch = stubApi({ '/api/projects': [], 'POST /api/projects': project })
@@ -190,19 +236,30 @@ describe('App', () => {
     const nav = await screen.findByRole('navigation', { name: 'Navegación principal' })
     for (const [area, links] of [
       ['Espacio de trabajo', ['Inicio', 'Proyectos', 'Trabajos', 'Actividad']],
-      ['Fábrica', ['En curso', 'Workflows', 'Aprobaciones', 'Resultados']],
-      ['Administración', ['Proveedores', 'Runners', 'Consumo', 'Ajustes', 'Mantenimiento']],
+      ['Fábrica', ['En curso', 'Workflows', 'Memoria']],
+      ['Administración', ['Agentes', 'Ajustes', 'Mantenimiento']],
     ] as const) {
       const group = within(nav).getByRole('group', { name: area })
       for (const name of links) {
         expect(within(group).getByRole('link', { name })).toBeInTheDocument()
       }
     }
-    expect(within(nav).getByRole('link', { name: 'Runners' })).toHaveAttribute(
+    // Runners es una pestaña de «Agentes»: la entrada de la barra queda marcada.
+    expect(within(nav).getByRole('link', { name: 'Agentes' })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    expect(screen.getByRole('link', { name: 'Skynet: ir al Inicio' })).toHaveAttribute('href', '/')
+    const tabs = screen.getByRole('navigation', { name: 'Agentes' })
+    expect(within(tabs).getByRole('link', { name: 'Runners' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(tabs).getByRole('link', { name: 'Proveedores' })).toHaveAttribute(
+      'href',
+      '/providers',
+    )
+    expect(within(tabs).getByRole('link', { name: 'Consumo' })).toHaveAttribute('href', '/usage')
+    expect(screen.getByRole('button', { name: 'Pregúntale a Skyny' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Saltar al contenido' })).toHaveAttribute(
       'href',
       '#main',
@@ -493,30 +550,28 @@ describe('App', () => {
   it('la página de runners distingue los que no envían latidos', async () => {
     stubApi({ '/api/runners': runners, '/api/runners?archived=all': runners })
     renderAt('/runners', <App />)
-    const stale = (await screen.findByText('runner-02')).closest('tr')!
+    const list = await screen.findByRole('list', { name: 'Runners' })
+    const stale = within(list).getByRole('article', { name: 'runner-02' })
     expect(within(stale).getByText('Sin latido')).toBeInTheDocument()
     expect(
-      within(screen.getByText('runner-01').closest('tr')!).getByText('1 / 2'),
+      within(within(list).getByRole('article', { name: 'runner-01' })).getByText('1 / 2'),
     ).toBeInTheDocument()
   })
 
-  it('en el móvil, la página de runners pinta tarjetas en lugar de tabla', async () => {
-    vi.stubGlobal(
-      'matchMedia',
-      (query: string) =>
-        ({
-          matches: query === '(max-width: 640px)',
-          addEventListener: () => {},
-          removeEventListener: () => {},
-        }) as unknown as MediaQueryList,
-    )
+  it('cada runner es una tarjeta con sus versiones en chips', async () => {
     stubApi({ '/api/runners': runners, '/api/runners?archived=all': runners })
     renderAt('/runners', <App />)
-    const card = (await screen.findByText('runner-01')).closest('li')!
+    const card = await screen.findByRole('article', { name: 'runner-01' })
     expect(screen.queryByRole('table', { name: 'Runners' })).toBeNull()
-    expect(screen.getByRole('list', { name: 'Runners' })).toBeInTheDocument()
-    expect(within(card).getByText('Agentes / capacidad')).toBeInTheDocument()
-    expect(within(card).getByText('1 / 2')).toBeInTheDocument()
+    const versions = within(within(card).getByRole('list', { name: 'Versiones' })).getAllByRole(
+      'listitem',
+    )
+    expect(versions.map((v) => v.textContent)).toEqual([
+      'runner 0.1.0',
+      'Claude Code 2.1.288',
+      'Codex',
+    ])
+    expect(within(card).getByText('Último latido')).toBeInTheDocument()
     expect(within(card).getByRole('button', { name: 'Revocar token…' })).toBeInTheDocument()
   })
 
@@ -911,7 +966,7 @@ describe('App', () => {
     renderAt('/runners', <App />)
     const crumbs = await screen.findByRole('navigation', { name: 'Migas' })
     expect(within(crumbs).getByText('Administración')).toBeInTheDocument()
-    expect(within(crumbs).getByText('Runners')).toHaveAttribute('aria-current', 'page')
+    expect(within(crumbs).getByText('Agentes')).toHaveAttribute('aria-current', 'page')
     expect(within(crumbs).queryByRole('link', { name: /^Volver a/ })).toBeNull()
   })
 
@@ -927,11 +982,14 @@ describe('App', () => {
     fireEvent.click(within(mobile).getByRole('button', { name: 'Más' }))
     const all = await screen.findByRole('navigation', { name: 'Todas las secciones' })
     const admin = within(all).getByRole('group', { name: 'Administración' })
-    expect(within(admin).getByRole('link', { name: 'Runners' })).toHaveAttribute(
+    expect(within(admin).getByRole('link', { name: 'Agentes' })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    expect(within(all).getByRole('link', { name: 'Consumo' })).toHaveAttribute('href', '/usage')
+    expect(within(all).getByRole('link', { name: /^Memoria/ })).toHaveAttribute(
+      'href',
+      '/approvals',
+    )
   })
 
   it('⌘K busca un trabajo por su clave y lo abre', async () => {
@@ -1363,21 +1421,34 @@ describe('App', () => {
     expect(runFetches).toHaveLength(1)
   })
 
-  it('el timeline solo pinta las filas visibles', async () => {
+  it('la actividad pinta lo último arriba, de 50 en 50, con día y hora', async () => {
     vi.stubGlobal('EventSource', FakeEventSource)
     stubApi({})
     renderAt('/activity', <App />)
     await screen.findByRole('heading', { name: /Actividad/ })
     FakeEventSource.last!.emit(
-      ...Array.from({ length: 2000 }, (_, i) => ({
+      ...Array.from({ length: 120 }, (_, i) => ({
         ...(storedEvent as StoredEvent),
         sequence: i + 1,
         type: 'agent.message.received',
         payload: { text: `mensaje ${i + 1}` },
       })),
     )
-    expect(await screen.findByText('Mensaje: mensaje 1')).toBeInTheDocument()
-    expect(document.querySelectorAll('.timeline-item').length).toBeLessThan(100)
+    const table = await screen.findByRole('table')
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((h) => h.textContent),
+    ).toEqual(['Fecha y hora', 'Origen', 'Tipo', 'Descripción'])
+    const rows = () => within(table).getAllByRole('row').slice(1)
+    expect(rows()).toHaveLength(50)
+    expect(rows()[0]).toHaveTextContent('Mensaje: mensaje 120')
+    expect(rows()[0]).toHaveTextContent(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/)
+    fireEvent.click(screen.getByRole('button', { name: 'Ver 50 más' }))
+    expect(rows()).toHaveLength(100)
+    fireEvent.click(screen.getByRole('button', { name: 'Ver 20 más' }))
+    expect(rows()).toHaveLength(120)
+    expect(screen.getByText('120 eventos')).toBeInTheDocument()
   })
 
   it('la actividad enlaza cada evento con el inspector de su ejecución', async () => {
@@ -1392,7 +1463,7 @@ describe('App', () => {
     renderAt('/activity', <App />)
     await screen.findByRole('heading', { name: /Actividad/ })
     FakeEventSource.last!.emit(storedEvent as StoredEvent)
-    fireEvent.click(await screen.findByRole('button', { name: /Read: \/w\/README.md/ }))
+    fireEvent.click(await screen.findByRole('link', { name: /Read: \/w\/README.md/ }))
     expect(await screen.findByRole('tab', { name: 'Evento original' })).toHaveAttribute(
       'aria-selected',
       'true',

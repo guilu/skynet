@@ -69,16 +69,18 @@ export function CommandPalette({
               </Command.Empty>
               {NAV_AREAS.map((area) => (
                 <Command.Group key={area.id} heading={`Ir a · ${area.label}`}>
-                  {area.items.map((n) => (
-                    <Command.Item
-                      key={n.to}
-                      value={`ir a ${n.label} ${area.label}`}
-                      onSelect={() => go(n.to)}
-                    >
-                      <Icon name={n.icon} size={20} strokeWidth={2.25} />
-                      {n.label}
-                    </Command.Item>
-                  ))}
+                  {area.items
+                    .flatMap((i) => i.tabs ?? [i])
+                    .map((n) => (
+                      <Command.Item
+                        key={n.to}
+                        value={`ir a ${n.label} ${area.label}`}
+                        onSelect={() => go(n.to)}
+                      >
+                        <Icon name={n.icon} size={20} strokeWidth={2.25} />
+                        {n.label}
+                      </Command.Item>
+                    ))}
                 </Command.Group>
               ))}
               {!!projects.data?.length && (

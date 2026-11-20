@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 
+/** Estado del control plane: un punto verde, rojo o gris y «CP disponible». */
 export function HealthIndicator() {
   const health = useQuery({
     queryKey: ['health'],
@@ -15,7 +16,10 @@ export function HealthIndicator() {
   const label = { checking: 'comprobando…', up: 'disponible', down: 'no disponible' }[state]
   return (
     <span className={`health health-${state}`} title="Estado del control plane">
-      Control plane: <strong data-testid="health">{label}</strong>
+      <span className="status-dot" aria-hidden="true" />
+      <span className="health-text">
+        <abbr title="Control plane">CP</abbr> <strong data-testid="health">{label}</strong>
+      </span>
     </span>
   )
 }

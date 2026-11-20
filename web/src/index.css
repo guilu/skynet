@@ -88,6 +88,8 @@
   --radius: var(--r-sm);
   --radius-lg: var(--r-lg);
   --sidenav-width: 232px;
+  /* Alto de la barra superior: el botón (44 px), el relleno y el borde inferior. */
+  --topbar-h: calc(44px + 2 * 14px + var(--border-w));
 
   /* Monogramas de los proveedores en las tarjetas de workflow (WF-C): tinta y fondo suave */
   --prov-claude: #a8481f;
@@ -442,9 +444,13 @@
     grid-template-columns: var(--sidenav-width) minmax(0, 1fr);
     grid-template-rows: auto 1fr;
     grid-template-areas:
-      'side top'
+      'top top'
       'side main';
-    min-height: 100vh;
+    /*
+     * dvh: en el iPad y el móvil, 100vh cuenta también la barra del navegador y la página
+     * quedaba un poco más alta que la ventana, con un scroll corto sin nada que ver.
+     */
+    min-height: 100dvh;
   }
 
   .shell[data-collapsed] {
@@ -454,8 +460,8 @@
   .sidebar {
     grid-area: side;
     position: sticky;
-    top: 0;
-    height: 100vh;
+    top: var(--topbar-h);
+    height: calc(100dvh - var(--topbar-h));
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -465,13 +471,21 @@
     background: var(--surface);
   }
 
+  /*
+   * La marca, a la izquierda de la barra superior y tan ancha como la barra lateral: las migas
+   * empiezan donde el contenido. Abre el chat con Skyny.
+   */
   .brand {
+    flex: none;
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 10px;
+    width: calc(var(--sidenav-width) - 4px);
     padding: 4px 8px;
+    border: 0;
     border-radius: var(--r-md);
+    background: none;
+    cursor: pointer;
     font-family: var(--font-display);
     font-weight: 600;
     font-size: 1.5rem;
@@ -664,17 +678,29 @@
     padding-top: var(--space-4);
   }
 
-  .runner-mini {
+  /* Pie de la barra: un recuadro con los runners arriba y el control plane abajo. */
+  .status-box {
+    display: grid;
+    gap: 2px;
+    padding: 4px;
+    border: var(--border-w) solid var(--border);
+    border-radius: var(--r-md);
+    font-size: 0.8125rem;
+    line-height: 1.3;
+  }
+
+  .runner-mini,
+  .status-box .health {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
-    border: var(--border-w) solid var(--border);
-    border-radius: var(--r-md);
+    padding: 6px 8px;
+    border-radius: var(--r-sm);
+  }
+
+  .runner-mini {
     color: var(--fg);
     text-decoration: none;
-    font-size: 0.8125rem;
-    line-height: 1.3;
   }
 
   .runner-mini:hover {
@@ -686,7 +712,7 @@
     min-width: 0;
   }
 
-  .runner-mini-dot {
+  .status-dot {
     flex: none;
     width: 12px;
     height: 12px;
@@ -695,13 +721,23 @@
     box-shadow: 0 0 0 3px var(--ok-soft);
   }
 
-  .runner-mini[data-state='warn'] .runner-mini-dot {
+  .runner-mini[data-state='warn'] .status-dot {
     background: var(--warn);
     box-shadow: 0 0 0 3px var(--warn-soft);
   }
 
-  .sidebar .health {
-    padding: 0 12px;
+  .health-down .status-dot {
+    background: var(--bad);
+    box-shadow: 0 0 0 3px var(--bad-soft);
+  }
+
+  .health-checking .status-dot {
+    background: var(--border-strong);
+    box-shadow: 0 0 0 3px var(--surface-2);
+  }
+
+  .health abbr {
+    text-decoration: none;
   }
 
   /* Plegada: solo iconos; los textos siguen ahí para los lectores de pantalla. */
@@ -710,8 +746,12 @@
     padding: 20px 12px;
   }
 
-  .sidebar[data-collapsed] .brand {
+  .shell[data-collapsed] .topbar .brand {
     padding: 4px 0;
+  }
+
+  .shell[data-collapsed] .topbar .brand-name {
+    display: none;
   }
 
   .sidebar[data-collapsed] .sidenav a,
@@ -720,7 +760,7 @@
     padding: 9px;
   }
 
-  .sidebar[data-collapsed] :is(.nav-label, .brand-name, .runner-mini-text, .health) {
+  .sidebar[data-collapsed] :is(.nav-label, .runner-mini-text, .health-text) {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -729,8 +769,12 @@
     white-space: nowrap;
   }
 
-  .sidebar[data-collapsed] .runner-mini {
-    padding: 12px;
+  .sidebar[data-collapsed] .status-box {
+    justify-items: center;
+  }
+
+  .sidebar[data-collapsed] :is(.runner-mini, .health) {
+    padding: 8px;
   }
 
   .tooltip {
@@ -1137,6 +1181,10 @@
         'main';
     }
 
+    :root {
+      --topbar-h: calc(44px + 2 * 10px + var(--border-w));
+    }
+
     .sidebar {
       display: none;
     }
@@ -1144,6 +1192,15 @@
     .topbar {
       padding: 10px var(--space-4);
       gap: var(--space-2);
+    }
+
+    .topbar .brand {
+      width: auto;
+      padding: 0;
+    }
+
+    .topbar .brand-name {
+      display: none;
     }
 
     .crumbs li:not(:last-child) {
@@ -1741,6 +1798,52 @@
     box-shadow: none;
   }
 
+  /* Pestañas de una sección con varias páginas (Memoria, Agentes): enlaces con aspecto de pestaña. */
+  .section-tabs {
+    display: flex;
+    gap: 4px;
+    width: fit-content;
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 4px;
+    margin-bottom: var(--space-4);
+    background: var(--surface-2);
+    border: var(--border-w) solid var(--border);
+    border-radius: var(--r-md);
+  }
+
+  .section-tabs a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: var(--r-sm);
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .section-tabs a:hover {
+    color: var(--fg);
+  }
+
+  .section-tabs a.active {
+    background: var(--surface);
+    color: var(--fg);
+  }
+
+  @media (max-width: 640px) {
+    .section-tabs a svg {
+      display: none;
+    }
+
+    .section-tabs a {
+      padding: 7px 10px;
+    }
+  }
+
   .segmented {
     display: inline-flex;
     gap: 4px;
@@ -1975,6 +2078,127 @@
   }
 
   /* ---------- Timeline ---------- */
+  /* Filtros del timeline en el móvil: botón «Filtrar» y panel que sube desde abajo. */
+  .filter-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-size: 0.75rem;
+  }
+
+  .filter-sheet {
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .filter-sheet .inline-field {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+  }
+
+  .filter-sheet select {
+    width: 100%;
+  }
+
+  .filter-sheet-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+
+  /* Actividad: tabla a lo ancho de la página, sin panel propio; la cabecera se queda bajo la barra. */
+  .activity-table {
+    width: 100%;
+    margin-top: var(--space-4);
+    /* Separados: con los bordes colapsados, el de la cabecera fija se queda atrás al bajar. */
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.9375rem;
+    line-height: 1.45;
+  }
+
+  .activity-table th {
+    position: sticky;
+    top: var(--topbar-h);
+    z-index: 1;
+    padding: 10px 12px;
+    border-bottom: var(--border-w) solid var(--border);
+    background: var(--bg);
+    color: var(--muted);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .activity-table td {
+    padding: 10px 12px;
+    border-bottom: var(--border-w) solid var(--border);
+    vertical-align: top;
+  }
+
+  .activity-table tbody tr:hover {
+    background: var(--surface-2);
+  }
+
+  .activity-when {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  td.activity-origin {
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .activity-type code {
+    display: block;
+    max-width: 26ch;
+    overflow: hidden;
+    font-size: 0.8125rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .activity-what {
+    width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .activity-what a {
+    color: var(--fg);
+    text-decoration: none;
+  }
+
+  .activity-what a:hover {
+    color: var(--primary-ink);
+    text-decoration: underline;
+  }
+
+  .activity-end {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-6) 0;
+  }
+
+  @media (max-width: 640px) {
+    .activity-table :is(.activity-origin, .activity-type) {
+      display: none;
+    }
+
+    .activity-when {
+      white-space: normal;
+    }
+  }
+
   .timeline-scroll {
     max-height: 60vh;
     min-height: 160px;
@@ -2302,7 +2526,7 @@
 
   main.login:has(.login-card) {
     max-width: 52rem;
-    min-height: 100vh;
+    min-height: 100dvh;
     margin: 0 auto;
     display: grid;
     place-items: center;
@@ -9280,31 +9504,12 @@
     margin-block: -10px;
   }
 
-  .companion-hello {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    margin-top: var(--space-6);
-    padding: 16px 20px;
-    background: color-mix(in oklab, var(--primary-soft) 75%, var(--surface));
-    border-color: color-mix(in oklab, var(--primary) 16%, var(--border));
-  }
-
-  .companion-hello-text {
-    display: grid;
-    gap: 10px;
-    min-width: 0;
-  }
-
-  .companion-hello-text p {
-    margin: 0;
-    font-size: 1.0625rem;
-  }
-
-  .companion-hello-links {
+  /* Atajos de Inicio, bajo el saludo: revisar, lanzar y ver las ejecuciones. */
+  .home-links {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    margin-top: var(--space-4);
   }
 
   .run-band {
@@ -9369,17 +9574,6 @@
 
     .peek-bubble {
       margin-bottom: 20px;
-    }
-
-    /* SV-C: en el móvil, Skyny va encima del texto, centrado. */
-    .companion-hello {
-      flex-direction: column;
-      align-items: stretch;
-      gap: var(--space-2);
-    }
-
-    .companion-hello > .skyny-poke {
-      align-self: center;
     }
   }
 
@@ -9665,6 +9859,123 @@
     padding: 18px 22px;
   }
 
+  /* Lista de proyectos: tarjetas anchas con el resumen en etiquetas. */
+  .proj-rows {
+    display: grid;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Arriba la clave, el nombre, el coste y el menú; debajo, a lo ancho, la descripción y el resumen. */
+  .proj-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px var(--space-4);
+    margin: 0;
+    padding: 16px 20px;
+  }
+
+  .proj-row-title {
+    grid-row: 1;
+    grid-column: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    color: var(--fg);
+    text-decoration: none;
+  }
+
+  .proj-row-title:hover .proj-row-name {
+    color: var(--primary-ink);
+    text-decoration: underline;
+  }
+
+  .proj-row-name {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .proj-row-body {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .proj-row-menu {
+    grid-row: 1;
+    grid-column: 3;
+  }
+
+  .proj-row-desc {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    color: var(--muted);
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .proj-row-bullets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .proj-row-icon {
+    display: inline-flex;
+  }
+
+  .proj-row-icon svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2.25;
+  }
+
+  .proj-row-loading {
+    font-size: 0.8125rem;
+  }
+
+  .proj-row-side {
+    grid-row: 1;
+    grid-column: 2;
+    display: grid;
+    justify-items: end;
+    gap: 2px;
+    white-space: nowrap;
+  }
+
+  .proj-row-cost {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (max-width: 640px) {
+    .proj-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .proj-row-menu {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .proj-row-side {
+      grid-column: 1 / -1;
+      grid-row: 3;
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+  }
+
   .proj-badge {
     display: grid;
     place-items: center;
@@ -9678,6 +9989,143 @@
     font-family: var(--font-mono);
     font-weight: 500;
     font-size: 0.875rem;
+  }
+
+  /* Lista de runners: tarjetas anchas; arriba nombre, estado, carga, latido y acciones; debajo,
+     las versiones en chips. */
+  .runner-rows {
+    display: grid;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .runner-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px var(--space-6);
+    margin: 0;
+    padding: 16px 20px;
+  }
+
+  .runner-row-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .runner-row-name {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .runner-badge {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--r-md);
+    background: var(--ok-soft);
+    color: var(--ok-ink);
+  }
+
+  .runner-badge[data-status='STALE'] {
+    background: var(--warn-soft);
+    color: var(--warn-ink);
+  }
+
+  .runner-badge svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .runner-row-side {
+    display: flex;
+    gap: var(--space-6);
+    margin: 0;
+  }
+
+  .runner-row-side > div {
+    display: grid;
+    gap: 2px;
+  }
+
+  .runner-row-side dt {
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
+  .runner-row-side dd {
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .runner-row-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+  }
+
+  .runner-versions {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .version-chip {
+    color: var(--fg);
+  }
+
+  .version-chip code {
+    padding: 0;
+    background: none;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .version-chip.tag-warn,
+  .version-chip.tag-warn code {
+    color: var(--warn-ink);
+  }
+
+  .version-chip-icon {
+    display: inline-flex;
+  }
+
+  .version-chip-icon svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2.25;
+  }
+
+  @media (max-width: 720px) {
+    .runner-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .runner-row-side {
+      justify-content: space-between;
+    }
+
+    /* En el móvil, las acciones van abajo para que el nombre tenga toda la fila. */
+    .runner-row-actions {
+      grid-row: 4;
+      padding-top: 12px;
+      border-top: var(--border-w) solid var(--border);
+    }
   }
 
   .proj-card-title {
@@ -11448,52 +11896,29 @@
 
 /* ---------- Chat con Skyny (CH-D): la cortina que baja desde la barra superior ---------- */
 @layer components {
-  .skyny-btn {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 8px;
-    height: 44px;
-    padding: 0 10px 0 6px;
-    border: var(--border-w) solid var(--border);
-    border-radius: 999px;
-    background: var(--surface);
-    color: var(--fg);
-    font: inherit;
-    font-weight: 500;
-    cursor: pointer;
-  }
-
-  .skyny-btn:hover {
-    border-color: var(--border-strong);
-  }
-
-  .skyny-btn[aria-expanded='true'] {
-    border-color: var(--primary);
-    background: var(--primary-soft);
-    color: var(--primary-ink);
-  }
-
-  /* Con poco ancho, solo Skyny: la búsqueda necesita el sitio. */
-  @media (max-width: 1100px) {
-    .skyny-btn-label {
-      display: none;
-    }
-  }
-
-  /* Debajo de la barra superior, que queda sin atenuar: de ella baja la cortina. */
+  /*
+   * Debajo de la barra superior (`--topbar-h`, con su borde inferior a la vista), que queda sin
+   * atenuar: de ella baja la cortina.
+   */
   .curtain-overlay {
-    inset: 73px 0 0;
+    inset: var(--topbar-h) 0 0;
     z-index: 40;
     animation: curtain-fade 0.25s ease;
   }
 
   /*
-   * Ocupa casi toda la web, bajo la barra superior. Baja desde el borde inferior de la barra: a la
-   * vez que se desplaza, se recorta por arriba lo mismo, así que nunca se ve por encima de ella.
+   * Con la cortina abierta, la barra superior pasa por delante de ella y se vuelve opaca: la
+   * cortina sale de detrás de la barra, como una persiana.
    */
+  body:has(.curtain) .topbar {
+    z-index: 42;
+    background: var(--bg);
+    backdrop-filter: none;
+  }
+
+  /* Ocupa casi toda la web, bajo la barra superior, y baja desde detrás de ella. */
   .curtain {
-    --curtain-top: 73px;
+    --curtain-top: var(--topbar-h);
     --curtain-gap: 16px;
     position: fixed;
     z-index: 41;
@@ -11509,8 +11934,6 @@
     background: var(--surface);
     box-sizing: border-box;
     outline: none;
-    /* Explícito: entre `none` y un recorte no hay transición. */
-    clip-path: inset(0 0 0 0);
     animation: curtain-down 0.45s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
@@ -11537,14 +11960,12 @@
   @keyframes curtain-down {
     from {
       transform: translateY(-100%);
-      clip-path: inset(100% 0 0 0);
     }
   }
 
   @keyframes curtain-up {
     to {
       transform: translateY(-100%);
-      clip-path: inset(100% 0 0 0);
     }
   }
 
@@ -11903,23 +12324,7 @@
 
   /* Móvil: a lo ancho y hasta abajo. */
   @media (max-width: 720px) {
-    .skyny-btn {
-      width: 44px;
-      padding: 0;
-      justify-content: center;
-    }
-
-    .skyny-btn-label,
-    .skyny-btn .kbd {
-      display: none;
-    }
-
-    .curtain-overlay {
-      inset: 65px 0 0;
-    }
-
     .curtain {
-      --curtain-top: 65px;
       --curtain-gap: 8px;
       border-radius: 0 0 24px 24px;
     }
