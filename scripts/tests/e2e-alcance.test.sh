@@ -8,11 +8,11 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 SCRIPT=$ROOT/scripts/ci/e2e-alcance.sh
 failures=0 passed=0
 
-# espera descripción rápidas lentas evento etiquetas ficheros...
+# espera descripción rápidas lentas evento etiquetas ficheros... (TITULO del entorno)
 espera() {
   local what=$1 rapidas=$2 lentas=$3 evento=$4 etiquetas=$5; shift 5
   local out
-  out=$(printf '%s\n' "$@" | EVENTO=$evento ETIQUETAS=$etiquetas "$SCRIPT")
+  out=$(printf '%s\n' "$@" | EVENTO=$evento ETIQUETAS=$etiquetas TITULO=${TITULO:-} "$SCRIPT")
   if grep -qx "rapidas=$rapidas" <<< "$out" && grep -qx "lentas=$lentas" <<< "$out"; then
     passed=$((passed + 1))
   else
@@ -47,6 +47,20 @@ espera 'etiqueta con nombre parecido' false false pull_request 'e2e-completo-no'
 # La etiqueta e2e-completo lanza todas, toque lo que toque.
 espera 'e2e-completo con código' true true pull_request 'bug,e2e-completo' web/src/App.tsx
 espera 'e2e-completo solo con docs' true true pull_request 'e2e-completo' docs/a.md
+
+# Una PR «UI:» de solo web no las lanza; si toca las E2E o algo fuera de web/, sí.
+TITULO='UI: Runners en tarjetas' espera 'UI: solo web' false false pull_request '' \
+  web/src/App.tsx web/src/index.css docs/a.md
+TITULO='UI: algo' espera 'UI: toca las E2E' true false pull_request '' web/src/App.tsx web/e2e/run.e2e.ts
+TITULO='UI: algo' espera 'UI: toca playwright.config' true false pull_request '' web/playwright.config.ts
+TITULO='UI: algo' espera 'UI: toca el backend' true false pull_request '' web/src/App.tsx \
+  control-plane/src/A.java
+TITULO='UI: algo' espera 'UI: solo docs' false false pull_request '' docs/a.md
+TITULO='UI: algo' espera 'UI: con e2e-completo' true true pull_request 'e2e-completo' web/src/App.tsx
+TITULO='SV-A - Algo de web' espera 'sin UI: corren' true false pull_request '' web/src/App.tsx
+TITULO='ui: en minúsculas' espera 'ui: en minúsculas no cuenta' true false pull_request '' \
+  web/src/App.tsx
+TITULO='UI: algo' EVENTO=push espera 'UI: en push a main' true true push '' web/src/App.tsx
 
 # La matriz: 6 shards de rápidas y 4 de lentas, JSON válido.
 matriz() { printf '%s\n' "$@" | EVENTO=${EVENTO:-pull_request} "$SCRIPT" | sed -n 's/^matriz=//p'; }
