@@ -4,9 +4,9 @@ import { can3D } from './look'
 
 const Skyny3D = lazy(() => import('./three/Skyny3D'))
 
-/** Lo que mide el Skyny 3D del login; el 2D de respaldo ocupa lo mismo que antes. */
-const SIZE_3D = 152
-const SIZE_2D = 128
+/** Lo que mide el Skyny del login: grande, protagonista de la pantalla. */
+const SIZE_3D = 240
+const SIZE_2D = 180
 
 /**
  * Skyny del login (TD-A): en 3D (three, en un trozo aparte que solo se descarga aquí) y, mientras

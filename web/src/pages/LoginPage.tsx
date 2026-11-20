@@ -8,8 +8,8 @@ import { Button } from '../components/ui/Button'
 import { Pill } from '../components/ui/Pill'
 
 /**
- * Entrada a la web con el usuario único del control plane. Casi sin texto: Skyny centrado en su
- * panel con tres estados de muestra, y el formulario. Skyny (en 3D desde TD-A) sigue con los
+ * Entrada a la web con el usuario único del control plane. Una columna centrada, sin recuadro:
+ * Skyny grande con tres estados de muestra, el saludo y el formulario. Skyny (en 3D desde TD-A) sigue con los
  * ojos lo que haces, se tapa los ojos mientras escribes la contraseña y mira de reojo si la
  * muestras (SY-C).
  */
