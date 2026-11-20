@@ -446,7 +446,11 @@
     grid-template-areas:
       'top top'
       'side main';
-    min-height: 100vh;
+    /*
+     * dvh: en el iPad y el móvil, 100vh cuenta también la barra del navegador y la página
+     * quedaba un poco más alta que la ventana, con un scroll corto sin nada que ver.
+     */
+    min-height: 100dvh;
   }
 
   .shell[data-collapsed] {
@@ -457,7 +461,7 @@
     grid-area: side;
     position: sticky;
     top: var(--topbar-h);
-    height: calc(100vh - var(--topbar-h));
+    height: calc(100dvh - var(--topbar-h));
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -2522,7 +2526,7 @@
 
   main.login:has(.login-card) {
     max-width: 52rem;
-    min-height: 100vh;
+    min-height: 100dvh;
     margin: 0 auto;
     display: grid;
     place-items: center;
