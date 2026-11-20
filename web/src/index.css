@@ -9855,6 +9855,123 @@
     padding: 18px 22px;
   }
 
+  /* Lista de proyectos: tarjetas anchas con el resumen en etiquetas. */
+  .proj-rows {
+    display: grid;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Arriba la clave, el nombre, el coste y el menú; debajo, a lo ancho, la descripción y el resumen. */
+  .proj-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px var(--space-4);
+    margin: 0;
+    padding: 16px 20px;
+  }
+
+  .proj-row-title {
+    grid-row: 1;
+    grid-column: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    color: var(--fg);
+    text-decoration: none;
+  }
+
+  .proj-row-title:hover .proj-row-name {
+    color: var(--primary-ink);
+    text-decoration: underline;
+  }
+
+  .proj-row-name {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .proj-row-body {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .proj-row-menu {
+    grid-row: 1;
+    grid-column: 3;
+  }
+
+  .proj-row-desc {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    color: var(--muted);
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .proj-row-bullets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .proj-row-icon {
+    display: inline-flex;
+  }
+
+  .proj-row-icon svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2.25;
+  }
+
+  .proj-row-loading {
+    font-size: 0.8125rem;
+  }
+
+  .proj-row-side {
+    grid-row: 1;
+    grid-column: 2;
+    display: grid;
+    justify-items: end;
+    gap: 2px;
+    white-space: nowrap;
+  }
+
+  .proj-row-cost {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (max-width: 640px) {
+    .proj-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .proj-row-menu {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .proj-row-side {
+      grid-column: 1 / -1;
+      grid-row: 3;
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+  }
+
   .proj-badge {
     display: grid;
     place-items: center;

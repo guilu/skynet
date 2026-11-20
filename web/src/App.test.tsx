@@ -155,6 +155,52 @@ describe('App', () => {
     expect(await screen.findByText('disponible')).toBeInTheDocument()
   })
 
+  it('cada proyecto es una tarjeta con su resumen en etiquetas', async () => {
+    stubApi({
+      '/api/projects': [
+        {
+          id: 'p1',
+          key: 'TKM',
+          name: 'TokenMeter',
+          description: 'Mide tokens',
+          createdAt: '2026-11-07T19:09:06Z',
+        },
+      ],
+      '/api/projects/p1/overview': {
+        projectId: 'p1',
+        since: '2026-10-21T00:00:00Z',
+        openWorkItems: 4,
+        activeRuns: 1,
+        openPullRequests: 2,
+        mergedPullRequests: 3,
+        pendingApprovals: 1,
+        costUsd: 18.3,
+        repositories: [{ id: 'r1' }],
+        workItems: [],
+      },
+    })
+    renderAt('/projects', <App />)
+    const card = await screen.findByRole('article', { name: 'TKM · TokenMeter' })
+    expect(within(card).getByRole('link', { name: 'TKM TokenMeter' })).toHaveAttribute(
+      'href',
+      '/projects/p1',
+    )
+    const bullets = await within(card).findByRole('list', { name: 'Resumen' })
+    expect(
+      within(bullets)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual([
+      '1 repositorio',
+      '4 trabajos abiertos',
+      '1 ejecución en marcha',
+      '2 PRs abiertas · 3 fusionadas',
+      '1 aprobación pendiente',
+    ])
+    expect(card).toHaveTextContent('18,30 US$ en 30 días')
+    expect(card).toHaveTextContent('Creado el 07/11/2026')
+  })
+
   it('«Nuevo proyecto» abre el formulario en un panel lateral y lo cierra al crear', async () => {
     const project = { id: 'p2', key: 'NEW', name: 'Nuevo', description: null, createdAt: '' }
     const fetch = stubApi({ '/api/projects': [], 'POST /api/projects': project })
