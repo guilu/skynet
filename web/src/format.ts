@@ -7,6 +7,19 @@ const time = new Intl.DateTimeFormat('es-ES', { timeStyle: 'medium' })
 export const formatDateTime = (iso: string | null) => (iso ? dateTime.format(new Date(iso)) : '—')
 export const formatTime = (iso: string) => time.format(new Date(iso))
 
+const stamp = new Intl.DateTimeFormat('es-ES', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+})
+
+/** Día y hora completos, «20/11/2026 07:24:36», en la hora local. */
+export const formatStamp = (iso: string) => stamp.format(new Date(iso)).replace(',', '')
+
 const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Pendiente',
   READY: 'Lista',

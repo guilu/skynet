@@ -1377,21 +1377,34 @@ describe('App', () => {
     expect(runFetches).toHaveLength(1)
   })
 
-  it('el timeline solo pinta las filas visibles', async () => {
+  it('la actividad pinta lo último arriba, de 50 en 50, con día y hora', async () => {
     vi.stubGlobal('EventSource', FakeEventSource)
     stubApi({})
     renderAt('/activity', <App />)
     await screen.findByRole('heading', { name: /Actividad/ })
     FakeEventSource.last!.emit(
-      ...Array.from({ length: 2000 }, (_, i) => ({
+      ...Array.from({ length: 120 }, (_, i) => ({
         ...(storedEvent as StoredEvent),
         sequence: i + 1,
         type: 'agent.message.received',
         payload: { text: `mensaje ${i + 1}` },
       })),
     )
-    expect(await screen.findByText('Mensaje: mensaje 1')).toBeInTheDocument()
-    expect(document.querySelectorAll('.timeline-item').length).toBeLessThan(100)
+    const table = await screen.findByRole('table')
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((h) => h.textContent),
+    ).toEqual(['Fecha y hora', 'Origen', 'Tipo', 'Descripción'])
+    const rows = () => within(table).getAllByRole('row').slice(1)
+    expect(rows()).toHaveLength(50)
+    expect(rows()[0]).toHaveTextContent('Mensaje: mensaje 120')
+    expect(rows()[0]).toHaveTextContent(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/)
+    fireEvent.click(screen.getByRole('button', { name: 'Ver 50 más' }))
+    expect(rows()).toHaveLength(100)
+    fireEvent.click(screen.getByRole('button', { name: 'Ver 20 más' }))
+    expect(rows()).toHaveLength(120)
+    expect(screen.getByText('120 eventos')).toBeInTheDocument()
   })
 
   it('la actividad enlaza cada evento con el inspector de su ejecución', async () => {
@@ -1406,7 +1419,7 @@ describe('App', () => {
     renderAt('/activity', <App />)
     await screen.findByRole('heading', { name: /Actividad/ })
     FakeEventSource.last!.emit(storedEvent as StoredEvent)
-    fireEvent.click(await screen.findByRole('button', { name: /Read: \/w\/README.md/ }))
+    fireEvent.click(await screen.findByRole('link', { name: /Read: \/w\/README.md/ }))
     expect(await screen.findByRole('tab', { name: 'Evento original' })).toHaveAttribute(
       'aria-selected',
       'true',

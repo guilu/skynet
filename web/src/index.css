@@ -2074,6 +2074,127 @@
   }
 
   /* ---------- Timeline ---------- */
+  /* Filtros del timeline en el móvil: botón «Filtrar» y panel que sube desde abajo. */
+  .filter-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-size: 0.75rem;
+  }
+
+  .filter-sheet {
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .filter-sheet .inline-field {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+  }
+
+  .filter-sheet select {
+    width: 100%;
+  }
+
+  .filter-sheet-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+
+  /* Actividad: tabla a lo ancho de la página, sin panel propio; la cabecera se queda bajo la barra. */
+  .activity-table {
+    width: 100%;
+    margin-top: var(--space-4);
+    /* Separados: con los bordes colapsados, el de la cabecera fija se queda atrás al bajar. */
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.9375rem;
+    line-height: 1.45;
+  }
+
+  .activity-table th {
+    position: sticky;
+    top: var(--topbar-h);
+    z-index: 1;
+    padding: 10px 12px;
+    border-bottom: var(--border-w) solid var(--border);
+    background: var(--bg);
+    color: var(--muted);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .activity-table td {
+    padding: 10px 12px;
+    border-bottom: var(--border-w) solid var(--border);
+    vertical-align: top;
+  }
+
+  .activity-table tbody tr:hover {
+    background: var(--surface-2);
+  }
+
+  .activity-when {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  td.activity-origin {
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .activity-type code {
+    display: block;
+    max-width: 26ch;
+    overflow: hidden;
+    font-size: 0.8125rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .activity-what {
+    width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .activity-what a {
+    color: var(--fg);
+    text-decoration: none;
+  }
+
+  .activity-what a:hover {
+    color: var(--primary-ink);
+    text-decoration: underline;
+  }
+
+  .activity-end {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-6) 0;
+  }
+
+  @media (max-width: 640px) {
+    .activity-table :is(.activity-origin, .activity-type) {
+      display: none;
+    }
+
+    .activity-when {
+      white-space: normal;
+    }
+  }
+
   .timeline-scroll {
     max-height: 60vh;
     min-height: 160px;

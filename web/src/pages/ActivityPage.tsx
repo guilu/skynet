@@ -1,8 +1,6 @@
 import { useMemo } from 'react'
-import { useNavigate } from 'react-router'
-import { eventLink } from '../components/run/eventLink'
 import { useRunSelection } from '../components/run/useRunSelection'
-import { Timeline } from '../components/timeline/Timeline'
+import { ActivityTable } from '../components/timeline/ActivityTable'
 import { aggregateTimeline, matchesFilters } from '../components/timeline/timeline'
 import { TimelineFiltersBar } from '../components/timeline/TimelineFiltersBar'
 import { STREAM } from '../components/run/stream'
@@ -10,11 +8,10 @@ import { Pill } from '../components/ui/Pill'
 import { useEventStream } from '../useEventStream'
 
 /**
- * Todos los eventos del sistema en tiempo real, los últimos abajo, con los filtros del timeline
- * en la URL; los de una ejecución abren su inspector.
+ * Todos los eventos del sistema en tiempo real, en una tabla con lo último arriba y scroll
+ * infinito, con los filtros del timeline en la URL; los de una ejecución abren su inspector.
  */
 export function ActivityPage() {
-  const navigate = useNavigate()
   const [selection, select] = useRunSelection()
   const { events, state } = useEventStream({})
   const entries = useMemo(() => aggregateTimeline(events), [events])
@@ -36,14 +33,7 @@ export function ActivityPage() {
         agents={[]}
         onChange={(filters) => select({ filters })}
       />
-      <Timeline
-        entries={visible}
-        selected={null}
-        onSelect={(e) => {
-          const link = eventLink(e)
-          if (link) void navigate(link)
-        }}
-      />
+      <ActivityTable entries={visible} />
     </>
   )
 }
