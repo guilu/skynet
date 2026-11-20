@@ -7,6 +7,7 @@ import { useTheme } from '../theme'
 import { BrandMark } from './brand/Logo'
 import { CompanionMenu } from './companion/CompanionMenu'
 import { CompanionProvider } from './companion/CompanionProvider'
+import { preloadSkyny3D } from './companion/load3d'
 import { NoticeBell } from './companion/NoticeBell'
 import { SkynyPaused } from './companion/pause'
 import { useCompanionPrefs } from './companion/prefs'
@@ -63,6 +64,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       queryClient.setQueryData(SESSION_KEY, null)
     },
   })
+
+  // three en un rato libre: la cortina del chat y En curso sacan a Skyny ya en 3D.
+  useEffect(preloadSkyny3D, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

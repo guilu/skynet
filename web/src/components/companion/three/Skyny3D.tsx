@@ -15,22 +15,31 @@ export interface LiveInfo {
   compact?: boolean
 }
 
+/** Cuánto más grande que Skyny es el lienzo por defecto: sitio para globos y complementos. */
+export const ROOM = 1.5
+
 /**
  * Skyny en 3D (TD): flota, parpadea y sigue con la mirada al cursor y al foco, y se tapa los ojos
  * (`cover`) o mira de reojo (`peek`). Con `live` (SV-B), escribe en la pantalla lo que hace al
  * cambiar de estado, enseña el contador y solo sigue al cursor cuando pasa cerca de la cara. Va en
  * un trozo aparte (React.lazy) con three; si WebGL falla al arrancar o se pierde el contexto,
  * avisa con `onFail` para volver al 2D. Bajo la cortina del chat (`SkynyPaused`), se para.
+ *
+ * `size` es lo que ocupa en la página; el lienzo mide `size × room` y se sale por igual por los
+ * cuatro lados (sin capturar clics), para que los globos, el sombrero o un gesto no se corten.
+ * Aparece con un fundido.
  */
 export default function Skyny3D({
   state = 'calm',
   size,
+  room = ROOM,
   pose,
   live,
   onFail,
 }: {
   state?: CompanionState
   size: number
+  room?: number
   pose?: Pose3D
   live?: LiveInfo
   onFail: () => void
@@ -45,6 +54,8 @@ export default function Skyny3D({
     latest.current = { state, live, paused }
   })
   const isLive = live !== undefined
+  const px = Math.round(size * room)
+  const overflow = (px - size) / 2
 
   useEffect(() => {
     const el = canvas.current
@@ -60,7 +71,7 @@ export default function Skyny3D({
       return
     }
     scene.current = skyny
-    skyny.resize(size)
+    skyny.resize(px, px, room)
     const first = latest.current
     if (first.live) {
       skyny.setCompact(!!first.live.compact)
@@ -104,7 +115,7 @@ export default function Skyny3D({
       skyny.dispose()
       scene.current = null
     }
-  }, [size, isLive])
+  }, [px, room, isLive])
 
   useEffect(() => {
     if (paused) scene.current?.stop()
@@ -131,9 +142,9 @@ export default function Skyny3D({
     <canvas
       ref={canvas}
       className="skyny-3d"
-      width={size}
-      height={size}
-      style={{ width: size, height: size }}
+      width={px}
+      height={px}
+      style={{ width: px, height: px, margin: -overflow }}
       data-state={state}
       data-pose={pose}
       aria-hidden="true"

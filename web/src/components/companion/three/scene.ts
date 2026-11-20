@@ -307,9 +307,14 @@ export class SkynyScene {
     this.blinkUntil = performance.now() + BLINK_MS
   }
 
-  resize(width: number, height = width) {
+  /**
+   * Tamaño del lienzo. Con `room` > 1 el lienzo crece y la cámara se aleja en la misma proporción:
+   * Skyny se ve igual de grande y quedan márgenes para globos, sombreros y gestos.
+   */
+  resize(width: number, height = width, room = 1) {
     this.renderer.setSize(width, height, false)
     this.camera.aspect = width / height
+    this.camera.zoom = 1 / room
     this.camera.updateProjectionMatrix()
   }
 
