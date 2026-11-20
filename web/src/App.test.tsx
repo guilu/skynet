@@ -550,30 +550,28 @@ describe('App', () => {
   it('la página de runners distingue los que no envían latidos', async () => {
     stubApi({ '/api/runners': runners, '/api/runners?archived=all': runners })
     renderAt('/runners', <App />)
-    const stale = (await screen.findByText('runner-02')).closest('tr')!
+    const list = await screen.findByRole('list', { name: 'Runners' })
+    const stale = within(list).getByRole('article', { name: 'runner-02' })
     expect(within(stale).getByText('Sin latido')).toBeInTheDocument()
     expect(
-      within(screen.getByText('runner-01').closest('tr')!).getByText('1 / 2'),
+      within(within(list).getByRole('article', { name: 'runner-01' })).getByText('1 / 2'),
     ).toBeInTheDocument()
   })
 
-  it('en el móvil, la página de runners pinta tarjetas en lugar de tabla', async () => {
-    vi.stubGlobal(
-      'matchMedia',
-      (query: string) =>
-        ({
-          matches: query === '(max-width: 640px)',
-          addEventListener: () => {},
-          removeEventListener: () => {},
-        }) as unknown as MediaQueryList,
-    )
+  it('cada runner es una tarjeta con sus versiones en chips', async () => {
     stubApi({ '/api/runners': runners, '/api/runners?archived=all': runners })
     renderAt('/runners', <App />)
-    const card = (await screen.findByText('runner-01')).closest('li')!
+    const card = await screen.findByRole('article', { name: 'runner-01' })
     expect(screen.queryByRole('table', { name: 'Runners' })).toBeNull()
-    expect(screen.getByRole('list', { name: 'Runners' })).toBeInTheDocument()
-    expect(within(card).getByText('Agentes / capacidad')).toBeInTheDocument()
-    expect(within(card).getByText('1 / 2')).toBeInTheDocument()
+    const versions = within(within(card).getByRole('list', { name: 'Versiones' })).getAllByRole(
+      'listitem',
+    )
+    expect(versions.map((v) => v.textContent)).toEqual([
+      'runner 0.1.0',
+      'Claude Code 2.1.288',
+      'Codex',
+    ])
+    expect(within(card).getByText('Último latido')).toBeInTheDocument()
     expect(within(card).getByRole('button', { name: 'Revocar token…' })).toBeInTheDocument()
   })
 

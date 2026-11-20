@@ -570,7 +570,11 @@ export function providerName(id: string): string {
   return PROVIDER_NAMES[id] ?? id
 }
 
-/** Proveedores de un runner: «Claude Code 2.1.288 · Codex». */
+/** El número de versión de lo que responde un CLI a --version: «codex-cli 0.50.0» → «0.50.0». */
+export function shortVersion(raw: string): string {
+  return raw.match(/\d+(?:\.\d+)+[\w.+-]*/)?.[0] ?? raw
+}
+
 /** Nombres de los proveedores de un runner que usan un CLI simulado (AR-A). */
 export function simulatedProviders(providers: { id: string; simulated: boolean }[]): string[] {
   return providers.filter((p) => p.simulated).map((p) => providerName(p.id))

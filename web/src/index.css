@@ -9991,6 +9991,143 @@
     font-size: 0.875rem;
   }
 
+  /* Lista de runners: tarjetas anchas; arriba nombre, estado, carga, latido y acciones; debajo,
+     las versiones en chips. */
+  .runner-rows {
+    display: grid;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .runner-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px var(--space-6);
+    margin: 0;
+    padding: 16px 20px;
+  }
+
+  .runner-row-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .runner-row-name {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .runner-badge {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--r-md);
+    background: var(--ok-soft);
+    color: var(--ok-ink);
+  }
+
+  .runner-badge[data-status='STALE'] {
+    background: var(--warn-soft);
+    color: var(--warn-ink);
+  }
+
+  .runner-badge svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .runner-row-side {
+    display: flex;
+    gap: var(--space-6);
+    margin: 0;
+  }
+
+  .runner-row-side > div {
+    display: grid;
+    gap: 2px;
+  }
+
+  .runner-row-side dt {
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
+  .runner-row-side dd {
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .runner-row-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+  }
+
+  .runner-versions {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .version-chip {
+    color: var(--fg);
+  }
+
+  .version-chip code {
+    padding: 0;
+    background: none;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .version-chip.tag-warn,
+  .version-chip.tag-warn code {
+    color: var(--warn-ink);
+  }
+
+  .version-chip-icon {
+    display: inline-flex;
+  }
+
+  .version-chip-icon svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2.25;
+  }
+
+  @media (max-width: 720px) {
+    .runner-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .runner-row-side {
+      justify-content: space-between;
+    }
+
+    /* En el móvil, las acciones van abajo para que el nombre tenga toda la fila. */
+    .runner-row-actions {
+      grid-row: 4;
+      padding-top: 12px;
+      border-top: var(--border-w) solid var(--border);
+    }
+  }
+
   .proj-card-title {
     flex: 1;
     min-width: 0;
