@@ -54,6 +54,51 @@
   /* Lo gastado fuera de Skynet en los medidores de cuota (rayado) */
   --other: #a3aec2;
   /* Mascota (CO-A): nodos blancos y visor oscuro en los dos temas */
+  /* Cuerpo de Skyny 3D en cada estado: los colores del estudio (v4.4). */
+  --skyny-3d-calm: #9ac2ff;
+  --skyny-3d-sleeping: #b8c2d1;
+  --skyny-3d-ready: #b8c7de;
+  --skyny-3d-thinking: #c2abff;
+  --skyny-3d-running: #ffb385;
+  --skyny-3d-reviewing: #9ac2ff;
+  --skyny-3d-success: #86e3b3;
+  --skyny-3d-error: #ffa3a3;
+  --skyny-3d-waiting: #ffd970;
+  --skyny-3d-paused: #bcc4d1;
+  --skyny-3d-offline: #aeb7c4;
+  --skyny-3d-cancelled: #bcc4d1;
+  --skyny-3d-handover: #ddd6fe;
+  --skyny-3d-throttled: #d9f99d;
+  --skyny-3d-escalating: #f5d0fe;
+  --skyny-3d-streaming: #a5f3fc;
+  --skyny-3d-syncing: #bae6fd;
+  --skyny-3d-dry-run: #bfdbfe;
+  --skyny-3d-pr-open: #bbf7d0;
+  --skyny-3d-compacting: #c7d2fe;
+  --skyny-3d-conflict: #fed7aa;
+  --skyny-3d-context-indexing: #99f6e4;
+  --skyny-3d-guardrail: #fecdd3;
+  --skyny-3d-rate-limited: #fcd34d;
+  --skyny-3d-benchmarking: #fef08a;
+  --skyny-3d-rolling-back: #fdba74;
+  --skyny-3d-delegating: #c4b5fd;
+  --skyny-3d-routing: #99f6e4;
+  --skyny-3d-sandbox: #a7f3d0;
+  --skyny-3d-recalling: #cbc6ee;
+  --skyny-3d-check-result: #edcf95;
+  --skyny-3d-external-wait: #b7d0ec;
+  --skyny-3d-listening: #a4dfe7;
+  --skyny-3d-no-results: #bed5ee;
+  --skyny-3d-planning: #c7d2fe;
+  --skyny-3d-coding: #7de8e0;
+  --skyny-3d-testing: #d9f99d;
+  --skyny-3d-healing: #fed7aa;
+  --skyny-3d-auditing: #7ae7c7;
+  --skyny-3d-merging: #d8b4fe;
+  --skyny-3d-deploying: #80d4ff;
+  --skyny-3d-learning: #f3e8ff;
+  --skyny-3d-celebrating: #fbb6ce;
+  --skyny-3d-overloaded: #fbd38d;
   --companion-node: #ffffff;
   --companion-visor: #1c2345;
   --companion-bezel: #c7cbd1;
@@ -153,6 +198,50 @@
     --bad-btn-shade: #d13f3f;
     --on-state-btn: #0b1022;
     --other: #6f7b93;
+    --skyny-3d-calm: #7da6ff;
+    --skyny-3d-sleeping: #94a3b8;
+    --skyny-3d-ready: #9cb3d9;
+    --skyny-3d-thinking: #b89eff;
+    --skyny-3d-running: #ffa875;
+    --skyny-3d-reviewing: #7da6ff;
+    --skyny-3d-success: #6ee7b7;
+    --skyny-3d-error: #ff9494;
+    --skyny-3d-waiting: #fcd34d;
+    --skyny-3d-paused: #94a3b8;
+    --skyny-3d-offline: #8892a4;
+    --skyny-3d-cancelled: #94a3b8;
+    --skyny-3d-handover: #c4b5fd;
+    --skyny-3d-throttled: #bef264;
+    --skyny-3d-escalating: #f0abfc;
+    --skyny-3d-streaming: #67e8f9;
+    --skyny-3d-syncing: #7dd3fc;
+    --skyny-3d-dry-run: #93c5fd;
+    --skyny-3d-pr-open: #86efac;
+    --skyny-3d-compacting: #a5b4fc;
+    --skyny-3d-conflict: #fb923c;
+    --skyny-3d-context-indexing: #5eead4;
+    --skyny-3d-guardrail: #fda4af;
+    --skyny-3d-rate-limited: #fcd34d;
+    --skyny-3d-benchmarking: #fde047;
+    --skyny-3d-rolling-back: #fdba74;
+    --skyny-3d-delegating: #c4b5fd;
+    --skyny-3d-routing: #67e8f9;
+    --skyny-3d-sandbox: #6ee7b7;
+    --skyny-3d-recalling: #a8a0df;
+    --skyny-3d-check-result: #e3bc70;
+    --skyny-3d-external-wait: #94b7e0;
+    --skyny-3d-listening: #78cfdd;
+    --skyny-3d-no-results: #9bbce3;
+    --skyny-3d-planning: #a5b4fc;
+    --skyny-3d-coding: #4fd1c5;
+    --skyny-3d-testing: #bef264;
+    --skyny-3d-healing: #fdba74;
+    --skyny-3d-auditing: #5eead4;
+    --skyny-3d-merging: #c084fc;
+    --skyny-3d-deploying: #60c5ff;
+    --skyny-3d-learning: #d8b4fe;
+    --skyny-3d-celebrating: #f49cbb;
+    --skyny-3d-overloaded: #f6ad55;
     --companion-node: #f4f6ff;
     --companion-visor: #11162c;
     --companion-bezel: #9ea4ae;
@@ -219,6 +308,50 @@
   --bad-btn-shade: #d13f3f;
   --on-state-btn: #0b1022;
   --other: #6f7b93;
+  --skyny-3d-calm: #7da6ff;
+  --skyny-3d-sleeping: #94a3b8;
+  --skyny-3d-ready: #9cb3d9;
+  --skyny-3d-thinking: #b89eff;
+  --skyny-3d-running: #ffa875;
+  --skyny-3d-reviewing: #7da6ff;
+  --skyny-3d-success: #6ee7b7;
+  --skyny-3d-error: #ff9494;
+  --skyny-3d-waiting: #fcd34d;
+  --skyny-3d-paused: #94a3b8;
+  --skyny-3d-offline: #8892a4;
+  --skyny-3d-cancelled: #94a3b8;
+  --skyny-3d-handover: #c4b5fd;
+  --skyny-3d-throttled: #bef264;
+  --skyny-3d-escalating: #f0abfc;
+  --skyny-3d-streaming: #67e8f9;
+  --skyny-3d-syncing: #7dd3fc;
+  --skyny-3d-dry-run: #93c5fd;
+  --skyny-3d-pr-open: #86efac;
+  --skyny-3d-compacting: #a5b4fc;
+  --skyny-3d-conflict: #fb923c;
+  --skyny-3d-context-indexing: #5eead4;
+  --skyny-3d-guardrail: #fda4af;
+  --skyny-3d-rate-limited: #fcd34d;
+  --skyny-3d-benchmarking: #fde047;
+  --skyny-3d-rolling-back: #fdba74;
+  --skyny-3d-delegating: #c4b5fd;
+  --skyny-3d-routing: #67e8f9;
+  --skyny-3d-sandbox: #6ee7b7;
+  --skyny-3d-recalling: #a8a0df;
+  --skyny-3d-check-result: #e3bc70;
+  --skyny-3d-external-wait: #94b7e0;
+  --skyny-3d-listening: #78cfdd;
+  --skyny-3d-no-results: #9bbce3;
+  --skyny-3d-planning: #a5b4fc;
+  --skyny-3d-coding: #4fd1c5;
+  --skyny-3d-testing: #bef264;
+  --skyny-3d-healing: #fdba74;
+  --skyny-3d-auditing: #5eead4;
+  --skyny-3d-merging: #c084fc;
+  --skyny-3d-deploying: #60c5ff;
+  --skyny-3d-learning: #d8b4fe;
+  --skyny-3d-celebrating: #f49cbb;
+  --skyny-3d-overloaded: #f6ad55;
   --companion-node: #f4f6ff;
   --companion-visor: #11162c;
   --companion-bezel: #9ea4ae;
@@ -1643,50 +1776,6 @@
     --ink: var(--live-ink);
   }
 
-  /* Boceto «Skyny en los bullets»: la píldora crece un poco y Skyny hace de bullet. */
-  .pill-skyny {
-    gap: 4px;
-    padding: 4px 14px 4px 6px;
-    font-size: 0.8125rem;
-  }
-
-  .pill-face {
-    display: grid;
-    place-items: center;
-    flex: none;
-    margin: -3px 0 -3px -2px;
-  }
-
-  .pill-face .companion {
-    display: block;
-  }
-
-  /* Cuando Skyny y el tono del estado no casan, la píldora toma el color de Skyny. */
-  .pill-skyny[data-face='running'] {
-    --soft: color-mix(in srgb, var(--skyny-orange) 16%, var(--surface));
-    --ink: color-mix(in srgb, var(--skyny-orange) 45%, var(--fg));
-  }
-
-  .pill-skyny:is([data-face='reviewing'], [data-face='calm']) {
-    --soft: var(--primary-soft);
-    --ink: var(--primary-ink);
-  }
-
-  .pill-skyny[data-face='offline'] {
-    --soft: var(--idle-soft);
-    --ink: var(--idle-ink);
-  }
-
-  .pill-skyny[data-face='waiting'] {
-    --soft: var(--warn-soft);
-    --ink: var(--warn-ink);
-  }
-
-  .pill-skyny[data-face='error'] {
-    --soft: var(--bad-soft);
-    --ink: var(--bad-ink);
-  }
-
   .pill-active .pill-icon {
     animation: var(--animate-pulse-ring);
   }
@@ -2524,8 +2613,9 @@
     padding: 0 var(--space-4);
   }
 
+  /* Una columna centrada, sin recuadro: Skyny grande, los estados, el saludo y el formulario. */
   main.login:has(.login-card) {
-    max-width: 52rem;
+    max-width: 24rem;
     min-height: 100dvh;
     margin: 0 auto;
     display: grid;
@@ -2535,41 +2625,36 @@
   .login-card {
     width: 100%;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-    border: var(--border-w) solid var(--border);
-    border-radius: var(--r-lg);
-    box-shadow: none;
-    background: var(--surface);
-    overflow: hidden;
+    padding: var(--space-6) 0;
   }
 
+  /* El hueco de Skyny: se puede tocar (¡boop!) y girar arrastrando */
   .login-hero {
     display: grid;
-    align-content: center;
+    justify-self: center;
     justify-items: center;
-    gap: var(--space-4);
-    padding: 40px 32px;
-    background: var(--primary-soft);
-    border-right: var(--border-w) solid var(--border);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
 
-  .login-states {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+  .login-hero:active {
+    cursor: grabbing;
   }
 
   .login-form {
-    padding: 40px 32px;
+    padding-top: var(--space-6);
   }
 
   .login-form h1 {
     margin-top: 0;
     font-size: 2rem;
+    text-align: center;
+  }
+
+  .login-form .btn {
+    width: 100%;
   }
 
   .login h1:focus {
@@ -2609,22 +2694,6 @@
   .login-reveal:hover,
   .login-reveal[aria-pressed='true'] {
     color: var(--primary);
-  }
-
-  @media (max-width: 640px) {
-    .login-card {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .login-hero {
-      border-right: none;
-      border-bottom: var(--border-w) solid var(--border);
-      padding: 24px;
-    }
-
-    .login-form {
-      padding: 24px;
-    }
   }
 
   /* ---------- Métricas del dashboard ---------- */
@@ -9103,12 +9172,20 @@
     margin-bottom: 4px;
   }
 
-  /* Galería de Ajustes › Companion */
+  /* Ajustes › Companion: vista previa en 3D, lo que lleva puesto y los 34 estados */
   .companion-stage {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    gap: 20px;
+    gap: 24px;
     align-items: center;
+    margin-bottom: var(--space-4);
+  }
+
+  .companion-preview {
+    display: grid;
+    place-items: center;
+    width: 220px;
+    height: 220px;
   }
 
   .companion-moves {
@@ -9118,64 +9195,109 @@
     margin-top: var(--space-3);
   }
 
-  .companion-gallery {
+  .companion-outfit {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
+    margin: var(--space-4) 0 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .companion-outfit legend {
+    margin-bottom: 8px;
+    padding: 0;
+    font-weight: 600;
+  }
+
+  .companion-outfit label {
+    display: grid;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .companion-outfit .hint {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+
+  .companion-group-title {
+    margin: 20px 0 10px;
+  }
+
+  .companion-states {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 6px;
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  .companion-tile {
-    display: grid;
-    justify-items: center;
-    gap: 4px;
+  .companion-state {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     width: 100%;
-    padding: 10px 6px 8px;
+    padding: 8px 10px;
     border: var(--border-w) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
     color: var(--fg);
     font: inherit;
-    font-size: 0.85rem;
+    font-size: 0.875rem;
     font-weight: 500;
+    text-align: left;
     cursor: pointer;
   }
 
-  .companion-tile[aria-pressed='true'] {
+  .companion-state:hover {
+    background: var(--surface-2);
+  }
+
+  .companion-state[aria-pressed='true'] {
     border-color: var(--primary);
     background: var(--primary-soft);
     color: var(--primary-ink);
   }
 
-  .companion-seasons-title {
-    margin: 20px 0 10px;
-  }
-
-  .companion-seasons .companion-tile {
-    cursor: default;
-    text-align: center;
-  }
-
-  .companion-seasons .companion-tile small {
-    font-size: 0.75rem;
-    font-weight: 400;
-  }
-
-  .companion-seasons .companion-tile[data-off] {
-    opacity: 0.55;
-  }
-
-  .companion-tile:focus-visible {
+  .companion-state:focus-visible {
     outline: 3px solid var(--focus);
     outline-offset: 2px;
+  }
+
+  .companion-swatch {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 12%, transparent);
   }
 
   @media (max-width: 640px) {
     .companion-stage {
       grid-template-columns: minmax(0, 1fr);
       justify-items: center;
+      text-align: center;
+    }
+
+    .companion-moves {
+      justify-content: center;
+    }
+
+    .companion-outfit {
+      grid-template-columns: minmax(0, 1fr);
+      text-align: left;
+    }
+
+    .companion-states {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .companion-state {
+      padding: 8px;
+      font-size: 0.8rem;
     }
   }
 
@@ -9455,6 +9577,23 @@
     border-radius: var(--r-md);
     background: none;
     cursor: pointer;
+  }
+
+  /* El Skyny 3D sale con un fundido; su lienzo se sale de su hueco sin tapar clics. */
+  .skyny-3d {
+    display: block;
+    pointer-events: none;
+    animation: skyny-in 260ms ease-out;
+  }
+
+  .skyny-slot {
+    display: block;
+  }
+
+  @keyframes skyny-in {
+    from {
+      opacity: 0;
+    }
   }
 
   .skyny-poke:active .companion,

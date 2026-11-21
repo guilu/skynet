@@ -1,8 +1,10 @@
 import { useContext, useEffect, useRef } from 'react'
 import { prefersReducedMotion } from '../look'
+import { useOutfit, type Outfit } from '../outfit'
 import { SkynyPaused } from '../pause'
-import type { CompanionState } from '../state'
 import { SkynyScene, type Pose3D } from './scene'
+import { attachSpin } from './spin'
+import type { SkynyState } from './states'
 import { onThemeChange, readColors } from './tokens'
 
 /** Lo que cuenta Skyny en vivo (SV-B): letreros al cambiar de estado y contador. */
@@ -15,36 +17,67 @@ export interface LiveInfo {
   compact?: boolean
 }
 
+/** Cuánto más grande que Skyny es el lienzo por defecto: sitio para globos y complementos. */
+export const ROOM = 1.5
+
 /**
  * Skyny en 3D (TD): flota, parpadea y sigue con la mirada al cursor y al foco, y se tapa los ojos
  * (`cover`) o mira de reojo (`peek`). Con `live` (SV-B), escribe en la pantalla lo que hace al
  * cambiar de estado, enseña el contador y solo sigue al cursor cuando pasa cerca de la cara. Va en
  * un trozo aparte (React.lazy) con three; si WebGL falla al arrancar o se pierde el contexto,
  * avisa con `onFail` para volver al 2D. Bajo la cortina del chat (`SkynyPaused`), se para.
+ *
+ * `size` es lo que ocupa en la página; el lienzo mide `size × room` y se sale por igual por los
+ * cuatro lados (sin capturar clics), para que los globos, el sombrero o un gesto no se corten.
+ * Aparece con un fundido.
  */
 export default function Skyny3D({
   state = 'calm',
   size,
+  room = ROOM,
   pose,
   live,
+  outfit,
+  replay = 0,
+  boop = 0,
+  ticker,
+  say,
+  interactive = false,
   onFail,
 }: {
-  state?: CompanionState
+  state?: SkynyState
   size: number
+  room?: number
   pose?: Pose3D
   live?: LiveInfo
+  /** Gorro y complementos; por defecto, los de Ajustes › Companion. */
+  outfit?: Outfit
+  /** Al cambiar, repite el gesto de entrada del estado (Ajustes › Companion). */
+  replay?: number
+  /** Al cambiar, ¡boop!: un toque en la cara. */
+  boop?: number
+  /** Letreros que pasan deslizándose por la pantalla en reposo (login). */
+  ticker?: { lines: string[]; loopFrom?: number; delay?: number } | null
+  /** Un letrero ya, tecleado; sale otra vez cada vez que cambia `key`. */
+  say?: { text: string | string[]; key: number; error?: boolean; hold?: number } | null
+  /** Se puede tocar (¡boop!) y girar arrastrando; se marea si gira deprisa (login). */
+  interactive?: boolean
   onFail: () => void
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const scene = useRef<SkynyScene | null>(null)
   const fail = useRef(onFail)
   const paused = useContext(SkynyPaused)
-  const latest = useRef({ state, live, paused })
+  const saved = useOutfit()
+  const { hat, face, back } = outfit ?? saved
+  const latest = useRef({ state, live, paused, hat, face, back, ticker, say })
   useEffect(() => {
     fail.current = onFail
-    latest.current = { state, live, paused }
+    latest.current = { state, live, paused, hat, face, back, ticker, say }
   })
   const isLive = live !== undefined
+  const px = Math.round(size * room)
+  const overflow = (px - size) / 2
 
   useEffect(() => {
     const el = canvas.current
@@ -60,8 +93,13 @@ export default function Skyny3D({
       return
     }
     scene.current = skyny
-    skyny.resize(size)
+    skyny.resize(px, px, room)
     const first = latest.current
+    skyny.setHat(first.hat)
+    skyny.setFace(first.face)
+    skyny.setBack(first.back)
+    if (first.ticker) skyny.setTicker(first.ticker.lines, first.ticker)
+    if (first.say) skyny.say(first.say.text, first.say)
     if (first.live) {
       skyny.setCompact(!!first.live.compact)
       skyny.setProgress(first.live.progress?.[0] ?? null, first.live.progress?.[1])
@@ -104,7 +142,25 @@ export default function Skyny3D({
       skyny.dispose()
       scene.current = null
     }
-  }, [size, isLive])
+  }, [px, room, isLive])
+
+  useEffect(() => {
+    const host = canvas.current?.parentElement
+    if (!interactive || !host || !scene.current) return
+    return attachSpin(scene.current, host)
+  }, [interactive, px, room, isLive])
+
+  const tickerLines = ticker?.lines.join('\n')
+  useEffect(() => {
+    const t = latest.current.ticker
+    scene.current?.setTicker(t?.lines ?? null, t ?? {})
+  }, [tickerLines])
+
+  const sayKey = say?.key
+  useEffect(() => {
+    const s = latest.current.say
+    if (s && sayKey !== undefined) scene.current?.say(s.text, s)
+  }, [sayKey])
 
   useEffect(() => {
     if (paused) scene.current?.stop()
@@ -113,7 +169,7 @@ export default function Skyny3D({
 
   const message = live?.message
   useEffect(() => {
-    if (scene.current && scene.current.current !== state)
+    if (scene.current && scene.current.state !== state)
       scene.current.setState(state, { message: latest.current.live?.message })
   }, [state, message])
 
@@ -127,13 +183,27 @@ export default function Skyny3D({
     scene.current?.setPose(pose)
   }, [pose])
 
+  useEffect(() => {
+    if (replay) scene.current?.setState(latest.current.state)
+  }, [replay])
+
+  useEffect(() => {
+    if (boop) scene.current?.poke()
+  }, [boop])
+
+  useEffect(() => {
+    scene.current?.setHat(hat)
+    scene.current?.setFace(face)
+    scene.current?.setBack(back)
+  }, [hat, face, back])
+
   return (
     <canvas
       ref={canvas}
       className="skyny-3d"
-      width={size}
-      height={size}
-      style={{ width: size, height: size }}
+      width={px}
+      height={px}
+      style={{ width: px, height: px, margin: -overflow }}
       data-state={state}
       data-pose={pose}
       aria-hidden="true"
