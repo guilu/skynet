@@ -46,11 +46,11 @@ npm run studio:export   # → dist-studio/skyny-studio.html
 
 Mete three, el código, los estilos y las fuentes en un único fichero que se abre con doble clic (sin servidor), para enseñarlo o adjuntarlo. Es una salida generada: no se edita ni se sube al repo.
 
-## Qué hace Skyny 3D (estudio v4.3)
+## Qué hace Skyny 3D (estudio v4.4)
 
-El motor es el del estudio v4.3 (`plans/skyny-3d/skyny-v4.3.html` en la carpeta del proyecto), pasado a módulos:
+El motor es el del estudio v4.4 (`plans/skyny-3d/skyny-v4.4.html` en la carpeta del proyecto), pasado a módulos:
 
-- **34 estados**: los 12 del companion de la web (Reposo, Pensando, Ejecutando…) y 22 más de flujos agénticos (Bloqueado por seguridad, Cooldown, Evaluando, Delegando, Enrutando, Sandbox, Recordando…). Cada uno con sus ojos, su accesorio, su gesto de entrada y su letrero (`STATES_META`, `STATE_CONFIG`, `LED_MESSAGES`).
+- **44 estados**: los 12 del companion de la web (Reposo, Pensando, Ejecutando…) y 32 más de flujos agénticos (Bloqueado por seguridad, Cooldown, Evaluando, Delegando, Relevo, Modo eco, Conflicto de Git, Pull Request…). Cada uno con sus ojos, su accesorio, su gesto de entrada y su letrero (`STATES_META`, `STATE_CONFIG`, `LED_MESSAGES`).
 - **Al cambiar de estado**, los colores y la postura se funden, el accesorio anterior se desvanece y llega el gesto de entrada del nuevo.
 - **Letreros en la pantalla**: al acabar el gesto escribe letra a letra lo que hace, con cursor, y vuelve a poner los ojos. En compacto usa los cortos (`LED_COMPACT`). `setState(estado, { message })` pone otro letrero (p. ej. `retryMessage(1, 2)` → «REINTENTO 1/2»). Solo hay trazo para las letras que usa algún letrero: un letrero nuevo con otras letras necesita sus glifos en `LED_GLYPHS` (`screen.ts`), y `states.test.ts` lo comprueba.
 - **Gorro, cara y espalda** (`extras.ts`): ingeniero, headset, mago, corona, detective, antena, Navidad y verano; gafas de sol, cybervisor y pipa; jetpack. `setHat`, `setFace` y `setBack`. Se eligen en Ajustes › Companion, se guardan en el navegador y Skyny los lleva en toda la web; sin gorro elegido, lleva el de temporada.
@@ -65,25 +65,25 @@ El motor es el del estudio v4.3 (`plans/skyny-3d/skyny-v4.3.html` en la carpeta 
 
 Todo en `web/src/components/companion/three/`. Los ficheros del motor son JavaScript del estudio con `// @ts-nocheck`; la API que usa la web está tipada (`SkynyScene`, `SkynyExtras`, `SkynyState`).
 
-| Fichero | Qué tiene |
-|---|---|
-| `states.ts` | Los 34 estados (`STATES_META`), su aspecto (`STATE_CONFIG`) y sus letreros (`LED_MESSAGES`, `LED_COMPACT`) |
-| `model.ts` | Cuerpo, bandas, cara, manos, materiales y suelo (`buildSkynyModel`) |
-| `accessories.ts` | Los accesorios de cada estado (`createAccessory`) |
-| `extras.ts` | Gorros, complementos de cara y de espalda (`createExtras`, `HATS`, `FACES`, `BACKS`) |
-| `screen.ts` | Pantalla: ojos, letreros y trazos de las letras (`LED_GLYPHS`) |
-| `math.ts` | Curvas de ayuda (`clamp01`, `smoothstep`, `easeOutCubic`) |
-| `scene.ts` | `SkynyScene`: junta todo y lo anima |
-| `spin.ts` | Tocar y girar a Skyny arrastrando (login) |
-| `transitions.ts` | Las demos (`DEMOS`, `DemoRunner`) y `retryMessage` |
-| `tokens.ts` | Colores leídos del tema |
-| `Skyny3D.tsx` | El componente de React que usa la web (lee el gorro y los complementos de las preferencias) |
+| Fichero          | Qué tiene                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| `states.ts`      | Los 44 estados (`STATES_META`), su aspecto (`STATE_CONFIG`) y sus letreros (`LED_MESSAGES`, `LED_COMPACT`) |
+| `model.ts`       | Cuerpo, bandas, cara, manos, materiales y suelo (`buildSkynyModel`)                                        |
+| `accessories.ts` | Los accesorios de cada estado (`createAccessory`)                                                          |
+| `extras.ts`      | Gorros, complementos de cara y de espalda (`createExtras`, `HATS`, `FACES`, `BACKS`)                       |
+| `screen.ts`      | Pantalla: ojos, letreros y trazos de las letras (`LED_GLYPHS`)                                             |
+| `math.ts`        | Curvas de ayuda (`clamp01`, `smoothstep`, `easeOutCubic`)                                                  |
+| `scene.ts`       | `SkynyScene`: junta todo y lo anima                                                                        |
+| `spin.ts`        | Tocar y girar a Skyny arrastrando (login)                                                                  |
+| `transitions.ts` | Las demos (`DEMOS`, `DemoRunner`) y `retryMessage`                                                         |
+| `tokens.ts`      | Colores leídos del tema                                                                                    |
+| `Skyny3D.tsx`    | El componente de React que usa la web (lee el gorro y los complementos de las preferencias)                |
 
 La página del estudio es `web/skyny-studio.html` + `web/src/studio/` (solo la interfaz: vistas, complementos, botones y lista). En el móvil, los controles se pliegan bajo «Controles» y la lista de estados va en un cajón abajo (Agrandar / Recoger / Mostrar).
 
 ## Colores
 
-El cuerpo de cada estado es su token `--skyny-3d-<estado>` de `index.css` (claro y oscuro), con los colores claros del estudio v4.3; las bandas son ese color oscurecido. No sigue el acento de la paleta ni el `--c-lo` del Skyny 2D: Diego quiere el 3D como en el estudio. Los ojos usan `--companion-glow` y `--companion-eye`; los nodos, `--companion-node`.
+El cuerpo de cada estado es su token `--skyny-3d-<estado>` de `index.css` (claro y oscuro), con los colores claros del estudio v4.4; las bandas son ese color oscurecido. No sigue el acento de la paleta ni el `--c-lo` del Skyny 2D: Diego quiere el 3D como en el estudio. Los ojos usan `--companion-glow` y `--companion-eye`; los nodos, `--companion-node`.
 
 Para cambiar el color de un estado en 3D, cambia su `--skyny-3d-<estado>` en los tres bloques de `index.css` (claro, oscuro del sistema y `[data-theme='dark']`). Solo los ojos de algunos estados tienen color fijo, en `states.ts`.
 

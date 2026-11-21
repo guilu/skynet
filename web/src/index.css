@@ -54,7 +54,7 @@
   /* Lo gastado fuera de Skynet en los medidores de cuota (rayado) */
   --other: #a3aec2;
   /* Mascota (CO-A): nodos blancos y visor oscuro en los dos temas */
-  /* Cuerpo de Skyny 3D en cada estado: los colores del estudio v4.3. */
+  /* Cuerpo de Skyny 3D en cada estado: los colores del estudio (v4.4). */
   --skyny-3d-calm: #9ac2ff;
   --skyny-3d-sleeping: #b8c2d1;
   --skyny-3d-ready: #b8c7de;
@@ -67,6 +67,16 @@
   --skyny-3d-paused: #bcc4d1;
   --skyny-3d-offline: #aeb7c4;
   --skyny-3d-cancelled: #bcc4d1;
+  --skyny-3d-handover: #ddd6fe;
+  --skyny-3d-throttled: #d9f99d;
+  --skyny-3d-escalating: #f5d0fe;
+  --skyny-3d-streaming: #a5f3fc;
+  --skyny-3d-syncing: #bae6fd;
+  --skyny-3d-dry-run: #bfdbfe;
+  --skyny-3d-pr-open: #bbf7d0;
+  --skyny-3d-compacting: #c7d2fe;
+  --skyny-3d-conflict: #fed7aa;
+  --skyny-3d-context-indexing: #99f6e4;
   --skyny-3d-guardrail: #fecdd3;
   --skyny-3d-rate-limited: #fcd34d;
   --skyny-3d-benchmarking: #fef08a;
@@ -200,6 +210,16 @@
     --skyny-3d-paused: #94a3b8;
     --skyny-3d-offline: #8892a4;
     --skyny-3d-cancelled: #94a3b8;
+    --skyny-3d-handover: #c4b5fd;
+    --skyny-3d-throttled: #bef264;
+    --skyny-3d-escalating: #f0abfc;
+    --skyny-3d-streaming: #67e8f9;
+    --skyny-3d-syncing: #7dd3fc;
+    --skyny-3d-dry-run: #93c5fd;
+    --skyny-3d-pr-open: #86efac;
+    --skyny-3d-compacting: #a5b4fc;
+    --skyny-3d-conflict: #fb923c;
+    --skyny-3d-context-indexing: #5eead4;
     --skyny-3d-guardrail: #fda4af;
     --skyny-3d-rate-limited: #fcd34d;
     --skyny-3d-benchmarking: #fde047;
@@ -300,6 +320,16 @@
   --skyny-3d-paused: #94a3b8;
   --skyny-3d-offline: #8892a4;
   --skyny-3d-cancelled: #94a3b8;
+  --skyny-3d-handover: #c4b5fd;
+  --skyny-3d-throttled: #bef264;
+  --skyny-3d-escalating: #f0abfc;
+  --skyny-3d-streaming: #67e8f9;
+  --skyny-3d-syncing: #7dd3fc;
+  --skyny-3d-dry-run: #93c5fd;
+  --skyny-3d-pr-open: #86efac;
+  --skyny-3d-compacting: #a5b4fc;
+  --skyny-3d-conflict: #fb923c;
+  --skyny-3d-context-indexing: #5eead4;
   --skyny-3d-guardrail: #fda4af;
   --skyny-3d-rate-limited: #fcd34d;
   --skyny-3d-benchmarking: #fde047;

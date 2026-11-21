@@ -1,6 +1,7 @@
 // @ts-nocheck -- motor portado del estudio v4.3 sin tipar; la API que usa la web la tipa
 // `SkynyScene` (scene.ts) y la prueban los tests de Skyny3D.
-// Portado del estudio v4.3 (plans/skyny-3d/skyny-v4.3.html).
+// Portado del estudio v4.4 (plans/skyny-3d/skyny-v4.4.html).
+import { clamp01 } from './math'
 
 // =========================================================================
 // 4. PANTALLA 2D DEL VISOR (Ojos y Texto LED con la 'F' y 'W' completas)
@@ -410,6 +411,11 @@ export function renderEyesBase(ctx, eyeType, colors, offset, overrideColor, sacc
           ctx.fill()
         }
         break
+      case 'eco-eyes':
+        // Píldoras bajas y relajadas de ahorro energético (55% de altura)
+        roundPill(cx - 92, cy - 34, 46, 68, 22)
+        roundPill(cx + 46, cy - 34, 46, 68, 22)
+        break
       case 'shield-eyes':
         ctx.lineWidth = 16
         for (const s of [-1, 1]) {
@@ -427,6 +433,37 @@ export function renderEyesBase(ctx, eyeType, colors, offset, overrideColor, sacc
           ctx.fill()
         }
         break
+      case 'conflict-eyes':
+        ctx.lineWidth = 24
+        for (const s of [-1, 1]) {
+          const bx = cx + s * 74
+          ctx.beginPath()
+          ctx.moveTo(bx - 38, cy - s * 18)
+          ctx.lineTo(bx + 38, cy + s * 18)
+          ctx.stroke()
+          roundPill(bx - 18, cy - 4, 36, 44, 16)
+        }
+        break
+      case 'compact-eyes': {
+        // Ojos concentrados que se estrechan verticalmente según la presión de las manos (saccade[0] = 0..1)
+        const squeeze = clamp01(saccade[0])
+        const hPill = Math.round(124 - squeeze * 72)
+        const wPill = Math.round(44 + squeeze * 12)
+        roundPill(cx - 70 - wPill / 2, cy - hPill / 2, wPill, hPill, Math.min(22, hPill / 2))
+        roundPill(cx + 70 - wPill / 2, cy - hPill / 2, wPill, hPill, Math.min(22, hPill / 2))
+        break
+      }
+      case 'stream-eyes': {
+        // Pupilas con latido rítmico alterno al ritmo de la emisión de tokens en vivo
+        const beat = saccade[0]
+        const pulseL = 1 + Math.sin(beat) * 0.18
+        const pulseR = 1 + Math.cos(beat) * 0.18
+        const hL = Math.round(122 * pulseL)
+        const hR = Math.round(122 * pulseR)
+        roundPill(cx - 92, cy - hL / 2, 44, hL, 22)
+        roundPill(cx + 48, cy - hR / 2, 44, hR, 22)
+        break
+      }
       case 'dizzy':
         ctx.lineWidth = 10
         const spinAngle = performance.now() * 0.008

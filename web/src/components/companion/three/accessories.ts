@@ -1,6 +1,6 @@
 // @ts-nocheck -- motor portado del estudio v4.3 sin tipar; la API que usa la web la tipa
 // `SkynyScene` (scene.ts) y la prueban los tests de Skyny3D.
-// Portado del estudio v4.3 (plans/skyny-3d/skyny-v4.3.html).
+// Portado del estudio v4.4 (plans/skyny-3d/skyny-v4.4.html).
 import * as THREE from 'three'
 import { clamp01, smoothstep } from './math'
 import { createBodyGeometry } from './model'
@@ -58,6 +58,597 @@ export function cooldownCharge(elapsedMs, moving) {
 export function createAccessory(type, palette) {
   const group = new THREE.Group()
   switch (type) {
+    case 'relay-baton': {
+      const relayGroup = new THREE.Group()
+      relayGroup.name = 'relayBaton'
+
+      // Cápsula / testigo luminoso de relevo entre agentes
+      const batonUnit = new THREE.Group()
+      batonUnit.name = 'batonCapsule'
+
+      const coreMat = plasticMat(0xc4b5fd)
+      coreMat.emissive = new THREE.Color(0x8b5cf6)
+      coreMat.emissiveIntensity = 0.75
+      const coreCylinder = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.048, 0.048, 0.22, 24),
+        coreMat,
+      )
+
+      const capMat = plasticMat(0x38bdf8)
+      capMat.emissive = new THREE.Color(0x0284c7).multiplyScalar(0.5)
+      ;[-0.125, 0.125].forEach((yOff) => {
+        const endCap = new THREE.Mesh(new THREE.SphereGeometry(0.052, 20, 16), capMat)
+        endCap.position.y = yOff
+        batonUnit.add(endCap)
+      })
+
+      // Aro de energía central en el testigo
+      const bandShape = new THREE.Shape().absarc(0, 0, 0.068, 0, Math.PI * 2, false)
+      bandShape.holes.push(new THREE.Path().absarc(0, 0, 0.052, 0, Math.PI * 2, true))
+      const bandRing = extrudeShape(
+        bandShape,
+        0.016,
+        new THREE.MeshBasicMaterial({
+          color: 0xf3e8ff,
+          transparent: true,
+          opacity: 0.9,
+          side: THREE.DoubleSide,
+        }),
+      )
+      bandRing.rotation.x = Math.PI / 2
+
+      batonUnit.add(coreCylinder, bandRing)
+      batonUnit.rotation.z = 0.45
+
+      // Aro de destello al recibir el testigo en la mano derecha
+      const catchShape = new THREE.Shape().absarc(0, 0, 0.22, 0, Math.PI * 2, false)
+      catchShape.holes.push(new THREE.Path().absarc(0, 0, 0.185, 0, Math.PI * 2, true))
+      const catchRing = extrudeShape(
+        catchShape,
+        0.014,
+        new THREE.MeshBasicMaterial({
+          color: 0xd8b4fe,
+          transparent: true,
+          opacity: 0.85,
+          side: THREE.DoubleSide,
+        }),
+      )
+      catchRing.name = 'relayCatchRing'
+
+      relayGroup.add(batonUnit, catchRing)
+      group.add(relayGroup)
+      break
+    }
+    case 'eco-leaf': {
+      const ecoGroup = new THREE.Group()
+      ecoGroup.name = 'ecoLeaf'
+
+      // Hoja orgánica 3D con nervadura central en verde lima
+      const leafShape = new THREE.Shape()
+      leafShape.moveTo(0, -0.17)
+      leafShape.quadraticCurveTo(0.15, -0.05, 0.12, 0.1)
+      leafShape.quadraticCurveTo(0.06, 0.19, 0, 0.24)
+      leafShape.quadraticCurveTo(-0.06, 0.19, -0.12, 0.1)
+      leafShape.quadraticCurveTo(-0.15, -0.05, 0, -0.17)
+      leafShape.closePath()
+
+      const leafMat = plasticMat(0x84cc16)
+      leafMat.emissive = new THREE.Color(0x65a30d).multiplyScalar(0.35)
+      const leafMesh = extrudeShape(leafShape, 0.022, leafMat)
+      leafMesh.rotation.z = -0.32
+
+      // Nervadura central y tallo
+      const veinMat = plasticMat(0xd9f99d)
+      const vein = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.34, 0.028), veinMat)
+      vein.position.y = 0.01
+      leafMesh.add(vein)
+
+      // Anillo suave de eficiencia energética alrededor de la hoja
+      const ringShape = new THREE.Shape().absarc(0, 0, 0.28, 0, Math.PI * 2, false)
+      ringShape.holes.push(new THREE.Path().absarc(0, 0, 0.248, 0, Math.PI * 2, true))
+      const ecoRing = extrudeShape(
+        ringShape,
+        0.012,
+        new THREE.MeshBasicMaterial({
+          color: 0xbef264,
+          transparent: true,
+          opacity: 0.68,
+          side: THREE.DoubleSide,
+        }),
+      )
+      ecoRing.name = 'ecoPulseRing'
+
+      ecoGroup.add(leafMesh, ecoRing)
+      ecoGroup.position.set(0.84, 0.66, 0.44)
+      group.add(ecoGroup)
+      break
+    }
+    case 'upgrade-chevrons': {
+      const escGroup = new THREE.Group()
+      escGroup.name = 'upgradeChevrons'
+
+      // Tres galones ascendentes (▲ ▲ ▲) que se iluminan secuencialmente de abajo arriba
+      const chevronsGrp = new THREE.Group()
+      chevronsGrp.name = 'chevronStack'
+      for (let i = 0; i < 3; i++) {
+        const chevShape = new THREE.Shape()
+        const w = 0.22 - i * 0.015
+        const h = 0.11
+        const thick = 0.044
+        chevShape.moveTo(-w, 0)
+        chevShape.lineTo(0, h)
+        chevShape.lineTo(w, 0)
+        chevShape.lineTo(w - thick * 0.85, -thick * 0.7)
+        chevShape.lineTo(0, h - thick * 1.15)
+        chevShape.lineTo(-w + thick * 0.85, -thick * 0.7)
+        chevShape.closePath()
+
+        const mat = plasticMat(0xe879f9)
+        mat.emissive = new THREE.Color(0xc026d3)
+        mat.emissiveIntensity = 0.35
+        mat.transparent = true
+
+        const mesh = extrudeShape(chevShape, 0.024, mat)
+        mesh.position.set(0, -0.16 + i * 0.16, 0)
+        mesh.userData = { idx: i }
+        chevronsGrp.add(mesh)
+      }
+
+      // Anillo de pulso ascendente de subida de nivel
+      const boostShape = new THREE.Shape().absarc(0, 0, 0.42, 0, Math.PI * 2, false)
+      boostShape.holes.push(new THREE.Path().absarc(0, 0, 0.385, 0, Math.PI * 2, true))
+      const boostRing = extrudeShape(
+        boostShape,
+        0.014,
+        new THREE.MeshBasicMaterial({
+          color: 0xf0abfc,
+          transparent: true,
+          opacity: 0.75,
+          side: THREE.DoubleSide,
+        }),
+      )
+      boostRing.rotation.x = Math.PI / 2
+      boostRing.name = 'escalateBoostRing'
+
+      escGroup.add(chevronsGrp, boostRing)
+      escGroup.position.set(0, 0.08, 1.18)
+      group.add(escGroup)
+      break
+    }
+    case 'token-stream': {
+      const streamGroup = new THREE.Group()
+      streamGroup.name = 'tokenStream'
+
+      // Aro emisor holográfico frente al visor
+      const emitterShape = new THREE.Shape().absarc(0, 0, 0.3, 0, Math.PI * 2, false)
+      emitterShape.holes.push(new THREE.Path().absarc(0, 0, 0.268, 0, Math.PI * 2, true))
+      const emitterRing = extrudeShape(
+        emitterShape,
+        0.015,
+        new THREE.MeshBasicMaterial({
+          color: 0x22d3ee,
+          transparent: true,
+          opacity: 0.52,
+          side: THREE.DoubleSide,
+        }),
+      )
+      emitterRing.name = 'streamEmitter'
+      streamGroup.add(emitterRing)
+
+      // Cascada de 16 bloques/tokens luminosos brotando hacia adelante
+      const tokenColors = [0x22d3ee, 0x67e8f9, 0x38bdf8, 0xa5f3fc]
+      const tokensGrp = new THREE.Group()
+      tokensGrp.name = 'streamTokens'
+      for (let i = 0; i < 16; i++) {
+        const col = tokenColors[i % tokenColors.length]
+        const mat = new THREE.MeshBasicMaterial({
+          color: col,
+          transparent: true,
+          opacity: 0.92,
+        })
+        const w = 0.062 + (i % 3) * 0.028
+        const tok = new THREE.Mesh(new THREE.BoxGeometry(w, 0.034, 0.034), mat)
+        tok.userData = {
+          phase: i / 16,
+          laneX: ((i % 3) - 1) * 0.14 + ((i % 2) - 0.5) * 0.038,
+          laneY: (Math.floor(i / 4) % 2 === 0 ? 1 : -1) * (0.052 + (i % 3) * 0.04),
+          spinDir: i % 2 === 0 ? 1 : -1,
+        }
+        tokensGrp.add(tok)
+      }
+      streamGroup.add(tokensGrp)
+      streamGroup.position.set(0, -0.04, 1.08)
+      group.add(streamGroup)
+      break
+    }
+    case 'sync-arrows': {
+      const syncGroup = new THREE.Group()
+      syncGroup.name = 'syncArrows'
+
+      const skyMat = plasticMat(0x38bdf8)
+      skyMat.emissive = new THREE.Color(0x0284c7).multiplyScalar(0.45)
+      const iceMat = plasticMat(0x7dd3fc)
+      iceMat.emissive = new THREE.Color(0x38bdf8).multiplyScalar(0.35)
+
+      // Dos flechas curvas opuestas formando un ciclo continuo de sincronización
+      ;[0, Math.PI].forEach((rotOffset, idx) => {
+        const arm = new THREE.Group()
+        arm.rotation.z = rotOffset
+
+        const rArc = 0.25
+        const aStart = 0.22
+        const aEnd = Math.PI - 0.36
+        const pts = []
+        for (let i = 0; i <= 32; i++) {
+          const a = aStart + (i / 32) * (aEnd - aStart)
+          pts.push(new THREE.Vector3(Math.cos(a) * rArc, Math.sin(a) * rArc, 0))
+        }
+        const mat = idx === 0 ? skyMat : iceMat
+        const tube = new THREE.Mesh(
+          new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 32, 0.028, 12),
+          mat,
+        )
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.068, 0.125, 18), mat)
+        tip.position.copy(pts[pts.length - 1])
+        tip.rotation.z = aEnd
+
+        arm.add(tube, tip)
+        syncGroup.add(arm)
+      })
+
+      // Dos pulsos luminosos que orbitan intercambiando datos entre ramas
+      const pulseA = new THREE.Mesh(
+        new THREE.SphereGeometry(0.036, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0xe0f2fe }),
+      )
+      pulseA.name = 'syncPulseA'
+      const pulseB = new THREE.Mesh(
+        new THREE.SphereGeometry(0.036, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0x38bdf8 }),
+      )
+      pulseB.name = 'syncPulseB'
+
+      syncGroup.add(pulseA, pulseB)
+      syncGroup.position.set(0, -0.08, 1.02)
+      group.add(syncGroup)
+      break
+    }
+    case 'holo-wireframe': {
+      const holoGroup = new THREE.Group()
+      holoGroup.name = 'holoWireframe'
+
+      // Engranaje / cubo holográfico fantasma en wireframe azul hielo
+      const gearUnit = new THREE.Group()
+      gearUnit.name = 'holoGear'
+
+      const ghostMat = new THREE.MeshBasicMaterial({
+        color: 0x60a5fa,
+        transparent: true,
+        opacity: 0.14,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+      const wireMat = new THREE.LineBasicMaterial({
+        color: 0x93c5fd,
+        transparent: true,
+        opacity: 0.92,
+      })
+
+      // Engranaje 3D extruido con dientes
+      const gearShape = new THREE.Shape()
+      const teeth = 8
+      const rInner = 0.13,
+        rOuter = 0.18
+      for (let i = 0; i < teeth * 4; i++) {
+        const a = (i / (teeth * 4)) * Math.PI * 2
+        const mod = i % 4
+        const r = mod === 1 || mod === 2 ? rOuter : rInner
+        const px = Math.cos(a) * r,
+          py = Math.sin(a) * r
+        if (i === 0) gearShape.moveTo(px, py)
+        else gearShape.lineTo(px, py)
+      }
+      gearShape.closePath()
+      gearShape.holes.push(new THREE.Path().absarc(0, 0, 0.055, 0, Math.PI * 2, true))
+
+      const gearGeo = new THREE.ExtrudeGeometry(gearShape, {
+        depth: 0.06,
+        bevelEnabled: false,
+      }).translate(0, 0, -0.03)
+      const gearGhost = new THREE.Mesh(gearGeo, ghostMat)
+      const gearEdges = new THREE.LineSegments(new THREE.EdgesGeometry(gearGeo, 18), wireMat)
+      gearUnit.add(gearGhost, gearEdges)
+
+      // Anillo orbital discontinuo alrededor del holograma
+      const orbitGroup = new THREE.Group()
+      orbitGroup.name = 'holoDashRing'
+      const segs = 12
+      for (let i = 0; i < segs; i++) {
+        const a0 = (i / segs) * Math.PI * 2 + 0.06
+        const a1 = ((i + 0.55) / segs) * Math.PI * 2
+        const dashShape = new THREE.Shape()
+        dashShape.absarc(0, 0, 0.255, a0, a1, false)
+        dashShape.absarc(0, 0, 0.238, a1, a0, true)
+        dashShape.closePath()
+        orbitGroup.add(
+          extrudeShape(
+            dashShape,
+            0.008,
+            new THREE.MeshBasicMaterial({
+              color: 0xbae6fd,
+              transparent: true,
+              opacity: 0.78,
+              side: THREE.DoubleSide,
+            }),
+          ),
+        )
+      }
+      orbitGroup.rotation.x = Math.PI / 2 - 0.35
+
+      // Dos haces discontinuos de proyección desde el visor hacia el holograma
+      const raysGroup = new THREE.Group()
+      raysGroup.name = 'holoProjectRays'
+      ;[-1, 1].forEach((side) => {
+        for (let d = 0; d < 4; d++) {
+          const dash = new THREE.Mesh(
+            new THREE.BoxGeometry(0.012, 0.012, 0.055),
+            new THREE.MeshBasicMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.65 }),
+          )
+          dash.userData = { side, idx: d }
+          raysGroup.add(dash)
+        }
+      })
+
+      holoGroup.add(gearUnit, orbitGroup, raysGroup)
+      holoGroup.position.set(0.42, 0.08, 1.24)
+      group.add(holoGroup)
+      break
+    }
+    case 'pr-badge': {
+      const prGroup = new THREE.Group()
+      prGroup.name = 'prBadge'
+
+      const emeraldMat = plasticMat(0x10b981)
+      emeraldMat.emissive = new THREE.Color(0x059669).multiplyScalar(0.5)
+      const mintMat = plasticMat(0x86efac)
+      mintMat.emissive = new THREE.Color(0x22c55e).multiplyScalar(0.35)
+
+      // Anillo exterior holográfico
+      const ringShape = new THREE.Shape().absarc(0, 0, 0.25, 0, Math.PI * 2, false)
+      ringShape.holes.push(new THREE.Path().absarc(0, 0, 0.21, 0, Math.PI * 2, true))
+      const ringMesh = extrudeShape(
+        ringShape,
+        0.022,
+        new THREE.MeshBasicMaterial({
+          color: 0x4ade80,
+          transparent: true,
+          opacity: 0.85,
+          side: THREE.DoubleSide,
+        }),
+      )
+
+      // Icono 3D de Pull Request (dos nodos verticales a la izquierda + rama curva con check)
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.22, 12), mintMat)
+      trunk.position.set(-0.075, 0, 0.015)
+      const nodeTopL = new THREE.Mesh(new THREE.SphereGeometry(0.036, 16, 16), emeraldMat)
+      nodeTopL.position.set(-0.075, 0.11, 0.02)
+      const nodeBotL = new THREE.Mesh(new THREE.SphereGeometry(0.036, 16, 16), emeraldMat)
+      nodeBotL.position.set(-0.075, -0.11, 0.02)
+
+      const branchCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-0.075, 0.09, 0.015),
+        new THREE.Vector3(0.04, 0.08, 0.015),
+        new THREE.Vector3(0.075, -0.02, 0.015),
+      ])
+      const branchTube = new THREE.Mesh(new THREE.TubeGeometry(branchCurve, 20, 0.015, 10), mintMat)
+      const nodeBotR = new THREE.Mesh(new THREE.SphereGeometry(0.042, 16, 16), emeraldMat)
+      nodeBotR.position.set(0.075, -0.06, 0.02)
+
+      // Anillo expansivo de celebración de PR abierta
+      const waveShape = new THREE.Shape().absarc(0, 0, 0.29, 0, Math.PI * 2, false)
+      waveShape.holes.push(new THREE.Path().absarc(0, 0, 0.255, 0, Math.PI * 2, true))
+      const pulseRing = extrudeShape(
+        waveShape,
+        0.012,
+        new THREE.MeshBasicMaterial({
+          color: 0x86efac,
+          transparent: true,
+          opacity: 0.8,
+          side: THREE.DoubleSide,
+        }),
+      )
+      pulseRing.name = 'prPulseRing'
+
+      prGroup.add(ringMesh, trunk, nodeTopL, nodeBotL, branchTube, nodeBotR, pulseRing)
+      prGroup.position.set(0.86, 0.88, 0.42)
+      group.add(prGroup)
+      break
+    }
+    case 'context-press': {
+      const pressGroup = new THREE.Group()
+      pressGroup.name = 'contextPress'
+
+      // 6 bloques dispersos de contexto que se comprimen hacia el centro
+      const shardsGrp = new THREE.Group()
+      shardsGrp.name = 'contextShards'
+      const shardColors = [0x818cf8, 0xa5b4fc, 0x38bdf8, 0xc084fc, 0x6366f1, 0x93c5fd]
+      const dirs = [
+        [-0.46, 0.22, 0.04],
+        [0.46, 0.22, -0.04],
+        [-0.52, -0.02, -0.05],
+        [0.52, -0.02, 0.05],
+        [-0.42, -0.24, 0.03],
+        [0.42, -0.24, -0.03],
+      ]
+      dirs.forEach((d, idx) => {
+        const mat = plasticMat(shardColors[idx])
+        mat.emissive = new THREE.Color(shardColors[idx]).multiplyScalar(0.35)
+        mat.transparent = true
+        const shard = new THREE.Mesh(new THREE.BoxGeometry(0.105, 0.085, 0.085), mat)
+        shard.userData = { dir: d, idx }
+        shardsGrp.add(shard)
+      })
+
+      // Cápsula brillante central resultante de la compactación
+      const capsuleMat = plasticMat(0xe0e7ff)
+      capsuleMat.emissive = new THREE.Color(0x6366f1)
+      capsuleMat.emissiveIntensity = 0.85
+      const capsule = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.11, 12, 24), capsuleMat)
+      capsule.name = 'compactCapsule'
+      capsule.rotation.z = Math.PI / 2
+
+      // Anillo de pulso cuando se sella la cápsula compactada
+      const pulseShape = new THREE.Shape().absarc(0, 0, 0.3, 0, Math.PI * 2, false)
+      pulseShape.holes.push(new THREE.Path().absarc(0, 0, 0.255, 0, Math.PI * 2, true))
+      const pulseRing = extrudeShape(
+        pulseShape,
+        0.015,
+        new THREE.MeshBasicMaterial({
+          color: 0xa5b4fc,
+          transparent: true,
+          opacity: 0.85,
+          side: THREE.DoubleSide,
+        }),
+      )
+      pulseRing.name = 'compactPulseRing'
+
+      pressGroup.add(shardsGrp, capsule, pulseRing)
+      pressGroup.position.set(0, -0.1, 0.96)
+      group.add(pressGroup)
+      break
+    }
+    case 'git-conflict': {
+      const confGroup = new THREE.Group()
+      confGroup.name = 'gitConflict'
+
+      const leftMat = plasticMat(0x38bdf8)
+      leftMat.emissive = new THREE.Color(0x0284c7).multiplyScalar(0.4)
+      const rightMat = plasticMat(0xc084fc)
+      rightMat.emissive = new THREE.Color(0x9333ea).multiplyScalar(0.4)
+
+      const leftNode = new THREE.Mesh(new THREE.SphereGeometry(0.095, 24, 24), leftMat)
+      leftNode.name = 'confLeft'
+      const rightNode = new THREE.Mesh(new THREE.SphereGeometry(0.095, 24, 24), rightMat)
+      rightNode.name = 'confRight'
+
+      const leftTrail = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.36, 16), leftMat)
+      leftTrail.name = 'confLeftTrail'
+      const rightTrail = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.022, 0.022, 0.36, 16),
+        rightMat,
+      )
+      rightTrail.name = 'confRightTrail'
+
+      // Chispas naranjas que estallan al chocar ambas ramas
+      const sparksGrp = new THREE.Group()
+      sparksGrp.name = 'conflictSparks'
+      for (let i = 0; i < 8; i++) {
+        const sp = new THREE.Mesh(
+          new THREE.BoxGeometry(0.09, 0.024, 0.024),
+          new THREE.MeshBasicMaterial({
+            color: i % 2 === 0 ? 0xfb923c : 0xfef08a,
+            transparent: true,
+            opacity: 0.95,
+          }),
+        )
+        sp.userData = { ang: (i / 8) * Math.PI * 2 + 0.2 }
+        sparksGrp.add(sp)
+      }
+
+      const impactShape = new THREE.Shape().absarc(0, 0, 0.28, 0, Math.PI * 2, false)
+      impactShape.holes.push(new THREE.Path().absarc(0, 0, 0.23, 0, Math.PI * 2, true))
+      const impactRing = extrudeShape(
+        impactShape,
+        0.016,
+        new THREE.MeshBasicMaterial({
+          color: 0xfb923c,
+          transparent: true,
+          opacity: 0.9,
+          side: THREE.DoubleSide,
+        }),
+      )
+      impactRing.name = 'conflictImpactRing'
+
+      confGroup.add(leftTrail, rightTrail, leftNode, rightNode, sparksGrp, impactRing)
+      confGroup.position.set(0, -0.1, 0.94)
+      group.add(confGroup)
+      break
+    }
+    case 'layer-scanner': {
+      const idxGrp = new THREE.Group()
+      idxGrp.name = 'layerScanner'
+
+      const layersGrp = new THREE.Group()
+      layersGrp.name = 'indexLayers'
+      const layerYs = [0.22, 0.0, -0.22]
+      layerYs.forEach((ly, i) => {
+        const layerUnit = new THREE.Group()
+        layerUnit.position.y = ly
+
+        const disc = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.32, 0.32, 0.018, 36),
+          new THREE.MeshBasicMaterial({
+            color: 0x0d9488,
+            transparent: true,
+            opacity: 0.24,
+            depthWrite: false,
+          }),
+        )
+        disc.name = 'layerDisc'
+
+        const ringShape = new THREE.Shape().absarc(0, 0, 0.33, 0, Math.PI * 2, false)
+        ringShape.holes.push(new THREE.Path().absarc(0, 0, 0.305, 0, Math.PI * 2, true))
+        const rim = extrudeShape(
+          ringShape,
+          0.016,
+          new THREE.MeshBasicMaterial({
+            color: 0x5eead4,
+            transparent: true,
+            opacity: 0.65,
+            side: THREE.DoubleSide,
+          }),
+        )
+        rim.rotation.x = Math.PI / 2
+        rim.name = 'layerRim'
+
+        // Pequeños nodos de código sobre cada capa
+        for (let k = 0; k < 4; k++) {
+          const a = (k / 4) * Math.PI * 2 + i * 0.6
+          const dot = new THREE.Mesh(
+            new THREE.BoxGeometry(0.055, 0.016, 0.032),
+            new THREE.MeshBasicMaterial({ color: 0x99f6e4, transparent: true, opacity: 0.8 }),
+          )
+          dot.position.set(Math.cos(a) * 0.16, 0.012, Math.sin(a) * 0.16)
+          dot.rotation.y = -a
+          layerUnit.add(dot)
+        }
+
+        layerUnit.add(disc, rim)
+        layersGrp.add(layerUnit)
+      })
+
+      // Anillo láser cian que barre verticalmente las 3 capas
+      const laserShape = new THREE.Shape().absarc(0, 0, 0.38, 0, Math.PI * 2, false)
+      laserShape.holes.push(new THREE.Path().absarc(0, 0, 0.352, 0, Math.PI * 2, true))
+      const scanRing = extrudeShape(
+        laserShape,
+        0.018,
+        new THREE.MeshBasicMaterial({
+          color: 0x2dd4bf,
+          transparent: true,
+          opacity: 0.95,
+          side: THREE.DoubleSide,
+        }),
+      )
+      scanRing.rotation.x = Math.PI / 2
+      scanRing.name = 'indexLaserRing'
+
+      idxGrp.add(layersGrp, scanRing)
+      idxGrp.position.set(0, -0.02, 1.02)
+      idxGrp.rotation.x = 0.22
+      group.add(idxGrp)
+      break
+    }
     case 'hex-shield': {
       const shieldGrp = new THREE.Group()
       shieldGrp.name = 'hexShield'

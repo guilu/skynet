@@ -1,6 +1,6 @@
 // @ts-nocheck -- motor portado del estudio v4.3 sin tipar; la API que usa la web la tipa
 // `SkynyScene` (scene.ts) y la prueban los tests de Skyny3D.
-// Portado del estudio v4.3 (plans/skyny-3d/skyny-v4.3.html).
+// Portado del estudio v4.4 (plans/skyny-3d/skyny-v4.4.html).
 import * as THREE from 'three'
 
 // =========================================================================

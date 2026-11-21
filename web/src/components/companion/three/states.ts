@@ -1,9 +1,59 @@
-// Portado del estudio v4.3 (plans/skyny-3d/skyny-v4.3.html).
+// Portado del estudio v4.4 (plans/skyny-3d/skyny-v4.4.html).
 // =========================================================================
 // 1. DEFINICIÓN DE ESTADOS, CONFIGURACIÓN VISUAL Y TEXTOS LED
 // =========================================================================
 
 export const STATES_META = [
+  {
+    state: 'handover',
+    label: 'Relevo',
+    when: 'Pasando el testigo y contexto entre agentes especializados en un flujo secuencial.',
+  },
+  {
+    state: 'throttled',
+    label: 'Modo Eco',
+    when: 'Throttling preventivo activado para ahorrar tokens y estirar la cuota.',
+  },
+  {
+    state: 'escalating',
+    label: 'Escalando',
+    when: 'Subiendo la tarea a un modelo de razonamiento superior por alta complejidad.',
+  },
+  {
+    state: 'streaming',
+    label: 'Transmitiendo',
+    when: 'Emitiendo tokens o respuesta progresiva en tiempo real (streaming).',
+  },
+  {
+    state: 'syncing',
+    label: 'Sincronizando',
+    when: 'Actualizando rama local con cambios remotos (git pull / rebase) sin conflictos.',
+  },
+  {
+    state: 'dry-run',
+    label: 'Simulando',
+    when: 'Ejecutando workflow en modo vista previa (dry-run) sin aplicar cambios reales.',
+  },
+  {
+    state: 'pr-open',
+    label: 'Pull Request',
+    when: 'Rama verificada y Pull Request publicada lista para revisión.',
+  },
+  {
+    state: 'compacting',
+    label: 'Compactando',
+    when: 'Comprimiendo y resumiendo la ventana de contexto para liberar memoria.',
+  },
+  {
+    state: 'conflict',
+    label: 'Conflicto de Git',
+    when: 'git merge o git rebase detecta un conflicto que requiere resolución.',
+  },
+  {
+    state: 'context-indexing',
+    label: 'Indexando Repo',
+    when: 'Construyendo grafo AST o embeddings del repositorio.',
+  },
   {
     state: 'guardrail',
     label: 'Bloqueado por Seguridad',
@@ -108,7 +158,7 @@ export const STATES_META = [
   { state: 'cancelled', label: 'Cancelado', when: 'Se canceló o se omitió.' },
 ] as const
 
-/** Los 35 estados de Skyny 3D (los 12 del companion y los del estudio v4.3). */
+/** Los estados de Skyny 3D (los 12 del companion y los del estudio). */
 export type SkynyState = (typeof STATES_META)[number]['state']
 
 /** Ojos, accesorio, gesto de entrada y color de ojos de cada estado. */
@@ -120,7 +170,28 @@ export interface StateLook {
 }
 
 export const STATE_CONFIG: Record<SkynyState, StateLook> = {
+  // En el estudio v4.4 se perdió esta línea al añadir los estados nuevos: es la de la v4.3.
   guardrail: { eyes: 'shield-eyes', accessory: 'hex-shield', entry: true, eyeColor: '#fda4af' },
+  handover: { eyes: 'pills', accessory: 'relay-baton', entry: true, eyeColor: '#c4b5fd' },
+  throttled: { eyes: 'eco-eyes', accessory: 'eco-leaf', entry: true, eyeColor: '#a3e635' },
+  escalating: { eyes: 'stars', accessory: 'upgrade-chevrons', entry: true, eyeColor: '#f0abfc' },
+  streaming: { eyes: 'stream-eyes', accessory: 'token-stream', entry: true, eyeColor: '#22d3ee' },
+  syncing: { eyes: 'pills', accessory: 'sync-arrows', entry: true, eyeColor: '#7dd3fc' },
+  'dry-run': { eyes: 'reticle', accessory: 'holo-wireframe', entry: true, eyeColor: '#93c5fd' },
+  'pr-open': { eyes: 'happy', accessory: 'pr-badge', entry: true, eyeColor: '#4ade80' },
+  compacting: {
+    eyes: 'compact-eyes',
+    accessory: 'context-press',
+    entry: true,
+    eyeColor: '#a5b4fc',
+  },
+  conflict: { eyes: 'conflict-eyes', accessory: 'git-conflict', entry: true, eyeColor: '#fb923c' },
+  'context-indexing': {
+    eyes: 'pills',
+    accessory: 'layer-scanner',
+    entry: true,
+    eyeColor: '#5eead4',
+  },
   'rate-limited': {
     eyes: 'sleep',
     accessory: 'battery-cooldown',
@@ -163,6 +234,16 @@ export const STATE_CONFIG: Record<SkynyState, StateLook> = {
 
 /** Letrero de cada estado al llegar. */
 export const LED_MESSAGES: Record<SkynyState, string> = {
+  handover: 'RELEVO',
+  throttled: 'MODO ECO',
+  escalating: 'ESCALANDO',
+  streaming: 'STREAMING',
+  syncing: 'SINCRONIZANDO',
+  'dry-run': 'SIMULANDO',
+  'pr-open': 'PR LISTA',
+  compacting: 'COMPACTANDO',
+  conflict: 'CONFLICTO',
+  'context-indexing': 'INDEXANDO',
   guardrail: 'BLOQUEO',
   'rate-limited': 'COOLDOWN',
   benchmarking: 'EVALUANDO',
@@ -201,6 +282,16 @@ export const LED_MESSAGES: Record<SkynyState, string> = {
 
 /** Letreros cortos (Skyny pequeño). */
 export const LED_COMPACT: Partial<Record<SkynyState, string>> = {
+  handover: 'PASE',
+  throttled: 'ECO',
+  escalating: 'UPGRADE',
+  streaming: 'LIVE',
+  syncing: 'SYNC',
+  'dry-run': 'DRY RUN',
+  'pr-open': 'PR OK',
+  compacting: 'RESUMEN',
+  conflict: 'CONFLICT',
+  'context-indexing': 'INDEX',
   guardrail: 'STOP',
   'rate-limited': 'CUPO',
   benchmarking: 'EVAL',
@@ -222,3 +313,5 @@ export const LED_COMPACT: Partial<Record<SkynyState, string>> = {
   merging: 'MERGE',
   learning: 'RAG',
 }
+
+// =========================================================================
