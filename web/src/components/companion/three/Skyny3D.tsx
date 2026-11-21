@@ -114,8 +114,10 @@ export default function Skyny3D({
     el.addEventListener('webglcontextlost', lost)
     const stopTheme = onThemeChange(() => skyny.setColors(readColors()))
 
-    // En vivo, solo mira al cursor si pasa cerca de la cara; si no (login), lo sigue por toda la
-    // página, y también a lo que tiene el foco.
+    // En vivo, solo mira al cursor si pasa cerca de la cara; si no (login) o si se puede tocar
+    // (login y cortina del chat), lo sigue por toda la página, también al tocar la pantalla; y en
+    // el login, a lo que tiene el foco.
+    const follow = !isLive || interactive
     const aim = (x: number, y: number) => {
       const box = el.getBoundingClientRect()
       const dx = x - (box.left + box.width / 2)
@@ -123,7 +125,7 @@ export default function Skyny3D({
       skyny.lookAt(dx / 320, dy / 320)
     }
     const onMove = (e: PointerEvent) => {
-      if (isLive) skyny.pointer(e.pointerType === 'mouse' ? { x: e.clientX, y: e.clientY } : null)
+      if (!follow) skyny.pointer(e.pointerType === 'mouse' ? { x: e.clientX, y: e.clientY } : null)
       else aim(e.clientX, e.clientY)
     }
     const onFocus = (e: FocusEvent) => {
@@ -132,17 +134,19 @@ export default function Skyny3D({
       aim(r.left + r.width / 2, r.top + r.height / 2)
     }
     window.addEventListener('pointermove', onMove, { passive: true })
+    window.addEventListener('pointerdown', onMove, { passive: true })
     document.addEventListener('focusin', onFocus)
 
     return () => {
       window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerdown', onMove)
       document.removeEventListener('focusin', onFocus)
       stopTheme()
       el.removeEventListener('webglcontextlost', lost)
       skyny.dispose()
       scene.current = null
     }
-  }, [px, room, isLive])
+  }, [px, room, isLive, interactive])
 
   useEffect(() => {
     const host = canvas.current?.parentElement
