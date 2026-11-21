@@ -54,7 +54,19 @@
   /* Lo gastado fuera de Skynet en los medidores de cuota (rayado) */
   --other: #a3aec2;
   /* Mascota (CO-A): nodos blancos y visor oscuro en los dos temas */
-  /* Skyny 3D (estudio v4.3): cuerpo de los estados que no tiene el Skyny 2D */
+  /* Cuerpo de Skyny 3D en cada estado: los colores del estudio v4.3. */
+  --skyny-3d-calm: #9ac2ff;
+  --skyny-3d-sleeping: #b8c2d1;
+  --skyny-3d-ready: #b8c7de;
+  --skyny-3d-thinking: #c2abff;
+  --skyny-3d-running: #ffb385;
+  --skyny-3d-reviewing: #9ac2ff;
+  --skyny-3d-success: #86e3b3;
+  --skyny-3d-error: #ffa3a3;
+  --skyny-3d-waiting: #ffd970;
+  --skyny-3d-paused: #bcc4d1;
+  --skyny-3d-offline: #aeb7c4;
+  --skyny-3d-cancelled: #bcc4d1;
   --skyny-3d-guardrail: #fecdd3;
   --skyny-3d-rate-limited: #fcd34d;
   --skyny-3d-benchmarking: #fef08a;
@@ -176,7 +188,18 @@
     --bad-btn-shade: #d13f3f;
     --on-state-btn: #0b1022;
     --other: #6f7b93;
-    /* Skyny 3D (estudio v4.3): cuerpo de los estados que no tiene el Skyny 2D */
+    --skyny-3d-calm: #7da6ff;
+    --skyny-3d-sleeping: #94a3b8;
+    --skyny-3d-ready: #9cb3d9;
+    --skyny-3d-thinking: #b89eff;
+    --skyny-3d-running: #ffa875;
+    --skyny-3d-reviewing: #7da6ff;
+    --skyny-3d-success: #6ee7b7;
+    --skyny-3d-error: #ff9494;
+    --skyny-3d-waiting: #fcd34d;
+    --skyny-3d-paused: #94a3b8;
+    --skyny-3d-offline: #8892a4;
+    --skyny-3d-cancelled: #94a3b8;
     --skyny-3d-guardrail: #fda4af;
     --skyny-3d-rate-limited: #fcd34d;
     --skyny-3d-benchmarking: #fde047;
@@ -265,7 +288,18 @@
   --bad-btn-shade: #d13f3f;
   --on-state-btn: #0b1022;
   --other: #6f7b93;
-  /* Skyny 3D (estudio v4.3): cuerpo de los estados que no tiene el Skyny 2D */
+  --skyny-3d-calm: #7da6ff;
+  --skyny-3d-sleeping: #94a3b8;
+  --skyny-3d-ready: #9cb3d9;
+  --skyny-3d-thinking: #b89eff;
+  --skyny-3d-running: #ffa875;
+  --skyny-3d-reviewing: #7da6ff;
+  --skyny-3d-success: #6ee7b7;
+  --skyny-3d-error: #ff9494;
+  --skyny-3d-waiting: #fcd34d;
+  --skyny-3d-paused: #94a3b8;
+  --skyny-3d-offline: #8892a4;
+  --skyny-3d-cancelled: #94a3b8;
   --skyny-3d-guardrail: #fda4af;
   --skyny-3d-rate-limited: #fcd34d;
   --skyny-3d-benchmarking: #fde047;

@@ -81,9 +81,9 @@ La página del estudio es `web/skyny-studio.html` + `web/src/studio/` (solo la i
 
 ## Colores
 
-El 3D **no lleva colores propios**: el cuerpo de los 12 estados del companion es el mismo `--c-lo` que el Skyny 2D (`.companion[data-state]` en `index.css`), y el de los otros 22, su token `--skyny-3d-<estado>` (claro y oscuro); las bandas son ese color oscurecido. Los ojos usan `--companion-glow` y `--companion-eye`; los nodos, `--companion-node`. Así casa con las píldoras de estado, el modo oscuro y las paletas personalizadas.
+El cuerpo de cada estado es su token `--skyny-3d-<estado>` de `index.css` (claro y oscuro), con los colores claros del estudio v4.3; las bandas son ese color oscurecido. No sigue el acento de la paleta ni el `--c-lo` del Skyny 2D: Diego quiere el 3D como en el estudio. Los ojos usan `--companion-glow` y `--companion-eye`; los nodos, `--companion-node`.
 
-Para cambiar el color de un estado, cambia su token en `index.css`: cambia a la vez en 2D y en 3D. Solo los ojos de algunos estados (Error, En pausa, Inactivo, Sin conexión, Cancelado) tienen color fijo, en `states.ts`.
+Para cambiar el color de un estado en 3D, cambia su `--skyny-3d-<estado>` en los tres bloques de `index.css` (claro, oscuro del sistema y `[data-theme='dark']`). Solo los ojos de algunos estados tienen color fijo, en `states.ts`.
 
 ## Editar con Codex (u otro agente)
 
