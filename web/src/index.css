@@ -9113,12 +9113,20 @@
     margin-bottom: 4px;
   }
 
-  /* Galería de Ajustes › Companion */
+  /* Ajustes › Companion: vista previa en 3D, lo que lleva puesto y los 34 estados */
   .companion-stage {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    gap: 20px;
+    gap: 24px;
     align-items: center;
+    margin-bottom: var(--space-4);
+  }
+
+  .companion-preview {
+    display: grid;
+    place-items: center;
+    width: 220px;
+    height: 220px;
   }
 
   .companion-moves {
@@ -9128,64 +9136,109 @@
     margin-top: var(--space-3);
   }
 
-  .companion-gallery {
+  .companion-outfit {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
+    margin: var(--space-4) 0 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .companion-outfit legend {
+    margin-bottom: 8px;
+    padding: 0;
+    font-weight: 600;
+  }
+
+  .companion-outfit label {
+    display: grid;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .companion-outfit .hint {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+
+  .companion-group-title {
+    margin: 20px 0 10px;
+  }
+
+  .companion-states {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 6px;
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  .companion-tile {
-    display: grid;
-    justify-items: center;
-    gap: 4px;
+  .companion-state {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     width: 100%;
-    padding: 10px 6px 8px;
+    padding: 8px 10px;
     border: var(--border-w) solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
     color: var(--fg);
     font: inherit;
-    font-size: 0.85rem;
+    font-size: 0.875rem;
     font-weight: 500;
+    text-align: left;
     cursor: pointer;
   }
 
-  .companion-tile[aria-pressed='true'] {
+  .companion-state:hover {
+    background: var(--surface-2);
+  }
+
+  .companion-state[aria-pressed='true'] {
     border-color: var(--primary);
     background: var(--primary-soft);
     color: var(--primary-ink);
   }
 
-  .companion-seasons-title {
-    margin: 20px 0 10px;
-  }
-
-  .companion-seasons .companion-tile {
-    cursor: default;
-    text-align: center;
-  }
-
-  .companion-seasons .companion-tile small {
-    font-size: 0.75rem;
-    font-weight: 400;
-  }
-
-  .companion-seasons .companion-tile[data-off] {
-    opacity: 0.55;
-  }
-
-  .companion-tile:focus-visible {
+  .companion-state:focus-visible {
     outline: 3px solid var(--focus);
     outline-offset: 2px;
+  }
+
+  .companion-swatch {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 12%, transparent);
   }
 
   @media (max-width: 640px) {
     .companion-stage {
       grid-template-columns: minmax(0, 1fr);
       justify-items: center;
+      text-align: center;
+    }
+
+    .companion-moves {
+      justify-content: center;
+    }
+
+    .companion-outfit {
+      grid-template-columns: minmax(0, 1fr);
+      text-align: left;
+    }
+
+    .companion-states {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .companion-state {
+      padding: 8px;
+      font-size: 0.8rem;
     }
   }
 

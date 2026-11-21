@@ -37,6 +37,8 @@ export default function Skyny3D({
   pose,
   live,
   outfit,
+  replay = 0,
+  boop = 0,
   onFail,
 }: {
   state?: SkynyState
@@ -46,6 +48,10 @@ export default function Skyny3D({
   live?: LiveInfo
   /** Gorro y complementos; por defecto, los de Ajustes › Companion. */
   outfit?: Outfit
+  /** Al cambiar, repite el gesto de entrada del estado (Ajustes › Companion). */
+  replay?: number
+  /** Al cambiar, ¡boop!: un toque en la cara. */
+  boop?: number
   onFail: () => void
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -146,6 +152,14 @@ export default function Skyny3D({
   useEffect(() => {
     scene.current?.setPose(pose)
   }, [pose])
+
+  useEffect(() => {
+    if (replay) scene.current?.setState(latest.current.state)
+  }, [replay])
+
+  useEffect(() => {
+    if (boop) scene.current?.poke()
+  }, [boop])
 
   useEffect(() => {
     scene.current?.setHat(hat)
