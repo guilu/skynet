@@ -1,7 +1,7 @@
 import type { SkynyScene } from './scene'
 
-/** Radianes de giro por píxel arrastrado. */
-const PER_PX = 0.012
+/** Radianes de giro de la cámara por píxel arrastrado (negativo: Skyny gira hacia donde arrastras). */
+const PER_PX = -0.012
 
 /**
  * Skyny se puede tocar y girar (login): un clic corto encima es un ¡boop!; arrastrando, la cámara

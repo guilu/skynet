@@ -9,7 +9,7 @@ import { createAccessory, delegationDispatch, cooldownCharge, BADGE_SCALE } from
 import { drawLedScreen, drawEyesScreen, ledWidth } from './screen'
 
 /** Letreros deslizantes: velocidad (px por segundo, en un visor de 512) y tamaño de letra. */
-const SCROLL_SPEED = 210
+const SCROLL_SPEED = 460
 const SCROLL_SCALE = 1.1
 import { createExtras, type BackKind, type FaceKind, type HatKind } from './extras'
 import type { SkynyState } from './states'
