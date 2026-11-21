@@ -7,7 +7,7 @@ const scene = vi.hoisted(() => ({ play: vi.fn(), stop: vi.fn() }))
 
 vi.mock('./scene', () => ({
   SkynyScene: class {
-    current = 'calm'
+    state = 'calm'
     play = scene.play
     stop = scene.stop
     resize() {}
@@ -16,6 +16,9 @@ vi.mock('./scene', () => ({
     setProgress() {}
     setPose() {}
     setColors() {}
+    setHat() {}
+    setFace() {}
+    setBack() {}
     pointer() {}
     lookAt() {}
     dispose() {}

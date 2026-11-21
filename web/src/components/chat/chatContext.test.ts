@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatAction, ChatConversation, ChatMessage } from '../../api'
-import { LED_GLYPHS } from '../companion/three/led'
+import { LED_GLYPHS } from '../companion/three/screen'
 import {
   CHAT_LED,
   chatContext,

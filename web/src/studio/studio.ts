@@ -1,15 +1,24 @@
 // Estudio de Skyny 3D (TD-B): la página `skyny-studio.html` del estudio original, ahora dentro del
 // repo y sobre el mismo módulo que la app. Solo para desarrollo (`npm run dev`), no va al build.
-// Las vistas, la órbita y los botones son del estudio; el modelo, los estados y las animaciones
-// son los de `components/companion/three/`, así que lo que se ve aquí es lo que sale en la web.
+// Las vistas, la órbita y los botones son del estudio (v4.3, adaptable al móvil); el modelo, los
+// estados, los complementos y las animaciones son los de `components/companion/three/`, así que lo
+// que se ve aquí es lo que sale en la web.
 import '@fontsource/barlow/latin-400.css'
 import '@fontsource/barlow/latin-600.css'
 import '@fontsource/jetbrains-mono/latin-500.css'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { applyCachedPalette } from '../appearance'
-import { COMPANION_STATES, type CompanionState } from '../components/companion/state'
+import * as THREE from 'three'
+import {
+  BACKS,
+  FACES,
+  HATS,
+  type BackKind,
+  type FaceKind,
+  type HatKind,
+} from '../components/companion/three/extras'
 import { SkynyScene, type Pose3D } from '../components/companion/three/scene'
-import { EXPRESSIONS_3D } from '../components/companion/three/states'
+import { STATE_CONFIG, STATES_META, type SkynyState } from '../components/companion/three/states'
 import { DEMOS, DemoRunner, type DemoKind } from '../components/companion/three/transitions'
 import { onThemeChange, readColors } from '../components/companion/three/tokens'
 import '../index.css'
@@ -45,47 +54,63 @@ const POSES: { pose: Pose3D; label: string }[] = [
 
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 const params = new URLSearchParams(location.search)
-const initial = (params.get('state') as CompanionState | null) ?? 'calm'
+const initial = (params.get('state') as SkynyState | null) ?? 'calm'
+
+const options = (list: { value: string; label: string }[]) =>
+  list.map((o) => `<option value="${o.value}">${o.label}</option>`).join('')
 
 document.body.innerHTML = `
   <div class="st">
     <header class="st-bar">
-      <div class="st-title">
-        <span class="st-kicker">Skyny 3D</span>
-        <h1>Estudio</h1>
+      <div class="st-bar-head">
+        <div class="st-title">
+          <span class="st-kicker">Skyny 3D</span>
+          <h1>Estudio</h1>
+        </div>
+        <button type="button" class="st-mobile-toggle" data-action="controls" aria-expanded="false">
+          Controles
+        </button>
       </div>
-      <nav class="st-group" aria-label="Vistas">
-        ${Object.entries(VIEWS)
-          .map(([key, v]) => `<button type="button" data-view="${key}">${v.title}</button>`)
-          .join('')}
-      </nav>
-      <div class="st-group" aria-label="Pose">
-        ${POSES.map((p, i) => `<button type="button" data-pose="${i}">${p.label}</button>`).join('')}
-      </div>
-      <div class="st-group">
-        <button type="button" data-action="idle" aria-pressed="true">Idle</button>
-        <button type="button" data-action="look" aria-pressed="false">Mirada</button>
-        <button type="button" data-action="wire" aria-pressed="false">Malla</button>
-        <button type="button" data-action="blink">Parpadear</button>
-        <button type="button" data-action="replay">Repetir gesto</button>
-        <button type="button" data-action="theme">Tema</button>
-        <button type="button" data-action="png">Captura PNG</button>
+      <div class="st-controls">
+        <nav class="st-group" aria-label="Vistas">
+          ${Object.entries(VIEWS)
+            .map(([key, v]) => `<button type="button" data-view="${key}">${v.title}</button>`)
+            .join('')}
+        </nav>
+        <div class="st-group"><label>Gorro <select data-extra="hat">${options(HATS)}</select></label></div>
+        <div class="st-group"><label>Cara <select data-extra="face">${options(FACES)}</select></label></div>
+        <div class="st-group"><label>Espalda <select data-extra="back">${options(BACKS)}</select></label></div>
+        <div class="st-group" aria-label="Pose">
+          ${POSES.map((p, i) => `<button type="button" data-pose="${i}">${p.label}</button>`).join('')}
+        </div>
+        <div class="st-group">
+          <button type="button" data-action="idle" aria-pressed="true">Idle</button>
+          <button type="button" data-action="look" aria-pressed="false">Mirada</button>
+          <button type="button" data-action="wire" aria-pressed="false">Malla</button>
+          <button type="button" data-action="blink">Parpadear</button>
+          <button type="button" data-action="replay">Repetir gesto</button>
+          <button type="button" data-action="theme">Tema</button>
+          <button type="button" data-action="png">Captura PNG</button>
+        </div>
       </div>
     </header>
     <main class="st-main">
       <div class="st-stage">
         <canvas class="st-canvas" aria-label="Skyny en 3D"></canvas>
         <p class="st-badge"><b data-out="view">Frontal</b> · <span data-out="state"></span></p>
-        <p class="st-hint">Orbitar: arrastrar · Zoom: rueda · Paneo: botón derecho</p>
+        <p class="st-hint">Orbitar: arrastrar · Zoom: rueda · Paneo: botón derecho · Clic en Skyny: ¡boop!</p>
       </div>
       <aside class="st-states">
-        <h2>Estados <span data-out="count"></span></h2>
+        <div class="st-states-head">
+          <h2>Estados <span data-out="count"></span></h2>
+          <button type="button" class="st-drawer-btn" data-action="drawer">Agrandar</button>
+        </div>
         <div class="st-demos">
-          <button type="button" data-action="compact" aria-pressed="false">Vista compacta</button>
+          <button type="button" data-action="compact" aria-pressed="false">Compacta</button>
           ${Object.entries(DEMOS)
             .map(([kind, d]) => `<button type="button" data-demo="${kind}">${d.label}</button>`)
             .join('')}
-          <button type="button" data-action="cancel" disabled>Cancelar tarea</button>
+          <button type="button" data-action="cancel" disabled>Cancelar</button>
           <button type="button" data-action="retry" hidden>Reintentar</button>
         </div>
         <ul></ul>
@@ -97,6 +122,8 @@ const $ = <T extends Element>(selector: string) => document.querySelector<T>(sel
 const canvas = $<HTMLCanvasElement>('.st-canvas')
 const stage = $<HTMLDivElement>('.st-stage')
 const list = $<HTMLUListElement>('.st-states ul')
+const bar = $<HTMLElement>('.st-bar')
+const main = $<HTMLElement>('.st-main')
 
 const skyny = new SkynyScene(canvas, readColors(), { gestures: !reducedMotion })
 const demo = new DemoRunner(skyny)
@@ -113,6 +140,7 @@ controls.target.set(0, 0.1, 0)
 let looking = false
 let current: View = 'frontal'
 let pose = 0
+let drawer = 0
 
 /** Vista compacta: Skyny a 180 px en la esquina, con letreros cortos (como iría en la web). */
 const COMPACT_PX = 180
@@ -125,25 +153,25 @@ const fit = () => {
   canvas.style.height = `${Math.max(1, h)}px`
   skyny.resize(Math.max(1, w), Math.max(1, h))
 }
-new ResizeObserver(fit).observe(stage)
+new ResizeObserver(() => requestAnimationFrame(fit)).observe(stage)
 fit()
 
 const colors = () => readColors().body
 function renderStates() {
   const body = colors()
-  list.innerHTML = COMPANION_STATES.map(({ state, label, when }) => {
-    const e = EXPRESSIONS_3D[state]
+  list.innerHTML = STATES_META.map(({ state, label, when }) => {
+    const e = STATE_CONFIG[state]
     return `<li><button type="button" data-state="${state}" aria-pressed="${state === skyny.current}">
       <span class="st-swatch" style="background:${body[state]}"></span>
       <span><b>${label}</b><small>${when}</small><code>${state} · ${e.eyes}${e.accessory ? ` · ${e.accessory}` : ''}</code></span>
     </button></li>`
   }).join('')
-  const i = COMPANION_STATES.findIndex((s) => s.state === skyny.current)
-  $('[data-out="count"]').textContent = `${i + 1} / ${COMPANION_STATES.length}`
-  $('[data-out="state"]').textContent = COMPANION_STATES[i].label
+  const i = STATES_META.findIndex((s) => s.state === skyny.current)
+  $('[data-out="count"]').textContent = `${i + 1} / ${STATES_META.length}`
+  $('[data-out="state"]').textContent = STATES_META[i].label
 }
 
-function setState(state: CompanionState) {
+function setState(state: SkynyState) {
   skyny.setState(state)
   const url = new URL(location.href)
   url.searchParams.set('state', state)
@@ -154,13 +182,17 @@ function setState(state: CompanionState) {
 function setView(key: View) {
   current = key
   const v = VIEWS[key]
+  // En un móvil en vertical, un poco más lejos para que quepa entero.
+  const narrow = window.innerWidth <= 820 && window.innerHeight > window.innerWidth
+  const zoom = narrow ? 1.18 : 1
+  const toPos = new THREE.Vector3(...v.pos).multiplyScalar(zoom)
   const fromPos = skyny.camera.position.clone()
   const fromTarget = controls.target.clone()
   const start = performance.now()
   const step = (now: number) => {
     const u = Math.min(1, (now - start) / 650)
     const ease = 0.5 - Math.cos(u * Math.PI) / 2
-    skyny.camera.position.lerpVectors(fromPos, fromPos.clone().set(...v.pos), ease)
+    skyny.camera.position.lerpVectors(fromPos, toPos, ease)
     controls.target.lerpVectors(fromTarget, fromTarget.clone().set(...v.target), ease)
     if (u < 1) requestAnimationFrame(step)
   }
@@ -185,7 +217,7 @@ document.addEventListener('click', (e) => {
   const { state, view: v, pose: p, action, demo: kind } = button.dataset
   if (state) {
     demo.stop()
-    setState(state as CompanionState)
+    setState(state as SkynyState)
   }
   if (kind) demo.toggle(kind as DemoKind)
   if (v) setView(v as View)
@@ -196,6 +228,20 @@ document.addEventListener('click', (e) => {
     return on
   }
   switch (action) {
+    case 'controls': {
+      const open = bar.classList.toggle('is-open')
+      button.setAttribute('aria-expanded', String(open))
+      button.textContent = open ? 'Cerrar' : 'Controles'
+      break
+    }
+    case 'drawer': {
+      // Cajón de estados en el móvil: normal → grande → recogido.
+      drawer = (drawer + 1) % 3
+      main.classList.toggle('drawer-expanded', drawer === 1)
+      main.classList.toggle('drawer-collapsed', drawer === 2)
+      button.textContent = ['Agrandar', 'Recoger', 'Mostrar'][drawer]
+      break
+    }
     case 'idle':
       skyny.setIdle(toggle())
       break
@@ -245,6 +291,36 @@ document.addEventListener('click', (e) => {
   }
 })
 
+document.addEventListener('change', (e) => {
+  const select = (e.target as Element).closest<HTMLSelectElement>('select[data-extra]')
+  if (!select) return
+  const value = select.value
+  if (select.dataset.extra === 'hat') skyny.setHat(value as HatKind)
+  if (select.dataset.extra === 'face') skyny.setFace(value as FaceKind)
+  if (select.dataset.extra === 'back') skyny.setBack(value as BackKind)
+})
+
+// Un clic corto sobre Skyny (sin arrastrar para orbitar): ¡boop!
+const raycaster = new THREE.Raycaster()
+let down: { x: number; y: number; t: number } | null = null
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.button === 0) down = { x: e.clientX, y: e.clientY, t: performance.now() }
+})
+canvas.addEventListener('pointerup', (e) => {
+  const start = down
+  down = null
+  if (!start || e.button !== 0) return
+  if (Math.hypot(e.clientX - start.x, e.clientY - start.y) >= 6) return
+  if (performance.now() - start.t >= 320) return
+  const box = canvas.getBoundingClientRect()
+  const ndc = new THREE.Vector2(
+    ((e.clientX - box.left) / box.width) * 2 - 1,
+    -((e.clientY - box.top) / box.height) * 2 + 1,
+  )
+  raycaster.setFromCamera(ndc, skyny.camera)
+  if (raycaster.intersectObjects(skyny.model.root.children, true).length > 0) skyny.poke()
+})
+
 // En reposo, Skyny sigue con los ojos al ratón cuando pasa cerca de la cara.
 canvas.addEventListener('pointermove', (e) => {
   skyny.pointer(
@@ -270,11 +346,11 @@ onThemeChange(() => {
 
 setView('frontal')
 setPose(0)
-setState(COMPANION_STATES.some((s) => s.state === initial) ? initial : 'calm')
+setState(STATES_META.some((s) => s.state === initial) ? initial : 'calm')
 // Los botones de la demo, al día con lo que hace Skyny; y la lista, con el estado al que llega.
 const cancelButton = $<HTMLButtonElement>('[data-action="cancel"]')
 const retryButton = $<HTMLButtonElement>('[data-action="retry"]')
-let shown: CompanionState = skyny.current
+let shown: SkynyState = skyny.current
 skyny.play(() => {
   controls.update()
   demo.tick(performance.now())

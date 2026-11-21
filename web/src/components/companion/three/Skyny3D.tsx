@@ -1,8 +1,9 @@
 import { useContext, useEffect, useRef } from 'react'
 import { prefersReducedMotion } from '../look'
+import { useOutfit, type Outfit } from '../outfit'
 import { SkynyPaused } from '../pause'
-import type { CompanionState } from '../state'
 import { SkynyScene, type Pose3D } from './scene'
+import type { SkynyState } from './states'
 import { onThemeChange, readColors } from './tokens'
 
 /** Lo que cuenta Skyny en vivo (SV-B): letreros al cambiar de estado y contador. */
@@ -35,23 +36,28 @@ export default function Skyny3D({
   room = ROOM,
   pose,
   live,
+  outfit,
   onFail,
 }: {
-  state?: CompanionState
+  state?: SkynyState
   size: number
   room?: number
   pose?: Pose3D
   live?: LiveInfo
+  /** Gorro y complementos; por defecto, los de Ajustes › Companion. */
+  outfit?: Outfit
   onFail: () => void
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const scene = useRef<SkynyScene | null>(null)
   const fail = useRef(onFail)
   const paused = useContext(SkynyPaused)
-  const latest = useRef({ state, live, paused })
+  const saved = useOutfit()
+  const { hat, face, back } = outfit ?? saved
+  const latest = useRef({ state, live, paused, hat, face, back })
   useEffect(() => {
     fail.current = onFail
-    latest.current = { state, live, paused }
+    latest.current = { state, live, paused, hat, face, back }
   })
   const isLive = live !== undefined
   const px = Math.round(size * room)
@@ -73,6 +79,9 @@ export default function Skyny3D({
     scene.current = skyny
     skyny.resize(px, px, room)
     const first = latest.current
+    skyny.setHat(first.hat)
+    skyny.setFace(first.face)
+    skyny.setBack(first.back)
     if (first.live) {
       skyny.setCompact(!!first.live.compact)
       skyny.setProgress(first.live.progress?.[0] ?? null, first.live.progress?.[1])
@@ -124,7 +133,7 @@ export default function Skyny3D({
 
   const message = live?.message
   useEffect(() => {
-    if (scene.current && scene.current.current !== state)
+    if (scene.current && scene.current.state !== state)
       scene.current.setState(state, { message: latest.current.live?.message })
   }, [state, message])
 
@@ -137,6 +146,12 @@ export default function Skyny3D({
   useEffect(() => {
     scene.current?.setPose(pose)
   }, [pose])
+
+  useEffect(() => {
+    scene.current?.setHat(hat)
+    scene.current?.setFace(face)
+    scene.current?.setBack(back)
+  }, [hat, face, back])
 
   return (
     <canvas

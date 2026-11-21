@@ -1,37 +1,61 @@
-// Transiciones de Skyny 3D (estudio v2): secuencias de estados que cuentan una tarea de principio
-// a fin. Las usan los botones de demo del estudio («Simular tarea», «Simular recuperación»,
-// «Cancelar tarea», «Reintentar») y son la base para enlazar a Skyny con las ejecuciones reales.
-import type { CompanionState } from '../state'
+// Transiciones de Skyny 3D (estudio v4.3): secuencias de estados que cuentan una tarea de principio
+// a fin. Las usan los botones de demo del estudio («Simular asistencia», «Simular tarea»,
+// «Simular recuperación», «Cancelar», «Reintentar»).
 import type { StateChange } from './scene'
+import type { SkynyState } from './states'
 
 /** El letrero de un reintento: «REINTENTO 1/2». */
 export const retryMessage = (attempt: number, max: number) => `REINTENTO ${attempt}/${max}`
 
 export interface DemoStep extends StateChange {
-  state: CompanionState
+  state: SkynyState
   /** Pasos del contador de Ejecutando (1/5 … 5/5). */
   steps?: number
   /** Se para aquí hasta que se pulsa «Reintentar». */
   waitRetry?: boolean
 }
 
-export type DemoKind = 'task' | 'recovery'
+export type DemoKind = 'assistance' | 'task' | 'recovery'
 
 export const DEMOS: Record<DemoKind, { label: string; steps: DemoStep[] }> = {
+  assistance: {
+    label: 'Simular asistencia',
+    steps: [
+      { state: 'listening' },
+      { state: 'recalling' },
+      { state: 'thinking' },
+      { state: 'external-wait' },
+      { state: 'check-result' },
+    ],
+  },
   task: {
     label: 'Simular tarea',
     steps: [
+      { state: 'routing' },
+      { state: 'sandbox' },
       { state: 'thinking' },
-      { state: 'running', steps: 5 },
-      { state: 'reviewing' },
-      { state: 'success' },
+      { state: 'planning' },
+      { state: 'delegating' },
+      { state: 'coding', steps: 4 },
+      { state: 'testing' },
+      { state: 'benchmarking' },
+      { state: 'auditing' },
+      { state: 'merging' },
+      { state: 'deploying' },
+      { state: 'learning' },
+      { state: 'celebrating' },
     ],
   },
   recovery: {
     label: 'Simular recuperación',
     steps: [
       { state: 'running', steps: 5 },
+      { state: 'guardrail' },
       { state: 'error' },
+      { state: 'rolling-back' },
+      { state: 'healing' },
+      { state: 'rate-limited' },
+      { state: 'testing' },
       { state: 'waiting', waitRetry: true },
       { state: 'running', message: retryMessage(1, 2), steps: 5 },
       { state: 'success' },
@@ -45,10 +69,10 @@ export const PROGRESS_STEP_MS = 550
 
 /** Lo que el guion necesita de la escena (así se prueba sin WebGL). */
 export interface DemoStage {
-  readonly current: CompanionState
+  readonly current: SkynyState
   readonly busy: boolean
   readonly progressShown: boolean
-  setState(state: CompanionState, change?: StateChange): void
+  setState(state: SkynyState, change?: StateChange): void
   setProgress(done: number | null, total?: number): void
 }
 

@@ -46,41 +46,42 @@ npm run studio:export   # → dist-studio/skyny-studio.html
 
 Mete three, el código, los estilos y las fuentes en un único fichero que se abre con doble clic (sin servidor), para enseñarlo o adjuntarlo. Es una salida generada: no se edita ni se sube al repo.
 
-## Qué hace Skyny 3D (estudio v2)
+## Qué hace Skyny 3D (estudio v4.3)
 
-- **Al cambiar de estado**, los colores (cuerpo, bandas, carcasa y luz de abajo) y la postura se funden en 300 ms, el accesorio anterior se desvanece en 220 ms y llega el gesto de entrada del nuevo.
-- **Letreros en la pantalla** (`led.ts`): al acabar el gesto escribe letra a letra lo que hace («PENSANDO...», «EN MARCHA», «LISTO», «AYUDA», «SIN RED»…) con cursor, lo deja un segundo y vuelve a poner los ojos. En Éxito escribe primero «LISTO» y luego salta. En Error el letrero es rojo. `setState(estado, { message })` pone otro letrero (p. ej. `retryMessage(1, 2)` → «REINTENTO 1/2»). Solo hay trazo para las letras que usa algún letrero (la cortina del chat añadió la F de «CONFIRMA»): un letrero nuevo con otras letras necesita sus glifos en `LED_GLYPHS`, y `led.test.ts` lo comprueba.
+El motor es el del estudio v4.3 (`plans/skyny-3d/skyny-v4.3.html` en la carpeta del proyecto), pasado a módulos:
+
+- **34 estados**: los 12 del companion de la web (Reposo, Pensando, Ejecutando…) y 22 más de flujos agénticos (Bloqueado por seguridad, Cooldown, Evaluando, Delegando, Enrutando, Sandbox, Recordando…). Cada uno con sus ojos, su accesorio, su gesto de entrada y su letrero (`STATES_META`, `STATE_CONFIG`, `LED_MESSAGES`).
+- **Al cambiar de estado**, los colores y la postura se funden, el accesorio anterior se desvanece y llega el gesto de entrada del nuevo.
+- **Letreros en la pantalla**: al acabar el gesto escribe letra a letra lo que hace, con cursor, y vuelve a poner los ojos. En compacto usa los cortos (`LED_COMPACT`). `setState(estado, { message })` pone otro letrero (p. ej. `retryMessage(1, 2)` → «REINTENTO 1/2»). Solo hay trazo para las letras que usa algún letrero: un letrero nuevo con otras letras necesita sus glifos en `LED_GLYPHS` (`screen.ts`), y `states.test.ts` lo comprueba.
+- **Gorro, cara y espalda** (`extras.ts`): ingeniero, headset, mago, corona, detective, antena, Navidad y verano; gafas de sol, cybervisor y pipa; jetpack. `setHat`, `setFace` y `setBack`. Se eligen en Ajustes › Companion, se guardan en el navegador y Skyny los lleva en toda la web; sin gorro elegido, lleva el de temporada.
+- **¡Boop!**: en el estudio, un clic corto sobre Skyny (`poke()`).
 - **Pausa bajo la cortina** (`pause.ts`): con la cortina del chat abierta, `SkynyPaused` para los Skyny 3D de la página (`stop()`), y al cerrarla vuelven a animarse (`play()`).
-- **Contador** de Ejecutando: `setProgress(hechos, total)` lo pinta en grande (2/5) después del letrero; en compacto, en su lugar. `setProgress(null)` lo quita.
-- **Te necesita, En pausa y Sin conexión**: la mano derecha sube y sostiene el símbolo («?», pausa, señal tachada), que la sigue.
-- **En reposo** (Reposo y En espera) mira a un lado cada 7,6 s, parpadea, y sigue con los ojos al puntero si pasa a menos de 200 px de la cara (`pointer({ x, y })`). **Pensando**, guiña poco a poco y de vez en cuando mira arriba a la izquierda.
-- Las manos flotan con un pequeño retraso respecto al cuerpo. La cabeza ya no se ve (de su sitio sale el confeti); las manos están a ±0,88.
-- **Modelo**: acabado mate con poco barniz, bisel de metal plano, y las tres bandas acaban en una **hebilla triangular** en la espalda (`buckleGeometry`), con el mismo acabado que la carcasa de la cara.
-- `busy` dice si Skyny está con algo a medias (gesto, letrero o contador): las demos esperan a que acabe antes de pasar al siguiente estado.
+- **Contador** de Ejecutando: `setProgress(hechos, total)`; `setProgress(null)` lo quita.
+- **En reposo** parpadea, mira a los lados y sigue con los ojos al puntero si pasa cerca de la cara (`pointer({ x, y })`).
+- `busy` dice si Skyny está con algo a medias (gesto, letrero o contador): las demos esperan a que acabe.
 
 ## Dónde está cada cosa
 
-Todo en `web/src/components/companion/three/`. Las secciones son las de los estudios sueltos (en la carpeta del proyecto, `plans/skyny-3d/skyny-studio-v1.html` y `skyny-v2.0.html`):
+Todo en `web/src/components/companion/three/`. Los ficheros del motor son JavaScript del estudio con `// @ts-nocheck`; la API que usa la web está tipada (`SkynyScene`, `SkynyExtras`, `SkynyState`).
 
-| Fichero | Qué tiene | Sección del estudio |
-|---|---|---|
-| `body.ts` | Forma del cuerpo (`deform`), recorrido de las bandas (`BANDS`) y `surfaceAt`, que apoya las bandas sobre el cuerpo | 5 y 6 |
-| `model.ts` | Entorno, luces, materiales, cara (carcasa, bisel, pantalla), nodos y sombra del suelo | 4, 7 y 8 |
-| `face.ts` | Los ojos que se pintan en la pantalla OLED (`drawFace`) | 9 |
-| `accessories.ts` | Burbujas, líneas de velocidad, lupa, confeti, rayos, «?», pausa, zetas y señal tachada | 10 |
-| `states.ts` | Qué ojos y qué accesorio lleva cada estado (`EXPRESSIONS_3D`) | 1 (`STATES`) |
-| `led.ts` | Letreros de la pantalla: textos de cada estado, trazos de las letras y el tecleo | 12 (`LED_MESSAGES`, `LED_GLYPHS`) |
-| `motion.ts` | Curvas de los gestos: entrada, carrerilla, sacudida, salto, fundidos, mano que sube, miradas en reposo… | 13 |
-| `scene.ts` | `SkynyScene`: junta todo y lo anima (fundidos, gestos, letreros, flotar, parpadeo, poses, mirada) | 12 y 13 |
-| `transitions.ts` | Las demos (`DEMOS`, `DemoRunner`) y `retryMessage` | 12 (`TASK_DEMOS`) |
-| `tokens.ts` | Colores leídos del tema | — |
-| `Skyny3D.tsx` | El componente de React que usa la web | — |
+| Fichero | Qué tiene |
+|---|---|
+| `states.ts` | Los 34 estados (`STATES_META`), su aspecto (`STATE_CONFIG`) y sus letreros (`LED_MESSAGES`, `LED_COMPACT`) |
+| `model.ts` | Cuerpo, bandas, cara, manos, materiales y suelo (`buildSkynyModel`) |
+| `accessories.ts` | Los accesorios de cada estado (`createAccessory`) |
+| `extras.ts` | Gorros, complementos de cara y de espalda (`createExtras`, `HATS`, `FACES`, `BACKS`) |
+| `screen.ts` | Pantalla: ojos, letreros y trazos de las letras (`LED_GLYPHS`) |
+| `math.ts` | Curvas de ayuda (`clamp01`, `smoothstep`, `easeOutCubic`) |
+| `scene.ts` | `SkynyScene`: junta todo y lo anima |
+| `transitions.ts` | Las demos (`DEMOS`, `DemoRunner`) y `retryMessage` |
+| `tokens.ts` | Colores leídos del tema |
+| `Skyny3D.tsx` | El componente de React que usa la web (lee el gorro y los complementos de las preferencias) |
 
-La página del estudio es `web/skyny-studio.html` + `web/src/studio/` (solo la interfaz: vistas, botones y lista).
+La página del estudio es `web/skyny-studio.html` + `web/src/studio/` (solo la interfaz: vistas, complementos, botones y lista). En el móvil, los controles se pliegan bajo «Controles» y la lista de estados va en un cajón abajo (Agrandar / Recoger / Mostrar).
 
 ## Colores
 
-El 3D **no lleva colores propios**: el cuerpo de cada estado es el mismo `--c-lo` que el Skyny 2D (`.companion[data-state]` en `index.css`), y las bandas son ese color oscurecido. Los ojos usan `--companion-glow` y `--companion-eye`; los nodos, `--companion-node`. Así casa con las píldoras de estado, el modo oscuro y las paletas personalizadas.
+El 3D **no lleva colores propios**: el cuerpo de los 12 estados del companion es el mismo `--c-lo` que el Skyny 2D (`.companion[data-state]` en `index.css`), y el de los otros 22, su token `--skyny-3d-<estado>` (claro y oscuro); las bandas son ese color oscurecido. Los ojos usan `--companion-glow` y `--companion-eye`; los nodos, `--companion-node`. Así casa con las píldoras de estado, el modo oscuro y las paletas personalizadas.
 
 Para cambiar el color de un estado, cambia su token en `index.css`: cambia a la vez en 2D y en 3D. Solo los ojos de algunos estados (Error, En pausa, Inactivo, Sin conexión, Cancelado) tienen color fijo, en `states.ts`.
 
@@ -91,5 +92,5 @@ Para cambiar el color de un estado, cambia su token en `index.css`: cambia a la 
 - No metas three por CDN ni variables globales: se importa de `three` (npm). Los añadidos, de `three/addons/…`.
 - No pongas hex en el modelo para los colores de estado: usa los tokens (arriba).
 - Nada de cálculos pesados al arrancar (la versión original tardaba ~1 s por banda con rayos contra la malla): si hace falta, una fórmula como `surfaceAt`.
-- Libera lo que crees al cambiar de estado (`disposeTree`), y nada de `Math.random` en lo que salga en capturas (el confeti usa una semilla fija).
+- Libera lo que crees al cambiar de estado o de complemento (`disposeGroup`, `clearExtra`; `dispose()` lo suelta todo), y nada de `Math.random` en lo que salga en capturas (solo el parpadeo lo usa).
 - Antes de subir: `npx tsc -b && npx oxlint && npx vitest run src/components/companion`.

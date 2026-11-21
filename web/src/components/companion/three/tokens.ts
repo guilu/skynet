@@ -1,10 +1,14 @@
 // Colores de Skyny 3D leídos de los tokens del tema: los mismos que usa el Skyny 2D, para que
 // el 3D case con las píldoras de estado, el modo oscuro y las paletas personalizadas.
 import { COMPANION_STATES, type CompanionState } from '../state'
+import { STATES_META, type SkynyState } from './states'
 
 export interface SkynyColors {
-  /** Cuerpo de cada expresión (`--c-lo` de `.companion[data-state]`). */
-  body: Record<CompanionState, string>
+  /**
+   * Cuerpo de cada estado: el `--c-lo` del Skyny 2D en los 12 del companion y `--skyny-3d-<estado>`
+   * en los demás del estudio v4.3.
+   */
+  body: Record<SkynyState, string>
   /** Nodos: cabeza y manos (`--companion-node`). */
   node: string
   /** Halo y núcleo de los ojos (`--companion-glow`, `--companion-eye`). */
@@ -47,10 +51,13 @@ export function readColors(): SkynyColors {
   svg.style.cssText = 'position:absolute;width:0;height:0;visibility:hidden'
   document.body.appendChild(svg)
   const primary = token('--primary', '#335fe0')
-  const body = {} as Record<CompanionState, string>
-  for (const { state } of COMPANION_STATES) {
-    svg.setAttribute('data-state', state)
-    body[state] = toHex(getComputedStyle(svg).getPropertyValue('--c-lo').trim(), primary)
+  const body = {} as Record<SkynyState, string>
+  const companion = new Set<string>(COMPANION_STATES.map((s) => s.state))
+  for (const { state } of STATES_META) {
+    if (companion.has(state)) {
+      svg.setAttribute('data-state', state as CompanionState)
+      body[state] = toHex(getComputedStyle(svg).getPropertyValue('--c-lo').trim(), primary)
+    } else body[state] = token(`--skyny-3d-${state}`, primary)
   }
   svg.remove()
 
