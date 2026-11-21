@@ -20,6 +20,12 @@ vi.mock('./scene', () => ({
     setFace() {}
     setBack() {}
     poke() {}
+    say() {}
+    setTicker() {}
+    hitTest() {
+      return false
+    }
+    setOrbit() {}
     pointer() {}
     lookAt() {}
     dispose() {}

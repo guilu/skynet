@@ -2598,20 +2598,19 @@
     padding: var(--space-6) 0;
   }
 
+  /* El hueco de Skyny: se puede tocar (¡boop!) y girar arrastrando */
   .login-hero {
     display: grid;
+    justify-self: center;
     justify-items: center;
-    gap: var(--space-4);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
 
-  .login-states {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+  .login-hero:active {
+    cursor: grabbing;
   }
 
   .login-form {
@@ -2621,10 +2620,6 @@
   .login-form h1 {
     margin-top: 0;
     font-size: 2rem;
-    text-align: center;
-  }
-
-  .login-form > p {
     text-align: center;
   }
 

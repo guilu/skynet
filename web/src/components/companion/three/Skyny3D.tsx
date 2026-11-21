@@ -3,6 +3,7 @@ import { prefersReducedMotion } from '../look'
 import { useOutfit, type Outfit } from '../outfit'
 import { SkynyPaused } from '../pause'
 import { SkynyScene, type Pose3D } from './scene'
+import { attachSpin } from './spin'
 import type { SkynyState } from './states'
 import { onThemeChange, readColors } from './tokens'
 
@@ -39,6 +40,9 @@ export default function Skyny3D({
   outfit,
   replay = 0,
   boop = 0,
+  ticker,
+  say,
+  interactive = false,
   onFail,
 }: {
   state?: SkynyState
@@ -52,6 +56,12 @@ export default function Skyny3D({
   replay?: number
   /** Al cambiar, ¡boop!: un toque en la cara. */
   boop?: number
+  /** Letreros que pasan deslizándose por la pantalla en reposo (login). */
+  ticker?: { lines: string[]; loopFrom?: number; delay?: number } | null
+  /** Un letrero ya, tecleado; sale otra vez cada vez que cambia `key`. */
+  say?: { text: string | string[]; key: number; error?: boolean; hold?: number } | null
+  /** Se puede tocar (¡boop!) y girar arrastrando; se marea si gira deprisa (login). */
+  interactive?: boolean
   onFail: () => void
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -60,10 +70,10 @@ export default function Skyny3D({
   const paused = useContext(SkynyPaused)
   const saved = useOutfit()
   const { hat, face, back } = outfit ?? saved
-  const latest = useRef({ state, live, paused, hat, face, back })
+  const latest = useRef({ state, live, paused, hat, face, back, ticker, say })
   useEffect(() => {
     fail.current = onFail
-    latest.current = { state, live, paused, hat, face, back }
+    latest.current = { state, live, paused, hat, face, back, ticker, say }
   })
   const isLive = live !== undefined
   const px = Math.round(size * room)
@@ -88,6 +98,8 @@ export default function Skyny3D({
     skyny.setHat(first.hat)
     skyny.setFace(first.face)
     skyny.setBack(first.back)
+    if (first.ticker) skyny.setTicker(first.ticker.lines, first.ticker)
+    if (first.say) skyny.say(first.say.text, first.say)
     if (first.live) {
       skyny.setCompact(!!first.live.compact)
       skyny.setProgress(first.live.progress?.[0] ?? null, first.live.progress?.[1])
@@ -131,6 +143,24 @@ export default function Skyny3D({
       scene.current = null
     }
   }, [px, room, isLive])
+
+  useEffect(() => {
+    const host = canvas.current?.parentElement
+    if (!interactive || !host || !scene.current) return
+    return attachSpin(scene.current, host)
+  }, [interactive, px, room, isLive])
+
+  const tickerLines = ticker?.lines.join('\n')
+  useEffect(() => {
+    const t = latest.current.ticker
+    scene.current?.setTicker(t?.lines ?? null, t ?? {})
+  }, [tickerLines])
+
+  const sayKey = say?.key
+  useEffect(() => {
+    const s = latest.current.say
+    if (s && sayKey !== undefined) scene.current?.say(s.text, s)
+  }, [sayKey])
 
   useEffect(() => {
     if (paused) scene.current?.stop()

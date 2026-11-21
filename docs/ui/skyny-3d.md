@@ -54,7 +54,8 @@ El motor es el del estudio v4.3 (`plans/skyny-3d/skyny-v4.3.html` en la carpeta 
 - **Al cambiar de estado**, los colores y la postura se funden, el accesorio anterior se desvanece y llega el gesto de entrada del nuevo.
 - **Letreros en la pantalla**: al acabar el gesto escribe letra a letra lo que hace, con cursor, y vuelve a poner los ojos. En compacto usa los cortos (`LED_COMPACT`). `setState(estado, { message })` pone otro letrero (p. ej. `retryMessage(1, 2)` → «REINTENTO 1/2»). Solo hay trazo para las letras que usa algún letrero: un letrero nuevo con otras letras necesita sus glifos en `LED_GLYPHS` (`screen.ts`), y `states.test.ts` lo comprueba.
 - **Gorro, cara y espalda** (`extras.ts`): ingeniero, headset, mago, corona, detective, antena, Navidad y verano; gafas de sol, cybervisor y pipa; jetpack. `setHat`, `setFace` y `setBack`. Se eligen en Ajustes › Companion, se guardan en el navegador y Skyny los lleva en toda la web; sin gorro elegido, lleva el de temporada.
-- **¡Boop!**: en el estudio, un clic corto sobre Skyny (`poke()`).
+- **¡Boop!**: en el estudio y en el login, un clic corto sobre Skyny (`poke()`). En el login también se gira arrastrando (`spin.ts`, `setOrbit`) y, si lo giras deprisa, se marea.
+- **Letreros que hablan** (login): `say(texto | [trozos])` escribe ya un letrero (a trozos, para que se lean grandes); `setTicker(líneas)` hace pasar letreros deslizándose de derecha a izquierda en reposo. Los del login están en `loginLines.ts` (saludo por la hora, de madrugada, café, viernes y los de la casa) y `loginLines.test.ts` comprueba que todas sus letras tienen trazo.
 - **Pausa bajo la cortina** (`pause.ts`): con la cortina del chat abierta, `SkynyPaused` para los Skyny 3D de la página (`stop()`), y al cerrarla vuelven a animarse (`play()`).
 - **Contador** de Ejecutando: `setProgress(hechos, total)`; `setProgress(null)` lo quita.
 - **En reposo** parpadea, mira a los lados y sigue con los ojos al puntero si pasa cerca de la cara (`pointer({ x, y })`).
@@ -73,6 +74,7 @@ Todo en `web/src/components/companion/three/`. Los ficheros del motor son JavaSc
 | `screen.ts` | Pantalla: ojos, letreros y trazos de las letras (`LED_GLYPHS`) |
 | `math.ts` | Curvas de ayuda (`clamp01`, `smoothstep`, `easeOutCubic`) |
 | `scene.ts` | `SkynyScene`: junta todo y lo anima |
+| `spin.ts` | Tocar y girar a Skyny arrastrando (login) |
 | `transitions.ts` | Las demos (`DEMOS`, `DemoRunner`) y `retryMessage` |
 | `tokens.ts` | Colores leídos del tema |
 | `Skyny3D.tsx` | El componente de React que usa la web (lee el gorro y los complementos de las preferencias) |

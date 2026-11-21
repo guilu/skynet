@@ -40,10 +40,46 @@ export const LED_GLYPHS: Record<string, string> = {
   X: 'M2 0 L46 60 M46 0 L2 60',
   Y: 'M0 0 L24 31 L48 0 M24 31 V60',
   Z: 'M0 0 H48 L0 60 H48',
+  // Para los letreros del login: Ñ, signos, coma y paréntesis.
+  Ñ: 'M0 60 V0 L48 60 V0 M6 -16 C14 -26 22 -12 30 -18 C36 -22 40 -22 44 -18',
+  ',': 'M2 58 L-4 72',
+  '!': 'M6 0 V40 M6 60 H6.01',
+  '¡': 'M6 0 H6.01 M6 20 V60',
+  '?': 'M0 12 C4 -6 42 -6 42 14 C42 28 20 30 20 42 M20 60 H20.01',
+  '¿': 'M22 0 H22.01 M22 18 C22 30 0 32 0 46 C0 66 38 66 42 48',
+  '(': 'M22 0 C4 18 4 42 22 60',
+  ')': 'M2 0 C20 18 20 42 2 60',
 }
-export const glyphW = (ch) => (ch === '.' ? 22 : ch === ' ' ? 32 : ch === 'I' ? 39 : 67)
 
-export function drawLedScreen(ctx, text, { count, cursor, error = false, big = false }) {
+/** Vocales con tilde: la letra y un trazo encima. */
+const ACCENTED: Record<string, string> = { Á: 'A', É: 'E', Í: 'I', Ó: 'O', Ú: 'U' }
+for (const [accented, base] of Object.entries(ACCENTED))
+  LED_GLYPHS[accented] = `${LED_GLYPHS[base]} M18 -10 L30 -22`
+
+const NARROW: Record<string, number> = {
+  '.': 22,
+  ',': 22,
+  ' ': 32,
+  '!': 30,
+  '¡': 30,
+  '(': 40,
+  ')': 40,
+  '?': 60,
+  '¿': 60,
+  I: 39,
+  Í: 39,
+}
+export const glyphW = (ch) => NARROW[ch] ?? 67
+
+/** Ancho en px de un letrero a una escala dada. */
+export const ledWidth = (text: string, scale = 1) =>
+  ([...text].reduce((acc, c) => acc + glyphW(c), 0) - 19) * scale
+
+export function drawLedScreen(
+  ctx,
+  text,
+  { count, cursor, error = false, big = false, scrollX = null },
+) {
   const chars = [...text]
   ctx.save()
   ctx.beginPath()
@@ -53,8 +89,9 @@ export function drawLedScreen(ctx, text, { count, cursor, error = false, big = f
   ctx.fillRect(0, 0, 512, 512)
 
   const totalW = chars.reduce((acc, c) => acc + glyphW(c), 0) - 19
-  const scale = Math.min(big ? 1.65 : 1.1, 335 / totalW)
-  ctx.translate(256 - (totalW * scale) / 2, 256 - 30 * scale)
+  // Deslizándose, a tamaño fijo y desde `scrollX`; si no, centrado y encogido para que quepa.
+  const scale = scrollX === null ? Math.min(big ? 1.65 : 1.1, 335 / totalW) : 1.1
+  ctx.translate(scrollX === null ? 256 - (totalW * scale) / 2 : scrollX, 256 - 30 * scale)
   ctx.scale(scale, scale)
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
@@ -77,7 +114,7 @@ export function drawLedScreen(ctx, text, { count, cursor, error = false, big = f
     const d = LED_GLYPHS[ch]
     if (d) {
       ctx.save()
-      if (ch === 'I') ctx.translate(-14, 0)
+      if (ch === 'I' || ch === 'Í') ctx.translate(-14, 0)
       strokePath(new Path2D(d), 16)
       ctx.restore()
     }

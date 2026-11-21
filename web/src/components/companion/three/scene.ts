@@ -6,7 +6,11 @@ import { clamp01, smoothstep, easeOutCubic } from './math'
 import { STATE_CONFIG, LED_MESSAGES, LED_COMPACT } from './states'
 import { buildSkynyModel, HAND_REST_POS, HAND_SPHERE_RADIUS, BASE_Y, BODY_RADIUS } from './model'
 import { createAccessory, delegationDispatch, cooldownCharge, BADGE_SCALE } from './accessories'
-import { drawLedScreen, drawEyesScreen } from './screen'
+import { drawLedScreen, drawEyesScreen, ledWidth } from './screen'
+
+/** Letreros deslizantes: velocidad (px por segundo, en un visor de 512) y tamaño de letra. */
+const SCROLL_SPEED = 210
+const SCROLL_SCALE = 1.1
 import { createExtras, type BackKind, type FaceKind, type HatKind } from './extras'
 import type { SkynyState } from './states'
 import type { SkynyColors } from './tokens'
@@ -171,6 +175,63 @@ export class SkynyScene {
   }
   setBack(kind: BackKind) {
     this.extras.setBack(kind)
+  }
+
+  /**
+   * Escribe un letrero ya, por encima de lo que hubiera: tecleado o, con `scroll`, deslizándose de
+   * derecha a izquierda. Con varios, uno tras otro (tecleados). `error` lo pinta en rojo.
+   */
+  say(text: string | string[], opts: { scroll?: boolean; error?: boolean; hold?: number } = {}) {
+    const [first, ...rest] = Array.isArray(text) ? text : [text]
+    const error = !!opts.error
+    this.message = {
+      text: first,
+      at: performance.now(),
+      scroll: !!opts.scroll,
+      error,
+      hold: opts.hold ?? 900,
+    }
+    this.sayQueue = rest.map((t) => ({ text: t, error, hold: 900 }))
+    this.drawnKey = ''
+  }
+
+  /**
+   * Letreros que pasan deslizándose por la pantalla, uno tras otro, mientras no hay otro letrero
+   * (`gap` ms de ojos entre uno y otro). Al acabar la lista vuelve a empezar por `loopFrom`.
+   */
+  setTicker(
+    lines: string[] | null,
+    opts: { gap?: number; loopFrom?: number; delay?: number } = {},
+  ) {
+    this.ticker = lines?.length
+      ? { lines, i: 0, gap: opts.gap ?? 2600, loopFrom: opts.loopFrom ?? 0 }
+      : null
+    this.tickerAt = performance.now() + (opts.delay ?? 0)
+  }
+
+  /** ¿Está el punto (de la ventana) encima de Skyny? */
+  hitTest(x: number, y: number) {
+    const r = this.renderer.domElement.getBoundingClientRect()
+    if (!r.width || !r.height) return false
+    const ndc = new THREE.Vector2(
+      ((x - r.left) / r.width) * 2 - 1,
+      -((y - r.top) / r.height) * 2 + 1,
+    )
+    this.raycaster ??= new THREE.Raycaster()
+    this.raycaster.setFromCamera(ndc, this.camera)
+    return this.raycaster.intersectObjects(this.model.root.children, true).length > 0
+  }
+
+  /** Gira la cámara alrededor de Skyny (radianes); si gira deprisa, Skyny se marea. */
+  setOrbit(angle: number) {
+    this.orbitBase ??= this.camera.position.clone()
+    const target = new THREE.Vector3(0, 0.1, 0)
+    const offset = this.orbitBase
+      .clone()
+      .sub(target)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), angle)
+    this.camera.position.copy(target).add(offset)
+    this.camera.lookAt(target)
   }
 
   poke() {
@@ -2148,6 +2209,31 @@ export class SkynyScene {
     cooldownReadyPop = 0,
   ) {
     const showProg = this.state === 'running' && this.progress !== null
+    if (!this.message && this.ticker && now >= this.tickerAt && animate) {
+      const t = this.ticker
+      this.message = { text: t.lines[t.i], at: now, scroll: true }
+      t.i = t.i + 1 < t.lines.length ? t.i + 1 : Math.min(t.loopFrom, t.lines.length - 1)
+    }
+    if (this.message?.scroll && now >= this.message.at) {
+      // Letrero que entra por la derecha y sale por la izquierda (SCROLL_SPEED px/s del visor).
+      const x = 512 - ((now - this.message.at) / 1000) * SCROLL_SPEED
+      if (x + ledWidth(this.message.text, SCROLL_SCALE) > 0 && animate) {
+        const key = `scroll:${this.message.text}:${Math.round(x)}`
+        if (key !== this.drawnKey) {
+          this.drawnKey = key
+          drawLedScreen(this.faceCtx, this.message.text, {
+            count: [...this.message.text].length,
+            cursor: false,
+            error: this.message.error,
+            scrollX: x,
+          })
+          this.faceTexture.needsUpdate = true
+        }
+        return
+      }
+      this.message = null
+      this.tickerAt = now + (this.ticker?.gap ?? 0)
+    }
     if (this.message && now >= this.message.at) {
       if (showProg && this.compact) {
         this.message = null
@@ -2160,21 +2246,23 @@ export class SkynyScene {
           ? chars.length
           : Math.max(0, Math.min(chars.length, Math.floor(dt / 90)))
         const cursor = !instant && (dt < charTime || Math.floor((dt - charTime) / 240) % 2 === 0)
-        if (dt < charTime + 1000) {
+        if (dt < charTime + (this.message.hold ?? 1000)) {
           this.showingProgress = false
-          const key = `led:${this.message.text}:${count}:${cursor}`
+          const key = `led:${this.message.text}:${count}:${cursor}:${!!this.message.error}`
           if (key !== this.drawnKey) {
             this.drawnKey = key
             drawLedScreen(this.faceCtx, this.message.text, {
               count,
               cursor,
-              error: this.state === 'error',
+              error: this.state === 'error' || this.message.error,
             })
             this.faceTexture.needsUpdate = true
           }
           return
         }
-        this.message = null
+        const next = this.sayQueue?.shift()
+        this.message = next ? { ...next, at: now + 120 } : null
+        this.tickerAt = Math.max(this.tickerAt ?? 0, now + (this.ticker?.gap ?? 0))
       }
     }
 
