@@ -18,8 +18,15 @@ export function SkynyLive({
   state,
   size,
   fallback,
+  interactive = false,
   ...live
-}: LiveInfo & { state: CompanionState; size: number; fallback: ReactNode }) {
+}: LiveInfo & {
+  state: CompanionState
+  size: number
+  fallback: ReactNode
+  /** Se puede tocar (¡boop!) y girar arrastrando, como en el login. */
+  interactive?: boolean
+}) {
   const [three, setThree] = useState(can3D)
   const shown = useSettledState(state)
   if (!three) return fallback
@@ -29,6 +36,7 @@ export function SkynyLive({
         state={shown}
         size={size}
         live={{ compact: size < COMPACT_BELOW, ...live }}
+        interactive={interactive}
         onFail={() => setThree(false)}
       />
     </Suspense>

@@ -254,6 +254,7 @@ export function ChatCurtain({
               state={talking ? expression : 'calm'}
               size={size}
               message={talking ? CHAT_LED[expression] : undefined}
+              interactive
               fallback={
                 <Companion state={talking ? expression : 'calm'} size={Math.round(size * 0.8)} />
               }

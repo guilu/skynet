@@ -12168,11 +12168,21 @@
   }
 
   /* Skyny siempre grande y centrado arriba, con lo que hace debajo. */
+  /* Skyny de la cortina: se puede tocar (¡boop!) y girar arrastrando, como en el login */
   .curtain-skyny {
     display: grid;
     flex: none;
     place-items: center;
+    width: fit-content;
     margin: -16px auto -8px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .curtain-skyny:active {
+    cursor: grabbing;
   }
 
   .curtain-status {
