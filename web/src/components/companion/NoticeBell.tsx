@@ -1,12 +1,11 @@
 import * as Menu from '@radix-ui/react-dropdown-menu'
 import { useNavigate } from 'react-router'
 import { formatTime } from '../../format'
-import { Companion } from './Companion'
 import { useCompanion } from './context'
-import { NOTICE_FACE } from './notices'
+import { NOTICE_ICON } from './notices'
 import { Icon } from '../icons/Icon'
 
-/** La campana: los últimos avisos con su cara; al abrirla quedan leídos. */
+/** La campana: los últimos avisos con su icono; al abrirla quedan leídos. */
 export function NoticeBell({
   open,
   onOpenChange,
@@ -39,7 +38,7 @@ export function NoticeBell({
           <Menu.Label className="menu-label">Avisos</Menu.Label>
           {notices.length === 0 ? (
             <p className="notices-empty">
-              <Companion state="calm" size={56} />
+              <Icon name="inbox" size={32} strokeWidth={2} />
               Aún no hay avisos. Te contaré aquí lo que termine, falle o te necesite.
             </p>
           ) : (
@@ -52,7 +51,9 @@ export function NoticeBell({
                   data-kind={n.kind}
                   onSelect={() => navigate(n.href)}
                 >
-                  <Companion state={NOTICE_FACE[n.kind]} size={30} still />
+                  <span className="notice-icon">
+                    <Icon name={NOTICE_ICON[n.kind]} size={20} strokeWidth={2.25} />
+                  </span>
                   <span className="notice-text">
                     <strong>{n.title}</strong>
                     {n.body !== '' && <span className="muted">{n.body}</span>}

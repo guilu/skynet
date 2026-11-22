@@ -155,30 +155,21 @@ describe('companion global', () => {
     expect(screen.queryByText('Te necesito')).not.toBeInTheDocument()
   })
 
-  it('dormida, se despierta con un bostezo al mover el ratón', async () => {
+  it('dormida, se despierta al mover el ratón', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
       const { container } = start('/', {
         '/api/workflow-runs?status=PENDING&status=RUNNING&size=50': { ...runPage, items: [] },
       })
-      const skyny = () => container.querySelector<SVGSVGElement>('.companion-btn svg.companion')!
-      await waitFor(() => expect(skyny().dataset.state).toBe('calm'))
+      // La barra lleva el icono del estado; el estado se lee en la etiqueta del botón.
+      const label = () => container.querySelector('.companion-btn')?.getAttribute('aria-label')
+      await waitFor(() => expect(label()).toMatch(/^Skynet: Reposo\./))
       await act(async () => vi.advanceTimersByTimeAsync(6 * 60_000))
-      await waitFor(() => expect(skyny().dataset.state).toBe('sleeping'))
+      await waitFor(() => expect(label()).toMatch(/^Skynet: Inactivo\./))
       fireEvent.pointerMove(window)
-      expect(skyny().dataset.gesture).toBe('yawn')
-      await waitFor(() => expect(skyny().dataset.state).toBe('calm'))
+      await waitFor(() => expect(label()).toMatch(/^Skynet: Reposo\./))
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('suda si alguna cuota va justa', async () => {
-    const { container } = start('/', {
-      '/api/dashboard': { quotaWarnings: [{ provider: 'codex' }] },
-    })
-    await waitFor(() =>
-      expect(container.querySelector('.companion-btn .companion-fx-sweat')).not.toBeNull(),
-    )
   })
 })

@@ -4,7 +4,6 @@ import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 import { api, SESSION_KEY, type Session } from '../api'
 import { useTheme } from '../theme'
-import { BrandMark } from './brand/Logo'
 import { CompanionMenu } from './companion/CompanionMenu'
 import { CompanionProvider } from './companion/CompanionProvider'
 import { preloadSkyny3D } from './companion/load3d'
@@ -117,8 +116,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   aria-expanded={chatOpen}
                   aria-keyshortcuts="Meta+J Control+J"
                 >
-                  <BrandMark />
-                  <span className="brand-name">Skynet</span>
+                  <span className="brand-name">SKYNET</span>
                 </button>
               </Tooltip.Trigger>
               <Tooltip.Portal>

@@ -1,6 +1,7 @@
 import type { Run, StoredEvent } from '../../api'
 import { elapsed, formatCost, formatDuration, providerName } from '../../format'
 import type { CompanionState } from './state'
+import type { IconName } from '../icons/registry'
 
 /** Los tipos que escucha el companion global: estados, aprobaciones y límites (plan, §7). */
 export const COMPANION_EVENT_TYPES = [
@@ -46,6 +47,17 @@ export const NOTICE_FACE: Record<NoticeKind, CompanionState> = {
   started: 'running',
   unresponsive: 'offline',
   limit: 'paused',
+}
+
+/** El icono de cada aviso en la campana de la barra superior. */
+export const NOTICE_ICON: Record<NoticeKind, IconName> = {
+  approval: 'approvals',
+  input: 'message',
+  success: 'status-ok',
+  error: 'status-error',
+  started: 'status-running',
+  unresponsive: 'status-offline',
+  limit: 'status-paused',
 }
 
 /** Cuánto dura el aviso flotante; null: hasta que lo cierras (o decides, si es una aprobación). */

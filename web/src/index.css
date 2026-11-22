@@ -627,13 +627,8 @@
     text-decoration: none;
   }
 
-  /* Skyny se ilumina al pasar y se hunde al pulsar. */
-  .brand:hover .brand-mark {
-    filter: brightness(1.06) saturate(1.1);
-  }
-
-  .brand:active .brand-mark {
-    transform: translateY(2px);
+  .brand:hover {
+    background: var(--surface-2);
   }
 
   .brand:focus-visible {
@@ -641,22 +636,9 @@
     outline-offset: 2px;
   }
 
-  .brand-mark {
-    flex: none;
-    width: 44px;
-    height: 44px;
-    display: grid;
-    place-items: center;
-    /* El lienzo de Skyny deja sitio a los efectos: se agranda sin mover el texto. */
-    margin: -5px 0;
-    transition:
-      transform 0.12s var(--ease-pop),
-      filter 0.12s ease;
-  }
-
-  /* En la marca, Skyny va sin destellos ni suelo: solo el personaje. */
-  .brand-mark :is(.companion-fx, .companion-floor) {
-    display: none;
+  /* El nombre en mayúsculas es el logotipo: la única excepción a los textos sin mayúsculas. */
+  .brand-name {
+    letter-spacing: 0.08em;
   }
 
   .brand-tagline {
@@ -879,12 +861,10 @@
     padding: 20px 12px;
   }
 
+  /* Plegada, el nombre no cabe en el ancho de la barra: la marca crece lo justo. */
   .shell[data-collapsed] .topbar .brand {
-    padding: 4px 0;
-  }
-
-  .shell[data-collapsed] .topbar .brand-name {
-    display: none;
+    width: auto;
+    min-width: calc(var(--sidenav-width) - 4px);
   }
 
   .sidebar[data-collapsed] .sidenav a,
@@ -1329,11 +1309,8 @@
 
     .topbar .brand {
       width: auto;
-      padding: 0;
-    }
-
-    .topbar .brand-name {
-      display: none;
+      padding: 4px 2px;
+      font-size: 1.125rem;
     }
 
     .crumbs li:not(:last-child) {
@@ -1372,6 +1349,7 @@
     }
 
     .search-btn {
+      flex: none;
       padding: 0;
       width: 44px;
       height: 44px;
@@ -9303,23 +9281,9 @@
 
   /* ---- Companion global (CO-B): mascota de la barra, campana y avisos ---- */
 
+  /* El estado global: un botón de icono más; solo necesita sitio para el punto verde. */
   .companion-btn {
     position: relative;
-    flex: none;
-    display: grid;
-    place-items: center;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    border: var(--border-w) solid var(--border);
-    border-radius: 14px;
-    background: var(--surface);
-    box-shadow: 0 3px 0 var(--border);
-    cursor: pointer;
-  }
-
-  .companion-btn:hover {
-    border-color: var(--border-strong);
   }
 
   /* El punto verde: hay algo en vivo. */
@@ -9381,6 +9345,23 @@
     align-items: center;
     gap: 10px;
     padding: 6px 8px;
+  }
+
+  .companion-menu-icon,
+  .notice-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--surface-2);
+    color: var(--fg);
+  }
+
+  .notice-icon {
+    width: 30px;
+    height: 30px;
   }
 
   .companion-menu-head div {

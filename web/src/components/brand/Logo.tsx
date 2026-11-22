@@ -1,5 +1,4 @@
 import { useId } from 'react'
-import { Companion } from '../companion/Companion'
 import {
   MARK_ARM_WIDTH,
   MARK_ARMS,
@@ -45,17 +44,5 @@ export function Logo({ size = 24, className }: { size?: number; className?: stri
         ))}
       </g>
     </svg>
-  )
-}
-
-/**
- * Marca de la barra lateral: Skyny en reposo (SY-B), quieto y sin efectos, en lugar del isotipo
- * sobre la baldosa. Sigue al acento, al tema y a los accesorios de temporada.
- */
-export function BrandMark() {
-  return (
-    <span className="brand-mark" aria-hidden="true">
-      <Companion state="calm" size={54} still />
-    </span>
   )
 }

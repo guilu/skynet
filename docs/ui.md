@@ -188,7 +188,8 @@ El logo sale del estudio de imagen corporativa de octubre de 2026, variante «Pr
 **Desde SY-B (#183), el icono de la app es Skyny**, la mascota (sección 11), en lugar del isotipo. El isotipo queda en `brand.ts` y en el componente `Logo`, pero ya no sale en la interfaz.
 
 - **Un solo dibujo.** La geometría de Skyny (cuerpo, bandas, nodos y visor) está en `web/src/lib/brand.ts` y la comparten el componente `Companion` y `skynySvg`, que dibuja a Skyny quieto y sin efectos para los iconos.
-- **Marca de la barra lateral.** `BrandMark` es Skyny en Reposo (54 px, quieto, sin destellos ni suelo), sin baldosa. Sigue al acento, al tema y a los accesorios de temporada. Es enlace al Inicio: se ilumina al pasar el ratón, se hunde al pulsar y tiene foco visible. Con la barra plegada solo queda Skyny.
+- **Marca de la barra superior.** El nombre «SKYNET» en texto (Barlow 600, espaciado), sin Skyny ni isotipo: es la única excepción a los textos sin mayúsculas. Abre el chat con Skyny (⌘J), se ilumina al pasar el ratón y tiene foco visible. Siempre visible, también con la barra plegada y en el móvil.
+- **Sin Skyny en 2D en la barra superior.** El botón del companion y la cabecera de su menú llevan el icono del estado (`COMPANION_ICON`), y la campana, el de cada aviso (`NOTICE_ICON`).
 - **Dónde aparece.** En la barra lateral y en el login, donde va Skyny grande con animación, y bajo el nombre va el lema «Agentes · Flujos · Ejecuciones».
 - **Nombre.** «Skynet» en Barlow 600, la tipografía de títulos.
 - **Favicon e iconos.** `public/favicon.svg` es `faviconSvg`: Skyny en reposo, sin fondo, con el azul por defecto, y un test lo comprueba. Con un acento propio, `appearance.ts` lo cambia por uno generado al vuelo con ese color.
