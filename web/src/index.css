@@ -917,6 +917,19 @@
     z-index: 20;
   }
 
+  /*
+   * Las acciones de la barra (buscar, companion, avisos y tema). En escritorio van en fila, como
+   * si el envoltorio no existiera; en el móvil se pliegan tras «…» (más abajo).
+   */
+  .topbar-more-wrap,
+  .topbar-tools {
+    display: contents;
+  }
+
+  .topbar .topbar-more {
+    display: none;
+  }
+
   .crumbs {
     min-width: 0;
     margin-right: auto;
@@ -1346,6 +1359,56 @@
     .search-label,
     .search-btn .kbd {
       display: none;
+    }
+
+    /* Plegadas tras «…»: al abrir, salen deslizándose hacia la izquierda, sobre las migas. */
+    .topbar-more-wrap {
+      position: relative;
+      display: flex;
+      flex: none;
+    }
+
+    .topbar .topbar-more {
+      display: grid;
+    }
+
+    /* Abiertas, no caben con la marca: la marca y las migas se apartan con un fundido. */
+    .topbar :is(.brand, .crumbs) {
+      transition: opacity 0.16s ease;
+    }
+
+    .topbar:has(.topbar-tools[data-open]) :is(.brand, .crumbs) {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .topbar-tools {
+      position: absolute;
+      top: 50%;
+      right: calc(100% + var(--space-2));
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding-left: var(--space-2);
+      background: var(--bg);
+      opacity: 0;
+      visibility: hidden;
+      transform: translate(24px, -50%);
+      pointer-events: none;
+      transition:
+        transform 0.22s var(--ease-pop),
+        opacity 0.16s ease,
+        visibility 0s linear 0.22s;
+    }
+
+    .topbar-tools[data-open] {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(0, -50%);
+      pointer-events: auto;
+      transition:
+        transform 0.22s var(--ease-pop),
+        opacity 0.16s ease;
     }
 
     .search-btn {

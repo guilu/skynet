@@ -49,6 +49,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useTheme()
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  // En el móvil, las cuatro acciones de la barra van plegadas tras «…» (se pliegan al cambiar de página).
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const [toolsPath, setToolsPath] = useState(pathname)
+  if (toolsPath !== pathname) {
+    setToolsPath(pathname)
+    setToolsOpen(false)
+  }
   const [chatOpen, setChatOpen] = useState(false)
   // Montada desde la primera vez que se abre: al cerrarla conserva el borrador y la conversación.
   const [chatLoaded, setChatLoaded] = useState(false)
@@ -126,20 +133,45 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Tooltip.Portal>
             </Tooltip.Root>
             <Breadcrumbs />
-            <button
-              type="button"
-              className="search-btn"
-              onClick={() => setPaletteOpen(true)}
-              aria-label="Buscar o ejecutar una orden"
-              aria-keyshortcuts="Meta+K Control+K"
-            >
-              <Icon name="search" size={20} strokeWidth={2.5} />
-              <span className="search-label">Buscar ejecución, trabajo o runner…</span>
-              <kbd className="kbd">⌘K</kbd>
-            </button>
-            {companion.mascot && <CompanionMenu onOpenNotices={() => setNoticesOpen(true)} />}
-            <NoticeBell open={noticesOpen} onOpenChange={setNoticesOpen} />
-            <ThemeMenu theme={theme} onChange={setTheme} />
+            <div className="topbar-more-wrap">
+              <div
+                id="topbar-tools"
+                className="topbar-tools"
+                data-open={toolsOpen || undefined}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setToolsOpen(false)
+                }}
+              >
+                <button
+                  type="button"
+                  className="search-btn"
+                  onClick={() => setPaletteOpen(true)}
+                  aria-label="Buscar o ejecutar una orden"
+                  aria-keyshortcuts="Meta+K Control+K"
+                >
+                  <Icon name="search" size={20} strokeWidth={2.5} />
+                  <span className="search-label">Buscar ejecución, trabajo o runner…</span>
+                  <kbd className="kbd">⌘K</kbd>
+                </button>
+                {companion.mascot && <CompanionMenu onOpenNotices={() => setNoticesOpen(true)} />}
+                <NoticeBell open={noticesOpen} onOpenChange={setNoticesOpen} />
+                <ThemeMenu theme={theme} onChange={setTheme} />
+              </div>
+              <button
+                type="button"
+                className="icon-btn topbar-more"
+                aria-label={
+                  toolsOpen
+                    ? 'Ocultar las acciones de la barra'
+                    : 'Mostrar las acciones de la barra'
+                }
+                aria-expanded={toolsOpen}
+                aria-controls="topbar-tools"
+                onClick={() => setToolsOpen((open) => !open)}
+              >
+                <Icon name={toolsOpen ? 'close' : 'more'} size={22} strokeWidth={2.25} />
+              </button>
+            </div>
             {session.data && (
               <UserMenu
                 username={session.data.username}
