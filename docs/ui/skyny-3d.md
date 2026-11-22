@@ -50,12 +50,15 @@ Mete three, el código, los estilos y las fuentes en un único fichero que se ab
 
 El motor es el del estudio v4.4 (`plans/skyny-3d/skyny-v4.4.html` en la carpeta del proyecto), pasado a módulos:
 
-- **44 estados**: los 12 del companion de la web (Reposo, Pensando, Ejecutando…) y 32 más de flujos agénticos (Bloqueado por seguridad, Cooldown, Evaluando, Delegando, Relevo, Modo eco, Conflicto de Git, Pull Request…). Cada uno con sus ojos, su accesorio, su gesto de entrada y su letrero (`STATES_META`, `STATE_CONFIG`, `LED_MESSAGES`).
+- **45 estados**: los 12 del companion de la web (Reposo, Pensando, Ejecutando…) y 33 más de flujos agénticos (Servicio degradado, Bloqueado por seguridad, Cooldown, Evaluando, Delegando, Relevo, Modo eco, Conflicto de Git, Pull Request…). Cada uno con sus ojos, su accesorio, su gesto de entrada y su letrero (`STATES_META`, `STATE_CONFIG`, `LED_MESSAGES`).
 - **Al cambiar de estado**, los colores y la postura se funden, el accesorio anterior se desvanece y llega el gesto de entrada del nuevo.
 - **Letreros en la pantalla**: al acabar el gesto escribe letra a letra lo que hace, con cursor, y vuelve a poner los ojos. En compacto usa los cortos (`LED_COMPACT`). `setState(estado, { message })` pone otro letrero (p. ej. `retryMessage(1, 2)` → «REINTENTO 1/2»). Solo hay trazo para las letras que usa algún letrero: un letrero nuevo con otras letras necesita sus glifos en `LED_GLYPHS` (`screen.ts`), y `states.test.ts` lo comprueba.
 - **Gorro, cara y espalda** (`extras.ts`): ingeniero, headset, mago, corona, detective, antena, Navidad y verano; gafas de sol, cybervisor y pipa; jetpack. `setHat`, `setFace` y `setBack`. Se eligen en Ajustes › Companion, se guardan en el navegador y Skyny los lleva en toda la web; sin gorro elegido, lleva el de temporada.
 - **¡Boop!**: en el estudio, el login y la cortina del chat, un clic corto sobre Skyny (`poke()`). En el login y la cortina también se gira arrastrando (`spin.ts`, `setOrbit`) y, si lo giras deprisa, se marea.
 - **Letreros que hablan** (login): `say(texto | [trozos])` escribe ya un letrero (a trozos, para que se lean grandes); `setTicker(líneas)` hace pasar letreros deslizándose de derecha a izquierda en reposo. Los del login están en `loginLines.ts` (saludo por la hora, de madrugada, café, viernes y los de la casa) y `loginLines.test.ts` comprueba que todas sus letras tienen trazo.
+- **Entrar y salir de escena**: `enter({ duration })` llega volando desde el fondo con los propulsores de las manos y frena con ondas en el suelo; `exit({ duration })` se agacha, se da la vuelta y se va volando, y se queda fuera hasta el siguiente `enter()` (en el estudio, `exit({ autoReenter: true })` vuelve solo). En la web: el Skyny del login entra al cargar y sale al entrar (la web espera `LEAVE_MS`); en `Skyny3D`, la prop `stage`.
+- **Reacciones al vivo** (`pulseEvent(tipo)`), sin cambiar de estado: `tool_call` (destello en el visor y asentimiento), `file_edited` (chispa que sube), `token_tick` (late el brillo inferior) y `gate_passed` (chispas verdes). `pulse.ts` decide la reacción de cada evento (`agent.tool.started`, `agent.file.changed`, `agent.message.received`, `agent.verification.completed` si pasa, y los `chat.*`) y `usePulse` recorta las ráfagas (una cada 300 ms). Las usan el Skyny de En curso (stream de la ejecución) y el de la cortina mientras contesta. Con movimiento reducido no hay reacciones.
+- **Microexpresiones en reposo**: cada 6 s alterna curiosidad, malabares y estiramiento.
 - **Pausa bajo la cortina** (`pause.ts`): con la cortina del chat abierta, `SkynyPaused` para los Skyny 3D de la página (`stop()`), y al cerrarla vuelven a animarse (`play()`).
 - **Contador** de Ejecutando: `setProgress(hechos, total)`; `setProgress(null)` lo quita.
 - **En reposo** parpadea, mira a los lados y sigue con los ojos al puntero si pasa cerca de la cara (`pointer({ x, y })`).
@@ -67,7 +70,7 @@ Todo en `web/src/components/companion/three/`. Los ficheros del motor son JavaSc
 
 | Fichero          | Qué tiene                                                                                                  |
 | ---------------- | ---------------------------------------------------------------------------------------------------------- |
-| `states.ts`      | Los 44 estados (`STATES_META`), su aspecto (`STATE_CONFIG`) y sus letreros (`LED_MESSAGES`, `LED_COMPACT`) |
+| `states.ts`      | Los 45 estados (`STATES_META`), su aspecto (`STATE_CONFIG`) y sus letreros (`LED_MESSAGES`, `LED_COMPACT`) |
 | `model.ts`       | Cuerpo, bandas, cara, manos, materiales y suelo (`buildSkynyModel`)                                        |
 | `accessories.ts` | Los accesorios de cada estado (`createAccessory`)                                                          |
 | `extras.ts`      | Gorros, complementos de cara y de espalda (`createExtras`, `HATS`, `FACES`, `BACKS`)                       |

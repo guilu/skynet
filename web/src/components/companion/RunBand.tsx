@@ -4,6 +4,7 @@ import { latestAttempts } from '../run/stageNotes'
 import { Companion } from './Companion'
 import type { Gesture } from './gesture'
 import { bandText } from './peek'
+import type { PulseType } from './pulse'
 import { runLive } from './runLive'
 import { SkynyLive } from './SkynyLive'
 import { runExpression } from './state'
@@ -22,11 +23,14 @@ export function RunBand({
   run,
   now,
   gesture,
+  pulse,
 }: {
   run: Run
   now: number
   /** Un gesto de una vez (el salto al terminar bien mientras la miras); anima aunque haya acabado. */
   gesture?: Gesture | null
+  /** Reacción de Skyny a lo que llega por el stream (herramientas, ficheros, mensajes). */
+  pulse?: { type: PulseType; key: number } | null
 }) {
   const stages = latestAttempts(run)
   const state = runExpression(run, stages, now)
@@ -40,6 +44,7 @@ export function RunBand({
         size={SIZE_3D}
         progress={progress}
         message={message}
+        pulse={done ? null : pulse}
         fallback={
           <Companion state={state} size={SIZE_2D} still={done && !gesture} gesture={gesture} />
         }

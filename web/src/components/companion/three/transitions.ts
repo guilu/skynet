@@ -63,6 +63,7 @@ export const DEMOS: Record<DemoKind, { label: string; steps: DemoStep[] }> = {
       { state: 'conflict' },
       { state: 'rolling-back' },
       { state: 'healing' },
+      { state: 'degraded' },
       { state: 'rate-limited' },
       { state: 'testing' },
       { state: 'waiting', waitRetry: true },

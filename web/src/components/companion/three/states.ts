@@ -5,6 +5,11 @@
 
 export const STATES_META = [
   {
+    state: 'degraded',
+    label: 'Servicio Degradado',
+    when: 'Proveedor principal con latencia o fallos; operando mediante fallback activo.',
+  },
+  {
     state: 'handover',
     label: 'Relevo',
     when: 'Pasando el testigo y contexto entre agentes especializados en un flujo secuencial.',
@@ -172,6 +177,7 @@ export interface StateLook {
 export const STATE_CONFIG: Record<SkynyState, StateLook> = {
   // En el estudio v4.4 se perdió esta línea al añadir los estados nuevos: es la de la v4.3.
   guardrail: { eyes: 'shield-eyes', accessory: 'hex-shield', entry: true, eyeColor: '#fda4af' },
+  degraded: { eyes: 'effort-eyes', accessory: 'limp-gears', entry: true, eyeColor: '#fde047' },
   handover: { eyes: 'pills', accessory: 'relay-baton', entry: true, eyeColor: '#c4b5fd' },
   throttled: { eyes: 'eco-eyes', accessory: 'eco-leaf', entry: true, eyeColor: '#a3e635' },
   escalating: { eyes: 'stars', accessory: 'upgrade-chevrons', entry: true, eyeColor: '#f0abfc' },
@@ -234,6 +240,7 @@ export const STATE_CONFIG: Record<SkynyState, StateLook> = {
 
 /** Letrero de cada estado al llegar. */
 export const LED_MESSAGES: Record<SkynyState, string> = {
+  degraded: 'DEGRADADO',
   handover: 'RELEVO',
   throttled: 'MODO ECO',
   escalating: 'ESCALANDO',
@@ -282,6 +289,7 @@ export const LED_MESSAGES: Record<SkynyState, string> = {
 
 /** Letreros cortos (Skyny pequeño). */
 export const LED_COMPACT: Partial<Record<SkynyState, string>> = {
+  degraded: 'FALLBACK',
   handover: 'PASE',
   throttled: 'ECO',
   escalating: 'UPGRADE',

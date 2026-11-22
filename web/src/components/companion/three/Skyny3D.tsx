@@ -3,6 +3,7 @@ import { prefersReducedMotion } from '../look'
 import { useOutfit, type Outfit } from '../outfit'
 import { SkynyPaused } from '../pause'
 import { SkynyScene, type Pose3D } from './scene'
+import type { PulseType } from '../pulse'
 import { attachSpin } from './spin'
 import type { SkynyState } from './states'
 import { onThemeChange, readColors } from './tokens'
@@ -19,6 +20,14 @@ export interface LiveInfo {
 
 /** Cuánto más grande que Skyny es el lienzo por defecto: sitio para globos y complementos. */
 export const ROOM = 1.5
+
+/** Entrar o salir de escena volando; se repite cada vez que cambia `key`. */
+export interface StageMove {
+  mode: 'enter' | 'exit'
+  key: number
+  /** Cuánto dura, en ms. */
+  duration?: number
+}
 
 /**
  * Skyny en 3D (TD): flota, parpadea y sigue con la mirada al cursor y al foco, y se tapa los ojos
@@ -43,6 +52,8 @@ export default function Skyny3D({
   ticker,
   say,
   interactive = false,
+  stage,
+  pulse,
   onFail,
 }: {
   state?: SkynyState
@@ -62,6 +73,10 @@ export default function Skyny3D({
   say?: { text: string | string[]; key: number; error?: boolean; hold?: number } | null
   /** Se puede tocar (¡boop!) y girar arrastrando; se marea si gira deprisa (login). */
   interactive?: boolean
+  /** Entra o sale de escena (login). Si llega al montar, empieza ya con el movimiento. */
+  stage?: StageMove | null
+  /** Reacción a un evento en vivo sin cambiar de estado; sale cada vez que cambia `key`. */
+  pulse?: { type: PulseType; key: number } | null
   onFail: () => void
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -70,10 +85,10 @@ export default function Skyny3D({
   const paused = useContext(SkynyPaused)
   const saved = useOutfit()
   const { hat, face, back } = outfit ?? saved
-  const latest = useRef({ state, live, paused, hat, face, back, ticker, say })
+  const latest = useRef({ state, live, paused, hat, face, back, ticker, say, stage, pulse })
   useEffect(() => {
     fail.current = onFail
-    latest.current = { state, live, paused, hat, face, back, ticker, say }
+    latest.current = { state, live, paused, hat, face, back, ticker, say, stage, pulse }
   })
   const isLive = live !== undefined
   const px = Math.round(size * room)
@@ -105,6 +120,7 @@ export default function Skyny3D({
       skyny.setProgress(first.live.progress?.[0] ?? null, first.live.progress?.[1])
       skyny.setState(first.state, { message: first.live.message })
     } else if (first.state !== 'calm') skyny.setState(first.state)
+    if (first.stage) moveStage(skyny, first.stage)
     if (!first.paused) skyny.play()
 
     const lost = (e: Event) => {
@@ -166,6 +182,22 @@ export default function Skyny3D({
     if (s && sayKey !== undefined) scene.current?.say(s.text, s)
   }, [sayKey])
 
+  const stageKey = stage?.key
+  const firstStageKey = useRef(stageKey)
+  useEffect(() => {
+    // El primero ya lo hizo la escena al crearse.
+    if (stageKey === firstStageKey.current) return
+    firstStageKey.current = undefined
+    const st = latest.current.stage
+    if (st && scene.current) moveStage(scene.current, st)
+  }, [stageKey])
+
+  const pulseKey = pulse?.key
+  useEffect(() => {
+    const p = latest.current.pulse
+    if (p && !prefersReducedMotion()) scene.current?.pulseEvent(p.type)
+  }, [pulseKey])
+
   useEffect(() => {
     if (paused) scene.current?.stop()
     else scene.current?.play()
@@ -213,4 +245,9 @@ export default function Skyny3D({
       aria-hidden="true"
     />
   )
+}
+
+function moveStage(skyny: SkynyScene, { mode, duration }: StageMove) {
+  if (mode === 'enter') skyny.enter({ duration })
+  else skyny.exit({ duration })
 }

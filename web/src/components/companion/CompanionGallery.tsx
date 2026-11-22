@@ -30,7 +30,7 @@ function useBodyColors() {
 
 /**
  * Ajustes › Companion: si se ve la mascota de la barra y si salen avisos (en este navegador), los
- * 44 estados de Skyny en 3D (como en el estudio) y el gorro y los complementos que lleva en toda
+ * 45 estados de Skyny en 3D (como en el estudio) y el gorro y los complementos que lleva en toda
  * la web. Sin WebGL o con movimiento reducido, la vista previa es el Skyny 2D.
  */
 export function CompanionGallery() {

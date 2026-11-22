@@ -2,11 +2,12 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useLocation } from 'react-router'
-import { api, ApiError, type ChatAction, type ChatThread } from '../../api'
+import { api, ApiError, type ChatAction, type ChatThread, type StoredEvent } from '../../api'
 import { formatDateTime } from '../../format'
 import { useMediaQuery } from '../../useMediaQuery'
 import { Companion } from '../companion/Companion'
 import { SkynyLive } from '../companion/SkynyLive'
+import { usePulse } from '../companion/usePulse'
 import { ErrorMessage } from '../ErrorMessage'
 import { Icon } from '../icons/Icon'
 import { ChatMessages } from './ChatMessages'
@@ -108,7 +109,9 @@ export function ChatCurtain({
     enabled: open && view === 'history',
   })
 
-  // Lo que pasa en la conversación llega por el stream de eventos: mensajes y acciones.
+  // Lo que pasa en la conversación llega por el stream de eventos: mensajes y acciones. Skyny
+  // reacciona a cada uno sin cambiar de estado.
+  const [pulse, pushPulse] = usePulse()
   useEffect(() => {
     if (!open || !activeId || typeof EventSource === 'undefined') return
     const params = new URLSearchParams({
@@ -117,12 +120,17 @@ export function ChatCurtain({
       after: 'latest',
     })
     const source = new EventSource(`/api/events/stream?${params}`)
-    source.onmessage = () => {
+    source.onmessage = (message) => {
+      try {
+        pushPulse(JSON.parse(message.data as string) as StoredEvent)
+      } catch {
+        // Un evento que no se entiende no reacciona; la conversación se relee igual.
+      }
       void queryClient.invalidateQueries({ queryKey: ['chat', activeId] })
       void queryClient.invalidateQueries({ queryKey: ['chat-actions', activeId] })
     }
     return () => source.close()
-  }, [open, activeId, queryClient])
+  }, [open, activeId, queryClient, pushPulse])
 
   const send = useMutation({
     mutationFn: async (message: string): Promise<ChatThread> => {
@@ -254,6 +262,7 @@ export function ChatCurtain({
               state={talking ? expression : 'calm'}
               size={size}
               message={talking ? CHAT_LED[expression] : undefined}
+              pulse={talking ? pulse : null}
               interactive
               fallback={
                 <Companion state={talking ? expression : 'calm'} size={Math.round(size * 0.8)} />

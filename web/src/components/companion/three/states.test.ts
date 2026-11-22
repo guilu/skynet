@@ -6,8 +6,8 @@ import { LED_GLYPHS } from './screen'
 import { LED_COMPACT, LED_MESSAGES, STATE_CONFIG, STATES_META } from './states'
 
 describe('estados de Skyny 3D (estudio v4.4)', () => {
-  it('hay 44 estados, cada uno con su aspecto y su letrero', () => {
-    expect(STATES_META).toHaveLength(44)
+  it('hay 45 estados, cada uno con su aspecto y su letrero', () => {
+    expect(STATES_META).toHaveLength(45)
     for (const { state } of STATES_META) {
       expect(STATE_CONFIG[state], state).toBeDefined()
       expect(LED_MESSAGES[state], state).toBeTruthy()

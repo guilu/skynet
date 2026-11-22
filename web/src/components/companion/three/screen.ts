@@ -416,6 +416,16 @@ export function renderEyesBase(ctx, eyeType, colors, offset, overrideColor, sacc
         roundPill(cx - 92, cy - 34, 46, 68, 22)
         roundPill(cx + 46, cy - 34, 46, 68, 22)
         break
+      case 'effort-eyes':
+        // Ojo izquierdo firme y ojo derecho entrecerrado de esfuerzo ("cojeando pero tirando")
+        roundPill(cx - 92, cy - 60, 44, 120, 22)
+        ctx.lineWidth = 26
+        ctx.beginPath()
+        ctx.moveTo(cx + 44, cy - 22)
+        ctx.lineTo(cx + 98, cy + 2)
+        ctx.lineTo(cx + 44, cy + 26)
+        ctx.stroke()
+        break
       case 'shield-eyes':
         ctx.lineWidth = 16
         for (const s of [-1, 1]) {

@@ -58,6 +58,64 @@ export function cooldownCharge(elapsedMs, moving) {
 export function createAccessory(type, palette) {
   const group = new THREE.Group()
   switch (type) {
+    case 'limp-gears': {
+      const gearsGroup = new THREE.Group()
+      gearsGroup.name = 'limpGears'
+
+      const makeGear = (teeth, rInner, rOuter, rHole, depth, mat, skipTooth = -1) => {
+        const shape = new THREE.Shape()
+        const steps = teeth * 4
+        for (let i = 0; i < steps; i++) {
+          const a = (i / steps) * Math.PI * 2
+          const toothIdx = Math.floor(i / 4)
+          const mod = i % 4
+          const isTip = (mod === 1 || mod === 2) && toothIdx !== skipTooth
+          const r = isTip ? rOuter : rInner
+          const px = Math.cos(a) * r,
+            py = Math.sin(a) * r
+          if (i === 0) shape.moveTo(px, py)
+          else shape.lineTo(px, py)
+        }
+        shape.closePath()
+        shape.holes.push(new THREE.Path().absarc(0, 0, rHole, 0, Math.PI * 2, true))
+        return extrudeShape(shape, depth, mat)
+      }
+
+      const mainMat = plasticMat(0xf59e0b)
+      mainMat.emissive = new THREE.Color(0xd97706)
+      mainMat.emissiveIntensity = 0.45
+      const mainGear = makeGear(10, 0.145, 0.195, 0.055, 0.036, mainMat)
+      mainGear.name = 'mainGear'
+      mainGear.position.set(-0.14, 0.02, 0)
+
+      const limpMat = plasticMat(0x38bdf8)
+      limpMat.emissive = new THREE.Color(0x0284c7)
+      limpMat.emissiveIntensity = 0.45
+      const limpGear = makeGear(7, 0.095, 0.138, 0.036, 0.034, limpMat, 2)
+      limpGear.name = 'limpGear'
+      limpGear.position.set(0.155, -0.05, 0.01)
+
+      const sparksGrp = new THREE.Group()
+      sparksGrp.name = 'gearSparks'
+      for (let i = 0; i < 6; i++) {
+        const sp = new THREE.Mesh(
+          new THREE.BoxGeometry(0.065, 0.018, 0.018),
+          new THREE.MeshBasicMaterial({
+            color: i % 2 === 0 ? 0xfef08a : 0xfb923c,
+            transparent: true,
+            opacity: 0.9,
+          }),
+        )
+        sp.userData = { ang: (i / 6) * Math.PI * 1.4 - 0.5, phase: i * 0.17 }
+        sparksGrp.add(sp)
+      }
+      sparksGrp.position.set(0.02, -0.02, 0.03)
+
+      gearsGroup.add(mainGear, limpGear, sparksGrp)
+      gearsGroup.position.set(0, -0.08, 1.06)
+      group.add(gearsGroup)
+      break
+    }
     case 'relay-baton': {
       const relayGroup = new THREE.Group()
       relayGroup.name = 'relayBaton'

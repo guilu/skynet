@@ -4,6 +4,7 @@ import { can3D } from './look'
 import { useSettledState } from './settle'
 import type { CompanionState } from './state'
 import { SkynySlot } from './SkynySlot'
+import type { PulseType } from './pulse'
 import type { LiveInfo } from './three/Skyny3D'
 
 /** Por debajo de este tamaño, letreros cortos («IDEA» en vez de «PENSANDO...»). */
@@ -19,6 +20,7 @@ export function SkynyLive({
   size,
   fallback,
   interactive = false,
+  pulse,
   ...live
 }: LiveInfo & {
   state: CompanionState
@@ -26,6 +28,8 @@ export function SkynyLive({
   fallback: ReactNode
   /** Se puede tocar (¡boop!) y girar arrastrando, como en el login. */
   interactive?: boolean
+  /** Reacción a un evento en vivo (`usePulse`). */
+  pulse?: { type: PulseType; key: number } | null
 }) {
   const [three, setThree] = useState(can3D)
   const shown = useSettledState(state)
@@ -37,6 +41,7 @@ export function SkynyLive({
         size={size}
         live={{ compact: size < COMPACT_BELOW, ...live }}
         interactive={interactive}
+        pulse={pulse}
         onFail={() => setThree(false)}
       />
     </Suspense>

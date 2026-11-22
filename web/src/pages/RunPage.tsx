@@ -26,6 +26,7 @@ import { Timeline } from '../components/timeline/Timeline'
 import { aggregateTimeline, indexOfSequence, matchesFilters } from '../components/timeline/timeline'
 import { TimelineFiltersBar } from '../components/timeline/TimelineFiltersBar'
 import { useEventStream } from '../useEventStream'
+import { usePulse } from '../components/companion/usePulse'
 import { useMediaQuery } from '../useMediaQuery'
 import { useNow } from '../useNow'
 import { RunSkeleton } from '../components/ui/Skeleton'
@@ -56,7 +57,10 @@ export function RunPage() {
   }
 
   // Cada evento se aplica a la vista en caché; solo se relee lo que el evento no trae.
+  // Skyny reacciona a lo que llega sin cambiar de estado: herramientas, ficheros, mensajes.
+  const [pulse, pushPulse] = usePulse()
   const { events, state } = useEventStream({ workflowRunId: runId }, (event) => {
+    pushPulse(event)
     // La PR, su CI y su fusión van aparte: se releen con sus eventos.
     if (event.type.includes('.github.') || event.type.startsWith('run.escape')) {
       void queryClient.invalidateQueries({ queryKey: pullRequestKey(runId) })
@@ -222,7 +226,7 @@ export function RunPage() {
             selectedAgentId={agent?.id}
             onSelectAgent={selectAgent}
           />
-          <RunBand run={run.data} now={now} gesture={celebrating ? 'hop' : null} />
+          <RunBand run={run.data} now={now} gesture={celebrating ? 'hop' : null} pulse={pulse} />
           {hasPullRequestStages(run.data) && <PullRequestCard run={run.data} />}
           <AssumptionsCard runId={run.data.id} />
           {celebrating && <Celebration />}

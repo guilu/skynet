@@ -5,7 +5,13 @@ import * as THREE from 'three'
 import { clamp01, smoothstep, easeOutCubic } from './math'
 import { STATE_CONFIG, LED_MESSAGES, LED_COMPACT } from './states'
 import { buildSkynyModel, HAND_REST_POS, HAND_SPHERE_RADIUS, BASE_Y, BODY_RADIUS } from './model'
-import { createAccessory, delegationDispatch, cooldownCharge, BADGE_SCALE } from './accessories'
+import {
+  createAccessory,
+  delegationDispatch,
+  cooldownCharge,
+  BADGE_SCALE,
+  extrudeShape,
+} from './accessories'
 import { drawLedScreen, drawEyesScreen, ledWidth } from './screen'
 
 /** Letreros deslizantes: velocidad (px por segundo, en un visor de 512) y tamaño de letra. */
@@ -102,8 +108,75 @@ export class SkynyScene {
 
     this.model = buildSkynyModel(this.faceTexture)
     this.accessory = new THREE.Group()
-    this.model.root.add(this.accessory)
-    this.scene.add(this.model.root, this.model.floor)
+    this.pulseGroup = new THREE.Group()
+
+    // Propulsores tipo Iron Man en ambas manos + ondas circulares en el suelo
+    this.repulsorJets = this.model.hands.map(() => {
+      const jet = new THREE.Group()
+      const core = new THREE.Mesh(
+        new THREE.SphereGeometry(0.11, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 }),
+      )
+      core.position.y = -0.32
+
+      const outerGeo = new THREE.ConeGeometry(0.14, 0.95, 24, 1, true)
+      outerGeo.rotateX(Math.PI)
+      outerGeo.translate(0, -0.475, 0)
+      const outerCone = new THREE.Mesh(
+        outerGeo,
+        new THREE.MeshBasicMaterial({
+          color: 0x38bdf8,
+          transparent: true,
+          opacity: 0.56,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      )
+      outerCone.position.y = -0.3
+
+      const innerGeo = new THREE.ConeGeometry(0.068, 0.68, 20, 1, true)
+      innerGeo.rotateX(Math.PI)
+      innerGeo.translate(0, -0.34, 0)
+      const innerCone = new THREE.Mesh(
+        innerGeo,
+        new THREE.MeshBasicMaterial({
+          color: 0x00e5ff,
+          transparent: true,
+          opacity: 0.9,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      )
+      innerCone.position.y = -0.3
+
+      jet.add(core, outerCone, innerCone)
+      jet.visible = false
+      return jet
+    })
+    this.model.hands.forEach((h, idx) => h.add(this.repulsorJets[idx]))
+
+    this.shockRings = new THREE.Group()
+    for (let i = 0; i < 3; i++) {
+      const ringShape = new THREE.Shape().absarc(0, 0, 0.56, 0, Math.PI * 2, false)
+      ringShape.holes.push(new THREE.Path().absarc(0, 0, 0.49, 0, Math.PI * 2, true))
+      const rMesh = extrudeShape(
+        ringShape,
+        0.016,
+        new THREE.MeshBasicMaterial({
+          color: i === 0 ? 0x7dd3fc : 0x38bdf8,
+          transparent: true,
+          opacity: 0,
+          side: THREE.DoubleSide,
+        }),
+      )
+      rMesh.rotation.x = Math.PI / 2
+      rMesh.visible = false
+      this.shockRings.add(rMesh)
+    }
+    this.shockRings.position.y = -0.88
+
+    this.model.root.add(this.accessory, this.pulseGroup)
+    this.scene.add(this.model.root, this.model.floor, this.shockRings)
 
     // Luz frontal reactiva acoplada al visor (Visor Subsurface Light)
     this.visorLight = new THREE.PointLight(0x49c2ff, 0, 2.2)
@@ -146,6 +219,9 @@ export class SkynyScene {
     // Micro-animaciones interactivas
     this.pokeAt = null
     this.pokeCount = 0
+    this.pulseAnim = null
+    this.stageTransition = null
+    this.offstage = false
     this.dizzyUntil = 0
     this.lastCamDir = null
     this.camSpinAccum = 0
@@ -238,6 +314,79 @@ export class SkynyScene {
     const now = performance.now()
     this.pokeAt = now
     this.pokeCount = (this.pokeCount + 1) % 3
+    this.drawnKey = ''
+  }
+
+  /** Quita las chispas y el aro del último pulso y libera su memoria. */
+  clearPulse() {
+    for (const child of [...this.pulseGroup.children]) {
+      child.geometry?.dispose()
+      child.material?.dispose()
+    }
+    this.pulseGroup.clear()
+  }
+
+  /** Entra en escena volando. `duration` en ms. */
+  enter({ duration = 2600 }: { duration?: number } = {}) {
+    this.offstage = false
+    this.stageTransition = { mode: 'enter', at: performance.now(), duration }
+    this.drawnKey = ''
+  }
+
+  /**
+   * Sale de escena volando. Sin `autoReenter` se queda fuera hasta el siguiente `enter()`
+   * (el estudio vuelve a entrar solo para repetirlo).
+   */
+  exit({
+    autoReenter = false,
+    duration = 2400,
+  }: { autoReenter?: boolean; duration?: number } = {}) {
+    this.stageTransition = { mode: 'exit', at: performance.now(), duration, autoReenter }
+    this.drawnKey = ''
+  }
+
+  pulseEvent(type = 'tool_call') {
+    const now = performance.now()
+    this.pulseAnim = { type, at: now }
+    this.clearPulse()
+
+    const colMap = {
+      tool_call: 0x38bdf8,
+      file_edited: 0x34d399,
+      token_tick: 0xfbbf24,
+      gate_passed: 0x4ade80,
+    }
+    const colHex = colMap[type] ?? 0x38bdf8
+
+    if (type === 'file_edited' || type === 'gate_passed') {
+      const count = type === 'gate_passed' ? 5 : 3
+      for (let i = 0; i < count; i++) {
+        const p = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.055, 0),
+          new THREE.MeshBasicMaterial({ color: colHex, transparent: true, opacity: 0.95 }),
+        )
+        p.userData = {
+          ang: (i / count) * Math.PI * 2 + 0.4,
+          speed: 0.9 + i * 0.15,
+        }
+        this.pulseGroup.add(p)
+      }
+    } else {
+      const ringShape = new THREE.Shape().absarc(0, 0, 0.44, 0, Math.PI * 2, false)
+      ringShape.holes.push(new THREE.Path().absarc(0, 0, 0.39, 0, Math.PI * 2, true))
+      const ring = extrudeShape(
+        ringShape,
+        0.015,
+        new THREE.MeshBasicMaterial({
+          color: colHex,
+          transparent: true,
+          opacity: 0.9,
+          side: THREE.DoubleSide,
+        }),
+      )
+      ring.position.set(0, -0.04, 0.56)
+      this.pulseGroup.add(ring)
+    }
     this.drawnKey = ''
   }
 
@@ -609,6 +758,125 @@ export class SkynyScene {
       }
     }
 
+    // Transiciones de escenario para widget (enter / exit) estilo Iron Man
+    let enterT = 1,
+      exitT = 0,
+      jetPower = 0
+    if (this.stageTransition !== null) {
+      const stDt = now - this.stageTransition.at
+      const p = clamp01(stDt / this.stageTransition.duration)
+      if (this.stageTransition.mode === 'enter') {
+        enterT = p
+        // Potencia de vuelo al acercarse + ráfaga fuerte de retropropulsión al frenar (0.52..0.84)
+        const cruiseJet = p < 0.55 ? 0.65 + 0.25 * Math.sin((p / 0.55) * Math.PI) : 0
+        const brakeJet = p >= 0.48 && p < 0.86 ? Math.sin(((p - 0.48) / 0.38) * Math.PI) * 1.15 : 0
+        jetPower = Math.max(cruiseJet, brakeJet)
+
+        const ringPhase = clamp01((p - 0.64) / 0.36)
+        this.shockRings.children.forEach((ring, idx) => {
+          const stagger = clamp01((ringPhase - idx * 0.14) / 0.72)
+          ring.visible = stagger > 0.01 && stagger < 0.99
+          ring.scale.setScalar(0.35 + stagger * 1.95)
+          if (ring instanceof THREE.Mesh) {
+            ring.material.opacity = Math.sin(stagger * Math.PI) * 0.85
+          }
+        })
+
+        if (p >= 1) {
+          this.stageTransition = null
+          this.shockRings.children.forEach((r) => {
+            r.visible = false
+          })
+        }
+      } else {
+        exitT = p
+        jetPower = p >= 0.2 ? smoothstep((p - 0.2) / 0.18) : 0
+
+        const ringPhase = clamp01((p - 0.22) / 0.55)
+        this.shockRings.children.forEach((ring, idx) => {
+          const stagger = clamp01((ringPhase - idx * 0.12) / 0.76)
+          ring.visible = stagger > 0.01 && stagger < 0.99
+          ring.scale.setScalar(0.4 + stagger * 2.1)
+          if (ring instanceof THREE.Mesh) {
+            ring.material.opacity = Math.sin(stagger * Math.PI) * 0.9
+          }
+        })
+
+        if (p >= 1) {
+          const reenter = this.stageTransition.autoReenter
+          this.stageTransition = null
+          this.shockRings.children.forEach((r) => {
+            r.visible = false
+          })
+          if (reenter) this.enter()
+          else this.offstage = true
+        }
+      }
+    } else {
+      // Fuera de escena tras salir: se queda en el último fotograma de la salida.
+      if (this.offstage) exitT = 1
+      this.shockRings.children.forEach((r) => {
+        r.visible = false
+      })
+    }
+
+    // Actualizar visibilidad, orientación y parpadeo de chorros repulsores en ambas manos
+    this.repulsorJets.forEach((jet, idx) => {
+      jet.visible = jetPower > 0.02
+      if (jet.visible) {
+        const flicker = 0.88 + Math.sin(elapsed * 42 + idx * 1.7) * 0.16
+        jet.scale.set(
+          0.65 + jetPower * 0.45,
+          Math.max(0.05, jetPower * flicker),
+          0.65 + jetPower * 0.45,
+        )
+        // Al venir volando inclinamos los chorros hacia atrás (-Z) y al frenar hacia adelante (+Z)
+        if (enterT < 1) {
+          const flareMix = smoothstep((enterT - 0.48) / 0.26)
+          jet.rotation.x =
+            -0.35 * (1 - flareMix) + 0.28 * flareMix * (1 - smoothstep((enterT - 0.78) / 0.22))
+        } else if (exitT > 0) {
+          const awayMix = smoothstep((exitT - 0.18) / 0.24)
+          jet.rotation.x = -0.38 * awayMix
+        } else {
+          jet.rotation.x = 0
+        }
+      }
+    })
+
+    // Pulso en tiempo real sin interrumpir estado (EventStore / StreamParser)
+    let pulseEnv = 0,
+      pulseT = 0,
+      pulseType = null
+    if (this.pulseAnim !== null) {
+      const evDt = now - this.pulseAnim.at
+      if (evDt >= 480) {
+        this.pulseAnim = null
+        this.clearPulse()
+      } else {
+        pulseT = evDt / 480
+        pulseEnv = Math.sin(pulseT * Math.PI)
+        pulseType = this.pulseAnim.type
+        this.pulseGroup.children.forEach((child) => {
+          if (child.userData.ang !== undefined) {
+            const r = 0.25 + pulseT * 0.55
+            child.position.set(
+              Math.cos(child.userData.ang) * r,
+              0.55 + pulseT * 0.55 * child.userData.speed,
+              0.35 + Math.sin(child.userData.ang) * 0.25,
+            )
+            child.rotation.y = pulseT * 5
+            child.scale.setScalar(Math.max(1e-4, 1 - pulseT * 0.7))
+          } else {
+            child.scale.setScalar(0.85 + pulseT * 0.75)
+          }
+          if (child instanceof THREE.Mesh) {
+            child.material.opacity = (1 - pulseT) * 0.9
+          }
+        })
+      }
+    }
+
     // Variedad de 3 micro-gestos en 'calm' cada 6 segundos
     const calmCycleIdx = Math.floor(stateElapsed / 6000) % 3
     const curiosityTime = stateElapsed % 6000
@@ -745,6 +1013,9 @@ export class SkynyScene {
 
     if (state === 'learning') {
       this.glowLight.intensity = 2.2 + Math.sin(elapsed * 3.6) * 0.9 * activeFade
+    } else if (state === 'degraded') {
+      const strobe = Math.sin(elapsed * 9) > 0.25 ? 1 : 0.35
+      this.glowLight.intensity = (1.7 + strobe * 0.9) * activeFade + 0.5
     } else if (state === 'throttled') {
       this.glowLight.intensity = 1.45 + Math.sin(elapsed * 1.8) * 0.35 * activeFade
     } else if (state === 'escalating') {
@@ -760,9 +1031,53 @@ export class SkynyScene {
     } else {
       this.glowLight.intensity = 2.2
     }
+    if (pulseEnv > 0) {
+      this.glowLight.intensity += pulseEnv * (pulseType === 'token_tick' ? 1.8 : 1.1)
+    }
 
     // Animación de accesorios por estado
     switch (state) {
+      case 'degraded': {
+        const gears = this.accessory.getObjectByName('limpGears')
+        if (gears) {
+          const appear = smoothstep(stateElapsed / 280)
+          gears.scale.setScalar(Math.max(1e-4, appear * 1.55))
+          gears.position.y = -0.06 + Math.sin(elapsed * 2.4) * 0.025
+
+          // Ciclo de giro con "trompicón" cada vez que pasa el diente faltante
+          const rawPhase = elapsed * 2.4
+          const limpSlip = Math.pow(Math.max(0, Math.sin(rawPhase * 2.0)), 6)
+          const mainAngle = -rawPhase + limpSlip * 0.14
+          const limpAngle = rawPhase * (10 / 7) - limpSlip * 0.42
+
+          const mainGear = gears.getObjectByName('mainGear')
+          const limpGear = gears.getObjectByName('limpGear')
+          if (mainGear) mainGear.rotation.z = mainAngle
+          if (limpGear) {
+            limpGear.rotation.z = limpAngle
+            limpGear.position.x = 0.155 + limpSlip * 0.022
+            limpGear.position.y = -0.05 - limpSlip * 0.015
+          }
+
+          const sparksGrp = gears.getObjectByName('gearSparks')
+          if (sparksGrp) {
+            sparksGrp.children.forEach((sp, i) => {
+              const sparkLife = clamp01(limpSlip * 1.35 - i * 0.08)
+              const dist = 0.04 + sparkLife * 0.24
+              sp.visible = sparkLife > 0.02
+              sp.position.set(
+                Math.cos(sp.userData.ang) * dist,
+                Math.sin(sp.userData.ang) * dist,
+                0.02,
+              )
+              sp.rotation.z = sp.userData.ang
+              sp.scale.setScalar(Math.max(1e-4, sparkLife * 1.1))
+              if (sp instanceof THREE.Mesh) sp.material.opacity = sparkLife
+            })
+          }
+        }
+        break
+      }
       case 'handover': {
         const rg = this.accessory.getObjectByName('relayBaton')
         if (rg) {
@@ -1851,6 +2166,8 @@ export class SkynyScene {
               : 0)) *
           activeFade
         : 0
+    const degradedPitch =
+      state === 'degraded' && animate ? (0.07 + Math.sin(elapsed * 3.0) * 0.025) * activeFade : 0
     const handoverPitch =
       state === 'handover' && animate ? (0.08 - relayArc * 0.12) * activeFade : 0
     const throttledPitch =
@@ -1911,6 +2228,7 @@ export class SkynyScene {
         : 0
 
     const extraPitch =
+      degradedPitch +
       handoverPitch +
       throttledPitch +
       escalatingPitch +
@@ -1966,6 +2284,8 @@ export class SkynyScene {
           : 0)
 
     const cooldownYaw = state === 'rate-limited' && animate ? cooldownGlance * 0.28 * activeFade : 0
+    const degradedYaw =
+      state === 'degraded' && animate ? (0.14 + Math.sin(elapsed * 2.2) * 0.08) * activeFade : 0
     const handoverYaw =
       state === 'handover' && animate ? (-0.2 + relayFlight * 0.4) * activeFade : 0
     const throttledYaw =
@@ -2017,8 +2337,10 @@ export class SkynyScene {
       state === 'testing' && animate ? (this.smoothTestIdx - 1) * 0.14 * activeFade : 0
     const healingYaw = state === 'healing' && animate ? 0.16 * activeFade : 0
     const pokeSpinYaw = pokeEnv > 0 && this.pokeCount === 0 ? smoothstep(pokeT) * Math.PI * 2 : 0
+    const exitTurnYaw = exitT > 0 ? smoothstep(clamp01((exitT - 0.14) / 0.34)) * Math.PI : 0
     const dizzyYaw = dizzyEnv * Math.sin(elapsed * 11) * 0.34
     const extraYaw =
+      degradedYaw +
       handoverYaw +
       throttledYaw +
       streamingYaw +
@@ -2043,6 +2365,7 @@ export class SkynyScene {
       testingYaw +
       healingYaw +
       pokeSpinYaw +
+      exitTurnYaw +
       dizzyYaw
 
     const targetBodyRotX =
@@ -2051,7 +2374,8 @@ export class SkynyScene {
       juggleEnv * 0.22 -
       stretchEnv * 0.14 +
       this.gaze[1] * 0.14 +
-      ptrNormY * 0.12
+      ptrNormY * 0.12 +
+      (pulseType === 'tool_call' ? pulseEnv * 0.14 : 0)
     const targetBodyRotY = reviewEnv * 0.14 + extraYaw + this.gaze[0] * 0.24 + ptrNormX * 0.18
 
     root.rotation.x += (targetBodyRotX - root.rotation.x) * (animate ? 0.16 : 1)
@@ -2100,7 +2424,12 @@ export class SkynyScene {
     )
 
     // Coreografías específicas de manos para cada estado
-    if (state === 'handover' && animate) {
+    if (state === 'degraded' && animate) {
+      // Mano izquierda sigue trabajando cautelosamente mientras la derecha vigila cerca de la barbilla
+      const workPulse = Math.sin(elapsed * 7) * 0.04
+      targetL.set(-0.62, -0.32 + workPulse, 0.52)
+      targetR.set(0.36, -0.48 + Math.sin(elapsed * 2.6) * 0.025, 0.56)
+    } else if (state === 'handover' && animate) {
       const tossL = relayCycle < 0.26 ? Math.sin((relayCycle / 0.26) * Math.PI) : 0
       targetL.set(-0.64 + tossL * 0.14, -0.22 + tossL * 0.16, 0.56 + tossL * 0.12)
       targetR.set(0.64 - relayCatch * 0.06, -0.22 + relayCatch * 0.14, 0.56 + relayCatch * 0.12)
@@ -2425,6 +2754,28 @@ export class SkynyScene {
       targetL.set(-1.08, -0.05 + bal, 0.22)
       targetR.set(1.08, -0.05 - bal, 0.22)
     }
+    if (enterT < 1) {
+      // Fase 1 (vuelo): manos atrás propulsando hacia abajo y detrás; Fase 2 (frenado): manos adelante-abajo frenando
+      const flareMix = smoothstep((enterT - 0.48) / 0.26)
+      const settleMix = smoothstep((enterT - 0.76) / 0.24)
+      const flyL = new THREE.Vector3(-0.84, -0.46, -0.26)
+      const flyR = new THREE.Vector3(0.84, -0.46, -0.26)
+      const brakeL = new THREE.Vector3(-0.78, -0.56, 0.24)
+      const brakeR = new THREE.Vector3(0.78, -0.56, 0.24)
+      const curL = flyL.lerp(brakeL, flareMix)
+      const curR = flyR.lerp(brakeR, flareMix)
+      targetL.lerp(curL, 1 - settleMix)
+      targetR.lerp(curR, 1 - settleMix)
+    }
+    if (exitT > 0) {
+      const turnMix = smoothstep((exitT - 0.14) / 0.26)
+      const liftPos = new THREE.Vector3(-0.76, -0.58, 0.04)
+      const awayPos = new THREE.Vector3(-0.84, -0.46, -0.26)
+      targetL.lerp(liftPos.lerp(awayPos, turnMix), smoothstep(exitT / 0.2))
+      const liftPosR = new THREE.Vector3(0.76, -0.58, 0.04)
+      const awayPosR = new THREE.Vector3(0.84, -0.46, -0.26)
+      targetR.lerp(liftPosR.lerp(awayPosR, turnMix), smoothstep(exitT / 0.2))
+    }
 
     // Flotación continua (Idle) y movimientos verticales
     this.idleAmount += ((state === 'paused' || !this.idle ? 0 : 1) - this.idleAmount) * 0.09
@@ -2464,13 +2815,14 @@ export class SkynyScene {
       sleepBreath * 0.065 +
       stretchEnv * 0.08 +
       pokeEnv * (this.pokeCount === 0 ? 0.44 : 0.22) +
+      (pulseType === 'file_edited' || pulseType === 'gate_passed' ? pulseEnv * 0.09 : 0) +
       (state === 'escalating' && animate ? (0.14 + Math.sin(elapsed * 4.5) * 0.03) * activeFade : 0)
 
-    if (animate && this.idle && state !== 'paused' && this.poseAmount === 0 && this.gestures) {
-      const lagY = Math.sin((elapsed - 0.23) * 2) - Math.sin(elapsed * 2)
-      const lagZ = Math.sin((elapsed - 0.23) * 1.6) - Math.sin(elapsed * 1.6)
-      targetL.y += 0.047 * lagY - 0.022 * lagZ
-      targetR.y += 0.047 * lagY + 0.022 * lagZ
+    if (pulseEnv > 0 && pulseType === 'tool_call') {
+      targetL.y += pulseEnv * 0.08
+      targetR.y += pulseEnv * 0.08
+      targetL.z += pulseEnv * 0.08
+      targetR.z += pulseEnv * 0.08
     }
 
     if (state === 'rate-limited' && cooldown) {
@@ -2550,7 +2902,49 @@ export class SkynyScene {
       squashY *= 1 + 0.08 * stretchEnv
     }
 
-    root.scale.set(1 / Math.sqrt(squashY), squashY, 1 / Math.sqrt(squashY))
+    let stageScale = 1
+    if (enterT < 1) {
+      // Vuelo frontal desde el horizonte en Z (-9.2 -> 0) mirando de frente + frenado suave (flare)
+      const approach = 1 - Math.pow(1 - clamp01(enterT / 0.78), 2.1)
+      const forwardLean = (1 - smoothstep((enterT - 0.46) / 0.22)) * smoothstep(enterT / 0.12)
+      const flare = smoothstep((enterT - 0.48) / 0.24) * (1 - smoothstep((enterT - 0.76) / 0.24))
+      const landBounce = enterT > 0.74 ? Math.sin(((enterT - 0.74) / 0.26) * Math.PI) * 0.11 : 0
+
+      root.position.z += (1 - approach) * -9.2
+      root.position.y += Math.pow(1 - approach, 1.45) * 1.45 - landBounce
+      // En Three.js rotation.x positivo inclina el visor hacia arriba/atrás y negativo hacia abajo/adelante
+      root.rotation.x += -forwardLean * 0.28 + flare * 0.32
+      squashY *= 1 - landBounce * 1.35
+      // Escalado progresivo desde lejano (0.14x) hasta tamaño real (1.0x)
+      stageScale = 0.14 + 0.86 * smoothstep(enterT / 0.76)
+    } else if (exitT > 0) {
+      if (exitT < 0.18) {
+        // Anticipación: se agacha tomando impulso antes de encender propulsores
+        const prep = smoothstep(exitT / 0.18)
+        root.position.y -= 0.18 * prep
+        squashY *= 1 - 0.18 * prep
+      } else {
+        // Se eleva mientras da una única media vuelta (180°) y se aleja de espaldas hacia el horizonte en Z
+        const flyT = clamp01((exitT - 0.18) / 0.82)
+        const awayCurve = Math.pow(flyT, 1.75)
+        const climbCurve = smoothstep(flyT / 0.45) * 0.65 + Math.pow(flyT, 1.8) * 1.15
+
+        root.position.y += climbCurve
+        root.position.z -= awayCurve * 9.2
+        // Como está girado 180° en Y (vía exitTurnYaw), rotation.x negativo inclina su cuerpo hacia el horizonte
+        root.rotation.x -= smoothstep((flyT - 0.15) / 0.35) * 0.32
+        squashY *= 1 + Math.sin(Math.min(1, flyT * 1.5) * Math.PI) * 0.12
+        stageScale = Math.max(0.12, 1 - awayCurve * 0.88)
+      }
+    }
+
+    root.scale.set(
+      (1 / Math.sqrt(squashY)) * stageScale,
+      squashY * stageScale,
+      (1 / Math.sqrt(squashY)) * stageScale,
+    )
+    // Ya se fue: ni el puntito en el horizonte.
+    root.visible = !this.offstage
 
     // Física de Resorte (Damped Spring Physics) en las Manos
     const stiffness = 210
@@ -2613,9 +3007,13 @@ export class SkynyScene {
     // Resplandor Facial Reactivo (Visor Subsurface Light sobre manos y bisel)
     const eyeHex = isDizzy
       ? '#fde047'
-      : state === 'rate-limited' && cooldownReadyPop > 0.2
+      : pulseEnv > 0.15 && pulseType === 'gate_passed'
         ? '#4ade80'
-        : (cfg.eyeColor ?? (state === 'error' ? '#ff453a' : this.colors.glow))
+        : pulseEnv > 0.15 && pulseType === 'tool_call'
+          ? '#38bdf8'
+          : state === 'rate-limited' && cooldownReadyPop > 0.2
+            ? '#4ade80'
+            : (cfg.eyeColor ?? (state === 'error' ? '#ff453a' : this.colors.glow))
     this.visorLight.color.set(eyeHex)
     const visorWorld = visor.getWorldPosition(new THREE.Vector3())
     let minHandDist = 99
@@ -2628,7 +3026,7 @@ export class SkynyScene {
       h.material.emissiveIntensity = prox * 0.28
     })
     const lightProx = clamp01(1 - (minHandDist - 0.42) / 0.55)
-    this.visorLight.intensity = 0.65 + lightProx * 2.15
+    this.visorLight.intensity = 0.65 + lightProx * 2.15 + pulseEnv * 1.6
 
     if (badgeScale && accChildren[0]) {
       accChildren[0].position.copy(handR.position)
@@ -2665,6 +3063,7 @@ export class SkynyScene {
       compactPress,
       relayFlight,
       relayArc,
+      jetPower,
     )
   }
 
@@ -2689,6 +3088,7 @@ export class SkynyScene {
     compactPress = 0,
     relayFlight = 0,
     relayArc = 0,
+    jetPower = 0,
   ) {
     const showProg = this.state === 'running' && this.progress !== null
     if (!this.message && this.ticker && now >= this.tickerAt && animate) {
@@ -2855,19 +3255,21 @@ export class SkynyScene {
 
     const eyeMode = isDizzy
       ? 'dizzy'
-      : pokeEnv > 0
-        ? this.pokeCount === 1
-          ? 'happy'
-          : 'stress'
-        : this.state === 'rate-limited' && cooldownReadyPop > 0.25
-          ? 'happy'
-          : this.state === 'rate-limited' && cooldownGlance > 0.35
-            ? 'wink'
-            : now < this.blinkUntil || autoBlink
-              ? 'bars'
-              : this.errorEyes
-                ? 'error-pills'
-                : cfg.eyes
+      : jetPower > 0.25
+        ? 'stars'
+        : pokeEnv > 0
+          ? this.pokeCount === 1
+            ? 'happy'
+            : 'stress'
+          : this.state === 'rate-limited' && cooldownReadyPop > 0.25
+            ? 'happy'
+            : this.state === 'rate-limited' && cooldownGlance > 0.35
+              ? 'wink'
+              : now < this.blinkUntil || autoBlink
+                ? 'bars'
+                : this.errorEyes
+                  ? 'error-pills'
+                  : cfg.eyes
     const revElapsed = now - this.stateAt
     const revLoopT = Math.max(0, revElapsed - 1500) % 4200
     const revEyeActive =
@@ -2878,123 +3280,129 @@ export class SkynyScene {
           )
         : 0
     const scanWave =
-      this.state === 'handover' && animate
-        ? -32 + relayFlight * 64
-        : this.state === 'throttled'
-          ? 16
-          : this.state === 'syncing' && animate
-            ? Math.cos((now - this.startTime) * 0.0034) * 18
-            : this.state === 'dry-run'
-              ? 10 + Math.sin((now - this.startTime) * 0.0018) * 12
-              : this.state === 'pr-open'
-                ? 24
-                : this.state === 'rate-limited' && animate
-                  ? cooldownGlance * 34
-                  : this.state === 'benchmarking' && animate
-                    ? -benchArmTilt * 85
-                    : this.state === 'rolling-back' && animate
-                      ? Math.sin((now - this.startTime) * 0.0026) * 24
-                      : this.state === 'delegating'
-                        ? animate && this.idle
-                          ? Math.cos((now - this.stateAt) / 1100) * 28
-                          : 0
-                        : this.state === 'sandbox'
-                          ? Math.sin((now - this.startTime) * 0.0022) * 24
-                          : this.state === 'routing' && activeRouterPos
-                            ? activeRouterPos.x * 75
-                            : this.state === 'recalling'
-                              ? Math.sin(recallCycle * Math.PI) * 28
-                              : this.state === 'check-result'
-                                ? 16 + Math.sin(checkCycle * Math.PI * 2) * 16
-                                : this.state === 'external-wait'
-                                  ? Math.sin((now - this.startTime) * 0.0019) * 24
-                                  : this.state === 'no-results' && animate
-                                    ? noResPhase < 0.5
-                                      ? Math.sin((noResPhase / 0.5) * Math.PI * 2) * 32
-                                      : 16
-                                    : this.state === 'planning' && activeDagNodePos
-                                      ? activeDagNodePos.x * 38
-                                      : this.state === 'testing'
-                                        ? (this.smoothTestIdx - 1) * 32
-                                        : this.state === 'healing'
-                                          ? 22
-                                          : this.state === 'reviewing'
-                                            ? revEyeActive * 16 +
-                                              Math.sin((now - this.startTime) * 0.0032) *
-                                                revEyeActive *
-                                                14
-                                            : this.state === 'auditing'
-                                              ? Math.sin((now - this.startTime) * 0.0035) * 22
-                                              : this.state === 'offline'
-                                                ? Math.sin((now - this.startTime) * 0.0022) * 26
-                                                : this.state === 'waiting'
-                                                  ? Math.sin((now - this.startTime) * 0.003) * 12
-                                                  : this.state === 'coding'
-                                                    ? Math.sin((now - this.startTime) * 0.012) * 14
-                                                    : 0
-    const scanY =
-      this.state === 'handover' && animate
-        ? 12 - relayArc * 26
-        : this.state === 'throttled' && animate
-          ? -8 + Math.sin((now - this.startTime) * 0.0019) * 6
-          : this.state === 'escalating'
-            ? -18
+      this.state === 'degraded' && animate
+        ? 18 + Math.sin((now - this.startTime) * 0.0022) * 14
+        : this.state === 'handover' && animate
+          ? -32 + relayFlight * 64
+          : this.state === 'throttled'
+            ? 16
             : this.state === 'syncing' && animate
-              ? 12 + Math.sin((now - this.startTime) * 0.0034) * 14
+              ? Math.cos((now - this.startTime) * 0.0034) * 18
               : this.state === 'dry-run'
-                ? 6
+                ? 10 + Math.sin((now - this.startTime) * 0.0018) * 12
                 : this.state === 'pr-open'
-                  ? -16
-                  : this.state === 'compacting'
-                    ? 14
-                    : this.state === 'conflict'
+                  ? 24
+                  : this.state === 'rate-limited' && animate
+                    ? cooldownGlance * 34
+                    : this.state === 'benchmarking' && animate
+                      ? -benchArmTilt * 85
+                      : this.state === 'rolling-back' && animate
+                        ? Math.sin((now - this.startTime) * 0.0026) * 24
+                        : this.state === 'delegating'
+                          ? animate && this.idle
+                            ? Math.cos((now - this.stateAt) / 1100) * 28
+                            : 0
+                          : this.state === 'sandbox'
+                            ? Math.sin((now - this.startTime) * 0.0022) * 24
+                            : this.state === 'routing' && activeRouterPos
+                              ? activeRouterPos.x * 75
+                              : this.state === 'recalling'
+                                ? Math.sin(recallCycle * Math.PI) * 28
+                                : this.state === 'check-result'
+                                  ? 16 + Math.sin(checkCycle * Math.PI * 2) * 16
+                                  : this.state === 'external-wait'
+                                    ? Math.sin((now - this.startTime) * 0.0019) * 24
+                                    : this.state === 'no-results' && animate
+                                      ? noResPhase < 0.5
+                                        ? Math.sin((noResPhase / 0.5) * Math.PI * 2) * 32
+                                        : 16
+                                      : this.state === 'planning' && activeDagNodePos
+                                        ? activeDagNodePos.x * 38
+                                        : this.state === 'testing'
+                                          ? (this.smoothTestIdx - 1) * 32
+                                          : this.state === 'healing'
+                                            ? 22
+                                            : this.state === 'reviewing'
+                                              ? revEyeActive * 16 +
+                                                Math.sin((now - this.startTime) * 0.0032) *
+                                                  revEyeActive *
+                                                  14
+                                              : this.state === 'auditing'
+                                                ? Math.sin((now - this.startTime) * 0.0035) * 22
+                                                : this.state === 'offline'
+                                                  ? Math.sin((now - this.startTime) * 0.0022) * 26
+                                                  : this.state === 'waiting'
+                                                    ? Math.sin((now - this.startTime) * 0.003) * 12
+                                                    : this.state === 'coding'
+                                                      ? Math.sin((now - this.startTime) * 0.012) *
+                                                        14
+                                                      : 0
+    const scanY =
+      this.state === 'degraded'
+        ? -10
+        : this.state === 'handover' && animate
+          ? 12 - relayArc * 26
+          : this.state === 'throttled' && animate
+            ? -8 + Math.sin((now - this.startTime) * 0.0019) * 6
+            : this.state === 'escalating'
+              ? -18
+              : this.state === 'syncing' && animate
+                ? 12 + Math.sin((now - this.startTime) * 0.0034) * 14
+                : this.state === 'dry-run'
+                  ? 6
+                  : this.state === 'pr-open'
+                    ? -16
+                    : this.state === 'compacting'
                       ? 14
-                      : this.state === 'context-indexing' && animate
-                        ? 8 - indexScanY * 85
-                        : this.state === 'rate-limited' && animate
-                          ? 12 - cooldownGlance * 24 - cooldownReadyPop * 10
-                          : this.state === 'benchmarking'
-                            ? 14
-                            : this.state === 'rolling-back'
-                              ? -24
-                              : this.state === 'sandbox'
-                                ? Math.sin((now - this.startTime) * 0.0036) * 14
-                                : this.state === 'routing'
-                                  ? 16
-                                  : this.state === 'recalling'
-                                    ? -Math.sin(recallCycle * Math.PI) * 22
-                                    : this.state === 'check-result'
-                                      ? Math.sin(checkCycle * Math.PI * 2) * 10
-                                      : this.state === 'no-results' && animate
-                                        ? noResPhase > 0.5
-                                          ? 14
-                                          : -6
-                                        : juggleEnv > 0
-                                          ? 22 * juggleEnv
-                                          : this.state === 'planning' && activeDagNodePos
-                                            ? -activeDagNodePos.y * 28
-                                            : this.state === 'testing'
-                                              ? 18 -
-                                                Math.sin(
-                                                  (now - this.startTime) * 0.0042 -
-                                                    this.smoothTestIdx * 1.35,
-                                                ) *
-                                                  7
-                                              : this.state === 'healing'
-                                                ? -10
-                                                : this.state === 'reviewing'
-                                                  ? Math.cos((now - this.startTime) * 0.0048) *
-                                                    revEyeActive *
-                                                    16
-                                                  : this.state === 'auditing'
-                                                    ? -Math.sin((now - this.startTime) * 0.0048) *
-                                                      20
-                                                    : this.state === 'offline'
-                                                      ? Math.cos((now - this.startTime) * 0.0044) *
-                                                        12
-                                                      : this.state === 'cancelled'
-                                                        ? 14
-                                                        : 0
+                      : this.state === 'conflict'
+                        ? 14
+                        : this.state === 'context-indexing' && animate
+                          ? 8 - indexScanY * 85
+                          : this.state === 'rate-limited' && animate
+                            ? 12 - cooldownGlance * 24 - cooldownReadyPop * 10
+                            : this.state === 'benchmarking'
+                              ? 14
+                              : this.state === 'rolling-back'
+                                ? -24
+                                : this.state === 'sandbox'
+                                  ? Math.sin((now - this.startTime) * 0.0036) * 14
+                                  : this.state === 'routing'
+                                    ? 16
+                                    : this.state === 'recalling'
+                                      ? -Math.sin(recallCycle * Math.PI) * 22
+                                      : this.state === 'check-result'
+                                        ? Math.sin(checkCycle * Math.PI * 2) * 10
+                                        : this.state === 'no-results' && animate
+                                          ? noResPhase > 0.5
+                                            ? 14
+                                            : -6
+                                          : juggleEnv > 0
+                                            ? 22 * juggleEnv
+                                            : this.state === 'planning' && activeDagNodePos
+                                              ? -activeDagNodePos.y * 28
+                                              : this.state === 'testing'
+                                                ? 18 -
+                                                  Math.sin(
+                                                    (now - this.startTime) * 0.0042 -
+                                                      this.smoothTestIdx * 1.35,
+                                                  ) *
+                                                    7
+                                                : this.state === 'healing'
+                                                  ? -10
+                                                  : this.state === 'reviewing'
+                                                    ? Math.cos((now - this.startTime) * 0.0048) *
+                                                      revEyeActive *
+                                                      16
+                                                    : this.state === 'auditing'
+                                                      ? -Math.sin((now - this.startTime) * 0.0048) *
+                                                        20
+                                                      : this.state === 'offline'
+                                                        ? Math.cos(
+                                                            (now - this.startTime) * 0.0044,
+                                                          ) * 12
+                                                        : this.state === 'cancelled'
+                                                          ? 14
+                                                          : 0
     const scanX = scanWave - thinkEnv * 20
     const ox = Math.max(-62, Math.min(62, Math.round(scanX + autoOff[0] + this.gaze[0] * 52)))
     const oy = Math.max(

@@ -3,7 +3,8 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, type Session } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
-import { LoginSkyny } from '../components/companion/LoginSkyny'
+import { LEAVE_MS, LoginSkyny } from '../components/companion/LoginSkyny'
+import { can3D } from '../components/companion/look'
 import { Button } from '../components/ui/Button'
 
 /**
@@ -19,9 +20,15 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
   const [reveal, setReveal] = useState(false)
   const heading = useRef<HTMLHeadingElement>(null)
   const [failures, setFailures] = useState(0)
+  // Bien: Skyny sale volando y la web entra cuando se ha ido (sin 3D, al momento).
+  const [leaving, setLeaving] = useState(false)
   const login = useMutation({
     mutationFn: () => api.login(username.trim(), password),
-    onSuccess: onLogin,
+    onSuccess: (session) => {
+      if (!can3D()) return onLogin(session)
+      setLeaving(true)
+      window.setTimeout(() => onLogin(session), LEAVE_MS)
+    },
     onError: () => setFailures((n) => n + 1),
   })
 
@@ -42,6 +49,7 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
             pose={reveal ? 'peek' : secret ? 'cover' : undefined}
             typingPassword={secret && !reveal}
             failures={failures}
+            leaving={leaving}
           />
         </section>
         <section className="login-form">
@@ -85,8 +93,8 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
                 )}
               </button>
             </div>
-            <Button type="submit" disabled={login.isPending}>
-              {login.isPending ? 'Entrando…' : 'Entrar'}
+            <Button type="submit" disabled={login.isPending || leaving}>
+              {login.isPending || leaving ? 'Entrando…' : 'Entrar'}
             </Button>
             <ErrorMessage error={login.error} />
           </form>

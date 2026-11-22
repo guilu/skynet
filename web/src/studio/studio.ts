@@ -18,6 +18,7 @@ import {
   type HatKind,
 } from '../components/companion/three/extras'
 import { SkynyScene, type Pose3D } from '../components/companion/three/scene'
+import type { PulseType } from '../components/companion/pulse'
 import { STATE_CONFIG, STATES_META, type SkynyState } from '../components/companion/three/states'
 import { DEMOS, DemoRunner, type DemoKind } from '../components/companion/three/transitions'
 import { onThemeChange, readColors } from '../components/companion/three/tokens'
@@ -91,6 +92,14 @@ document.body.innerHTML = `
           <button type="button" data-action="replay">Repetir gesto</button>
           <button type="button" data-action="theme">Tema</button>
           <button type="button" data-action="png">Captura PNG</button>
+        </div>
+        <div class="st-group" aria-label="Escenario y reacciones al vivo">
+          <button type="button" data-action="enter">Entrar</button>
+          <button type="button" data-action="exit">Salir</button>
+          <button type="button" data-pulse="tool_call">Herramienta</button>
+          <button type="button" data-pulse="file_edited">Fichero</button>
+          <button type="button" data-pulse="token_tick">Tokens</button>
+          <button type="button" data-pulse="gate_passed">Verificación</button>
         </div>
       </div>
     </header>
@@ -214,7 +223,8 @@ function setPose(i: number) {
 document.addEventListener('click', (e) => {
   const button = (e.target as Element).closest('button')
   if (!button) return
-  const { state, view: v, pose: p, action, demo: kind } = button.dataset
+  const { state, view: v, pose: p, action, demo: kind, pulse } = button.dataset
+  if (pulse) skyny.pulseEvent(pulse as PulseType)
   if (state) {
     demo.stop()
     setState(state as SkynyState)
@@ -254,6 +264,13 @@ document.addEventListener('click', (e) => {
       break
     case 'blink':
       skyny.blink()
+      break
+    case 'enter':
+      skyny.enter()
+      break
+    case 'exit':
+      // En el estudio vuelve a entrar solo, para repetirlo.
+      skyny.exit({ autoReenter: true })
       break
     case 'replay':
       skyny.setState(skyny.current)
