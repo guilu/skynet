@@ -6,6 +6,8 @@ import { can3D } from './look'
 import { setCompanionPrefs, useCompanionPrefs } from './prefs'
 import { useSettledState } from './settle'
 import { floatBox, floatPos } from './float'
+import { takeQuip } from './gesture'
+import { sayOnScouter, useScouterText } from './scouter'
 import type { MicroType } from './three/Skyny3D'
 
 /** Lo que mide Skyny flotando, y el margen con los bordes de la pantalla. */
@@ -35,6 +37,8 @@ function useViewport() {
  * cara el estado global, sigue con los ojos al puntero y al foco, y reacciona cuando lo tocas
  * (¡boop!). Se arrastra a cualquier sitio dentro de la pantalla para quitarlo de en medio, y
  * recuerda dónde lo dejaste. Solo él recibe clics: el resto de la capa deja pasar todo a la web.
+ * Con el scouter puesto, en su cristal sale lo que dice Skyny (`sayOnScouter`) o, si no dice nada,
+ * el estado.
  *
  * Con `away` (la cortina del chat abierta) se va volando y se desmonta; al cerrarla vuelve.
  * Sin WebGL o con movimiento reducido no sale (el 2D de la barra ya cuenta lo mismo).
@@ -48,6 +52,7 @@ export function FloatingSkyny({ away = false }: { away?: boolean }) {
   const size = mobile ? SIZE_MOBILE : SIZE
   const bottom = mobile ? MOBILE_NAV : 0
   const view = useViewport()
+  const scouter = useScouterText()
 
   // Montado mientras se ve o mientras se va volando.
   const [mounted, setMounted] = useState(!away)
@@ -103,7 +108,11 @@ export function FloatingSkyny({ away = false }: { away?: boolean }) {
     drag.current = null
     if (!d) return
     if (!d.moved) {
-      if (performance.now() - d.at < CLICK_MS) setBoop((n) => n + 1)
+      if (performance.now() - d.at < CLICK_MS) {
+        setBoop((n) => n + 1)
+        // Con el scouter puesto, al tocarlo dice la siguiente frase en el cristal.
+        if (prefs.face === 'cyber') sayOnScouter(takeQuip())
+      }
       return
     }
     setCompanionPrefs({ floatAt: floatPos(e.clientX - d.dx, e.clientY - d.dy, view, size, bottom) })
@@ -132,6 +141,7 @@ export function FloatingSkyny({ away = false }: { away?: boolean }) {
           size={size}
           boop={boop}
           micro={micro}
+          scouter={scouter}
           stage={{ mode: away ? 'exit' : 'enter', key: moves }}
           onFail={() => setThree(false)}
         />

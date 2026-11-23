@@ -58,6 +58,7 @@ export default function Skyny3D({
   stage,
   pulse,
   micro,
+  scouter,
   onFail,
 }: {
   state?: SkynyState
@@ -83,6 +84,8 @@ export default function Skyny3D({
   pulse?: { type: PulseType; key: number } | null
   /** Microexpresión de un momento (asentir, negar, curioso…); sale cada vez que cambia `key`. */
   micro?: { type: MicroType; key: number } | null
+  /** Texto del scouter, si lo lleva puesto: se escribe como en una terminal. Sin él, el estado. */
+  scouter?: string | null
   onFail: () => void
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -91,10 +94,36 @@ export default function Skyny3D({
   const paused = useContext(SkynyPaused)
   const saved = useOutfit()
   const { hat, face, back } = outfit ?? saved
-  const latest = useRef({ state, live, paused, hat, face, back, ticker, say, stage, pulse, micro })
+  const latest = useRef({
+    state,
+    live,
+    paused,
+    hat,
+    face,
+    back,
+    ticker,
+    say,
+    stage,
+    pulse,
+    micro,
+    scouter,
+  })
   useEffect(() => {
     fail.current = onFail
-    latest.current = { state, live, paused, hat, face, back, ticker, say, stage, pulse, micro }
+    latest.current = {
+      state,
+      live,
+      paused,
+      hat,
+      face,
+      back,
+      ticker,
+      say,
+      stage,
+      pulse,
+      micro,
+      scouter,
+    }
   })
   const isLive = live !== undefined
   const px = Math.round(size * room)
@@ -119,6 +148,7 @@ export default function Skyny3D({
     skyny.setHat(first.hat)
     skyny.setFace(first.face)
     skyny.setBack(first.back)
+    if (first.scouter) skyny.setScouterText(first.scouter)
     if (first.ticker) skyny.setTicker(first.ticker.lines, first.ticker)
     if (first.say) skyny.say(first.say.text, first.say)
     if (first.live) {
@@ -238,6 +268,10 @@ export default function Skyny3D({
   useEffect(() => {
     if (boop) scene.current?.poke()
   }, [boop])
+
+  useEffect(() => {
+    scene.current?.setScouterText(scouter ?? '')
+  }, [scouter])
 
   useEffect(() => {
     scene.current?.setHat(hat)

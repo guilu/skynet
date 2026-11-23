@@ -114,6 +114,11 @@ document.body.innerHTML = `
           <button type="button" data-micro="sigh">Suspiro</button>
           <button type="button" data-micro="glance">Vistazo</button>
         </div>
+        <form class="st-group st-scouter" data-scouter aria-label="Texto del scouter">
+          <textarea name="text" rows="2" maxlength="400" placeholder="Texto para el scouter (Intro envía, Mayús+Intro salto de línea)"></textarea>
+          <button type="submit">Enviar al scouter</button>
+          <button type="button" data-scouter-clear aria-label="Borrar el texto del scouter">✕</button>
+        </form>
       </div>
     </header>
     <main class="st-main">
@@ -334,6 +339,35 @@ document.addEventListener('change', (e) => {
   if (select.dataset.extra === 'hat') skyny.setHat(value as HatKind)
   if (select.dataset.extra === 'face') skyny.setFace(value as FaceKind)
   if (select.dataset.extra === 'back') skyny.setBack(value as BackKind)
+})
+
+// Scouter: el texto se escribe en su cristal como en una terminal (si no lo lleva, se lo pone).
+const scouterForm = document.querySelector<HTMLFormElement>('[data-scouter]')!
+const scouterText = scouterForm.querySelector('textarea')!
+function sendToScouter() {
+  const msg = scouterText.value.trim()
+  scouterText.value = msg
+  const face = document.querySelector<HTMLSelectElement>('select[data-extra="face"]')!
+  if (msg && face.value !== 'cyber') {
+    face.value = 'cyber'
+    skyny.setFace('cyber')
+  }
+  skyny.setScouterText(msg)
+  if (msg) skyny.microExpression('nod')
+}
+scouterForm.addEventListener('submit', (e) => {
+  e.preventDefault()
+  sendToScouter()
+})
+scouterText.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    sendToScouter()
+  }
+})
+scouterForm.querySelector('[data-scouter-clear]')!.addEventListener('click', () => {
+  scouterText.value = ''
+  skyny.setScouterText('')
 })
 
 // Un clic corto sobre Skyny (sin arrastrar para orbitar): ¡boop!

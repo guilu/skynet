@@ -19,6 +19,7 @@ vi.mock('./scene', () => ({
     setHat() {}
     setFace() {}
     setBack() {}
+    setScouterText() {}
     poke() {}
     say() {}
     setTicker() {}

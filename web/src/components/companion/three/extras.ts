@@ -1,10 +1,11 @@
 // @ts-nocheck -- complementos del estudio v4.3 sin tipar; la API la tipa `SkynyExtras`.
-// Gorros, complementos de cara y de espalda de Skyny 3D (estudio v4.3): se eligen en Ajustes ›
+// Gorros, complementos de cara (con el scouter de la v5) y de espalda de Skyny 3D: se eligen en Ajustes ›
 // Companion o en el estudio y Skyny los lleva en toda la web. El gorro se mueve con un muelle al
 // moverse Skyny; el jetpack echa llamas mientras trabaja.
 import * as THREE from 'three'
-import { createBodyGeometry } from './model'
-import { STATE_CONFIG } from './states'
+import { smoothstep } from './math'
+import { createBodyGeometry, projectOnBody } from './model'
+import { STATE_CONFIG, STATES_META } from './states'
 
 export type HatKind =
   | ''
@@ -33,7 +34,7 @@ export const HATS: { value: HatKind; label: string }[] = [
 export const FACES: { value: FaceKind; label: string }[] = [
   { value: '', label: 'Sin complemento' },
   { value: 'sunglasses', label: 'Gafas de sol' },
-  { value: 'cyber', label: 'Cybervisor' },
+  { value: 'cyber', label: 'Scouter' },
   { value: 'pipe', label: 'Pipa' },
 ]
 export const BACKS: { value: BackKind; label: string }[] = [
@@ -45,6 +46,11 @@ export interface SkynyExtras {
   setHat(kind: HatKind): void
   setFace(kind: FaceKind): void
   setBack(kind: BackKind): void
+  /**
+   * Texto del scouter (complemento de cara `cyber`): se escribe letra a letra como en una terminal.
+   * Vacío, enseña el nombre del estado.
+   */
+  setScouterText(text: string): void
   /** En cada fotograma: muelle del gorro, luz del casco y llamas del jetpack. */
   update(now: number): void
   dispose(): void
@@ -420,7 +426,234 @@ export function createExtras(skyny): SkynyExtras {
   skyny.model.visor.add(faceExtra)
   skyny.model.root.add(backExtra)
   const plasma = []
+  let scouterGlassMat = null,
+    scouterEdgesMat = null
+  let scouterHudCtx = null,
+    scouterHudTex = null,
+    scouterCustomText = '',
+    scouterLastKey = '',
+    scouterAnimAt = 0
+  /** Lo que pone el scouter sin texto propio: el nombre del estado. */
+  const scouterStateText = () =>
+    (STATES_META.find((s) => s.state === skyny.state)?.label || skyny.state).toUpperCase()
+  function drawScouterHud(ctx, text, revealCount = null) {
+    const w = ctx.canvas.width,
+      h = ctx.canvas.height
+    ctx.clearRect(0, 0, w, h)
+
+    // Sutiles scanlines y cabecera de terminal
+    ctx.fillStyle = 'rgba(4, 10, 22, 0.24)'
+    for (let sy = 24; sy < h - 20; sy += 8) {
+      ctx.fillRect(22, sy, w - 44, 2)
+    }
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.96)'
+    ctx.lineWidth = 4
+
+    // Escuadras sutiles de marco HUD
+    const pad = 18,
+      arm = 28
+    ctx.beginPath()
+    ctx.moveTo(pad, pad + arm)
+    ctx.lineTo(pad, pad)
+    ctx.lineTo(pad + arm, pad)
+    ctx.moveTo(w - pad - arm, pad)
+    ctx.lineTo(w - pad, pad)
+    ctx.lineTo(w - pad, pad + arm)
+    ctx.moveTo(pad, h - pad - arm)
+    ctx.lineTo(pad, h - pad)
+    ctx.lineTo(pad + arm, h - pad)
+    ctx.stroke()
+
+    // Mini retícula en esquina superior derecha
+    ctx.lineWidth = 3
+    ctx.beginPath()
+    ctx.arc(w - 58, 44, 12, 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(w - 58, 44, 4, 0, Math.PI * 2)
+    ctx.fill()
+
+    // Cabecera de terminal (barras + skyny@sh:~)
+    for (let b = 0; b < 4; b++) {
+      const bh = 7 + ((b * 7) % 14)
+      ctx.fillRect(42 + b * 11, 44 - bh, 6, bh)
+    }
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.font = '700 17px ui-monospace, SFMono-Regular, Menlo, monospace'
+    ctx.fillStyle = '#38bdf8'
+    ctx.fillText('skyny@sh:~', 94, 37)
+
+    // Tokenizador de sintaxis para terminal
+    const KEYWORDS = new Set([
+      'git',
+      'npm',
+      'pnpm',
+      'yarn',
+      'docker',
+      'kubectl',
+      'pytest',
+      'node',
+      'python',
+      'bash',
+      'curl',
+      'gh',
+      'const',
+      'let',
+      'var',
+      'fn',
+      'def',
+      'return',
+      'if',
+      'else',
+      'async',
+      'await',
+      'import',
+      'export',
+      'true',
+      'false',
+      'null',
+      'select',
+      'from',
+      'where',
+      'revisar',
+      'lanzar',
+      'ejecutar',
+    ])
+    const tokenizeLine = (rawLine, isFirstLine) => {
+      const tokens = []
+      const trimmed = rawLine.trim()
+      if (!trimmed) return tokens
+      const hasExplicitPrompt = /^(\$|❯|>)\s*/.test(trimmed)
+      if (!hasExplicitPrompt && isFirstLine) {
+        tokens.push({ text: '❯', color: '#38bdf8' })
+      }
+      const regex = /\/\/.*$|"(?:\\.|[^"])*"|'(?:\\.|[^'])*'|`(?:\\.|[^`])*`|\S+/g
+      let m,
+        wordIdx = 0
+      while ((m = regex.exec(trimmed)) !== null) {
+        const tok = m[0]
+        let color = '#f8fafc'
+        if (tok.startsWith('//')) {
+          color = '#94a3b8'
+        } else if (/^(\$|❯|>)$/.test(tok) && wordIdx === 0) {
+          color = '#38bdf8'
+        } else if (/^["'`]/.test(tok)) {
+          color = '#4ade80'
+        } else if (/^--?[a-zA-Z0-9_-]+/.test(tok)) {
+          color = '#fde047'
+        } else if (/^(&&|\|\||\|+|->|=>|=)$/.test(tok)) {
+          color = '#f472b6'
+        } else if (/^#?\d+(\.\d+)?!?$/.test(tok) || /^v\d+(\.\d+)*$/.test(tok)) {
+          color = '#fb923c'
+        } else if (/^(\.?\.?\/|https?:\/\/)/.test(tok) || /\.[a-z]{1,4}$/i.test(tok)) {
+          color = '#5eead4'
+        } else if (
+          KEYWORDS.has(tok.toLowerCase()) ||
+          (wordIdx === 0 && !hasExplicitPrompt) ||
+          (wordIdx === 1 && hasExplicitPrompt)
+        ) {
+          color = '#c084fc'
+        }
+        tokens.push({ text: tok, color })
+        wordIdx++
+      }
+      return tokens
+    }
+
+    const full = (text || '').trim() || 'SCAN'
+    const visibleText = revealCount !== null ? full.slice(0, revealCount) : full
+    const showCursor = revealCount !== null && revealCount < full.length
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    const textX = 42
+    const startY = 66
+    const maxBottomY = h - 30
+    const stepY = h * 0.54
+
+    const wrapTokenLines = (src, fs) => {
+      ctx.font = `700 ${fs}px ui-monospace, SFMono-Regular, Menlo, monospace`
+      const spaceW = ctx.measureText(' ').width
+      const lh = fs * 1.18
+      const out = []
+      const paras = src.split(/\r?\n/)
+      paras.forEach((para, pIdx) => {
+        const toks = tokenizeLine(para, pIdx === 0)
+        if (toks.length === 0) {
+          out.push([])
+          return
+        }
+        let cur = []
+        let curW = 0
+        for (const tok of toks) {
+          const tw = ctx.measureText(tok.text).width
+          const lineY = startY + out.length * lh
+          const lineMaxW = lineY + lh > stepY ? w - textX - 150 : w - textX - 34
+          const addW = cur.length > 0 ? spaceW + tw : tw
+          if (curW + addW <= lineMaxW || cur.length === 0) {
+            cur.push(tok)
+            curW += addW
+          } else {
+            out.push(cur)
+            cur = [tok]
+            curW = tw
+          }
+        }
+        if (cur.length) out.push(cur)
+      })
+      return out.length ? out : [[]]
+    }
+
+    let fontSize = 15
+    let tokenLines = []
+    for (const fs of [40, 32, 26, 22, 19, 16, 14]) {
+      const candidate = wrapTokenLines(full, fs)
+      const totalH = candidate.length * fs * 1.18
+      if (startY + totalH <= maxBottomY || fs === 14) {
+        fontSize = fs
+        tokenLines = revealCount !== null ? wrapTokenLines(visibleText, fs) : candidate
+        break
+      }
+    }
+
+    const lineH = fontSize * 1.18
+    const maxLines = Math.max(1, Math.floor((maxBottomY - startY) / lineH))
+    const shown = tokenLines.slice(0, maxLines)
+    if (showCursor) {
+      shown[shown.length - 1] = [...shown[shown.length - 1], { text: '█', color: '#38bdf8' }]
+    }
+
+    ctx.font = `700 ${fontSize}px ui-monospace, SFMono-Regular, Menlo, monospace`
+    const spaceW = ctx.measureText(' ').width
+    ctx.lineJoin = 'round'
+    ctx.lineWidth = Math.max(4, Math.round(fontSize * 0.24))
+    ctx.strokeStyle = 'rgba(6, 12, 24, 0.82)'
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.45)'
+    ctx.shadowBlur = 6
+
+    shown.forEach((toks, idx) => {
+      const y = startY + idx * lineH
+      let x = textX
+      toks.forEach((tok, tIdx) => {
+        if (tIdx > 0) x += spaceW
+        ctx.fillStyle = tok.color
+        ctx.strokeText(tok.text, x, y)
+        ctx.fillText(tok.text, x, y)
+        x += ctx.measureText(tok.text).width
+      })
+    })
+    ctx.shadowBlur = 0
+  }
   function clearExtra(group) {
+    if (group === faceExtra) {
+      scouterGlassMat = null
+      scouterEdgesMat = null
+      scouterHudCtx = null
+      scouterHudTex = null
+      scouterLastKey = ''
+    }
     const geometries = new Set(),
       materials = new Set()
     group.traverse((o) => {
@@ -503,13 +736,257 @@ export function createExtras(skyny): SkynyExtras {
       }
       return
     }
+    if (kind === 'cyber') {
+      // Medidor tipo Scouter (Dragon Ball): módulo auricular más arriba y adelantado en flanco derecho (+X), conectado al brazo y cristal horizontal
+      const visorPos = new THREE.Vector3(0, -0.04, 0.5)
+      const rootToVisor = (arr) =>
+        new THREE.Vector3(...arr).sub(visorPos).applyAxisAngle(new THREE.Vector3(1, 0, 0), 0.14)
+      const pRoot = projectOnBody([0.69, 0.15, 0.22], 0.006)
+      const pUp = projectOnBody([0.69, 0.29, 0.22], 0.006)
+      const pFwd = projectOnBody([0.69, 0.15, 0.34], 0.006)
+      const vBase = rootToVisor(pRoot)
+      const vUp = rootToVisor(pUp).sub(vBase).normalize()
+      const vFwd = rootToVisor(pFwd).sub(vBase).normalize()
+      const vOut = new THREE.Vector3().crossVectors(vUp, vFwd).normalize()
+      vFwd.crossVectors(vOut, vUp).normalize()
+
+      const podScale = 1.22
+      const podGroup = new THREE.Group()
+      podGroup.position.copy(vBase)
+      podGroup.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(vOut, vUp, vFwd))
+      podGroup.scale.setScalar(podScale)
+      faceExtra.add(podGroup)
+
+      const padMat = hatMaterial(0x2d3545)
+      const whiteShellMat = new THREE.MeshStandardMaterial({
+        color: 0xeef3f8,
+        roughness: 0.28,
+        metalness: 0.12,
+      })
+      const grillMat = new THREE.MeshStandardMaterial({
+        color: 0x222938,
+        roughness: 0.45,
+        metalness: 0.25,
+      })
+      const redBtnMat = new THREE.MeshStandardMaterial({
+        color: 0xef4444,
+        emissive: 0x5f0a0a,
+        roughness: 0.25,
+        metalness: 0.15,
+      })
+
+      const roundedRectShape = (w, h, r) => {
+        const s = new THREE.Shape()
+        const hw = w / 2,
+          hh = h / 2
+        s.moveTo(-hw + r, -hh)
+        s.lineTo(hw - r, -hh)
+        s.quadraticCurveTo(hw, -hh, hw, -hh + r)
+        s.lineTo(hw, hh - r)
+        s.quadraticCurveTo(hw, hh, hw - r, hh)
+        s.lineTo(-hw + r, hh)
+        s.quadraticCurveTo(-hw, hh, -hw, hh - r)
+        s.lineTo(-hw, -hh + r)
+        s.quadraticCurveTo(-hw, -hh, -hw + r, -hh)
+        return s
+      }
+
+      // Almohadilla interior oscura apoyada sobre el cuerpo
+      const padGeo = new THREE.ExtrudeGeometry(roundedRectShape(0.2, 0.28, 0.055), {
+        depth: 0.036,
+        bevelEnabled: true,
+        bevelSize: 0.012,
+        bevelThickness: 0.012,
+        bevelSegments: 4,
+      })
+      padGeo.rotateY(Math.PI / 2)
+      hatPart(padGeo, padMat, 0.0, 0, 0, podGroup)
+
+      // Carcasa blanca redondeada exterior
+      const shellGeo = new THREE.ExtrudeGeometry(roundedRectShape(0.17, 0.24, 0.048), {
+        depth: 0.068,
+        bevelEnabled: true,
+        bevelSize: 0.018,
+        bevelThickness: 0.018,
+        bevelSegments: 4,
+      })
+      shellGeo.rotateY(Math.PI / 2)
+      hatPart(shellGeo, whiteShellMat, 0.028, 0, 0, podGroup)
+
+      // Rejilla acanalada lateral (altavoz/sensor)
+      hatPart(new THREE.BoxGeometry(0.022, 0.15, 0.085), grillMat, 0.104, 0, -0.005, podGroup)
+      for (let r = -2; r <= 2; r++) {
+        hatPart(
+          new THREE.BoxGeometry(0.026, 0.008, 0.082),
+          padMat,
+          0.107,
+          r * 0.026,
+          -0.005,
+          podGroup,
+        )
+      }
+
+      // Botón rojo frontal-inferior característico
+      hatPart(new THREE.BoxGeometry(0.03, 0.044, 0.034), redBtnMat, 0.086, -0.072, 0.072, podGroup)
+
+      // Bisagra delantera en el bloque del medidor (anclaje directo del brazo)
+      const hingeLocal = new THREE.Vector3(0.064, 0.01, 0.095)
+      hatPart(
+        new THREE.BoxGeometry(0.058, 0.1, 0.065),
+        whiteShellMat,
+        hingeLocal.x,
+        hingeLocal.y,
+        hingeLocal.z,
+        podGroup,
+      )
+      hatPart(
+        new THREE.CylinderGeometry(0.017, 0.017, 0.11, 16),
+        padMat,
+        hingeLocal.x + 0.01,
+        hingeLocal.y,
+        hingeLocal.z + 0.01,
+        podGroup,
+      )
+
+      // Punto de anclaje real de la bisagra en espacio de visor (incluyendo podScale)
+      const hingeVisor = hingeLocal
+        .clone()
+        .multiplyScalar(podScale)
+        .applyQuaternion(podGroup.quaternion)
+        .add(podGroup.position)
+      const lensZ = 0.145
+      const lensY = 0.048
+      const lensRightX = 0.392
+      const crystalMidY = lensY + 0.026
+
+      // Brazo plano tipo cinta en arco C fluido (sin codo brusco) directo al borde del cristal
+      const armCurve = new THREE.CatmullRomCurve3([
+        hingeVisor,
+        new THREE.Vector3(hingeVisor.x + 0.015, hingeVisor.y + 0.01, hingeVisor.z + 0.11),
+        new THREE.Vector3(lensRightX + 0.14, crystalMidY, lensZ + 0.008),
+        new THREE.Vector3(lensRightX - 0.004, crystalMidY, lensZ),
+      ])
+      const segs = 32
+      const armPos = [],
+        armIdx = []
+      const worldUp = new THREE.Vector3(0, 1, 0)
+      for (let i = 0; i <= segs; i++) {
+        const t = i / segs
+        const pt = armCurve.getPoint(t)
+        const tan = armCurve.getTangent(t).normalize()
+        const upDir = new THREE.Vector3().lerpVectors(vUp, worldUp, smoothstep(t)).normalize()
+        // Ortogonalizar upDir respecto a tan y calcular el vector de grosor lateral
+        const sideDir = new THREE.Vector3().crossVectors(upDir, tan).normalize()
+        upDir.crossVectors(tan, sideDir).normalize()
+        const hh = 0.068 + 0.014 * t
+        const ht = 0.017 - 0.003 * t
+        const corners = [
+          [-ht, -hh],
+          [ht, -hh],
+          [ht, hh],
+          [-ht, hh],
+        ]
+        for (const [ct, ch] of corners) {
+          const v = pt.clone().addScaledVector(sideDir, ct).addScaledVector(upDir, ch)
+          armPos.push(v.x, v.y, v.z)
+        }
+        if (i < segs) {
+          const a = i * 4,
+            b = (i + 1) * 4
+          for (let k = 0; k < 4; k++) {
+            const k2 = (k + 1) % 4
+            armIdx.push(a + k, b + k, b + k2, a + k, b + k2, a + k2)
+          }
+        }
+      }
+      // Tapas en ambos extremos
+      armIdx.push(0, 2, 1, 0, 3, 2)
+      const endBase = segs * 4
+      armIdx.push(endBase, endBase + 1, endBase + 2, endBase, endBase + 2, endBase + 3)
+      const armGeo = new THREE.BufferGeometry()
+      armGeo.setAttribute('position', new THREE.Float32BufferAttribute(armPos, 3))
+      armGeo.setIndex(armIdx)
+      armGeo.computeVertexNormals()
+      const armMesh = new THREE.Mesh(armGeo, whiteShellMat)
+      armMesh.castShadow = true
+      faceExtra.add(armMesh)
+
+      // Cristal horizontal: plano por arriba y rebajado solo por abajo (extendido hacia abajo para más texto)
+      const lensShape = new THREE.Shape()
+      lensShape.moveTo(0.0, -0.175)
+      lensShape.lineTo(0.255, -0.175)
+      lensShape.quadraticCurveTo(0.285, -0.175, 0.298, -0.105)
+      lensShape.quadraticCurveTo(0.31, -0.056, 0.34, -0.056)
+      lensShape.lineTo(0.395, -0.056)
+      lensShape.lineTo(0.395, 0.108)
+      lensShape.lineTo(0.032, 0.108)
+      lensShape.quadraticCurveTo(-0.005, 0.108, -0.005, 0.072)
+      lensShape.lineTo(-0.005, -0.14)
+      lensShape.quadraticCurveTo(-0.005, -0.175, 0.0, -0.175)
+
+      const lensGeo = new THREE.ExtrudeGeometry(lensShape, {
+        depth: 0.016,
+        bevelEnabled: true,
+        bevelSize: 0.003,
+        bevelThickness: 0.003,
+        bevelSegments: 3,
+      })
+      const initCol =
+        STATE_CONFIG[skyny.state]?.eyeColor || skyny.colors.body[skyny.state] || '#22c55e'
+      scouterGlassMat = new THREE.MeshStandardMaterial({
+        color: initCol,
+        emissive: initCol,
+        emissiveIntensity: 0.35,
+        roughness: 0.12,
+        metalness: 0.1,
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
+      })
+      const lensMesh = hatPart(lensGeo, scouterGlassMat, 0, lensY, lensZ - 0.008, faceExtra)
+      scouterEdgesMat = new THREE.LineBasicMaterial({
+        color: initCol,
+        transparent: true,
+        opacity: 0.85,
+      })
+      const lensEdges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(lensMesh.geometry, 24),
+        scouterEdgesMat,
+      )
+      lensEdges.position.copy(lensMesh.position)
+      faceExtra.add(lensEdges)
+
+      // Cuadro de texto HUD sobre el cristal del medidor (512x358 aprovechando toda la altura del cristal)
+      const hudCanvas = document.createElement('canvas')
+      hudCanvas.width = 512
+      hudCanvas.height = 358
+      scouterHudCtx = hudCanvas.getContext('2d')
+      const initTxt = scouterCustomText || scouterStateText()
+      drawScouterHud(scouterHudCtx, initTxt)
+      scouterLastKey = initTxt
+      scouterHudTex = new THREE.CanvasTexture(hudCanvas)
+      scouterHudTex.colorSpace = THREE.SRGBColorSpace
+      const hudPlane = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.38, 0.265),
+        new THREE.MeshBasicMaterial({
+          map: scouterHudTex,
+          transparent: true,
+          opacity: 0.96,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        }),
+      )
+      hudPlane.position.set(0.188, lensY - 0.033, lensZ + 0.012)
+      faceExtra.add(hudPlane)
+      return
+    }
     const frame = hatMaterial(0x162032)
     const lens = new THREE.MeshStandardMaterial({
-      color: kind === 'cyber' ? 0x24cfe5 : 0x192b48,
+      color: 0x192b48,
       metalness: 0.3,
       roughness: 0.25,
       transparent: true,
-      opacity: kind === 'cyber' ? 0.32 : 0.72,
+      opacity: 0.72,
       depthWrite: false,
     })
     for (const side of [-1, 1]) {
@@ -523,7 +1000,7 @@ export function createExtras(skyny): SkynyExtras {
       )
       const edges = new THREE.LineSegments(
         new THREE.EdgesGeometry(glass.geometry),
-        new THREE.LineBasicMaterial({ color: kind === 'cyber' ? 0x43edff : 0x101724 }),
+        new THREE.LineBasicMaterial({ color: 0x101724 }),
       )
       edges.position.copy(glass.position)
       faceExtra.add(edges)
@@ -587,6 +1064,27 @@ export function createExtras(skyny): SkynyExtras {
       flame.visible = on
       flame.scale.y = reduced ? 1 : 0.86 + 0.14 * Math.sin(now / 65 + i)
     })
+    if (scouterGlassMat) {
+      const stCol =
+        STATE_CONFIG[skyny.state]?.eyeColor || skyny.colors.body[skyny.state] || '#22c55e'
+      scouterGlassMat.color.set(stCol)
+      scouterGlassMat.emissive.set(stCol)
+      if (scouterEdgesMat) scouterEdgesMat.color.set(stCol)
+    }
+    if (scouterHudCtx && scouterHudTex) {
+      const nextTxt = scouterCustomText || scouterStateText()
+      const typing = scouterAnimAt > 0 && scouterCustomText
+      const revealCount = typing
+        ? Math.min(nextTxt.length, Math.max(1, Math.floor((now - scouterAnimAt) / 28)))
+        : null
+      if (typing && revealCount >= nextTxt.length) scouterAnimAt = 0
+      const key = `${nextTxt}::${revealCount ?? 'full'}`
+      if (key !== scouterLastKey) {
+        scouterLastKey = key
+        drawScouterHud(scouterHudCtx, nextTxt, revealCount)
+        scouterHudTex.needsUpdate = true
+      }
+    }
   }
   let previousHatMotion = null
   let hatSpringX = 0,
@@ -672,6 +1170,15 @@ export function createExtras(skyny): SkynyExtras {
         faceKind = kind
         selectFace(kind)
       }
+    },
+    setScouterText(text) {
+      const msg = (text ?? '').trim()
+      if (msg === scouterCustomText) return
+      scouterCustomText = msg
+      // Con movimiento reducido sale de golpe, sin escribirse letra a letra.
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      scouterAnimAt = msg && !reduced ? performance.now() : 0
+      scouterLastKey = ''
     },
     setBack: (kind) => {
       if (kind !== backKind) {

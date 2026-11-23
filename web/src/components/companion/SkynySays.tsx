@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { cn } from '../../lib/cn'
 import { Companion } from './Companion'
 import { useGesture, type Gesture } from './gesture'
+import { sayOnScouter } from './scouter'
 import type { CompanionState } from './state'
 
 /**
@@ -21,6 +22,8 @@ export function SkynySays({
 }) {
   const [current, play] = useGesture()
   useEffect(() => play(gesture), [gesture, text, play])
+  // Lo mismo sale en el scouter del Skyny flotante, si lo lleva puesto.
+  useEffect(() => sayOnScouter(text), [text])
   return (
     <div className={cn('skyny-says', className)}>
       <Companion state={state} size={56} gesture={current} />

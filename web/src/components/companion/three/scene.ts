@@ -253,6 +253,10 @@ export class SkynyScene {
   setBack(kind: BackKind) {
     this.extras.setBack(kind)
   }
+  /** Lo que pone el scouter cuando lo lleva puesto; vacío, el nombre del estado. */
+  setScouterText(text: string) {
+    this.extras.setScouterText(text)
+  }
 
   /**
    * Escribe un letrero ya, por encima de lo que hubiera: tecleado o, con `scroll`, deslizándose de
