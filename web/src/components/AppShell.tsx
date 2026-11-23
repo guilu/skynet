@@ -6,7 +6,9 @@ import { api, SESSION_KEY, type Session } from '../api'
 import { useTheme } from '../theme'
 import { CompanionMenu } from './companion/CompanionMenu'
 import { CompanionProvider } from './companion/CompanionProvider'
+import { useCurtainSequence } from './chat/curtainSequence'
 import { FloatingSkyny } from './companion/FloatingSkyny'
+import { can3D } from './companion/look'
 import { preloadSkyny3D } from './companion/load3d'
 import { NoticeBell } from './companion/NoticeBell'
 import { SkynyPaused } from './companion/pause'
@@ -57,11 +59,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     setToolsPath(pathname)
     setToolsOpen(false)
   }
-  const [chatOpen, setChatOpen] = useState(false)
+  const companion = useCompanionPrefs()
+  // La cortina, una cosa detrás de otra: sale el Skyny de la web, baja la cortina, entra el suyo
+  // (y al revés al cerrarla).
+  const [three] = useState(can3D)
+  const curtain = useCurtainSequence({ floating: companion.floating && three, curtain3D: three })
+  const chatOpen = curtain.open
+  const toggleCurtain = curtain.toggle
   // Montada desde la primera vez que se abre: al cerrarla conserva el borrador y la conversación.
   const [chatLoaded, setChatLoaded] = useState(false)
   const [noticesOpen, setNoticesOpen] = useState(false)
-  const companion = useCompanionPrefs()
   const queryClient = useQueryClient()
   const session = useQuery<Session | null>({ queryKey: SESSION_KEY, enabled: false })
   const logout = useMutation({
@@ -84,12 +91,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault()
         setChatLoaded(true)
-        setChatOpen((o) => !o)
+        toggleCurtain()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [toggleCurtain])
 
   const toggleCollapsed = () => {
     setCollapsed((c) => {
@@ -118,7 +125,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   className="brand"
                   onClick={() => {
                     setChatLoaded(true)
-                    setChatOpen(true)
+                    curtain.request(true)
                   }}
                   aria-label="Pregúntale a Skyny"
                   aria-expanded={chatOpen}
@@ -190,7 +197,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </main>
           <MobileNav />
           {/* Skyny 3D en su capa, por encima de la página; se va volando al abrir la cortina. */}
-          <FloatingSkyny away={chatOpen} />
+          <FloatingSkyny away={curtain.away} />
           {paletteOpen && (
             <Suspense fallback={null}>
               <CommandPalette open onOpenChange={setPaletteOpen} onTheme={setTheme} />
@@ -198,7 +205,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
           {chatLoaded && (
             <Suspense fallback={null}>
-              <ChatCurtain open={chatOpen} onOpenChange={setChatOpen} />
+              <ChatCurtain
+                open={chatOpen}
+                onOpenChange={curtain.request}
+                skynyLeaving={curtain.leaving}
+              />
             </Suspense>
           )}
           <Toasts />

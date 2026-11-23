@@ -331,10 +331,13 @@ export class SkynyScene {
     this.pulseGroup.clear()
   }
 
-  /** Entra en escena volando. `duration` en ms. */
-  enter({ duration = 2500 }: { duration?: number } = {}) {
+  /**
+   * Entra en escena volando. `duration` en ms; con `delay`, espera fuera de escena ese rato
+   * antes de arrancar (la cortina del chat, mientras baja).
+   */
+  enter({ duration = 2500, delay = 0 }: { duration?: number; delay?: number } = {}) {
     this.offstage = false
-    this.stageTransition = { mode: 'enter', at: performance.now(), duration }
+    this.stageTransition = { mode: 'enter', at: performance.now() + delay, duration }
     this.drawnKey = ''
   }
 
@@ -3124,7 +3127,9 @@ export class SkynyScene {
       (1 / Math.sqrt(squashY)) * stageScale,
     )
     // Ya se fue: ni el puntito en el horizonte.
-    root.visible = !this.offstage
+    // Fuera de escena, o esperando a entrar (`enter({ delay })`), no se ve.
+    const waiting = this.stageTransition?.mode === 'enter' && now < this.stageTransition.at
+    root.visible = !this.offstage && !waiting
 
     // Física de Resorte (Damped Spring Physics) en las Manos
     const stiffness = 210

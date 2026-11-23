@@ -7,6 +7,7 @@ import { formatDateTime } from '../../format'
 import { useMediaQuery } from '../../useMediaQuery'
 import { Companion } from '../companion/Companion'
 import { SkynyLive } from '../companion/SkynyLive'
+import { CURTAIN_DOWN_MS, CURTAIN_SKYNY_ENTER_MS, CURTAIN_SKYNY_EXIT_MS } from './curtainSequence'
 import { usePulse } from '../companion/usePulse'
 import { ErrorMessage } from '../ErrorMessage'
 import { Icon } from '../icons/Icon'
@@ -58,9 +59,12 @@ const ANSWERING_POLL_MS = 4000
 export function ChatCurtain({
   open,
   onOpenChange,
+  skynyLeaving = false,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Su Skyny se va volando antes de que suba la cortina (`useCurtainSequence`). */
+  skynyLeaving?: boolean
 }) {
   const { pathname } = useLocation()
   const queryClient = useQueryClient()
@@ -207,7 +211,17 @@ export function ChatCurtain({
     input.current?.focus()
   }
 
-  const size = mobile ? (talking ? 150 : 180) : 240
+  // Grande en el escritorio; con conversación, más pequeño para dejar sitio a los mensajes.
+  const size = mobile ? (talking ? 150 : 180) : talking ? 280 : 512
+  // Entra cuando la cortina ha bajado del todo y se va antes de que suba.
+  const stage = skynyLeaving
+    ? { mode: 'exit' as const, key: 2, duration: CURTAIN_SKYNY_EXIT_MS }
+    : {
+        mode: 'enter' as const,
+        key: 1,
+        duration: CURTAIN_SKYNY_ENTER_MS,
+        delay: CURTAIN_DOWN_MS,
+      }
   const expression = chatExpression({
     conversation,
     actions: actions.data,
@@ -263,6 +277,7 @@ export function ChatCurtain({
               size={size}
               message={talking ? CHAT_LED[expression] : undefined}
               pulse={talking ? pulse : null}
+              stage={stage}
               interactive
               fallback={
                 <Companion state={talking ? expression : 'calm'} size={Math.round(size * 0.8)} />

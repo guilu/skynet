@@ -5,6 +5,7 @@ import { Skyny3D } from './load3d'
 import { can3D } from './look'
 import { setCompanionPrefs, useCompanionPrefs } from './prefs'
 import { useSettledState } from './settle'
+import { FLOAT_ENTER_MS, FLOAT_EXIT_MS } from '../chat/curtainSequence'
 import { floatBox, floatPos } from './float'
 import { takeQuip } from './gesture'
 import { sayOnScouter, useScouterText } from './scouter'
@@ -15,8 +16,8 @@ const SIZE = 240
 const SIZE_MOBILE = 168
 /** En el móvil, la barra de navegación de abajo: Skyny no se mete debajo. */
 const MOBILE_NAV = 84
-/** Lo que tarda en irse volando antes de desmontarlo (sin gastar GPU mientras no se ve). */
-const LEAVE_MS = 2400
+/** Lo que espera tras irse volando antes de desmontarlo (sin gastar GPU mientras no se ve). */
+const LEAVE_MS = FLOAT_EXIT_MS + 200
 /** Menos que esto (px y ms) es un toque (¡boop!), no un arrastre. */
 const CLICK_PX = 6
 const CLICK_MS = 320
@@ -142,7 +143,11 @@ export function FloatingSkyny({ away = false }: { away?: boolean }) {
           boop={boop}
           micro={micro}
           scouter={scouter}
-          stage={{ mode: away ? 'exit' : 'enter', key: moves }}
+          stage={{
+            mode: away ? 'exit' : 'enter',
+            key: moves,
+            duration: away ? FLOAT_EXIT_MS : FLOAT_ENTER_MS,
+          }}
           onFail={() => setThree(false)}
         />
       </Suspense>

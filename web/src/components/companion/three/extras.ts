@@ -17,6 +17,9 @@ export type HatKind =
   | 'satellite'
   | 'christmas'
   | 'summer'
+/** Cuánto más grande es el cristal del scouter que en el estudio v5, para que su texto se lea. */
+export const SCOUTER_LENS = 1.5
+
 export type FaceKind = '' | 'sunglasses' | 'cyber' | 'pipe'
 export type BackKind = '' | 'jetpack'
 
@@ -943,7 +946,20 @@ export function createExtras(skyny): SkynyExtras {
         opacity: 0.42,
         depthWrite: false,
       })
-      const lensMesh = hatPart(lensGeo, scouterGlassMat, 0, lensY, lensZ - 0.008, faceExtra)
+      // Cristal, bordes y texto van juntos y se agrandan desde donde los coge el brazo, para que
+      // el texto se lea con Skyny pequeño (en el estudio v5 el cristal mide SCOUTER_LENS = 1).
+      const lensGroup = new THREE.Group()
+      lensGroup.position.set(lensRightX, crystalMidY, lensZ)
+      lensGroup.scale.setScalar(SCOUTER_LENS)
+      faceExtra.add(lensGroup)
+      const lensMesh = hatPart(
+        lensGeo,
+        scouterGlassMat,
+        -lensRightX,
+        lensY - crystalMidY,
+        -0.008,
+        lensGroup,
+      )
       scouterEdgesMat = new THREE.LineBasicMaterial({
         color: initCol,
         transparent: true,
@@ -954,7 +970,7 @@ export function createExtras(skyny): SkynyExtras {
         scouterEdgesMat,
       )
       lensEdges.position.copy(lensMesh.position)
-      faceExtra.add(lensEdges)
+      lensGroup.add(lensEdges)
 
       // Cuadro de texto HUD sobre el cristal del medidor (512x358 aprovechando toda la altura del cristal)
       const hudCanvas = document.createElement('canvas')
@@ -976,8 +992,8 @@ export function createExtras(skyny): SkynyExtras {
           side: THREE.DoubleSide,
         }),
       )
-      hudPlane.position.set(0.188, lensY - 0.033, lensZ + 0.012)
-      faceExtra.add(hudPlane)
+      hudPlane.position.set(0.188 - lensRightX, lensY - 0.033 - crystalMidY, 0.012)
+      lensGroup.add(hudPlane)
       return
     }
     const frame = hatMaterial(0x162032)

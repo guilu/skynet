@@ -30,6 +30,8 @@ export interface StageMove {
   key: number
   /** Cuánto dura, en ms. */
   duration?: number
+  /** Solo al entrar: cuánto espera fuera de escena antes de arrancar, en ms. */
+  delay?: number
 }
 
 /**
@@ -293,7 +295,7 @@ export default function Skyny3D({
   )
 }
 
-function moveStage(skyny: SkynyScene, { mode, duration }: StageMove) {
-  if (mode === 'enter') skyny.enter({ duration })
+function moveStage(skyny: SkynyScene, { mode, duration, delay }: StageMove) {
+  if (mode === 'enter') skyny.enter({ duration, delay })
   else skyny.exit({ duration })
 }

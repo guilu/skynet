@@ -5,7 +5,7 @@ import { useSettledState } from './settle'
 import type { CompanionState } from './state'
 import { SkynySlot } from './SkynySlot'
 import type { PulseType } from './pulse'
-import type { LiveInfo } from './three/Skyny3D'
+import type { LiveInfo, StageMove } from './three/Skyny3D'
 
 /** Por debajo de este tamaño, letreros cortos («IDEA» en vez de «PENSANDO...»). */
 const COMPACT_BELOW = 160
@@ -21,6 +21,7 @@ export function SkynyLive({
   fallback,
   interactive = false,
   pulse,
+  stage,
   ...live
 }: LiveInfo & {
   state: CompanionState
@@ -30,6 +31,8 @@ export function SkynyLive({
   interactive?: boolean
   /** Reacción a un evento en vivo (`usePulse`). */
   pulse?: { type: PulseType; key: number } | null
+  /** Entra o sale de escena volando (la cortina del chat). */
+  stage?: StageMove | null
 }) {
   const [three, setThree] = useState(can3D)
   const shown = useSettledState(state)
@@ -42,6 +45,7 @@ export function SkynyLive({
         live={{ compact: size < COMPACT_BELOW, ...live }}
         interactive={interactive}
         pulse={pulse}
+        stage={stage}
         onFail={() => setThree(false)}
       />
     </Suspense>
