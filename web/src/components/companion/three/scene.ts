@@ -1,6 +1,6 @@
 // @ts-nocheck -- motor portado del estudio v4.3 sin tipar; la API que usa la web la tipa
 // `SkynyScene` (scene.ts) y la prueban los tests de Skyny3D.
-// Portado del estudio v4.4 (plans/skyny-3d/skyny-v4.4.html).
+// Portado del estudio v5 (plans/skyny-3d/skyny-v5.html).
 import * as THREE from 'three'
 import { clamp01, smoothstep, easeOutCubic } from './math'
 import { STATE_CONFIG, LED_MESSAGES, LED_COMPACT } from './states'
@@ -125,7 +125,7 @@ export class SkynyScene {
       const outerCone = new THREE.Mesh(
         outerGeo,
         new THREE.MeshBasicMaterial({
-          color: 0x38bdf8,
+          color: 0x16a9ff,
           transparent: true,
           opacity: 0.56,
           side: THREE.DoubleSide,
@@ -140,7 +140,7 @@ export class SkynyScene {
       const innerCone = new THREE.Mesh(
         innerGeo,
         new THREE.MeshBasicMaterial({
-          color: 0x00e5ff,
+          color: 0xe4ffff,
           transparent: true,
           opacity: 0.9,
           side: THREE.DoubleSide,
@@ -790,9 +790,9 @@ export class SkynyScene {
         }
       } else {
         exitT = p
-        jetPower = p >= 0.2 ? smoothstep((p - 0.2) / 0.18) : 0
+        jetPower = 0.35 * smoothstep((p - 0.16) / 0.18) + 0.65 * smoothstep((p - 0.56) / 0.22)
 
-        const ringPhase = clamp01((p - 0.22) / 0.55)
+        const ringPhase = clamp01((p - 0.56) / 0.44)
         this.shockRings.children.forEach((ring, idx) => {
           const stagger = clamp01((ringPhase - idx * 0.12) / 0.76)
           ring.visible = stagger > 0.01 && stagger < 0.99
@@ -836,7 +836,7 @@ export class SkynyScene {
           jet.rotation.x =
             -0.35 * (1 - flareMix) + 0.28 * flareMix * (1 - smoothstep((enterT - 0.78) / 0.22))
         } else if (exitT > 0) {
-          const awayMix = smoothstep((exitT - 0.18) / 0.24)
+          const awayMix = smoothstep((exitT - 0.56) / 0.22)
           jet.rotation.x = -0.38 * awayMix
         } else {
           jet.rotation.x = 0
@@ -2337,7 +2337,7 @@ export class SkynyScene {
       state === 'testing' && animate ? (this.smoothTestIdx - 1) * 0.14 * activeFade : 0
     const healingYaw = state === 'healing' && animate ? 0.16 * activeFade : 0
     const pokeSpinYaw = pokeEnv > 0 && this.pokeCount === 0 ? smoothstep(pokeT) * Math.PI * 2 : 0
-    const exitTurnYaw = exitT > 0 ? smoothstep(clamp01((exitT - 0.14) / 0.34)) * Math.PI : 0
+    const exitTurnYaw = exitT > 0 ? smoothstep(clamp01((exitT - 0.28) / 0.28)) * Math.PI : 0
     const dizzyYaw = dizzyEnv * Math.sin(elapsed * 11) * 0.34
     const extraYaw =
       degradedYaw +
@@ -2768,7 +2768,7 @@ export class SkynyScene {
       targetR.lerp(curR, 1 - settleMix)
     }
     if (exitT > 0) {
-      const turnMix = smoothstep((exitT - 0.14) / 0.26)
+      const turnMix = smoothstep((exitT - 0.34) / 0.22)
       const liftPos = new THREE.Vector3(-0.76, -0.58, 0.04)
       const awayPos = new THREE.Vector3(-0.84, -0.46, -0.26)
       targetL.lerp(liftPos.lerp(awayPos, turnMix), smoothstep(exitT / 0.2))
@@ -2908,34 +2908,52 @@ export class SkynyScene {
       const approach = 1 - Math.pow(1 - clamp01(enterT / 0.78), 2.1)
       const forwardLean = (1 - smoothstep((enterT - 0.46) / 0.22)) * smoothstep(enterT / 0.12)
       const flare = smoothstep((enterT - 0.48) / 0.24) * (1 - smoothstep((enterT - 0.76) / 0.24))
-      const landBounce = enterT > 0.74 ? Math.sin(((enterT - 0.74) / 0.26) * Math.PI) * 0.11 : 0
+      // Descend into approach, climb under braking, then ease down to rest.
+      const heightKeys = [
+        [0, 1.45],
+        [0.44, -0.18],
+        [0.72, 0.52],
+        [1, 0],
+      ]
+      let entryHeight = 0
+      for (let i = 1; i < heightKeys.length; i++) {
+        const [startTime, startHeight] = heightKeys[i - 1]
+        const [endTime, endHeight] = heightKeys[i]
+        if (enterT <= endTime) {
+          const blend = smoothstep((enterT - startTime) / (endTime - startTime))
+          entryHeight = startHeight + (endHeight - startHeight) * blend
+          break
+        }
+      }
+      const landBounce = Math.max(0, -entryHeight) * smoothstep((enterT - 0.74) / 0.1)
 
       root.position.z += (1 - approach) * -9.2
-      root.position.y += Math.pow(1 - approach, 1.45) * 1.45 - landBounce
-      // En Three.js rotation.x positivo inclina el visor hacia arriba/atrás y negativo hacia abajo/adelante
-      root.rotation.x += -forwardLean * 0.28 + flare * 0.32
+      root.position.y += entryHeight
+      // Absolute pose avoids accumulating tilt on every animation frame.
+      // Local +Z faces forward: positive X tips the face down into flight.
+      const flightPitch = 0.28 * forwardLean - 0.16 * flare
+      const settle = smoothstep((enterT - 0.76) / 0.24)
+      root.rotation.x = flightPitch + Math.max(-0.12, Math.min(0.12, targetBodyRotX)) * settle
       squashY *= 1 - landBounce * 1.35
       // Escalado progresivo desde lejano (0.14x) hasta tamaño real (1.0x)
       stageScale = 0.14 + 0.86 * smoothstep(enterT / 0.76)
     } else if (exitT > 0) {
-      if (exitT < 0.18) {
-        // Anticipación: se agacha tomando impulso antes de encender propulsores
-        const prep = smoothstep(exitT / 0.18)
-        root.position.y -= 0.18 * prep
-        squashY *= 1 - 0.18 * prep
-      } else {
-        // Se eleva mientras da una única media vuelta (180°) y se aleja de espaldas hacia el horizonte en Z
-        const flyT = clamp01((exitT - 0.18) / 0.82)
-        const awayCurve = Math.pow(flyT, 1.75)
-        const climbCurve = smoothstep(flyT / 0.45) * 0.65 + Math.pow(flyT, 1.8) * 1.15
-
-        root.position.y += climbCurve
-        root.position.z -= awayCurve * 9.2
-        // Como está girado 180° en Y (vía exitTurnYaw), rotation.x negativo inclina su cuerpo hacia el horizonte
-        root.rotation.x -= smoothstep((flyT - 0.15) / 0.35) * 0.32
-        squashY *= 1 + Math.sin(Math.min(1, flyT * 1.5) * Math.PI) * 0.12
-        stageScale = Math.max(0.12, 1 - awayCurve * 0.88)
-      }
+      // Compress, lift, turn in place, then accelerate along an ascending arc.
+      const prep = smoothstep(exitT / 0.16)
+      const lift = smoothstep((exitT - 0.16) / 0.18)
+      const turn = smoothstep((exitT - 0.28) / 0.28)
+      const launch = clamp01((exitT - 0.56) / 0.44)
+      const awayCurve = launch * launch
+      root.position.y += -0.14 * prep * (1 - lift) + 0.38 * lift + 1.35 * awayCurve
+      root.position.z -= 9.2 * awayCurve
+      // Absolute bounded poses prevent frame-dependent rotation accumulation.
+      root.rotation.x =
+        Math.max(-0.12, Math.min(0.12, targetBodyRotX)) * (1 - lift) -
+        (Math.PI / 6) * smoothstep(launch / 0.55)
+      root.rotation.y =
+        exitTurnYaw + Math.max(-0.18, Math.min(0.18, targetBodyRotY - exitTurnYaw)) * (1 - turn)
+      squashY *= 1 - 0.1 * prep * (1 - lift) + 0.06 * Math.sin(Math.PI * launch)
+      stageScale = 1 - 0.88 * awayCurve
     }
 
     root.scale.set(

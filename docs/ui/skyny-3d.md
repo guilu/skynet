@@ -46,9 +46,9 @@ npm run studio:export   # → dist-studio/skyny-studio.html
 
 Mete three, el código, los estilos y las fuentes en un único fichero que se abre con doble clic (sin servidor), para enseñarlo o adjuntarlo. Es una salida generada: no se edita ni se sube al repo.
 
-## Qué hace Skyny 3D (estudio v4.4)
+## Qué hace Skyny 3D (estudio v5)
 
-El motor es el del estudio v4.4 (`plans/skyny-3d/skyny-v4.4.html` en la carpeta del proyecto), pasado a módulos:
+El motor es el del estudio v5 (`plans/skyny-3d/skyny-v5.html` en la carpeta del proyecto), pasado a módulos:
 
 - **45 estados**: los 12 del companion de la web (Reposo, Pensando, Ejecutando…) y 33 más de flujos agénticos (Servicio degradado, Bloqueado por seguridad, Cooldown, Evaluando, Delegando, Relevo, Modo eco, Conflicto de Git, Pull Request…). Cada uno con sus ojos, su accesorio, su gesto de entrada y su letrero (`STATES_META`, `STATE_CONFIG`, `LED_MESSAGES`).
 - **Al cambiar de estado**, los colores y la postura se funden, el accesorio anterior se desvanece y llega el gesto de entrada del nuevo.
