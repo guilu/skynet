@@ -3,8 +3,8 @@ import { Check, Columns3, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/cn'
 import { useMediaQuery } from '../../useMediaQuery'
-import { Companion } from '../companion/Companion'
-import type { CompanionState } from '../companion/state'
+import { Icon as AppIcon } from '../icons/Icon'
+import { COMPANION_ICON, type CompanionState } from '../companion/state'
 
 export interface Column<T> {
   id: string
@@ -202,8 +202,8 @@ export function ColumnsMenu<T>({
 }
 
 /**
- * Estado vacío: icono grande (o la mascota con `companion`), una frase y, si se puede hacer
- * algo, la acción.
+ * Estado vacío: icono grande (o, con `companion`, el icono de ese estado de Skyny), una frase y,
+ * si se puede hacer algo, la acción. Skyny ya no sale aquí: va flotando por encima de la web.
  */
 export function EmptyState({
   icon: Icon,
@@ -218,12 +218,14 @@ export function EmptyState({
 }) {
   return (
     <div className="empty-state">
-      {companion ? (
-        <Companion state={companion} size={96} className="empty-companion" />
+      {Icon ? (
+        <span className="empty-icon" aria-hidden="true">
+          <Icon size={28} strokeWidth={2.25} />
+        </span>
       ) : (
-        Icon && (
+        companion && (
           <span className="empty-icon" aria-hidden="true">
-            <Icon size={28} strokeWidth={2.25} />
+            <AppIcon name={COMPANION_ICON[companion]} size={28} strokeWidth={2.25} />
           </span>
         )
       )}

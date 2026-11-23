@@ -46,11 +46,9 @@ import { Sheet } from '../components/ui/Sheet'
 import { TabList, TabPanel } from '../components/ui/Tabs'
 import { formatDateTime } from '../format'
 import { CardsSkeleton, TableSkeleton } from '../components/ui/Skeleton'
-import { Companion } from '../components/companion/Companion'
-import { CompanionPeek } from '../components/companion/CompanionPeek'
+import { Icon } from '../components/icons/Icon'
+import { COMPANION_ICON } from '../components/companion/state'
 import type { ImportedState } from '../components/project/importWizard'
-import { useCompanion } from '../components/companion/context'
-import { groupExpression } from '../components/companion/peek'
 
 type ProjectTab =
   'summary' | 'work' | 'runs' | 'changes' | 'deployments' | 'workflows' | 'memory' | 'config'
@@ -176,7 +174,6 @@ export function ProjectPage() {
           <h1>{project.data ? `${project.data.key} · ${project.data.name}` : 'Proyecto'}</h1>
           {project.data?.description && <p className="muted">{project.data.description}</p>}
         </div>
-        <ProjectPeek projectId={projectId} />
         <div className="page-actions">
           {editable && (
             <>
@@ -616,30 +613,11 @@ function SummaryTab({
   )
 }
 
-/** La mascota asoma en la cabecera con el estado agregado de las ejecuciones del proyecto. */
-function ProjectPeek({ projectId }: { projectId: string }) {
-  const { activeRuns } = useCompanion()
-  const runs = activeRuns.filter((r) => r.projectId === projectId)
-  const n = runs.length
-  return (
-    <CompanionPeek
-      state={groupExpression(runs)}
-      text={
-        n === 0
-          ? 'Nada en marcha'
-          : `${n} ${n === 1 ? 'ejecución en marcha' : 'ejecuciones en marcha'}`
-      }
-      size={80}
-      className="page-peek"
-    />
-  )
-}
-
 /** Aviso al llegar desde el asistente «Importar proyecto» (IP-C). */
 function ImportedNotice({ state }: { state: ImportedState }) {
   return (
     <div className="import-done" role="status">
-      <Companion state="success" size={36} />
+      <Icon name={COMPANION_ICON.success} size={24} strokeWidth={2.25} />
       <p>
         Proyecto importado desde <code>{state.importedFrom}</code>.
         {state.learn === 'launched' && state.learnRunId && (

@@ -173,10 +173,5 @@ Las caras pequeñas van quietas (`still`) para que una lista no se mueva entera.
 ## Dónde aparece (CO-A)
 
 - **Login:** héroe Reposo de 128 px.
-- **Estados vacíos (`EmptyState` con `companion`):**
-  - Proyectos, Ejecuciones y Aprobaciones sin nada todavía: Inactivo.
-  - Runners sin registrar: Sin conexión.
-  - Uso sin datos: En pausa.
-  - 404: Pensando.
-  - Con filtros activos se mantiene el icono.
+- **Estados vacíos:** desde que Skyny 3D flota por encima de la web, ya no sale en ellos. `EmptyState` con `companion` enseña el icono de ese estado (`COMPANION_ICON`). La cabecera del proyecto tampoco lleva ya a Skyny asomado con su bocadillo.
 - **Ajustes › Companion:** galería con todas las expresiones; al elegir una, la grande cambia con su parpadeo.

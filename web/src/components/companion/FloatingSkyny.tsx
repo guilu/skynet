@@ -9,8 +9,8 @@ import { floatBox, floatPos } from './float'
 import type { MicroType } from './three/Skyny3D'
 
 /** Lo que mide Skyny flotando, y el margen con los bordes de la pantalla. */
-const SIZE = 120
-const SIZE_MOBILE = 84
+const SIZE = 240
+const SIZE_MOBILE = 168
 /** En el móvil, la barra de navegación de abajo: Skyny no se mete debajo. */
 const MOBILE_NAV = 84
 /** Lo que tarda en irse volando antes de desmontarlo (sin gastar GPU mientras no se ve). */

@@ -9211,11 +9211,6 @@
     }
   }
 
-  /* En los estados vacíos, la mascota sustituye al icono */
-  .empty-companion {
-    margin-bottom: 4px;
-  }
-
   /* Ajustes › Companion: vista previa en 3D, lo que lleva puesto y los 34 estados */
   .companion-stage {
     display: grid;

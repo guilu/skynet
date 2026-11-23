@@ -20,7 +20,7 @@ En Inicio (SV-C), el saludo «Hola, soy Skyny» (`CompanionHello`) es el **únic
 
 `FloatingSkyny` (`web/src/components/companion/FloatingSkyny.tsx`, montado en `AppShell`) es un Skyny 3D en su propia capa (`.floating-skyny`, `position: fixed`, `z-index: 35`), por encima de las páginas y por debajo de los diálogos. Solo su caja recibe clics: el resto de la página se sigue pinchando.
 
-- Mide 120 px (84 px en el móvil, por encima de la barra de navegación de abajo) y sale abajo a la derecha. Cuenta con la cara el estado global del companion (con `settle.ts`, como `SkynyLive`).
+- Mide 240 px (168 px en el móvil, por encima de la barra de navegación de abajo) y sale abajo a la derecha. Cuenta con la cara el estado global del companion (con `settle.ts`, como `SkynyLive`).
 - **Se arrastra** a cualquier sitio, sin salirse de los bordes de la pantalla (`float.ts`: margen de 12 px). Al empezar a arrastrar se sobresalta (`startle`) y al soltarlo asiente (`nod`). La posición se guarda en fracciones de la pantalla (`floatAt` en las preferencias del companion), así que se mantiene al cambiar el tamaño de la ventana.
 - Un toque corto es un **¡boop!**.
 - Al abrir la **cortina del chat** se va volando (`stage` en `exit`) y se desmonta pasados 2,4 s, para no gastar un segundo contexto WebGL; al cerrarla vuelve a entrar volando.
