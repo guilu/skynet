@@ -19,7 +19,7 @@ export const LEAVE_MS = 1300
  *
  * En 3D saluda con «HOLA» y luego pasan letreros por su pantalla (`loginTicker`: el saludo de la
  * hora y los de la casa). Al escribir la contraseña se tapa los ojos y dice «NO MIRO, PROMETIDO»;
- * si la entrada falla, «UPS, OTRA VEZ». Se puede tocar (¡boop!) y girar arrastrando. Entra en
+ * si la entrada falla, «UPS, OTRA VEZ» y niega con la cabeza. Se puede tocar (¡boop!) y girar arrastrando. Entra en
  * escena volando al cargar la página y, con `leaving`, sale volando (`LEAVE_MS`).
  */
 export function LoginSkyny({
@@ -78,6 +78,7 @@ export function LoginSkyny({
         ticker={ticker}
         say={said}
         interactive
+        micro={failures > 0 ? { type: 'shake', key: failures } : null}
         stage={
           leaving
             ? { mode: 'exit', key: 2, duration: LEAVE_MS }

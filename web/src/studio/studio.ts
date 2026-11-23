@@ -19,7 +19,12 @@ import {
 } from '../components/companion/three/extras'
 import { SkynyScene, type Pose3D } from '../components/companion/three/scene'
 import type { PulseType } from '../components/companion/pulse'
-import { STATE_CONFIG, STATES_META, type SkynyState } from '../components/companion/three/states'
+import {
+  STATE_CATEGORIES,
+  STATE_CONFIG,
+  STATES_META,
+  type SkynyState,
+} from '../components/companion/three/states'
 import { DEMOS, DemoRunner, type DemoKind } from '../components/companion/three/transitions'
 import { onThemeChange, readColors } from '../components/companion/three/tokens'
 import '../index.css'
@@ -101,6 +106,14 @@ document.body.innerHTML = `
           <button type="button" data-pulse="token_tick">Tokens</button>
           <button type="button" data-pulse="gate_passed">Verificación</button>
         </div>
+        <div class="st-group" aria-label="Microexpresiones">
+          <button type="button" data-micro="nod">Asentir</button>
+          <button type="button" data-micro="shake">Negar</button>
+          <button type="button" data-micro="curious">Curioso</button>
+          <button type="button" data-micro="startle">Sobresalto</button>
+          <button type="button" data-micro="sigh">Suspiro</button>
+          <button type="button" data-micro="glance">Vistazo</button>
+        </div>
       </div>
     </header>
     <main class="st-main">
@@ -168,12 +181,17 @@ fit()
 const colors = () => readColors().body
 function renderStates() {
   const body = colors()
-  list.innerHTML = STATES_META.map(({ state, label, when }) => {
+  // Por grupos (estudio v5): agéntica, ciclo de vida, DevOps, seguridad e interacción.
+  const item = ({ state, label, when }: (typeof STATES_META)[number]) => {
     const e = STATE_CONFIG[state]
     return `<li><button type="button" data-state="${state}" aria-pressed="${state === skyny.current}">
       <span class="st-swatch" style="background:${body[state]}"></span>
       <span><b>${label}</b><small>${when}</small><code>${state} · ${e.eyes}${e.accessory ? ` · ${e.accessory}` : ''}</code></span>
     </button></li>`
+  }
+  list.innerHTML = STATE_CATEGORIES.map((cat) => {
+    const items = STATES_META.filter((m) => m.category === cat.id)
+    return `<li class="st-cat"><h3>${cat.label} <span>${items.length}</span></h3></li>${items.map(item).join('')}`
   }).join('')
   const i = STATES_META.findIndex((s) => s.state === skyny.current)
   $('[data-out="count"]').textContent = `${i + 1} / ${STATES_META.length}`
@@ -223,8 +241,9 @@ function setPose(i: number) {
 document.addEventListener('click', (e) => {
   const button = (e.target as Element).closest('button')
   if (!button) return
-  const { state, view: v, pose: p, action, demo: kind, pulse } = button.dataset
+  const { state, view: v, pose: p, action, demo: kind, pulse, micro } = button.dataset
   if (pulse) skyny.pulseEvent(pulse as PulseType)
+  if (micro) skyny.microExpression(micro)
   if (state) {
     demo.stop()
     setState(state as SkynyState)

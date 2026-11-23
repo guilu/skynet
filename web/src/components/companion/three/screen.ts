@@ -182,9 +182,11 @@ export function renderEyesBase(ctx, eyeType, colors, offset, overrideColor, sacc
 
   const cx = 256 + offset[0],
     cy = 268 + offset[1]
+  let coreInset = 0
   const roundPill = (x, y, w, h, r) => {
+    const ins = coreInset > 0 ? Math.min(coreInset, w * 0.18, h * 0.18) : 0
     ctx.beginPath()
-    ctx.roundRect(x, y, w, h, r)
+    ctx.roundRect(x + ins, y + ins, w - ins * 2, h - ins * 2, Math.max(3, r - ins * 0.6))
     ctx.fill()
   }
 
@@ -194,10 +196,12 @@ export function renderEyesBase(ctx, eyeType, colors, offset, overrideColor, sacc
   const asymR = 1 - sacMag * sacDir * 0.12
 
   const drawNeon = (fn) => {
+    const gCol = overrideColor ?? colors.glow
+    const cCol = overrideColor ? '#ffffff' : colors.core
     ;[
-      [colors.glow, 40, colors.glow, 0.4],
-      [colors.glow, 18, colors.glow, 1],
-      ['#ffffff', 8, colors.core, 1],
+      [gCol, 40, gCol, 0.4],
+      [gCol, 18, gCol, 1],
+      ['#ffffff', 8, cCol, overrideColor ? 0.72 : 1],
     ].forEach(([sc, sb, fs, alpha], layer) => {
       ctx.save()
       ctx.globalAlpha = alpha
@@ -231,15 +235,6 @@ export function renderEyesBase(ctx, eyeType, colors, offset, overrideColor, sacc
       }
       ctx.stroke()
     }
-  } else if (eyeType === 'empty-search') {
-    const col = overrideColor ?? colors.glow
-    ctx.shadowColor = col
-    ctx.shadowBlur = 26
-    ctx.strokeStyle = col
-    ctx.fillStyle = col
-    ctx.lineCap = 'round'
-    roundPill(cx - 92, cy - 34, 44, 68, 22)
-    roundPill(cx + 48, cy - 66, 44, 132, 22)
   } else if (eyeType === 'pills') {
     drawNeon((layer) => {
       const inset = layer === 2 ? 8 : 0
@@ -261,239 +256,254 @@ export function renderEyesBase(ctx, eyeType, colors, offset, overrideColor, sacc
     })
   } else {
     const col = overrideColor ?? colors.glow
-    ctx.shadowColor = col
-    ctx.shadowBlur = 28
-    ctx.strokeStyle = col
-    ctx.fillStyle = col
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
-    switch (eyeType) {
-      case 'error-pills':
-        roundPill(cx - 92, cy - 64, 44, 128, 22)
-        roundPill(cx + 48, cy - 64, 44, 128, 22)
-        break
-      case 'wink':
-        ctx.lineWidth = 34
-        ctx.beginPath()
-        ctx.arc(cx - 78, cy + 20, 50, Math.PI * 1.15, Math.PI * 1.85)
-        ctx.stroke()
-        roundPill(cx + 48, cy - 64, 44, 128, 22)
-        break
-      case 'sleep':
-        ctx.lineWidth = 30
-        for (const s of [-1, 1]) {
+    const coreCol = overrideColor ? '#ffffff' : colors.core
+    const passes = eyeType === 'pause-bars' ? [0] : [0, 1]
+    for (const pass of passes) {
+      const isCore = pass === 1
+      coreInset = isCore ? 7 : 0
+      const lw = (w) => {
+        ctx.lineWidth = isCore ? Math.max(3, w * 0.42) : w
+      }
+      ctx.save()
+      ctx.globalAlpha = isCore ? (overrideColor ? 0.72 : 1) : 1
+      ctx.shadowColor = isCore ? '#ffffff' : col
+      ctx.shadowBlur = isCore ? 6 : 28
+      ctx.strokeStyle = isCore ? coreCol : col
+      ctx.fillStyle = isCore ? coreCol : col
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      switch (eyeType) {
+        case 'empty-search':
+          ctx.shadowBlur = isCore ? 6 : 26
+          roundPill(cx - 92, cy - 34, 44, 68, 22)
+          roundPill(cx + 48, cy - 66, 44, 132, 22)
+          break
+        case 'error-pills':
+          roundPill(cx - 92, cy - 64, 44, 128, 22)
+          roundPill(cx + 48, cy - 64, 44, 128, 22)
+          break
+        case 'wink':
+          lw(34)
           ctx.beginPath()
-          ctx.arc(cx + s * 75, cy - 10, 48, Math.PI * 0.15, Math.PI * 0.85)
+          ctx.arc(cx - 78, cy + 20, 50, Math.PI * 1.15, Math.PI * 1.85)
           ctx.stroke()
-        }
-        break
-      case 'stress':
-        ctx.lineWidth = 34
-        for (const s of [-1, 1]) {
-          ctx.beginPath()
-          ctx.moveTo(cx + s * 105, cy - 35)
-          ctx.lineTo(cx + s * 50, cy)
-          ctx.lineTo(cx + s * 105, cy + 35)
-          ctx.stroke()
-        }
-        break
-      case 'pause-bars':
-        ctx.shadowBlur = 0
-        roundPill(cx - 117, cy - 19, 86, 38, 19)
-        roundPill(cx + 31, cy - 19, 86, 38, 19)
-        break
-      case 'bars':
-        ctx.lineWidth = 30
-        ctx.beginPath()
-        ctx.moveTo(cx - 95, cy)
-        ctx.lineTo(cx - 40, cy)
-        ctx.moveTo(cx + 40, cy)
-        ctx.lineTo(cx + 95, cy)
-        ctx.stroke()
-        break
-      case 'circles':
-        ctx.lineWidth = 24
-        for (const s of [-1, 1]) {
-          ctx.beginPath()
-          ctx.arc(cx + s * 70, cy, 38, 0, Math.PI * 2)
-          ctx.stroke()
-        }
-        break
-      case 'nodes':
-        ctx.lineWidth = 10
-        for (const s of [-1, 1]) {
-          const bx = cx + s * 74
-          const pts = [
-            [bx - 24, cy - 26],
-            [bx + 24, cy - 12],
-            [bx - 16, cy + 28],
-            [bx + 22, cy + 26],
-          ]
-          ctx.beginPath()
-          ctx.moveTo(...pts[0])
-          ctx.lineTo(...pts[1])
-          ctx.moveTo(...pts[0])
-          ctx.lineTo(...pts[2])
-          ctx.moveTo(...pts[1])
-          ctx.lineTo(...pts[3])
-          ctx.moveTo(...pts[2])
-          ctx.lineTo(...pts[3])
-          ctx.stroke()
-          for (const [px, py] of pts) {
+          roundPill(cx + 48, cy - 64, 44, 128, 22)
+          break
+        case 'sleep':
+          lw(30)
+          for (const s of [-1, 1]) {
             ctx.beginPath()
-            ctx.arc(px, py, 12, 0, Math.PI * 2)
+            ctx.arc(cx + s * 75, cy - 10, 48, Math.PI * 0.15, Math.PI * 0.85)
+            ctx.stroke()
+          }
+          break
+        case 'stress':
+          lw(34)
+          for (const s of [-1, 1]) {
+            ctx.beginPath()
+            ctx.moveTo(cx + s * 105, cy - 35)
+            ctx.lineTo(cx + s * 50, cy)
+            ctx.lineTo(cx + s * 105, cy + 35)
+            ctx.stroke()
+          }
+          break
+        case 'pause-bars':
+          ctx.shadowBlur = 0
+          roundPill(cx - 117, cy - 19, 86, 38, 19)
+          roundPill(cx + 31, cy - 19, 86, 38, 19)
+          break
+        case 'bars':
+          lw(30)
+          ctx.beginPath()
+          ctx.moveTo(cx - 95, cy)
+          ctx.lineTo(cx - 40, cy)
+          ctx.moveTo(cx + 40, cy)
+          ctx.lineTo(cx + 95, cy)
+          ctx.stroke()
+          break
+        case 'circles':
+          lw(24)
+          for (const s of [-1, 1]) {
+            ctx.beginPath()
+            ctx.arc(cx + s * 70, cy, 38, 0, Math.PI * 2)
+            ctx.stroke()
+          }
+          break
+        case 'nodes':
+          lw(10)
+          for (const s of [-1, 1]) {
+            const bx = cx + s * 74
+            const pts = [
+              [bx - 24, cy - 26],
+              [bx + 24, cy - 12],
+              [bx - 16, cy + 28],
+              [bx + 22, cy + 26],
+            ]
+            ctx.beginPath()
+            ctx.moveTo(...pts[0])
+            ctx.lineTo(...pts[1])
+            ctx.moveTo(...pts[0])
+            ctx.lineTo(...pts[2])
+            ctx.moveTo(...pts[1])
+            ctx.lineTo(...pts[3])
+            ctx.moveTo(...pts[2])
+            ctx.lineTo(...pts[3])
+            ctx.stroke()
+            for (const [px, py] of pts) {
+              ctx.beginPath()
+              ctx.arc(px, py, isCore ? 7 : 12, 0, Math.PI * 2)
+              ctx.fill()
+            }
+          }
+          break
+        case 'check-eyes':
+          lw(28)
+          for (const s of [-1, 1]) {
+            const bx = cx + s * 74
+            ctx.beginPath()
+            ctx.moveTo(bx - 36, cy + 2)
+            ctx.lineTo(bx - 10, cy + 28)
+            ctx.lineTo(bx + 38, cy - 28)
+            ctx.stroke()
+          }
+          break
+        case 'code-eyes':
+          lw(30)
+          ctx.beginPath()
+          ctx.moveTo(cx - 105, cy - 38)
+          ctx.lineTo(cx - 52, cy)
+          ctx.lineTo(cx - 105, cy + 38)
+          ctx.stroke()
+          roundPill(cx + 42, cy - 52, 46, 104, 14)
+          break
+        case 'stars':
+          for (const s of [-1, 1]) {
+            const sx = cx + s * 74,
+              sy = cy
+            const rOut = isCore ? 38 : 52,
+              rIn = isCore ? 12 : 18
+            ctx.beginPath()
+            for (let i = 0; i < 8; i++) {
+              const r = i % 2 === 0 ? rOut : rIn
+              const a = (i * Math.PI) / 4 - Math.PI / 2
+              if (i === 0) ctx.moveTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r)
+              else ctx.lineTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r)
+            }
+            ctx.closePath()
             ctx.fill()
           }
-        }
-        break
-      case 'check-eyes':
-        ctx.lineWidth = 28
-        for (const s of [-1, 1]) {
-          const bx = cx + s * 74
+          break
+        case 'reticle':
+          lw(20)
           ctx.beginPath()
-          ctx.moveTo(bx - 36, cy + 2)
-          ctx.lineTo(bx - 10, cy + 28)
-          ctx.lineTo(bx + 38, cy - 28)
+          ctx.arc(cx - 72, cy, 46, 0, Math.PI * 2)
           ctx.stroke()
-        }
-        break
-      case 'code-eyes':
-        ctx.lineWidth = 30
-        ctx.beginPath()
-        ctx.moveTo(cx - 105, cy - 38)
-        ctx.lineTo(cx - 52, cy)
-        ctx.lineTo(cx - 105, cy + 38)
-        ctx.stroke()
-        roundPill(cx + 42, cy - 52, 46, 104, 14)
-        break
-      case 'stars':
-        for (const s of [-1, 1]) {
-          const sx = cx + s * 74,
-            sy = cy
-          const rOut = 52,
-            rIn = 18
           ctx.beginPath()
-          for (let i = 0; i < 8; i++) {
-            const r = i % 2 === 0 ? rOut : rIn
-            const a = (i * Math.PI) / 4 - Math.PI / 2
-            if (i === 0) ctx.moveTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r)
-            else ctx.lineTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r)
+          ctx.arc(cx - 72, cy, isCore ? 9 : 14, 0, Math.PI * 2)
+          ctx.fill()
+          roundPill(cx + 44, cy - 26, 56, 52, 20)
+          break
+        case 'merge-eyes':
+          lw(18)
+          ctx.beginPath()
+          ctx.moveTo(cx - 95, cy - 32)
+          ctx.quadraticCurveTo(cx - 32, cy - 32, cx, cy)
+          ctx.moveTo(cx + 95, cy + 32)
+          ctx.quadraticCurveTo(cx + 32, cy + 32, cx, cy)
+          ctx.stroke()
+          for (const [nx, ny, nr] of [
+            [cx - 95, cy - 32, 20],
+            [cx + 95, cy + 32, 20],
+            [cx, cy, 28],
+          ]) {
+            ctx.beginPath()
+            ctx.arc(nx, ny, isCore ? nr * 0.62 : nr, 0, Math.PI * 2)
+            ctx.fill()
           }
-          ctx.closePath()
-          ctx.fill()
-        }
-        break
-      case 'reticle':
-        ctx.lineWidth = 20
-        ctx.beginPath()
-        ctx.arc(cx - 72, cy, 46, 0, Math.PI * 2)
-        ctx.stroke()
-        ctx.beginPath()
-        ctx.arc(cx - 72, cy, 14, 0, Math.PI * 2)
-        ctx.fill()
-        roundPill(cx + 44, cy - 26, 56, 52, 20)
-        break
-      case 'merge-eyes':
-        ctx.lineWidth = 18
-        ctx.beginPath()
-        ctx.moveTo(cx - 95, cy - 32)
-        ctx.quadraticCurveTo(cx - 32, cy - 32, cx, cy)
-        ctx.moveTo(cx + 95, cy + 32)
-        ctx.quadraticCurveTo(cx + 32, cy + 32, cx, cy)
-        ctx.stroke()
-        for (const [nx, ny, nr] of [
-          [cx - 95, cy - 32, 20],
-          [cx + 95, cy + 32, 20],
-          [cx, cy, 28],
-        ]) {
+          break
+        case 'eco-eyes':
+          roundPill(cx - 92, cy - 34, 46, 68, 22)
+          roundPill(cx + 46, cy - 34, 46, 68, 22)
+          break
+        case 'effort-eyes':
+          roundPill(cx - 92, cy - 60, 44, 120, 22)
+          lw(26)
           ctx.beginPath()
-          ctx.arc(nx, ny, nr, 0, Math.PI * 2)
-          ctx.fill()
-        }
-        break
-      case 'eco-eyes':
-        // Píldoras bajas y relajadas de ahorro energético (55% de altura)
-        roundPill(cx - 92, cy - 34, 46, 68, 22)
-        roundPill(cx + 46, cy - 34, 46, 68, 22)
-        break
-      case 'effort-eyes':
-        // Ojo izquierdo firme y ojo derecho entrecerrado de esfuerzo ("cojeando pero tirando")
-        roundPill(cx - 92, cy - 60, 44, 120, 22)
-        ctx.lineWidth = 26
-        ctx.beginPath()
-        ctx.moveTo(cx + 44, cy - 22)
-        ctx.lineTo(cx + 98, cy + 2)
-        ctx.lineTo(cx + 44, cy + 26)
-        ctx.stroke()
-        break
-      case 'shield-eyes':
-        ctx.lineWidth = 16
-        for (const s of [-1, 1]) {
-          const sx = cx + s * 74
-          ctx.beginPath()
-          ctx.moveTo(sx - 34, cy - 34)
-          ctx.lineTo(sx + 34, cy - 34)
-          ctx.lineTo(sx + 34, cy + 6)
-          ctx.lineTo(sx, cy + 38)
-          ctx.lineTo(sx - 34, cy + 6)
-          ctx.closePath()
+          ctx.moveTo(cx + 44, cy - 22)
+          ctx.lineTo(cx + 98, cy + 2)
+          ctx.lineTo(cx + 44, cy + 26)
           ctx.stroke()
-          ctx.beginPath()
-          ctx.arc(sx, cy - 4, 12, 0, Math.PI * 2)
-          ctx.fill()
-        }
-        break
-      case 'conflict-eyes':
-        ctx.lineWidth = 24
-        for (const s of [-1, 1]) {
-          const bx = cx + s * 74
-          ctx.beginPath()
-          ctx.moveTo(bx - 38, cy - s * 18)
-          ctx.lineTo(bx + 38, cy + s * 18)
-          ctx.stroke()
-          roundPill(bx - 18, cy - 4, 36, 44, 16)
-        }
-        break
-      case 'compact-eyes': {
-        // Ojos concentrados que se estrechan verticalmente según la presión de las manos (saccade[0] = 0..1)
-        const squeeze = clamp01(saccade[0])
-        const hPill = Math.round(124 - squeeze * 72)
-        const wPill = Math.round(44 + squeeze * 12)
-        roundPill(cx - 70 - wPill / 2, cy - hPill / 2, wPill, hPill, Math.min(22, hPill / 2))
-        roundPill(cx + 70 - wPill / 2, cy - hPill / 2, wPill, hPill, Math.min(22, hPill / 2))
-        break
-      }
-      case 'stream-eyes': {
-        // Pupilas con latido rítmico alterno al ritmo de la emisión de tokens en vivo
-        const beat = saccade[0]
-        const pulseL = 1 + Math.sin(beat) * 0.18
-        const pulseR = 1 + Math.cos(beat) * 0.18
-        const hL = Math.round(122 * pulseL)
-        const hR = Math.round(122 * pulseR)
-        roundPill(cx - 92, cy - hL / 2, 44, hL, 22)
-        roundPill(cx + 48, cy - hR / 2, 44, hR, 22)
-        break
-      }
-      case 'dizzy':
-        ctx.lineWidth = 10
-        const spinAngle = performance.now() * 0.008
-        for (const s of [-1, 1]) {
-          const dx = cx + s * 74
-          ctx.beginPath()
-          const steps = 64
-          for (let i = 0; i <= steps; i++) {
-            const t = i / steps
-            const r = t * 44
-            const a = t * Math.PI * 5 + spinAngle * s
-            const px = dx + Math.cos(a) * r
-            const py = cy + Math.sin(a) * r
-            if (i === 0) ctx.moveTo(px, py)
-            else ctx.lineTo(px, py)
+          break
+        case 'shield-eyes':
+          lw(16)
+          for (const s of [-1, 1]) {
+            const sx = cx + s * 74
+            ctx.beginPath()
+            ctx.moveTo(sx - 34, cy - 34)
+            ctx.lineTo(sx + 34, cy - 34)
+            ctx.lineTo(sx + 34, cy + 6)
+            ctx.lineTo(sx, cy + 38)
+            ctx.lineTo(sx - 34, cy + 6)
+            ctx.closePath()
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(sx, cy - 4, isCore ? 7 : 12, 0, Math.PI * 2)
+            ctx.fill()
           }
-          ctx.stroke()
+          break
+        case 'conflict-eyes':
+          lw(24)
+          for (const s of [-1, 1]) {
+            const bx = cx + s * 74
+            ctx.beginPath()
+            ctx.moveTo(bx - 38, cy - s * 18)
+            ctx.lineTo(bx + 38, cy + s * 18)
+            ctx.stroke()
+            roundPill(bx - 18, cy - 4, 36, 44, 16)
+          }
+          break
+        case 'compact-eyes': {
+          const squeeze = clamp01(saccade[0])
+          const hPill = Math.round(124 - squeeze * 72)
+          const wPill = Math.round(44 + squeeze * 12)
+          roundPill(cx - 70 - wPill / 2, cy - hPill / 2, wPill, hPill, Math.min(22, hPill / 2))
+          roundPill(cx + 70 - wPill / 2, cy - hPill / 2, wPill, hPill, Math.min(22, hPill / 2))
+          break
         }
-        break
+        case 'stream-eyes': {
+          const beat = saccade[0]
+          const pulseL = 1 + Math.sin(beat) * 0.18
+          const pulseR = 1 + Math.cos(beat) * 0.18
+          const hL = Math.round(122 * pulseL)
+          const hR = Math.round(122 * pulseR)
+          roundPill(cx - 92, cy - hL / 2, 44, hL, 22)
+          roundPill(cx + 48, cy - hR / 2, 44, hR, 22)
+          break
+        }
+        case 'dizzy': {
+          lw(10)
+          const spinAngle = performance.now() * 0.008
+          for (const s of [-1, 1]) {
+            const dx = cx + s * 74
+            ctx.beginPath()
+            const steps = 64
+            for (let i = 0; i <= steps; i++) {
+              const t = i / steps
+              const r = t * 44
+              const a = t * Math.PI * 5 + spinAngle * s
+              const px = dx + Math.cos(a) * r
+              const py = cy + Math.sin(a) * r
+              if (i === 0) ctx.moveTo(px, py)
+              else ctx.lineTo(px, py)
+            }
+            ctx.stroke()
+          }
+          break
+        }
+      }
+      ctx.restore()
     }
+    coreInset = 0
   }
   ctx.restore()
 }

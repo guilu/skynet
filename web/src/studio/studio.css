@@ -370,3 +370,17 @@ body {
     margin-top: 0;
   }
 }
+
+/* Grupos de estados (estudio v5). */
+.st-cat h3 {
+  display: flex;
+  justify-content: space-between;
+  margin: 14px 4px 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.st-cat:first-child h3 {
+  margin-top: 4px;
+}

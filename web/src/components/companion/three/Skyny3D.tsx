@@ -21,6 +21,9 @@ export interface LiveInfo {
 /** Cuánto más grande que Skyny es el lienzo por defecto: sitio para globos y complementos. */
 export const ROOM = 1.5
 
+/** Las microexpresiones del estudio v5. */
+export type MicroType = 'nod' | 'shake' | 'curious' | 'startle' | 'sigh' | 'glance'
+
 /** Entrar o salir de escena volando; se repite cada vez que cambia `key`. */
 export interface StageMove {
   mode: 'enter' | 'exit'
@@ -54,6 +57,7 @@ export default function Skyny3D({
   interactive = false,
   stage,
   pulse,
+  micro,
   onFail,
 }: {
   state?: SkynyState
@@ -77,6 +81,8 @@ export default function Skyny3D({
   stage?: StageMove | null
   /** Reacción a un evento en vivo sin cambiar de estado; sale cada vez que cambia `key`. */
   pulse?: { type: PulseType; key: number } | null
+  /** Microexpresión de un momento (asentir, negar, curioso…); sale cada vez que cambia `key`. */
+  micro?: { type: MicroType; key: number } | null
   onFail: () => void
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -85,10 +91,10 @@ export default function Skyny3D({
   const paused = useContext(SkynyPaused)
   const saved = useOutfit()
   const { hat, face, back } = outfit ?? saved
-  const latest = useRef({ state, live, paused, hat, face, back, ticker, say, stage, pulse })
+  const latest = useRef({ state, live, paused, hat, face, back, ticker, say, stage, pulse, micro })
   useEffect(() => {
     fail.current = onFail
-    latest.current = { state, live, paused, hat, face, back, ticker, say, stage, pulse }
+    latest.current = { state, live, paused, hat, face, back, ticker, say, stage, pulse, micro }
   })
   const isLive = live !== undefined
   const px = Math.round(size * room)
@@ -197,6 +203,12 @@ export default function Skyny3D({
     const p = latest.current.pulse
     if (p && !prefersReducedMotion()) scene.current?.pulseEvent(p.type)
   }, [pulseKey])
+
+  const microKey = micro?.key
+  useEffect(() => {
+    const m = latest.current.micro
+    if (m && microKey && !prefersReducedMotion()) scene.current?.microExpression(m.type)
+  }, [microKey])
 
   useEffect(() => {
     if (paused) scene.current?.stop()

@@ -220,6 +220,7 @@ export class SkynyScene {
     this.pokeAt = null
     this.pokeCount = 0
     this.pulseAnim = null
+    this.microAnim = null
     this.stageTransition = null
     this.offstage = false
     this.dizzyUntil = 0
@@ -327,7 +328,7 @@ export class SkynyScene {
   }
 
   /** Entra en escena volando. `duration` en ms. */
-  enter({ duration = 2600 }: { duration?: number } = {}) {
+  enter({ duration = 2500 }: { duration?: number } = {}) {
     this.offstage = false
     this.stageTransition = { mode: 'enter', at: performance.now(), duration }
     this.drawnKey = ''
@@ -339,7 +340,7 @@ export class SkynyScene {
    */
   exit({
     autoReenter = false,
-    duration = 2400,
+    duration = 2350,
   }: { autoReenter?: boolean; duration?: number } = {}) {
     this.stageTransition = { mode: 'exit', at: performance.now(), duration, autoReenter }
     this.drawnKey = ''
@@ -386,6 +387,23 @@ export class SkynyScene {
       )
       ring.position.set(0, -0.04, 0.56)
       this.pulseGroup.add(ring)
+    }
+    this.drawnKey = ''
+  }
+
+  microExpression(type = 'nod') {
+    const durations = {
+      nod: 620,
+      shake: 680,
+      curious: 900,
+      startle: 580,
+      sigh: 950,
+      glance: 820,
+    }
+    this.microAnim = {
+      type,
+      at: performance.now(),
+      duration: durations[type] ?? 700,
     }
     this.drawnKey = ''
   }
@@ -767,18 +785,19 @@ export class SkynyScene {
       const p = clamp01(stDt / this.stageTransition.duration)
       if (this.stageTransition.mode === 'enter') {
         enterT = p
-        // Potencia de vuelo al acercarse + ráfaga fuerte de retropropulsión al frenar (0.52..0.84)
-        const cruiseJet = p < 0.55 ? 0.65 + 0.25 * Math.sin((p / 0.55) * Math.PI) : 0
-        const brakeJet = p >= 0.48 && p < 0.86 ? Math.sin(((p - 0.48) / 0.38) * Math.PI) * 1.15 : 0
+        // Potencia de crucero al acercarse + ráfaga fuerte de retropropulsión al frenar (0.46..0.78)
+        const cruiseJet = p < 0.52 ? 0.68 + 0.25 * Math.sin((p / 0.52) * Math.PI) : 0
+        const brakeJet = p >= 0.44 && p < 0.8 ? Math.sin(((p - 0.44) / 0.36) * Math.PI) * 1.25 : 0
         jetPower = Math.max(cruiseJet, brakeJet)
 
-        const ringPhase = clamp01((p - 0.64) / 0.36)
+        // Ondas de choque sincronizadas con el aterrizaje real (p = 0.75..1.0)
+        const ringPhase = clamp01((p - 0.75) / 0.25)
         this.shockRings.children.forEach((ring, idx) => {
           const stagger = clamp01((ringPhase - idx * 0.14) / 0.72)
           ring.visible = stagger > 0.01 && stagger < 0.99
-          ring.scale.setScalar(0.35 + stagger * 1.95)
+          ring.scale.setScalar(0.32 + stagger * 2.15)
           if (ring instanceof THREE.Mesh) {
-            ring.material.opacity = Math.sin(stagger * Math.PI) * 0.85
+            ring.material.opacity = Math.sin(stagger * Math.PI) * 0.9
           }
         })
 
@@ -790,15 +809,19 @@ export class SkynyScene {
         }
       } else {
         exitT = p
-        jetPower = 0.35 * smoothstep((p - 0.16) / 0.18) + 0.65 * smoothstep((p - 0.56) / 0.22)
+        // Ignición al elevarse (0.20..0.42) + pico explosivo al despegar (0.54..1.0)
+        const hoverJet =
+          0.42 * smoothstep((p - 0.2) / 0.16) * (1 - 0.25 * smoothstep((p - 0.44) / 0.1))
+        const blastJet = 0.82 * smoothstep((p - 0.54) / 0.16)
+        jetPower = hoverJet + blastJet
 
-        const ringPhase = clamp01((p - 0.56) / 0.44)
+        const ringPhase = clamp01((p - 0.54) / 0.42)
         this.shockRings.children.forEach((ring, idx) => {
           const stagger = clamp01((ringPhase - idx * 0.12) / 0.76)
           ring.visible = stagger > 0.01 && stagger < 0.99
-          ring.scale.setScalar(0.4 + stagger * 2.1)
+          ring.scale.setScalar(0.4 + stagger * 2.25)
           if (ring instanceof THREE.Mesh) {
-            ring.material.opacity = Math.sin(stagger * Math.PI) * 0.9
+            ring.material.opacity = Math.sin(stagger * Math.PI) * 0.92
           }
         })
 
@@ -824,20 +847,20 @@ export class SkynyScene {
     this.repulsorJets.forEach((jet, idx) => {
       jet.visible = jetPower > 0.02
       if (jet.visible) {
-        const flicker = 0.88 + Math.sin(elapsed * 42 + idx * 1.7) * 0.16
+        const flicker = 0.88 + Math.sin(elapsed * 46 + idx * 1.7) * 0.18
         jet.scale.set(
-          0.65 + jetPower * 0.45,
+          0.65 + jetPower * 0.48,
           Math.max(0.05, jetPower * flicker),
-          0.65 + jetPower * 0.45,
+          0.65 + jetPower * 0.48,
         )
         // Al venir volando inclinamos los chorros hacia atrás (-Z) y al frenar hacia adelante (+Z)
         if (enterT < 1) {
-          const flareMix = smoothstep((enterT - 0.48) / 0.26)
+          const flareMix = smoothstep((enterT - 0.44) / 0.24)
           jet.rotation.x =
-            -0.35 * (1 - flareMix) + 0.28 * flareMix * (1 - smoothstep((enterT - 0.78) / 0.22))
+            -0.38 * (1 - flareMix) + 0.34 * flareMix * (1 - smoothstep((enterT - 0.74) / 0.2))
         } else if (exitT > 0) {
-          const awayMix = smoothstep((exitT - 0.56) / 0.22)
-          jet.rotation.x = -0.38 * awayMix
+          const awayMix = smoothstep((exitT - 0.54) / 0.2)
+          jet.rotation.x = -0.44 * awayMix
         } else {
           jet.rotation.x = 0
         }
@@ -874,6 +897,54 @@ export class SkynyScene {
             child.material.opacity = (1 - pulseT) * 0.9
           }
         })
+      }
+    }
+
+    // Micro-expresiones combinables sin interrumpir estado
+    let microEnv = 0,
+      microT = 0,
+      microType = null
+    let microPitch = 0,
+      microYaw = 0,
+      microRoll = 0,
+      microBounce = 0,
+      microZ = 0,
+      microSquash = 0
+    if (this.microAnim !== null) {
+      const mDt = now - this.microAnim.at
+      if (mDt >= this.microAnim.duration) {
+        this.microAnim = null
+      } else {
+        microT = mDt / this.microAnim.duration
+        microEnv = Math.sin(microT * Math.PI)
+        microType = this.microAnim.type
+        if (microType === 'nod') {
+          microPitch = Math.sin(microT * Math.PI * 3.5) * (1 - microT) * 0.24
+          microBounce = Math.abs(Math.sin(microT * Math.PI * 2)) * (1 - microT) * 0.04
+        } else if (microType === 'shake') {
+          microYaw = Math.sin(microT * Math.PI * 5) * (1 - microT) * 0.28
+        } else if (microType === 'curious') {
+          microRoll = microEnv * 0.22
+          microZ = microEnv * 0.09
+          microYaw = microEnv * 0.1
+        } else if (microType === 'startle') {
+          microBounce = Math.sin(clamp01(microT / 0.45) * Math.PI) * 0.18
+          microSquash = Math.sin(microT * Math.PI * 2) * (1 - microT) * 0.12
+        } else if (microType === 'sigh') {
+          if (microT < 0.35) {
+            const inEnv = Math.sin((microT / 0.35) * Math.PI)
+            microBounce = inEnv * 0.05
+            microPitch = -inEnv * 0.04
+            microSquash = inEnv * 0.05
+          } else {
+            const exEnv = Math.sin(((microT - 0.35) / 0.65) * Math.PI)
+            microBounce = -exEnv * 0.09
+            microPitch = exEnv * 0.15
+            microSquash = -exEnv * 0.07
+          }
+        } else if (microType === 'glance') {
+          microYaw = Math.sin(microT * Math.PI * 2) * 0.28
+        }
       }
     }
 
@@ -2227,6 +2298,8 @@ export class SkynyScene {
           activeFade
         : 0
 
+    const delegatingCue =
+      state === 'delegating' && animate && this.idle ? delegationDispatch(stateElapsed) : null
     const extraPitch =
       degradedPitch +
       handoverPitch +
@@ -2258,20 +2331,24 @@ export class SkynyScene {
             : state === 'healing'
               ? 0.06 * activeFade
               : state === 'learning'
-                ? -0.08 * activeFade
-                : state === 'deploying'
-                  ? -0.22 * activeFade
-                  : state === 'overloaded'
-                    ? 0.18 * activeFade
-                    : state === 'paused'
-                      ? 0.09 * activeFade
-                      : state === 'cancelled'
-                        ? 0.15 * smoothstep(stateElapsed / 450)
-                        : state === 'waiting'
-                          ? -0.07 * activeFade
-                          : state === 'auditing'
-                            ? 0.08 * Math.sin(elapsed * 5.6) * activeFade
-                            : 0)
+                ? (-0.09 + Math.cos(elapsed * 2.1) * 0.045) * activeFade
+                : state === 'running'
+                  ? 0.11 * activeFade
+                  : state === 'delegating' && delegatingCue
+                    ? -0.07 * delegatingCue.cue * activeFade
+                    : state === 'deploying'
+                      ? -0.22 * activeFade
+                      : state === 'overloaded'
+                        ? 0.18 * activeFade
+                        : state === 'paused'
+                          ? 0.09 * activeFade
+                          : state === 'cancelled'
+                            ? 0.15 * smoothstep(stateElapsed / 450)
+                            : state === 'waiting'
+                              ? -0.09 * activeFade
+                              : state === 'auditing'
+                                ? 0.08 * Math.sin(elapsed * 5.6) * activeFade
+                                : 0)
 
     const pitch =
       runEnv * 0.19 -
@@ -2331,13 +2408,20 @@ export class SkynyScene {
     const offlineSearchYaw =
       state === 'offline' && animate ? Math.sin(elapsed * 1.7) * 0.26 * activeFade : 0
     const waitingYaw =
-      state === 'waiting' && animate ? Math.sin(elapsed * 3) * 0.08 * activeFade : 0
+      state === 'waiting' && animate ? Math.sin(elapsed * 3.4) * 0.12 * activeFade : 0
+    const learningYaw =
+      state === 'learning' && animate ? Math.sin(elapsed * 2.1) * 0.14 * activeFade : 0
+    const runningYaw =
+      state === 'running' && animate ? Math.sin(elapsed * 10) * 0.08 * activeFade : 0
+    const delegatingYaw = delegatingCue
+      ? (delegatingCue.satellite === 0 ? 0.22 : -0.22) * delegatingCue.cue * activeFade
+      : 0
     const planningYaw = state === 'planning' && activeDagNodePos ? activeDagNodePos.x * 0.25 : 0
     const testingYaw =
       state === 'testing' && animate ? (this.smoothTestIdx - 1) * 0.14 * activeFade : 0
     const healingYaw = state === 'healing' && animate ? 0.16 * activeFade : 0
     const pokeSpinYaw = pokeEnv > 0 && this.pokeCount === 0 ? smoothstep(pokeT) * Math.PI * 2 : 0
-    const exitTurnYaw = exitT > 0 ? smoothstep(clamp01((exitT - 0.28) / 0.28)) * Math.PI : 0
+    const exitTurnYaw = exitT > 0 ? smoothstep(clamp01((exitT - 0.24) / 0.28)) * Math.PI : 0
     const dizzyYaw = dizzyEnv * Math.sin(elapsed * 11) * 0.34
     const extraYaw =
       degradedYaw +
@@ -2361,6 +2445,9 @@ export class SkynyScene {
       cancelShake +
       offlineSearchYaw +
       waitingYaw +
+      learningYaw +
+      runningYaw +
+      delegatingYaw +
       planningYaw +
       testingYaw +
       healingYaw +
@@ -2375,9 +2462,17 @@ export class SkynyScene {
       stretchEnv * 0.14 +
       this.gaze[1] * 0.14 +
       ptrNormY * 0.12 +
-      (pulseType === 'tool_call' ? pulseEnv * 0.14 : 0)
-    const targetBodyRotY = reviewEnv * 0.14 + extraYaw + this.gaze[0] * 0.24 + ptrNormX * 0.18
+      (pulseType === 'tool_call' ? pulseEnv * 0.14 : 0) +
+      microPitch
+    const targetBodyRotY =
+      reviewEnv * 0.14 + extraYaw + this.gaze[0] * 0.24 + ptrNormX * 0.18 + microYaw
 
+    if (pokeSpinYaw === 0) {
+      const twoPi = Math.PI * 2
+      root.rotation.y =
+        targetBodyRotY +
+        (((((root.rotation.y - targetBodyRotY + Math.PI) % twoPi) + twoPi) % twoPi) - Math.PI)
+    }
     root.rotation.x += (targetBodyRotX - root.rotation.x) * (animate ? 0.16 : 1)
     root.rotation.y += (targetBodyRotY - root.rotation.y) * (animate ? 0.16 : 1)
 
@@ -2575,9 +2670,10 @@ export class SkynyScene {
         nutZ - 0.22,
       )
     } else if (state === 'learning' && animate) {
-      const zenFloat = Math.sin(elapsed * 2.5) * 0.035
-      targetL.set(-0.62, -0.28 + zenFloat, 0.56)
-      targetR.set(0.62, -0.28 + zenFloat, 0.56)
+      const zenFloat = Math.sin(elapsed * 2.5) * 0.045
+      const orbitFollow = Math.cos(elapsed * 2.1) * 0.06
+      targetL.set(-0.64, -0.2 + zenFloat + orbitFollow, 0.58)
+      targetR.set(0.64, -0.2 + zenFloat - orbitFollow, 0.58)
     } else if (state === 'merging' && animate) {
       const handX = 0.86 - mergeConv * 0.52
       const handZ = 0.42 + mergeConv * 0.26
@@ -2659,10 +2755,12 @@ export class SkynyScene {
       targetL.y -= 0.08 + 0.035 * sleepBreath
       targetR.y -= 0.08 + 0.035 * sleepBreath
     } else if (state === 'ready') {
-      targetL.x += 0.09
-      targetR.x -= 0.09
-      targetL.y += 0.04 * readySway
-      targetR.y -= 0.04 * readySway
+      targetL.x += 0.07
+      targetR.x -= 0.07
+      targetL.z += 0.08
+      targetR.z += 0.08
+      targetL.y += 0.05 * readySway
+      targetR.y -= 0.05 * readySway
     } else if (state === 'thinking') {
       const chin = animate ? smoothstep(stateElapsed / 620) : 1
       targetR.lerp(new THREE.Vector3(0.31, -0.56, 0.61), chin)
@@ -2755,26 +2853,35 @@ export class SkynyScene {
       targetR.set(1.08, -0.05 - bal, 0.22)
     }
     if (enterT < 1) {
-      // Fase 1 (vuelo): manos atrás propulsando hacia abajo y detrás; Fase 2 (frenado): manos adelante-abajo frenando
-      const flareMix = smoothstep((enterT - 0.48) / 0.26)
-      const settleMix = smoothstep((enterT - 0.76) / 0.24)
-      const flyL = new THREE.Vector3(-0.84, -0.46, -0.26)
-      const flyR = new THREE.Vector3(0.84, -0.46, -0.26)
-      const brakeL = new THREE.Vector3(-0.78, -0.56, 0.24)
-      const brakeR = new THREE.Vector3(0.78, -0.56, 0.24)
-      const curL = flyL.lerp(brakeL, flareMix)
-      const curR = flyR.lerp(brakeR, flareMix)
+      // Fase 1 (vuelo): manos atrás propulsando; Fase 2 (frenado): manos adelante-abajo; Fase 3 (aterrizaje): guardia heroica
+      const flareMix = smoothstep((enterT - 0.44) / 0.24)
+      const landMix = smoothstep((enterT - 0.72) / 0.12)
+      const settleMix = smoothstep((enterT - 0.84) / 0.16)
+      const flyL = new THREE.Vector3(-0.88, -0.44, -0.32)
+      const flyR = new THREE.Vector3(0.88, -0.44, -0.32)
+      const brakeL = new THREE.Vector3(-0.8, -0.58, 0.28)
+      const brakeR = new THREE.Vector3(0.8, -0.58, 0.28)
+      const landL = new THREE.Vector3(-0.96, -0.34, 0.18)
+      const landR = new THREE.Vector3(0.96, -0.34, 0.18)
+      const curL = flyL.lerp(brakeL, flareMix).lerp(landL, landMix)
+      const curR = flyR.lerp(brakeR, flareMix).lerp(landR, landMix)
       targetL.lerp(curL, 1 - settleMix)
       targetR.lerp(curR, 1 - settleMix)
     }
     if (exitT > 0) {
-      const turnMix = smoothstep((exitT - 0.34) / 0.22)
-      const liftPos = new THREE.Vector3(-0.76, -0.58, 0.04)
-      const awayPos = new THREE.Vector3(-0.84, -0.46, -0.26)
-      targetL.lerp(liftPos.lerp(awayPos, turnMix), smoothstep(exitT / 0.2))
-      const liftPosR = new THREE.Vector3(0.76, -0.58, 0.04)
-      const awayPosR = new THREE.Vector3(0.84, -0.46, -0.26)
-      targetR.lerp(liftPosR.lerp(awayPosR, turnMix), smoothstep(exitT / 0.2))
+      // Saludo rápido de despedida con la mano derecha antes de encogerse y despegar
+      const waveMix = smoothstep(exitT / 0.08) * (1 - smoothstep((exitT - 0.16) / 0.1))
+      const turnMix = smoothstep((exitT - 0.24) / 0.26)
+      const liftPos = new THREE.Vector3(-0.78, -0.56, 0.08)
+      const awayPos = new THREE.Vector3(-0.88, -0.44, -0.32)
+      targetL.lerp(liftPos.lerp(awayPos, turnMix), smoothstep((exitT - 0.1) / 0.16))
+      const liftPosR = new THREE.Vector3(0.78, -0.56, 0.08)
+      const awayPosR = new THREE.Vector3(0.88, -0.44, -0.32)
+      targetR.lerp(liftPosR.lerp(awayPosR, turnMix), smoothstep((exitT - 0.1) / 0.16))
+      if (waveMix > 0.01) {
+        const waveTarget = new THREE.Vector3(1.06 + Math.sin(exitT * 42) * 0.14, 0.34, 0.24)
+        targetR.lerp(waveTarget, waveMix)
+      }
     }
 
     // Flotación continua (Idle) y movimientos verticales
@@ -2786,16 +2893,28 @@ export class SkynyScene {
       state === 'rolling-back' && animate
         ? Math.abs(Math.sin(elapsed * 5.2)) * 0.045 * activeFade
         : 0
+    const readyBounce =
+      state === 'ready' && animate
+        ? Math.pow(Math.max(0, Math.sin(elapsed * 3.2)), 4) * 0.035 * loopFade
+        : 0
+    const waitingHop =
+      state === 'waiting' && animate
+        ? Math.pow(Math.max(0, Math.sin(elapsed * 2.4)), 6) * 0.075 * activeFade
+        : 0
     root.position.y =
       BASE_Y +
       wave * 0.04 +
       rollbackStepBob +
+      readyBounce +
+      waitingHop +
       (isRunning && animate ? Math.abs(Math.sin(elapsed * 10)) * 0.035 * loopFade : 0)
     root.rotation.z = animate ? Math.sin(elapsed * 1.6) * 0.02 * this.idleAmount : 0
 
     const rollbackTilt =
       state === 'rolling-back' && animate ? Math.sin(elapsed * 5.2) * 0.055 * activeFade : 0
     const listenTilt = state === 'listening' && animate ? -0.09 * activeFade : 0
+    const waitingTilt =
+      state === 'waiting' && animate ? Math.sin(elapsed * 2.6) * 0.07 * activeFade : 0
     const noResTilt =
       state === 'no-results' && animate && noResPhase > 0.5
         ? Math.sin(((noResPhase - 0.5) / 0.5) * Math.PI) * 0.08
@@ -2804,19 +2923,39 @@ export class SkynyScene {
       state === 'throttled' && animate ? Math.sin(elapsed * 1.5) * 0.035 * activeFade : 0
     root.rotation.z +=
       curiosity * 0.1745 +
-      readySway * 0.065 +
+      readySway * 0.085 +
       dizzyEnv * Math.sin(elapsed * 11) * 0.22 +
       listenTilt +
+      waitingTilt +
       noResTilt +
       rollbackTilt +
-      ecoTilt
+      ecoTilt +
+      microRoll
     root.position.x += readySway * 0.045 + dizzyEnv * Math.cos(elapsed * 11) * 0.09
     root.position.y +=
       sleepBreath * 0.065 +
       stretchEnv * 0.08 +
+      microBounce +
       pokeEnv * (this.pokeCount === 0 ? 0.44 : 0.22) +
       (pulseType === 'file_edited' || pulseType === 'gate_passed' ? pulseEnv * 0.09 : 0) +
       (state === 'escalating' && animate ? (0.14 + Math.sin(elapsed * 4.5) * 0.03) * activeFade : 0)
+    root.position.z += microZ
+
+    if (microEnv > 0) {
+      if (microType === 'curious') {
+        targetR.y += microEnv * 0.14
+        targetR.z += microEnv * 0.08
+      } else if (microType === 'startle') {
+        targetL.x -= microEnv * 0.22
+        targetR.x += microEnv * 0.22
+        targetL.y += microEnv * 0.18
+        targetR.y += microEnv * 0.18
+      } else if (microType === 'sigh' && microT >= 0.3) {
+        const exEnv = Math.sin(((microT - 0.3) / 0.7) * Math.PI)
+        targetL.y -= exEnv * 0.12
+        targetR.y -= exEnv * 0.12
+      }
+    }
 
     if (pulseEnv > 0 && pulseType === 'tool_call') {
       targetL.y += pulseEnv * 0.08
@@ -2901,18 +3040,27 @@ export class SkynyScene {
     if (stretchEnv > 0) {
       squashY *= 1 + 0.08 * stretchEnv
     }
+    if (microSquash !== 0) {
+      squashY *= 1 + microSquash
+    }
 
     let stageScale = 1
     if (enterT < 1) {
-      // Vuelo frontal desde el horizonte en Z (-9.2 -> 0) mirando de frente + frenado suave (flare)
-      const approach = 1 - Math.pow(1 - clamp01(enterT / 0.78), 2.1)
-      const forwardLean = (1 - smoothstep((enterT - 0.46) / 0.22)) * smoothstep(enterT / 0.12)
-      const flare = smoothstep((enterT - 0.48) / 0.24) * (1 - smoothstep((enterT - 0.76) / 0.24))
-      // Descend into approach, climb under braking, then ease down to rest.
+      // Vuelo frontal en arco suave desde el horizonte (Z: -10.5 -> 0) + frenado (flare) + aterrizaje heroico con rebote
+      const approach = 1 - Math.pow(1 - clamp01(enterT / 0.74), 2.3)
+      const forwardLean = (1 - smoothstep((enterT - 0.44) / 0.2)) * smoothstep(enterT / 0.12)
+      const flare = smoothstep((enterT - 0.44) / 0.22) * (1 - smoothstep((enterT - 0.72) / 0.2))
+      const arcFade = 1 - smoothstep((enterT - 0.42) / 0.34)
+      const swayX = Math.sin(enterT * Math.PI * 1.45) * 0.42 * arcFade
+      const bankRoll = Math.cos(enterT * Math.PI * 1.45) * -0.18 * arcFade
+
+      // Desciende en picado suave, remonta al frenar, cae al aterrizaje (-0.11) y rebota (+0.06 -> 0)
       const heightKeys = [
-        [0, 1.45],
-        [0.44, -0.18],
-        [0.72, 0.52],
+        [0, 1.75],
+        [0.44, 0.14],
+        [0.66, 0.46],
+        [0.8, -0.11],
+        [0.9, 0.06],
         [1, 0],
       ]
       let entryHeight = 0
@@ -2925,35 +3073,45 @@ export class SkynyScene {
           break
         }
       }
-      const landBounce = Math.max(0, -entryHeight) * smoothstep((enterT - 0.74) / 0.1)
+      // Squash real al tocar el suelo (0.76..0.88) y ligero estiramiento previo en el descenso
+      const touchdownSquash = Math.sin(clamp01((enterT - 0.75) / 0.13) * Math.PI)
+      const diveStretch =
+        smoothstep((enterT - 0.68) / 0.08) * (1 - smoothstep((enterT - 0.76) / 0.04))
 
-      root.position.z += (1 - approach) * -9.2
+      root.position.x += swayX
+      root.position.z += (1 - approach) * -10.5
       root.position.y += entryHeight
-      // Absolute pose avoids accumulating tilt on every animation frame.
-      // Local +Z faces forward: positive X tips the face down into flight.
-      const flightPitch = 0.28 * forwardLean - 0.16 * flare
-      const settle = smoothstep((enterT - 0.76) / 0.24)
+      const flightPitch = 0.34 * forwardLean - 0.22 * flare
+      const settle = smoothstep((enterT - 0.8) / 0.2)
       root.rotation.x = flightPitch + Math.max(-0.12, Math.min(0.12, targetBodyRotX)) * settle
-      squashY *= 1 - landBounce * 1.35
-      // Escalado progresivo desde lejano (0.14x) hasta tamaño real (1.0x)
-      stageScale = 0.14 + 0.86 * smoothstep(enterT / 0.76)
+      root.rotation.z += bankRoll
+      squashY *= 1 - touchdownSquash * 0.16 + diveStretch * 0.07
+      // Escalado progresivo desde lejano (0.12x) hasta tamaño real antes del aterrizaje
+      stageScale = 0.12 + 0.88 * smoothstep(enterT / 0.72)
+      this.shockRings.position.set(root.position.x * 0.2, -0.88, root.position.z * 0.2)
     } else if (exitT > 0) {
-      // Compress, lift, turn in place, then accelerate along an ascending arc.
-      const prep = smoothstep(exitT / 0.16)
-      const lift = smoothstep((exitT - 0.16) / 0.18)
-      const turn = smoothstep((exitT - 0.28) / 0.28)
-      const launch = clamp01((exitT - 0.56) / 0.44)
-      const awayCurve = launch * launch
-      root.position.y += -0.14 * prep * (1 - lift) + 0.38 * lift + 1.35 * awayCurve
-      root.position.z -= 9.2 * awayCurve
-      // Absolute bounded poses prevent frame-dependent rotation accumulation.
+      // Despedida rápida, compresión de impulso, giro con ladeo aerodinámico, pausa tensa y despegue explosivo
+      const waveTilt = Math.sin(clamp01(exitT / 0.2) * Math.PI) * 0.09
+      const prep = smoothstep((exitT - 0.1) / 0.14)
+      const lift = smoothstep((exitT - 0.2) / 0.18)
+      const turn = smoothstep((exitT - 0.24) / 0.28)
+      const coil = Math.sin(clamp01((exitT - 0.46) / 0.12) * Math.PI)
+      const launch = clamp01((exitT - 0.54) / 0.46)
+      const awayCurve = Math.pow(launch, 2.2)
+
+      root.position.y += -0.15 * prep * (1 - lift) + 0.42 * lift - 0.06 * coil + 1.65 * awayCurve
+      root.position.z -= 10.5 * awayCurve
       root.rotation.x =
-        Math.max(-0.12, Math.min(0.12, targetBodyRotX)) * (1 - lift) -
-        (Math.PI / 6) * smoothstep(launch / 0.55)
+        Math.max(-0.12, Math.min(0.12, targetBodyRotX)) * (1 - lift) +
+        0.12 * coil * (1 - smoothstep(launch / 0.25)) -
+        (Math.PI / 5.5) * smoothstep(launch / 0.45)
       root.rotation.y =
         exitTurnYaw + Math.max(-0.18, Math.min(0.18, targetBodyRotY - exitTurnYaw)) * (1 - turn)
-      squashY *= 1 - 0.1 * prep * (1 - lift) + 0.06 * Math.sin(Math.PI * launch)
-      stageScale = 1 - 0.88 * awayCurve
+      root.rotation.z += waveTilt + Math.sin(turn * Math.PI) * 0.22
+      const blastStretch = Math.sin(clamp01(launch / 0.7) * Math.PI) * 0.14
+      squashY *= 1 - 0.12 * prep * (1 - lift) - 0.06 * coil + blastStretch
+      stageScale = Math.max(0.04, 1 - 0.92 * awayCurve)
+      this.shockRings.position.set(0, -0.88, 0)
     }
 
     root.scale.set(
@@ -3052,13 +3210,15 @@ export class SkynyScene {
       if (cfg.accessory === 'alert') accChildren[0].translateY(-0.055 * accChildren[0].scale.y)
     }
 
-    // Sombra Dinámica Reactiva a la Altura Y y Posición X
+    // Sombra Dinámica Reactiva a la Altura Y, Posición X/Z y Escala de transición
     const heightDelta = Math.max(0, root.position.y - BASE_Y)
-    const shadowScale = Math.max(0.42, (1 - wave * 0.04) * (1 - heightDelta * 0.44))
+    const shadowScale =
+      Math.max(0.42, (1 - wave * 0.04) * (1 - heightDelta * 0.44)) * (0.25 + 0.75 * stageScale)
+    const stageShadowFade = smoothstep(clamp01((stageScale - 0.14) / 0.35))
     floor.position.x = root.position.x
     floor.position.z = root.position.z
     floor.scale.set(shadowScale, shadowScale, 1)
-    floor.material.opacity = Math.max(0.22, 1 - heightDelta * 0.65)
+    floor.material.opacity = Math.max(0.22, 1 - heightDelta * 0.65) * stageShadowFade
 
     this.updateScreen(
       now,
@@ -3082,6 +3242,9 @@ export class SkynyScene {
       relayFlight,
       relayArc,
       jetPower,
+      microType,
+      microEnv,
+      microT,
     )
   }
 
@@ -3107,6 +3270,9 @@ export class SkynyScene {
     relayFlight = 0,
     relayArc = 0,
     jetPower = 0,
+    microType = null,
+    microEnv = 0,
+    microT = 0,
   ) {
     const showProg = this.state === 'running' && this.progress !== null
     if (!this.message && this.ticker && now >= this.tickerAt && animate) {
@@ -3245,6 +3411,9 @@ export class SkynyScene {
         mod >= 1800 && mod < 5000 ? Math.pow(Math.sin((Math.PI * (mod - 1800)) / 3200), 2) : 0
       autoOff = [Math.round(-18 * g) || 0, Math.round(10 * g * Math.sin(mod / 390)) || 0]
     }
+    if (microType === 'glance' && microEnv > 0) {
+      autoOff = [Math.round(Math.sin(microT * Math.PI * 2) * 24), 0]
+    }
 
     if (
       animate &&
@@ -3271,6 +3440,21 @@ export class SkynyScene {
       }
     }
 
+    const microEye =
+      microEnv > 0.2
+        ? microType === 'nod'
+          ? 'happy'
+          : microType === 'shake'
+            ? 'conflict-eyes'
+            : microType === 'curious'
+              ? 'wink'
+              : microType === 'startle'
+                ? 'stars'
+                : microType === 'sigh' && microT > 0.32 && microT < 0.85
+                  ? 'bars'
+                  : null
+        : null
+
     const eyeMode = isDizzy
       ? 'dizzy'
       : jetPower > 0.25
@@ -3279,15 +3463,17 @@ export class SkynyScene {
           ? this.pokeCount === 1
             ? 'happy'
             : 'stress'
-          : this.state === 'rate-limited' && cooldownReadyPop > 0.25
-            ? 'happy'
-            : this.state === 'rate-limited' && cooldownGlance > 0.35
-              ? 'wink'
-              : now < this.blinkUntil || autoBlink
-                ? 'bars'
-                : this.errorEyes
-                  ? 'error-pills'
-                  : cfg.eyes
+          : microEye
+            ? microEye
+            : this.state === 'rate-limited' && cooldownReadyPop > 0.25
+              ? 'happy'
+              : this.state === 'rate-limited' && cooldownGlance > 0.35
+                ? 'wink'
+                : now < this.blinkUntil || autoBlink
+                  ? 'bars'
+                  : this.errorEyes
+                    ? 'error-pills'
+                    : cfg.eyes
     const revElapsed = now - this.stateAt
     const revLoopT = Math.max(0, revElapsed - 1500) % 4200
     const revEyeActive =
