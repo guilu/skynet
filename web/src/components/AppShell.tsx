@@ -6,6 +6,7 @@ import { api, SESSION_KEY, type Session } from '../api'
 import { useTheme } from '../theme'
 import { CompanionMenu } from './companion/CompanionMenu'
 import { CompanionProvider } from './companion/CompanionProvider'
+import { FloatingSkyny } from './companion/FloatingSkyny'
 import { preloadSkyny3D } from './companion/load3d'
 import { NoticeBell } from './companion/NoticeBell'
 import { SkynyPaused } from './companion/pause'
@@ -188,6 +189,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </main>
           <MobileNav />
+          {/* Skyny 3D en su capa, por encima de la página; se va volando al abrir la cortina. */}
+          <FloatingSkyny away={chatOpen} />
           {paletteOpen && (
             <Suspense fallback={null}>
               <CommandPalette open onOpenChange={setPaletteOpen} onTheme={setTheme} />

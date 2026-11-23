@@ -9345,6 +9345,28 @@
     }
   }
 
+  /*
+   * Skyny flotando: su propia capa sobre la página (por encima de la barra, por debajo de menús,
+   * paneles y la cortina). Solo su caja recibe el puntero; el lienzo se sale sin capturar clics.
+   */
+  .floating-skyny {
+    position: fixed;
+    z-index: 35;
+    display: grid;
+    place-items: center;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .floating-skyny[data-dragging] {
+    cursor: grabbing;
+  }
+
+  .floating-skyny[data-away] {
+    pointer-events: none;
+  }
+
   /* ---- Companion global (CO-B): mascota de la barra, campana y avisos ---- */
 
   /* El estado global: un botón de icono más; solo necesita sitio para el punto verde. */

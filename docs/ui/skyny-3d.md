@@ -16,6 +16,16 @@ En la ejecución (`RunBand`), Skyny mide 120 px. `runLive.ts` decide qué cuenta
 
 En Inicio (SV-C), el saludo «Hola, soy Skyny» (`CompanionHello`) es el **único Skyny** de la página: el que asomaba junto al título con su bocadillo se ha quitado. Usa el estado global del companion (`useCompanion().expression`), mide 140 px (96 px en el móvil, centrado encima del texto) y, como está por debajo de 160 px, escribe los letreros cortos. Al pulsarlo dice una frase, como antes.
 
+## Skyny flotando por encima de la web
+
+`FloatingSkyny` (`web/src/components/companion/FloatingSkyny.tsx`, montado en `AppShell`) es un Skyny 3D en su propia capa (`.floating-skyny`, `position: fixed`, `z-index: 35`), por encima de las páginas y por debajo de los diálogos. Solo su caja recibe clics: el resto de la página se sigue pinchando.
+
+- Mide 120 px (84 px en el móvil, por encima de la barra de navegación de abajo) y sale abajo a la derecha. Cuenta con la cara el estado global del companion (con `settle.ts`, como `SkynyLive`).
+- **Se arrastra** a cualquier sitio, sin salirse de los bordes de la pantalla (`float.ts`: margen de 12 px). Al empezar a arrastrar se sobresalta (`startle`) y al soltarlo asiente (`nod`). La posición se guarda en fracciones de la pantalla (`floatAt` en las preferencias del companion), así que se mantiene al cambiar el tamaño de la ventana.
+- Un toque corto es un **¡boop!**.
+- Al abrir la **cortina del chat** se va volando (`stage` en `exit`) y se desmonta pasados 2,4 s, para no gastar un segundo contexto WebGL; al cerrarla vuelve a entrar volando.
+- Se quita en **Ajustes › Companion** («Skyny flotando por encima de la web»). Sin WebGL 2 o con movimiento reducido no sale.
+
 Desde TD-B, **el estudio donde se diseña está dentro del repo** y usa el mismo código que la app. No hay que portar nada: lo que se cambia en el estudio es lo que sale en la web. En SV-A se trajo todo lo del estudio v2 (`skyny-v2.0.html`, hecho con Codex fuera del repo) y ese HTML suelto se retira: a partir de aquí, Codex y Claude trabajan sobre estos ficheros (ver [`AGENTS.md`](../../AGENTS.md)).
 
 ## Abrir el estudio

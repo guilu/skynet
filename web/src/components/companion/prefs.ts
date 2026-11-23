@@ -16,6 +16,10 @@ export interface CompanionPrefs {
   face: string
   /** Complemento de espalda de Skyny 3D ('' = ninguno). */
   back: string
+  /** Skyny 3D flotando por encima de la web. */
+  floating: boolean
+  /** Dónde lo dejaste, en fracciones del sitio libre de la pantalla (1, 1: abajo a la derecha). */
+  floatAt: { x: number; y: number }
   /** Hasta cuándo (ms) no salen avisos flotantes ni del navegador; null si no está silenciado. */
   mutedUntil: number | null
 }
@@ -29,6 +33,8 @@ export const DEFAULT_PREFS: CompanionPrefs = {
   hat: '',
   face: '',
   back: '',
+  floating: true,
+  floatAt: { x: 1, y: 1 },
   mutedUntil: null,
 }
 /** «Silenciar 1 h». */

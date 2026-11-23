@@ -84,6 +84,14 @@ export function CompanionGallery() {
         <label>
           <input
             type="checkbox"
+            checked={prefs.floating}
+            onChange={(e) => setCompanionPrefs({ floating: e.target.checked })}
+          />
+          Skyny flotando por encima de la web (se arrastra para apartarlo)
+        </label>
+        <label>
+          <input
+            type="checkbox"
             checked={prefs.toasts}
             onChange={(e) => setCompanionPrefs({ toasts: e.target.checked })}
           />
