@@ -11,6 +11,8 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api, WORK_ITEM_TYPES, type ProjectOverview, type Repository, type WorkItem } from '../api'
 import { NewWorkItemForm } from '../components/work/NewWorkItemForm'
+import { phaseInfo } from '../components/work/phase'
+import { Pill } from '../components/ui/Pill'
 import { usePendingApprovals } from '../components/approval/usePendingApprovals'
 import {
   CostByWork,
@@ -81,7 +83,17 @@ const WORK_COLUMNS: Column<WorkItem>[] = [
     ),
   },
   { id: 'type', header: 'Tipo', cell: (w) => TYPE_LABEL[w.type] ?? w.type },
-  { id: 'status', header: 'Estado', cell: (w) => <StatusBadge status={w.status} /> },
+  {
+    id: 'status',
+    header: 'Estado',
+    // La fase del trabajo, la misma del tablero y del detalle (Entregado, En marcha…); archivado no
+    // tiene fase y queda su estado.
+    cell: (w) => {
+      if (!w.phase) return <StatusBadge status={w.status} />
+      const phase = phaseInfo(w.phase)
+      return <Pill tone={phase.tone}>{phase.label}</Pill>
+    },
+  },
   { id: 'created', header: 'Creado', cell: (w) => formatDateTime(w.createdAt) },
   {
     id: 'actions',
