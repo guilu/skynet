@@ -212,7 +212,7 @@ export function ChatCurtain({
   }
 
   // Grande en el escritorio; con conversación, más pequeño para dejar sitio a los mensajes.
-  const size = mobile ? (talking ? 150 : 180) : talking ? 280 : 512
+  const size = mobile ? (talking ? 150 : 180) : talking ? 240 : 360
   // Entra cuando la cortina ha bajado del todo y se va antes de que suba.
   const stage = skynyLeaving
     ? { mode: 'exit' as const, key: 2, duration: CURTAIN_SKYNY_EXIT_MS }

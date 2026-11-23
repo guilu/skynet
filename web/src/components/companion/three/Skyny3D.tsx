@@ -130,6 +130,12 @@ export default function Skyny3D({
   const isLive = live !== undefined
   const px = Math.round(size * room)
   const overflow = (px - size) / 2
+  // Al crear la escena, el tamaño de ese momento; si cambia después, solo se redimensiona (sin
+  // volver a crearla, que repetiría la entrada en escena).
+  const dims = useRef({ px, room })
+  useEffect(() => {
+    dims.current = { px, room }
+  })
 
   useEffect(() => {
     const el = canvas.current
@@ -145,7 +151,7 @@ export default function Skyny3D({
       return
     }
     scene.current = skyny
-    skyny.resize(px, px, room)
+    skyny.resize(dims.current.px, dims.current.px, dims.current.room)
     const first = latest.current
     skyny.setHat(first.hat)
     skyny.setFace(first.face)
@@ -200,7 +206,11 @@ export default function Skyny3D({
       skyny.dispose()
       scene.current = null
     }
-  }, [px, room, isLive, interactive])
+  }, [isLive, interactive])
+
+  useEffect(() => {
+    scene.current?.resize(px, px, room)
+  }, [px, room])
 
   useEffect(() => {
     const host = canvas.current?.parentElement

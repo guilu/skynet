@@ -17,8 +17,8 @@ export type HatKind =
   | 'satellite'
   | 'christmas'
   | 'summer'
-/** Cuánto más grande es el cristal del scouter que en el estudio v5, para que su texto se lea. */
-export const SCOUTER_LENS = 1.5
+/** Tamaño del cristal del scouter respecto al del estudio v5 (para que se lea, la cámara se acerca). */
+export const SCOUTER_LENS = 1
 
 export type FaceKind = '' | 'sunglasses' | 'cyber' | 'pipe'
 export type BackKind = '' | 'jetpack'
@@ -54,6 +54,8 @@ export interface SkynyExtras {
    * Vacío, enseña el nombre del estado.
    */
   setScouterText(text: string): void
+  /** Dónde está el texto del scouter (en el mundo), o null si no lo lleva puesto. */
+  scouterPoint(target: THREE.Vector3): THREE.Vector3 | null
   /** En cada fotograma: muelle del gorro, luz del casco y llamas del jetpack. */
   update(now: number): void
   dispose(): void
@@ -429,6 +431,7 @@ export function createExtras(skyny): SkynyExtras {
   skyny.model.visor.add(faceExtra)
   skyny.model.root.add(backExtra)
   const plasma = []
+  let scouterHud = null
   let scouterGlassMat = null,
     scouterEdgesMat = null
   let scouterHudCtx = null,
@@ -651,6 +654,7 @@ export function createExtras(skyny): SkynyExtras {
   }
   function clearExtra(group) {
     if (group === faceExtra) {
+      scouterHud = null
       scouterGlassMat = null
       scouterEdgesMat = null
       scouterHudCtx = null
@@ -982,7 +986,7 @@ export function createExtras(skyny): SkynyExtras {
       scouterLastKey = initTxt
       scouterHudTex = new THREE.CanvasTexture(hudCanvas)
       scouterHudTex.colorSpace = THREE.SRGBColorSpace
-      const hudPlane = new THREE.Mesh(
+      const hudPlane = (scouterHud = new THREE.Mesh(
         new THREE.PlaneGeometry(0.38, 0.265),
         new THREE.MeshBasicMaterial({
           map: scouterHudTex,
@@ -991,7 +995,7 @@ export function createExtras(skyny): SkynyExtras {
           depthWrite: false,
           side: THREE.DoubleSide,
         }),
-      )
+      ))
       hudPlane.position.set(0.188 - lensRightX, lensY - 0.033 - crystalMidY, 0.012)
       lensGroup.add(hudPlane)
       return
@@ -1186,6 +1190,10 @@ export function createExtras(skyny): SkynyExtras {
         faceKind = kind
         selectFace(kind)
       }
+    },
+    scouterPoint(target) {
+      if (!scouterHud) return null
+      return scouterHud.getWorldPosition(target)
     },
     setScouterText(text) {
       const msg = (text ?? '').trim()

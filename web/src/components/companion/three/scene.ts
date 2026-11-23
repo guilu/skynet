@@ -14,6 +14,9 @@ import {
 } from './accessories'
 import { drawLedScreen, drawEyesScreen, ledWidth } from './screen'
 
+/** Cuánto se acerca la cámara al cristal del scouter cuando tiene texto. */
+const SCOUTER_ZOOM = 2.6
+
 /** Letreros deslizantes: velocidad (px por segundo, en un visor de 512) y tamaño de letra. */
 const SCROLL_SPEED = 460
 const SCROLL_SCALE = 1.1
@@ -253,9 +256,51 @@ export class SkynyScene {
   setBack(kind: BackKind) {
     this.extras.setBack(kind)
   }
-  /** Lo que pone el scouter cuando lo lleva puesto; vacío, el nombre del estado. */
+  /**
+   * Lo que pone el scouter cuando lo lleva puesto; vacío, el nombre del estado. Con texto, la
+   * cámara se acerca al cristal para que se lea, y al borrarlo vuelve a alejarse.
+   */
   setScouterText(text: string) {
     this.extras.setScouterText(text)
+    this.scouterFocusTarget = text.trim() ? 1 : 0
+  }
+
+  /** Acercamiento al cristal del scouter: 0 lejos, 1 del todo. */
+  private scouterFocus = 0
+  private scouterFocusTarget = 0
+  private scouterFocusAt = 0
+  private readonly scouterWorld = new THREE.Vector3()
+
+  /** Acerca la cámara al texto del scouter con `setViewOffset`, sin moverla (no estorba al giro). */
+  private applyScouterFocus(now: number, animate: boolean) {
+    const dt = Math.min(0.1, Math.max(0, (now - (this.scouterFocusAt || now)) / 1000))
+    this.scouterFocusAt = now
+    const goal = this.scouterFocusTarget
+    this.scouterFocus = animate
+      ? this.scouterFocus + (goal - this.scouterFocus) * Math.min(1, dt * 5)
+      : goal
+    if (Math.abs(this.scouterFocus - goal) < 0.002) this.scouterFocus = goal
+    const f = this.scouterFocus
+    if (this.camera.view?.enabled) this.camera.clearViewOffset()
+    if (f <= 0) return
+    this.model.root.updateMatrixWorld(true)
+    const point = this.extras.scouterPoint(this.scouterWorld)
+    if (!point) return
+    const ndc = point.project(this.camera)
+    const full = 1000
+    const zoom = 1 + (SCOUTER_ZOOM - 1) * f
+    const size = full / zoom
+    const cx = full / 2 + ((ndc.x * 0.5 + 0.5) * full - full / 2) * f
+    const cy = full / 2 + ((0.5 - ndc.y * 0.5) * full - full / 2) * f
+    const clampTo = (v: number) => Math.min(full - size, Math.max(0, v))
+    this.camera.setViewOffset(
+      full,
+      full,
+      clampTo(cx - size / 2),
+      clampTo(cy - size / 2),
+      size,
+      size,
+    )
   }
 
   /**
@@ -677,6 +722,7 @@ export class SkynyScene {
       this.update(now, true)
       this.extras.update(now)
       onTick?.()
+      this.applyScouterFocus(now, true)
       this.renderFrame()
     }
     this.frame = requestAnimationFrame(loop)
@@ -687,6 +733,7 @@ export class SkynyScene {
     const now = performance.now()
     this.update(now, false)
     this.extras.update(now)
+    this.applyScouterFocus(now, false)
     this.renderFrame()
   }
 
