@@ -128,8 +128,9 @@ export async function openTab(page: Page, name: string) {
   await openDetail(page)
   const inspector = page.getByRole('region', { name: 'Inspector del agente' })
   await expect(inspector.getByRole('tab').first()).toBeVisible()
-  // En el inspector: la pestaña principal «Resumen» de la ejecución se llama igual.
-  const tab = inspector.getByRole('tab', { name, exact: true })
+  // «Resumen» se busca en el inspector: la pestaña principal de la ejecución se llama igual. El
+  // resto, en toda la página (Conversación, Cascada y Eventos están en el panel de actividad).
+  const tab = (name === 'Resumen' ? inspector : page).getByRole('tab', { name, exact: true })
   await expect(async () => {
     if (await tab.count()) {
       if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click({ timeout: 2_000 })
