@@ -21,6 +21,15 @@ export default defineConfig({
     baseURL: 'http://localhost:4100',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    // Skyny flotante va por encima del contenido y puede tapar lo que las pruebas pulsan (las
+    // pestañas del inspector, abajo a la derecha): las E2E empiezan sin él.
+    storageState: {
+      cookies: [],
+      origins: ['http://localhost:4100', 'http://localhost:4173'].map((origin) => ({
+        origin,
+        localStorage: [{ name: 'skynet.companion', value: JSON.stringify({ floating: false }) }],
+      })),
+    },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
