@@ -139,13 +139,6 @@ export function FloatingSkyny({ away = false }: { away?: boolean }) {
       data-dragging={dragBox ? true : undefined}
       data-away={away || undefined}
       style={{ left: box.left, top: box.top, width: size, height: size }}
-      onPointerDown={onDown}
-      onPointerMove={onMove}
-      onPointerUp={onUp}
-      onPointerCancel={() => {
-        drag.current = null
-        setDragBox(null)
-      }}
       aria-hidden="true"
     >
       <div
@@ -182,6 +175,17 @@ export function FloatingSkyny({ away = false }: { away?: boolean }) {
           />
         </Suspense>
       </div>
+      {/* Solo su cuerpo se toca y se arrastra: el resto del cuadrado deja pasar los clics. */}
+      <div
+        className="floating-skyny-hit"
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={() => {
+          drag.current = null
+          setDragBox(null)
+        }}
+      />
     </div>
   )
 }

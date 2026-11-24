@@ -9344,21 +9344,31 @@
    * Skyny flotando: su propia capa sobre la página (por encima de la barra, por debajo de menús,
    * paneles y la cortina). Solo su caja recibe el puntero; el lienzo se sale sin capturar clics.
    */
+  /* El cuadrado deja pasar los clics: solo el cuerpo de Skyny (.floating-skyny-hit) los recoge. */
   .floating-skyny {
     position: fixed;
     z-index: 35;
     display: grid;
     place-items: center;
-    cursor: grab;
-    touch-action: none;
+    pointer-events: none;
     user-select: none;
   }
 
-  .floating-skyny[data-dragging] {
+  .floating-skyny-hit {
+    position: absolute;
+    inset: 25%;
+    z-index: 1;
+    border-radius: 50%;
+    pointer-events: auto;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .floating-skyny[data-dragging] .floating-skyny-hit {
     cursor: grabbing;
   }
 
-  .floating-skyny[data-away] {
+  .floating-skyny[data-away] .floating-skyny-hit {
     pointer-events: none;
   }
 
