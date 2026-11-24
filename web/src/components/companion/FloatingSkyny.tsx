@@ -43,8 +43,8 @@ function useViewport() {
  * cara el estado global, sigue con los ojos al puntero y al foco, y reacciona cuando lo tocas
  * (¡boop!). Se arrastra a cualquier sitio dentro de la pantalla para quitarlo de en medio, y
  * recuerda dónde lo dejaste. Solo él recibe clics: el resto de la capa deja pasar todo a la web.
- * Con el scouter puesto, en su cristal sale lo que dice Skyny (`sayOnScouter`) o, si no dice nada,
- * el estado.
+ * Lo que dice Skyny (`sayOnScouter`) sale en el cristal del scouter si lo lleva puesto (si no dice
+ * nada, el estado) y, sin él, pasa por su visor de derecha a izquierda, como en el login.
  *
  * Con `away` (la cortina del chat abierta) se va volando y se desmonta; al cerrarla vuelve.
  * Sin WebGL o con movimiento reducido no sale (el 2D de la barra ya cuenta lo mismo).
@@ -59,6 +59,9 @@ export function FloatingSkyny({ away = false }: { away?: boolean }) {
   const bottom = mobile ? MOBILE_NAV : 0
   const view = useViewport()
   const scouter = useScouterText()
+  // Sin el scouter, lo que dice pasa por el visor de derecha a izquierda, como en el login.
+  const [visor, setVisor] = useState({ text: '', key: 0 })
+  if (scouter !== visor.text) setVisor({ text: scouter, key: visor.key + (scouter ? 1 : 0) })
 
   // Montado mientras se ve o mientras se va volando.
   const [mounted, setMounted] = useState(!away)
@@ -120,8 +123,8 @@ export function FloatingSkyny({ away = false }: { away?: boolean }) {
     if (!d.moved) {
       if (performance.now() - d.at < CLICK_MS) {
         setBoop((n) => n + 1)
-        // Con el scouter puesto, al tocarlo dice la siguiente frase en el cristal.
-        if (prefs.face === 'cyber') sayOnScouter(takeQuip())
+        // Al tocarlo dice la siguiente frase: en el scouter o, sin él, en el visor.
+        sayOnScouter(takeQuip())
       }
       return
     }
@@ -164,7 +167,12 @@ export function FloatingSkyny({ away = false }: { away?: boolean }) {
             scouterZoom={false}
             boop={boop}
             micro={micro}
-            scouter={scouter}
+            scouter={prefs.face === 'cyber' ? scouter : ''}
+            say={
+              prefs.face !== 'cyber' && visor.text
+                ? { text: visor.text.toUpperCase(), key: visor.key, scroll: true }
+                : null
+            }
             stage={{
               mode: away ? 'exit' : 'enter',
               key: moves,

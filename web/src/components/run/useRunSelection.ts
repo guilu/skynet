@@ -24,6 +24,9 @@ export const ACTIVITY_VIEWS = [
 
 export type ActivityView = (typeof ACTIVITY_VIEWS)[number]['id']
 
+/** Pestañas principales: el resumen (cabecera, progreso y cómo acabó) y el detalle (paneles). */
+export type RunMain = 'summary' | 'detail'
+
 /** En el móvil, los dos paneles pasan a ser pestañas. */
 export type RunPane = 'activity' | 'inspector'
 
@@ -32,6 +35,8 @@ const isView = (v: string | null): v is ActivityView => ACTIVITY_VIEWS.some((t) 
 const isPane = (v: string | null): v is RunPane => v === 'activity' || v === 'inspector'
 
 export interface RunSelection {
+  /** Pestaña principal. */
+  main: RunMain
   /** Agente elegido en la URL; null si no hay ninguno (la página elige uno por defecto). */
   agentId: string | null
   tab: InspectorTab
@@ -60,7 +65,11 @@ export function useRunSelection(): [RunSelection, (change: Partial<RunSelection>
   const tab = params.get('tab')
   const view = params.get('view')
   const pane = params.get('pane')
+  const main = params.get('main')
+  // Un enlace que elige algo del detalle (agente, pestaña, evento…) abre el detalle.
+  const detailLink = ['agent', 'tab', 'view', 'tool', 'pane', 'seq'].some((k) => params.has(k))
   const selection: RunSelection = {
+    main: main === 'detail' || (main == null && detailLink) ? 'detail' : 'summary',
     agentId: params.get('agent'),
     tab: isTab(tab) ? tab : 'summary',
     // Conversación era una pestaña del inspector (`?tab=conversation`): ahora es la vista por
@@ -87,6 +96,8 @@ export function useRunSelection(): [RunSelection, (change: Partial<RunSelection>
             if (value === null) next.delete(key)
             else next.set(key, String(value))
           }
+          // `summary` también se guarda si hace falta, para que no lo pise un enlace al detalle.
+          if (change.main !== undefined) next.set('main', change.main)
           put('agent', change.agentId)
           put('tab', change.tab === 'summary' ? null : change.tab)
           put('view', change.view === 'conversation' ? null : change.view)

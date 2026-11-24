@@ -78,7 +78,14 @@ export default function Skyny3D({
   /** Letreros que pasan deslizándose por la pantalla en reposo (login). */
   ticker?: { lines: string[]; loopFrom?: number; delay?: number } | null
   /** Un letrero ya, tecleado; sale otra vez cada vez que cambia `key`. */
-  say?: { text: string | string[]; key: number; error?: boolean; hold?: number } | null
+  say?: {
+    text: string | string[]
+    key: number
+    error?: boolean
+    hold?: number
+    /** Pasa deslizándose de derecha a izquierda en vez de teclearse. */
+    scroll?: boolean
+  } | null
   /** Se puede tocar (¡boop!) y girar arrastrando; se marea si gira deprisa (login). */
   interactive?: boolean
   /** Entra o sale de escena (login). Si llega al montar, empieza ya con el movimiento. */

@@ -601,7 +601,7 @@ describe('App', () => {
     const header = within(title.closest('header')!)
     expect(await header.findByText('runner-01')).toBeInTheDocument()
     expect(header.getByText('4 entrada · 32 salida', { exact: false })).toBeInTheDocument()
-    expect(header.getByText('caché: 28.437 leídos · 4256 escritos')).toBeInTheDocument()
+    expect(header.getByText(/caché 28\.437 \/ 4256/)).toBeInTheDocument()
     expect(header.getByText('Llega al terminar')).toBeInTheDocument()
     expect(header.getByText('Conectando…')).toBeInTheDocument()
 
@@ -1016,6 +1016,14 @@ describe('App', () => {
     ).toBeInTheDocument()
   })
   describe('inspector de la ejecución', () => {
+    /** Pestaña del inspector (la principal «Resumen» de la ejecución se llama igual). */
+    const agentTab = (name: string) =>
+      within(screen.getByRole('tablist', { name: 'Detalle del agente' })).getByRole('tab', { name })
+    const findAgentTab = async (name: string) =>
+      within(await screen.findByRole('tablist', { name: 'Detalle del agente' })).getByRole('tab', {
+        name,
+      })
+
     const runId = runView.id
     const agent = runView.stages[0].agents[0]
     const toolStarted = storedEvent as StoredEvent
@@ -1045,7 +1053,9 @@ describe('App', () => {
         [`/api/events/${toolStarted.sequence}`]: toolStarted,
         ...routes,
       })
-      renderAt(`/runs/${runId}${query}`, <App />)
+      // Casi todas miran el detalle (paneles e inspector); las del progreso piden `main=summary`.
+      const main = query.includes('main=') ? '' : `${query ? '&' : '?'}main=detail`
+      renderAt(`/runs/${runId}${query}${main}`, <App />)
       return fetch
     }
 
@@ -1187,7 +1197,7 @@ describe('App', () => {
         kind: 'RESUME',
         parentAgentRunId: 'a1b2c3d4-0000-4000-8000-000000000000',
       }
-      openRun('', {
+      openRun('?main=summary', {
         [`/api/workflow-runs/${runId}`]: {
           ...runView,
           stages: [{ ...runView.stages[0], agents: [child] }],
@@ -1204,13 +1214,14 @@ describe('App', () => {
     })
 
     it('elige por defecto el agente de la cabecera y muestra su resumen', async () => {
-      openRun()
+      openRun('?main=summary')
       const nav = await screen.findByRole('navigation', { name: 'Fases y agentes' })
       expect(within(nav).getByRole('button', { name: /claude-code/ })).toHaveAttribute(
         'aria-current',
         'true',
       )
-      expect(screen.getByRole('tab', { name: 'Resumen' })).toHaveAttribute('aria-selected', 'true')
+      fireEvent.click(screen.getByRole('tab', { name: 'Detalle' }))
+      expect(agentTab('Resumen')).toHaveAttribute('aria-selected', 'true')
       const inspector = within(screen.getByRole('region', { name: 'Inspector del agente' }))
       expect(inspector.getByText('claude-opus-5-5')).toBeInTheDocument()
     })
@@ -1234,10 +1245,7 @@ describe('App', () => {
 
       // El evento original se lee de la API.
       fireEvent.click(inspector.getByRole('button', { name: 'Evento de resultado #1043' }))
-      expect(screen.getByRole('tab', { name: 'Evento original' })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      )
+      expect(agentTab('Evento original')).toHaveAttribute('aria-selected', 'true')
       expect(await screen.findByText('“agent.tool.completed”')).toBeInTheDocument()
     })
 
@@ -1254,7 +1262,7 @@ describe('App', () => {
     })
 
     it('el progreso abre los agentes de la fase y elige uno', async () => {
-      openRun()
+      openRun('?main=summary')
       const progress = await screen.findByRole('navigation', { name: 'Fases y agentes' })
       const step = within(progress).getByRole('button', { name: /^1\. / })
       expect(step).toHaveAttribute('aria-pressed', 'true')
@@ -1262,12 +1270,12 @@ describe('App', () => {
       const agentButton = within(progress).getByRole('button', { name: /claude-code START/ })
       fireEvent.click(agentButton)
       expect(agentButton).toHaveAttribute('aria-current', 'true')
-      expect(screen.getByRole('tab', { name: 'Resumen' })).toHaveAttribute('aria-selected', 'true')
+      expect(agentTab('Resumen')).toHaveAttribute('aria-selected', 'true')
     })
 
     it('la cascada pone agentes y herramientas en el mismo eje y abre la barra elegida', async () => {
       openRun('?view=waterfall')
-      await screen.findByRole('tab', { name: 'Resumen' })
+      await findAgentTab('Resumen')
       FakeEventSource.last!.emit(toolStarted, toolCompleted)
       const panel = within(screen.getByRole('tabpanel', { name: 'Cascada' }))
       expect(panel.getByRole('button', { name: /^claude-code START: 40 s$/ })).toBeInTheDocument()
@@ -1282,7 +1290,7 @@ describe('App', () => {
 
     it('la conversación intercala las herramientas, plegadas', async () => {
       openRun()
-      await screen.findByRole('tab', { name: 'Resumen' })
+      await findAgentTab('Resumen')
       FakeEventSource.last!.emit(toolStarted, toolCompleted, message)
       const panel = within(screen.getByRole('tabpanel', { name: 'Conversación' }))
       const card = (await panel.findByText('Read')).closest('details')!
@@ -1302,7 +1310,7 @@ describe('App', () => {
         'aria-selected',
         'true',
       )
-      expect(screen.getByRole('tab', { name: 'Resumen' })).toHaveAttribute('aria-selected', 'true')
+      expect(agentTab('Resumen')).toHaveAttribute('aria-selected', 'true')
       FakeEventSource.last!.emit(message)
       expect(await screen.findByText('<img src=x onerror=alert(1)>')).toBeInTheDocument()
       expect(document.querySelector('.run-activity img')).toBeNull()
@@ -1317,24 +1325,21 @@ describe('App', () => {
 
     it('las flechas recorren las pestañas', async () => {
       openRun()
-      const summary = await screen.findByRole('tab', { name: 'Resumen' })
+      const summary = await findAgentTab('Resumen')
       fireEvent.keyDown(summary, { key: 'ArrowRight' })
-      expect(screen.getByRole('tab', { name: 'Prompt' })).toHaveAttribute('aria-selected', 'true')
-      expect(screen.getByRole('tab', { name: 'Prompt' })).toHaveFocus()
-      fireEvent.keyDown(screen.getByRole('tab', { name: 'Prompt' }), { key: 'End' })
-      expect(screen.getByRole('tab', { name: 'Evento original' })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      )
-      fireEvent.keyDown(screen.getByRole('tab', { name: 'Evento original' }), {
+      expect(agentTab('Prompt')).toHaveAttribute('aria-selected', 'true')
+      expect(agentTab('Prompt')).toHaveFocus()
+      fireEvent.keyDown(agentTab('Prompt'), { key: 'End' })
+      expect(agentTab('Evento original')).toHaveAttribute('aria-selected', 'true')
+      fireEvent.keyDown(agentTab('Evento original'), {
         key: 'ArrowRight',
       })
-      expect(screen.getByRole('tab', { name: 'Resumen' })).toHaveAttribute('aria-selected', 'true')
+      expect(agentTab('Resumen')).toHaveAttribute('aria-selected', 'true')
     })
 
     it('elegir una entrada del timeline la abre y enseña sus eventos originales', async () => {
       openRun('?view=events')
-      await screen.findByRole('tab', { name: 'Resumen' })
+      await findAgentTab('Resumen')
       FakeEventSource.last!.emit(toolStarted, toolCompleted)
       const timeline = within(screen.getByRole('tabpanel', { name: /^Eventos/ }))
       // Inicio y fin de la herramienta forman una sola entrada.
@@ -1358,7 +1363,7 @@ describe('App', () => {
 
     it('el timeline se recorre con el teclado', async () => {
       openRun('?view=events')
-      await screen.findByRole('tab', { name: 'Resumen' })
+      await findAgentTab('Resumen')
       FakeEventSource.last!.emit(message, toolStarted, toolCompleted)
       const timeline = within(screen.getByRole('tabpanel', { name: /^Eventos/ }))
       const first = timeline.getByRole('button', { name: /Mensaje: / })

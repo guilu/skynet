@@ -25,7 +25,6 @@ import { Pill } from '../ui/Pill'
 import { SimulatedPill } from '../ui/SimulatedPill'
 import { statusIcon, TONE_BADGE } from '../ui/statusIcons'
 import { Icon } from '../icons/Icon'
-import { useIconPack } from '../icons/pack'
 import type { IconName } from '../icons/registry'
 import { headlineShare, sharesByProvider, sharesLine } from '../usage/quotaFormat'
 import { AgentActions } from './AgentActions'
@@ -236,75 +235,60 @@ export function RunHeader({
           note="No sale en las listas ni en las métricas, y sus agentes no se pueden continuar."
         />
       )}
-      <dl className="kpis run-kpis">
-        <Kpi icon="duration" tone="live" label="Duración">
-          {formatDuration(elapsed(run.startedAt ?? run.createdAt, run.finishedAt, now))}
-        </Kpi>
-        <Kpi
-          icon="prompt"
-          tone="primary"
-          label="Tokens"
-          sub={
-            !noTokens && (
-              <>
-                <span className="kpi-line">
-                  {formatNumber(totals.inputTokens)} entrada · {formatNumber(totals.outputTokens)}{' '}
-                  salida
-                </span>
-                <span className="kpi-line">
-                  caché: {formatNumber(totals.cacheReadTokens)} leídos ·{' '}
-                  {formatNumber(totals.cacheCreationTokens)} escritos
-                </span>
-              </>
-            )
-          }
-        >
-          {noTokens ? '—' : formatNumber((totals.inputTokens ?? 0) + (totals.outputTokens ?? 0))}
-        </Kpi>
-        <Kpi
-          icon="cost"
-          tone="warn"
-          label="Coste"
-          sub={totals.costUsd == null && running && 'Llega al terminar'}
-        >
-          {formatCost(totals.costUsd)}
-        </Kpi>
-        <Kpi
-          icon="usage"
-          tone="warn"
-          label="Cuota"
-          sub={
-            quota
-              ? sharesByProvider(totals.quota).map((p) => (
-                  <span key={p.provider} className="kpi-line">
-                    {sharesLine(p)}
-                  </span>
-                ))
-              : running && 'Se atribuye al terminar cada agente'
-          }
-        >
-          {quota ? (
-            <>
-              {quota.value} <small className="kpi-unit">{quota.suffix}</small>
-            </>
-          ) : (
-            '—'
-          )}
-        </Kpi>
-        {/* Sin verificación, los tests no aplican: el hueco se queda vacío. */}
-        {verification ? (
-          <Kpi
-            icon="simulated"
-            tone={statusTone(verification.status) === 'bad' ? 'bad' : 'ok'}
-            label="Tests"
-            sub={<StatusBadge status={verification.status} />}
+      <section className="card run-stats" aria-labelledby="run-stats-title">
+        <h2 id="run-stats-title" className="run-stats-title">
+          Cifras
+        </h2>
+        <dl className="run-stats-list">
+          <Stat icon="duration" tone="live" label="Duración">
+            {formatDuration(elapsed(run.startedAt ?? run.createdAt, run.finishedAt, now))}
+          </Stat>
+          <Stat
+            icon="prompt"
+            tone="primary"
+            label="Tokens"
+            sub={
+              !noTokens &&
+              `${formatNumber(totals.inputTokens)} entrada · ${formatNumber(totals.outputTokens)} salida · caché ${formatNumber(totals.cacheReadTokens)} / ${formatNumber(totals.cacheCreationTokens)}`
+            }
           >
-            {tests ? `${tests.total - tests.failed - tests.errors}/${tests.total}` : '—'}
-          </Kpi>
-        ) : (
-          <div className="kpi-empty" aria-hidden="true" />
-        )}
-      </dl>
+            {noTokens ? '—' : formatNumber((totals.inputTokens ?? 0) + (totals.outputTokens ?? 0))}
+          </Stat>
+          <Stat
+            icon="cost"
+            tone="warn"
+            label="Coste"
+            sub={totals.costUsd == null && running && 'Llega al terminar'}
+          >
+            {formatCost(totals.costUsd)}
+          </Stat>
+          <Stat
+            icon="usage"
+            tone="warn"
+            label="Cuota"
+            sub={
+              quota
+                ? sharesByProvider(totals.quota)
+                    .map((p) => sharesLine(p))
+                    .join(' · ')
+                : running && 'Se atribuye al terminar cada agente'
+            }
+          >
+            {quota ? `${quota.value} ${quota.suffix}` : '—'}
+          </Stat>
+          {/* Sin verificación, los tests no aplican y no salen. */}
+          {verification && (
+            <Stat
+              icon="simulated"
+              tone={statusTone(verification.status) === 'bad' ? 'bad' : 'ok'}
+              label="Tests"
+              sub={<StatusBadge status={verification.status} />}
+            >
+              {tests ? `${tests.total - tests.failed - tests.errors}/${tests.total}` : '—'}
+            </Stat>
+          )}
+        </dl>
+      </section>
     </header>
   )
 }
@@ -334,7 +318,11 @@ function Chip({ icon, label, children }: { icon: IconName; label: string; childr
   )
 }
 
-function Kpi({
+/**
+ * Una cifra de la ejecución, en una píldora de su color: icono, nombre y valor y, al lado y más
+ * pequeño, el desglose.
+ */
+function Stat({
   icon,
   tone,
   label,
@@ -347,16 +335,14 @@ function Kpi({
   sub?: ReactNode
   children: ReactNode
 }) {
-  // Con un paquete ilustrado, el dibujo va suelto y grande, como en el dashboard.
-  const art = useIconPack() !== 'lucide'
   return (
-    <div className={cn('kpi kpi-main', `kpi-${tone}`)}>
-      <span className={cn('kpi-icon', art && 'kpi-icon-art')} aria-hidden="true">
-        <Icon name={icon} size={art ? 44 : 24} strokeWidth={2.5} />
-      </span>
-      <dt>{label}</dt>
-      <dd>{children}</dd>
-      {sub && <dd className="kpi-sub">{sub}</dd>}
+    <div className={cn('run-stat', `kpi-${tone}`)}>
+      <dt>
+        <Icon name={icon} size={18} strokeWidth={2.5} />
+        {label}
+      </dt>
+      <dd className="run-stat-value">{children}</dd>
+      {sub && <dd className="run-stat-sub">{sub}</dd>}
     </div>
   )
 }

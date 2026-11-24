@@ -69,7 +69,7 @@ Las piezas base están en `web/src/components/ui/`. Las de listas, en `component
 - **Confirmación con coste.** Reintentar, bifurcar o eliminar explican qué harán en un aviso amarillo antes del botón, y el botón dice la acción («Eliminar», no «Aceptar»).
 - **Archivado.** Proyectos, repositorios, trabajos, ejecuciones y runners llevan un menú «⋯» (en la página y en cada fila). Archivar y restaurar se hacen al momento; los runners se «olvidan». Lo archivado sale de las listas salvo con el chip «Archivados» (en runners, «Olvidados»), y su página lleva un aviso de solo lectura con «Restaurar» y esconde lo que crea o lanza. Si lo archivado es el padre, el aviso lo dice y no hay botón.
 - **Eliminar.** Solo sobre lo archivado, desde «Eliminar…», que abre un `Sheet` con lo que se borraría (`deletion-preview`), los avisos y lo que lo impide. Si lo impiden worktrees vivos, el panel ofrece eliminarlos y vuelve a mirar cada 3 s hasta poder seguir. «Eliminar definitivamente» queda desactivado hasta entonces. En la lista de ejecuciones se pueden marcar varias para archivarlas, restaurarlas o eliminarlas de una vez; las que fallan se listan con su motivo.
-- **Ejecución.** Cabecera con la insignia de estado, la clave, el título y chips (workflow, runner, modelo, rama), con las acciones del agente elegido (reintentar, bifurcar, eliminar worktree, cancelar) debajo. Cuatro cifras: duración, tokens, coste y tests (sin verificación, su hueco queda vacío). El progreso pinta las fases como un camino horizontal; al pulsar una fase se ven sus agentes. Debajo, dos paneles redimensionables (actividad e inspector) que en el móvil pasan a pestañas. La actividad tiene conversación, cascada y eventos.
+- **Ejecución.** Cabecera con la insignia de estado, la clave, el título y chips (workflow, runner, modelo, rama), con las acciones del agente elegido (reintentar, bifurcar, eliminar worktree, cancelar) debajo. Debajo, el panel «Cifras»: duración, tokens, coste, cuota y tests (si hay verificación) en píldoras de color con su desglose al lado. Luego dos pestañas (`?main=`): **Resumen**, con el progreso (las fases como un camino horizontal; al pulsar una fase se ven sus agentes, y al elegir uno se abre el detalle), cómo acabó y la PR; y **Detalle**, con los dos paneles redimensionables (actividad e inspector) que en el móvil pasan a pestañas. Un enlace que elige agente, pestaña o evento abre el detalle. La actividad tiene conversación, cascada y eventos.
 
 ## 5. Movimiento
 
@@ -90,7 +90,7 @@ Las piezas base están en `web/src/components/ui/`. Las de listas, en `component
 - Hasta 900 px, la ejecución pasa a pestañas (Pasos, Actividad, Detalle).
 - Hasta 720 px, la barra lateral pasa a una barra inferior con Inicio, Proyectos, Fábrica (las ejecuciones), Aprobar y «Más». «Más» abre una hoja con todas las secciones en baldosas, agrupadas por área. Las migas se reducen a «‹ padre» (por ejemplo, «‹ Proyectos»), o al nombre de la sección si no hay padre.
 - Hasta 640 px, el panel lateral sube desde abajo y las acciones de la cabecera ocupan el ancho.
-- Hasta 520 px, las cifras del dashboard y de la ejecución van de dos en dos.
+- Hasta 520 px, las cifras del dashboard van de dos en dos.
 - En pantallas grandes, el contenido ocupa todo el ancho del navegador, sin máximo.
 - Ninguna página se desplaza en horizontal: las tablas anchas se desplazan dentro de su bloque.
 

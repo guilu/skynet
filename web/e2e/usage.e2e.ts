@@ -142,7 +142,7 @@ test('la página Uso reparte la cuota de Codex y avisa al pasar del 90 %', async
 
   await test.step('la ejecución y su agente enseñan su cuota', async () => {
     await page.goto(`/runs/${codex.id}`)
-    const kpi = page.locator('.run-kpis .kpi').filter({ hasText: 'Cuota' })
+    const kpi = page.locator('.run-stats .run-stat').filter({ hasText: 'Cuota' })
     await expect(kpi).toContainText('3 % de 5 h')
     await expect(kpi).toContainText('Codex: 3 % de 5 h · 1 % semanal')
     await openTab(page, 'Coste')

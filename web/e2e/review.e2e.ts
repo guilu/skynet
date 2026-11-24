@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { csrf, expectAccessible, launchViaApi, login, openTab } from './helpers.ts'
+import { csrf, expectAccessible, launchViaApi, login, openTab, openDetail } from './helpers.ts'
 
 /**
  * Revisión de la web (M6-D): accesibilidad con axe en las páginas principales y ningún secreto en
@@ -92,6 +92,7 @@ test('las páginas principales pasan axe', async ({ page }) => {
   }
   // Las tres vistas de la actividad, con una herramienta abierta en la conversación.
   for (const view of ['Cascada', 'Eventos', 'Conversación']) {
+    await openDetail(page)
     await page.getByRole('tab', { name: new RegExp(`^${view}`) }).click()
     await expect(page.getByRole('tabpanel', { name: new RegExp(`^${view}`) })).toBeVisible()
     await expectAccessible(page, `ejecución · ${view}`)

@@ -204,7 +204,7 @@ describe('artefactos y verificación', () => {
 
   it('la cabecera muestra el resultado de la verificación', async () => {
     openRun('summary')
-    await waitFor(() => expect(document.querySelector('.run-kpis')).toHaveTextContent('Tests'))
-    expect(document.querySelector('.run-kpis')).toHaveTextContent('11/12')
+    await waitFor(() => expect(document.querySelector('.run-stats')).toHaveTextContent('Tests'))
+    expect(document.querySelector('.run-stats')).toHaveTextContent('11/12')
   })
 })
