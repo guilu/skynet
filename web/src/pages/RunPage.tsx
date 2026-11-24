@@ -127,7 +127,8 @@ export function RunPage() {
   const agent =
     agents.find((a) => a.id === selection.agentId) ?? (run.data && headlineAgent(run.data))
 
-  // Elegir un agente o una herramienta (también desde el progreso del resumen) abre el detalle.
+  // Elegir un agente o una herramienta lo enseña en el detalle. Abrir una fase en el progreso del
+  // resumen también elige su agente, pero se sigue en el resumen.
   const selectAgent = (agentId: string) =>
     select({
       main: 'detail',
@@ -136,6 +137,8 @@ export function RunPage() {
       sequence: null,
       ...(narrow && { pane: 'inspector' }),
     })
+  const selectStageAgent = (agentId: string) =>
+    select({ main: 'summary', agentId, toolUseId: null, sequence: null })
   const selectTool = (agentId: string, toolUseId: string) =>
     select({
       main: 'detail',
@@ -256,6 +259,7 @@ export function RunPage() {
                   now={now}
                   selectedAgentId={agent?.id}
                   onSelectAgent={selectAgent}
+                  onOpenStage={selectStageAgent}
                 />
                 <RunBand
                   run={run.data}

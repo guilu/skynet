@@ -1,7 +1,14 @@
 import { expect, test, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
-import { expectAccessible, login, postApi, publishWorkflowViaApi, repoPath } from './helpers.ts'
+import {
+  expectAccessible,
+  login,
+  openDetail,
+  postApi,
+  publishWorkflowViaApi,
+  repoPath,
+} from './helpers.ts'
 
 /**
  * Entrega por PR de punta a punta (EN-C), contra el GitHub falso de fake-github.ts y un remoto
@@ -143,9 +150,11 @@ test('Entrega por PR: abrir, esperar la CI, aprobar la fusión y fusionar', asyn
     const workItem = await (await page.request.get(`/api/work-items/${item.id}`)).json()
     expect(workItem.status).toBe('CLOSED')
 
-    await page.goto(`/runs/${run.id}?view=events`)
+    // La tarjeta de la PR está en el Resumen; los eventos, en el Detalle.
+    await page.goto(`/runs/${run.id}?main=summary&view=events`)
     const card = page.getByRole('region', { name: 'Pull request' })
     await expect(card).toContainText('Fusionada (eeeeeee)')
+    await openDetail(page)
     await expect(
       page.getByText(`fusionar fusionó la PR #${pr.number} y borró la rama ${branch}`).first(),
     ).toBeVisible()
