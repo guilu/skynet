@@ -2,12 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 
 /** Lo que tarda el Skyny flotante en irse volando y en volver. */
 export const FLOAT_EXIT_MS = 1200
-export const FLOAT_ENTER_MS = 1800
+export const FLOAT_ENTER_MS = 2000
 /** Lo que tarda la cortina en bajar y en subir (las animaciones `curtain-down` y `curtain-up`). */
 export const CURTAIN_DOWN_MS = 450
 export const CURTAIN_UP_MS = 250
 /** Lo que tarda el Skyny de la cortina en entrar y en irse. */
-export const CURTAIN_SKYNY_ENTER_MS = 1800
+export const CURTAIN_SKYNY_ENTER_MS = 2000
 export const CURTAIN_SKYNY_EXIT_MS = 1200
 
 /**

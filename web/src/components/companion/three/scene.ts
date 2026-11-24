@@ -380,7 +380,7 @@ export class SkynyScene {
    * Entra en escena volando. `duration` en ms; con `delay`, espera fuera de escena ese rato
    * antes de arrancar (la cortina del chat, mientras baja).
    */
-  enter({ duration = 2500, delay = 0 }: { duration?: number; delay?: number } = {}) {
+  enter({ duration = 2800, delay = 0 }: { duration?: number; delay?: number } = {}) {
     this.offstage = false
     this.stageTransition = { mode: 'enter', at: performance.now() + delay, duration }
     this.drawnKey = ''
@@ -839,19 +839,22 @@ export class SkynyScene {
       const p = clamp01(stDt / this.stageTransition.duration)
       if (this.stageTransition.mode === 'enter') {
         enterT = p
-        // Potencia de crucero al acercarse + ráfaga fuerte de retropropulsión al frenar (0.46..0.78)
-        const cruiseJet = p < 0.52 ? 0.68 + 0.25 * Math.sin((p / 0.52) * Math.PI) : 0
-        const brakeJet = p >= 0.44 && p < 0.8 ? Math.sin(((p - 0.44) / 0.36) * Math.PI) * 1.25 : 0
-        jetPower = Math.max(cruiseJet, brakeJet)
+        // Vuelo de crucero + planeo sostenido con propulsores encendidos (0.40..0.76) hasta apagarlos y caer suave
+        const cruiseJet = p < 0.48 ? 0.72 + 0.22 * Math.sin((p / 0.48) * Math.PI) : 0
+        const hoverGlideJet =
+          p >= 0.4 && p < 0.76
+            ? (0.98 - 0.34 * smoothstep((p - 0.62) / 0.14)) * smoothstep((p - 0.4) / 0.08)
+            : 0
+        jetPower = Math.max(cruiseJet, hoverGlideJet)
 
-        // Ondas de choque sincronizadas con el aterrizaje real (p = 0.75..1.0)
-        const ringPhase = clamp01((p - 0.75) / 0.25)
+        // Ondas de choque sincronizadas con el aterrizaje suave tras apagar propulsores (p = 0.82..1.0)
+        const ringPhase = clamp01((p - 0.82) / 0.18)
         this.shockRings.children.forEach((ring, idx) => {
           const stagger = clamp01((ringPhase - idx * 0.14) / 0.72)
           ring.visible = stagger > 0.01 && stagger < 0.99
-          ring.scale.setScalar(0.32 + stagger * 2.15)
+          ring.scale.setScalar(0.32 + stagger * 2.05)
           if (ring instanceof THREE.Mesh) {
-            ring.material.opacity = Math.sin(stagger * Math.PI) * 0.9
+            ring.material.opacity = Math.sin(stagger * Math.PI) * 0.85
           }
         })
 
@@ -2907,16 +2910,16 @@ export class SkynyScene {
       targetR.set(1.08, -0.05 - bal, 0.22)
     }
     if (enterT < 1) {
-      // Fase 1 (vuelo): manos atrás propulsando; Fase 2 (frenado): manos adelante-abajo; Fase 3 (aterrizaje): guardia heroica
-      const flareMix = smoothstep((enterT - 0.44) / 0.24)
-      const landMix = smoothstep((enterT - 0.72) / 0.12)
-      const settleMix = smoothstep((enterT - 0.84) / 0.16)
+      // Fase 1 (vuelo): manos atrás; Fase 2 (planeo con propulsores): manos equilibrando adelante-abajo; Fase 3 (caída suave tras apagar): guardia
+      const flareMix = smoothstep((enterT - 0.38) / 0.2)
+      const landMix = smoothstep((enterT - 0.76) / 0.12)
+      const settleMix = smoothstep((enterT - 0.88) / 0.12)
       const flyL = new THREE.Vector3(-0.88, -0.44, -0.32)
       const flyR = new THREE.Vector3(0.88, -0.44, -0.32)
-      const brakeL = new THREE.Vector3(-0.8, -0.58, 0.28)
-      const brakeR = new THREE.Vector3(0.8, -0.58, 0.28)
-      const landL = new THREE.Vector3(-0.96, -0.34, 0.18)
-      const landR = new THREE.Vector3(0.96, -0.34, 0.18)
+      const brakeL = new THREE.Vector3(-0.82, -0.54, 0.24)
+      const brakeR = new THREE.Vector3(0.82, -0.54, 0.24)
+      const landL = new THREE.Vector3(-0.94, -0.36, 0.16)
+      const landR = new THREE.Vector3(0.94, -0.36, 0.16)
       const curL = flyL.lerp(brakeL, flareMix).lerp(landL, landMix)
       const curR = flyR.lerp(brakeR, flareMix).lerp(landR, landMix)
       targetL.lerp(curL, 1 - settleMix)
@@ -3100,21 +3103,22 @@ export class SkynyScene {
 
     let stageScale = 1
     if (enterT < 1) {
-      // Vuelo frontal en arco suave desde el horizonte (Z: -10.5 -> 0) + frenado (flare) + aterrizaje heroico con rebote
-      const approach = 1 - Math.pow(1 - clamp01(enterT / 0.74), 2.3)
-      const forwardLean = (1 - smoothstep((enterT - 0.44) / 0.2)) * smoothstep(enterT / 0.12)
-      const flare = smoothstep((enterT - 0.44) / 0.22) * (1 - smoothstep((enterT - 0.72) / 0.2))
-      const arcFade = 1 - smoothstep((enterT - 0.42) / 0.34)
-      const swayX = Math.sin(enterT * Math.PI * 1.45) * 0.42 * arcFade
-      const bankRoll = Math.cos(enterT * Math.PI * 1.45) * -0.18 * arcFade
+      // Vuelo frontal en arco (0..0.42), planeo suave con propulsores encendidos (0.42..0.76), apagado y caída suave (0.76..1.0)
+      const approach = 1 - Math.pow(1 - clamp01(enterT / 0.68), 2.3)
+      const forwardLean = (1 - smoothstep((enterT - 0.38) / 0.18)) * smoothstep(enterT / 0.12)
+      const flare = smoothstep((enterT - 0.38) / 0.18) * (1 - smoothstep((enterT - 0.68) / 0.16))
+      const arcFade = 1 - smoothstep((enterT - 0.38) / 0.3)
+      const swayX = Math.sin(enterT * Math.PI * 1.45) * 0.4 * arcFade
+      const bankRoll = Math.cos(enterT * Math.PI * 1.45) * -0.16 * arcFade
 
-      // Desciende en picado suave, remonta al frenar, cae al aterrizaje (-0.11) y rebota (+0.06 -> 0)
+      // Planea suavemente en altura (0.26 -> 0.32 -> 0.24) mientras propulsa, y al apagarlos cae suave a -0.08 y asienta
       const heightKeys = [
-        [0, 1.75],
-        [0.44, 0.14],
-        [0.66, 0.46],
-        [0.8, -0.11],
-        [0.9, 0.06],
+        [0, 1.65],
+        [0.42, 0.26],
+        [0.58, 0.32],
+        [0.76, 0.24],
+        [0.89, -0.08],
+        [0.95, 0.04],
         [1, 0],
       ]
       let entryHeight = 0
@@ -3127,21 +3131,19 @@ export class SkynyScene {
           break
         }
       }
-      // Squash real al tocar el suelo (0.76..0.88) y ligero estiramiento previo en el descenso
-      const touchdownSquash = Math.sin(clamp01((enterT - 0.75) / 0.13) * Math.PI)
-      const diveStretch =
-        smoothstep((enterT - 0.68) / 0.08) * (1 - smoothstep((enterT - 0.76) / 0.04))
+      // Squash suave al tocar el suelo tras apagar los propulsores (0.84..0.95)
+      const touchdownSquash = Math.sin(clamp01((enterT - 0.84) / 0.12) * Math.PI)
 
       root.position.x += swayX
       root.position.z += (1 - approach) * -10.5
       root.position.y += entryHeight
-      const flightPitch = 0.34 * forwardLean - 0.22 * flare
-      const settle = smoothstep((enterT - 0.8) / 0.2)
+      const flightPitch = 0.32 * forwardLean - 0.16 * flare
+      const settle = smoothstep((enterT - 0.84) / 0.16)
       root.rotation.x = flightPitch + Math.max(-0.12, Math.min(0.12, targetBodyRotX)) * settle
       root.rotation.z += bankRoll
-      squashY *= 1 - touchdownSquash * 0.16 + diveStretch * 0.07
-      // Escalado progresivo desde lejano (0.12x) hasta tamaño real antes del aterrizaje
-      stageScale = 0.12 + 0.88 * smoothstep(enterT / 0.72)
+      squashY *= 1 - touchdownSquash * 0.11
+      // Escalado progresivo desde lejano (0.12x) hasta tamaño real antes del planeo
+      stageScale = 0.12 + 0.88 * smoothstep(enterT / 0.68)
       this.shockRings.position.set(root.position.x * 0.2, -0.88, root.position.z * 0.2)
     } else if (exitT > 0) {
       // Despedida rápida, compresión de impulso, giro con ladeo aerodinámico, pausa tensa y despegue explosivo

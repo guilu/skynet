@@ -10,7 +10,7 @@ const SIZE_3D = 240
 const SIZE_2D = 180
 
 /** Al cargar, entra volando; al entrar en la web, sale volando y la web espera a que se vaya. */
-const ENTER_MS = 2000
+const ENTER_MS = 2250
 export const LEAVE_MS = 1300
 
 /**
