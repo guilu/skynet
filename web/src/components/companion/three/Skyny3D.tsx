@@ -61,6 +61,7 @@ export default function Skyny3D({
   pulse,
   micro,
   scouter,
+  scouterZoom = true,
   onFail,
 }: {
   state?: SkynyState
@@ -88,6 +89,8 @@ export default function Skyny3D({
   micro?: { type: MicroType; key: number } | null
   /** Texto del scouter, si lo lleva puesto: se escribe como en una terminal. Sin él, el estado. */
   scouter?: string | null
+  /** Con texto en el scouter, la cámara se acerca al cristal (el flotante, en cambio, crece). */
+  scouterZoom?: boolean
   onFail: () => void
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -109,6 +112,7 @@ export default function Skyny3D({
     pulse,
     micro,
     scouter,
+    scouterZoom,
   })
   useEffect(() => {
     fail.current = onFail
@@ -125,6 +129,7 @@ export default function Skyny3D({
       pulse,
       micro,
       scouter,
+      scouterZoom,
     }
   })
   const isLive = live !== undefined
@@ -156,7 +161,7 @@ export default function Skyny3D({
     skyny.setHat(first.hat)
     skyny.setFace(first.face)
     skyny.setBack(first.back)
-    if (first.scouter) skyny.setScouterText(first.scouter)
+    if (first.scouter) skyny.setScouterText(first.scouter, first.scouterZoom)
     if (first.ticker) skyny.setTicker(first.ticker.lines, first.ticker)
     if (first.say) skyny.say(first.say.text, first.say)
     if (first.live) {
@@ -282,7 +287,7 @@ export default function Skyny3D({
   }, [boop])
 
   useEffect(() => {
-    scene.current?.setScouterText(scouter ?? '')
+    scene.current?.setScouterText(scouter ?? '', latest.current.scouterZoom)
   }, [scouter])
 
   useEffect(() => {

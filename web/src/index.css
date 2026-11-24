@@ -9362,6 +9362,21 @@
     pointer-events: none;
   }
 
+  /* Skyny se pinta a su tamaño grande y se encoge; con texto en el scouter, crece (sin recortes). */
+  .floating-skyny-zoom {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .floating-skyny-zoom {
+      transition: none;
+    }
+  }
+
   /* ---- Companion global (CO-B): mascota de la barra, campana y avisos ---- */
 
   /* El estado global: un botón de icono más; solo necesita sitio para el punto verde. */

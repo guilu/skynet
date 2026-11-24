@@ -257,12 +257,12 @@ export class SkynyScene {
     this.extras.setBack(kind)
   }
   /**
-   * Lo que pone el scouter cuando lo lleva puesto; vacío, el nombre del estado. Con texto, la
-   * cámara se acerca al cristal para que se lea, y al borrarlo vuelve a alejarse.
+   * Lo que pone el scouter cuando lo lleva puesto; vacío, el nombre del estado. Con texto (y
+   * `zoom`), la cámara se acerca al cristal para que se lea, y al borrarlo vuelve a alejarse.
    */
-  setScouterText(text: string) {
+  setScouterText(text: string, zoom = true) {
     this.extras.setScouterText(text)
-    this.scouterFocusTarget = text.trim() ? 1 : 0
+    this.scouterFocusTarget = zoom && text.trim() ? 1 : 0
   }
 
   /** Acercamiento al cristal del scouter: 0 lejos, 1 del todo. */

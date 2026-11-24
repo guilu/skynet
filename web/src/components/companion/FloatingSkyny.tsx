@@ -14,6 +14,11 @@ import type { MicroType } from './three/Skyny3D'
 /** Lo que mide Skyny flotando, y el margen con los bordes de la pantalla. */
 const SIZE = 240
 const SIZE_MOBILE = 168
+/**
+ * Con texto en el scouter, Skyny entero crece hasta este tanto (sin recortarlo) para que se lea.
+ * Se pinta siempre a ese tamaño y se encoge con CSS: así crecer es suave y no se ve borroso.
+ */
+const GROW = 1.75
 /** En el móvil, la barra de navegación de abajo: Skyny no se mete debajo. */
 const MOBILE_NAV = 84
 /** Lo que espera tras irse volando antes de desmontarlo (sin gastar GPU mientras no se ve). */
@@ -82,6 +87,10 @@ export function FloatingSkyny({ away = false }: { away?: boolean }) {
   if (!prefs.floating || !three || !mounted) return null
 
   const box = dragBox ?? floatBox(prefs.floatAt, view, size, bottom)
+  // Crece hacia el centro de la pantalla: desde la esquina o el borde donde está.
+  const at = dragBox ? floatPos(box.left, box.top, view, size, bottom) : prefs.floatAt
+  const big = Math.round(size * GROW)
+  const zoomed = scouter !== '' && prefs.face === 'cyber' && !away
 
   const onDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
@@ -136,21 +145,35 @@ export function FloatingSkyny({ away = false }: { away?: boolean }) {
       }}
       aria-hidden="true"
     >
-      <Suspense fallback={null}>
-        <Skyny3D
-          state={state}
-          size={size}
-          boop={boop}
-          micro={micro}
-          scouter={scouter}
-          stage={{
-            mode: away ? 'exit' : 'enter',
-            key: moves,
-            duration: away ? FLOAT_EXIT_MS : FLOAT_ENTER_MS,
-          }}
-          onFail={() => setThree(false)}
-        />
-      </Suspense>
+      <div
+        className="floating-skyny-zoom"
+        data-zoom={zoomed || undefined}
+        style={{
+          width: big,
+          height: big,
+          left: -(big - size) * at.x,
+          top: -(big - size) * at.y,
+          transformOrigin: `${at.x * 100}% ${at.y * 100}%`,
+          transform: zoomed ? undefined : `scale(${1 / GROW})`,
+        }}
+      >
+        <Suspense fallback={null}>
+          <Skyny3D
+            state={state}
+            size={big}
+            scouterZoom={false}
+            boop={boop}
+            micro={micro}
+            scouter={scouter}
+            stage={{
+              mode: away ? 'exit' : 'enter',
+              key: moves,
+              duration: away ? FLOAT_EXIT_MS : FLOAT_ENTER_MS,
+            }}
+            onFail={() => setThree(false)}
+          />
+        </Suspense>
+      </div>
     </div>
   )
 }
