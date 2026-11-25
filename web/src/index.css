@@ -9364,8 +9364,37 @@
     touch-action: none;
   }
 
-  .floating-skyny[data-dragging] .floating-skyny-hit {
+  .floating-skyny[data-dragging] .floating-skyny-hit,
+  .floating-skyny[data-gesture] .floating-skyny-hit {
     cursor: grabbing;
+  }
+
+  /* Móvil: «Girar» cambia lo que hace arrastrar con un dedo (mover ↔ girar). */
+  .floating-skyny-rotate {
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    z-index: 2;
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    min-height: 28px;
+    padding: 2px 10px;
+    border: var(--border-w) solid var(--border);
+    border-radius: 999px;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12px;
+    background: var(--surface);
+    transform: translateX(-50%);
+    pointer-events: auto;
+  }
+
+  .floating-skyny-rotate[aria-pressed='true'] {
+    border-color: var(--primary);
+    color: var(--primary-ink);
+    background: var(--primary-soft);
+    font-weight: 600;
   }
 
   .floating-skyny[data-away] .floating-skyny-hit {

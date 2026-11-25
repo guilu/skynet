@@ -62,6 +62,7 @@ export default function Skyny3D({
   micro,
   scouter,
   scouterZoom = true,
+  orbit,
   onFail,
 }: {
   state?: SkynyState
@@ -98,6 +99,8 @@ export default function Skyny3D({
   scouter?: string | null
   /** Con texto en el scouter, la cámara se acerca al cristal (el flotante, en cambio, crece). */
   scouterZoom?: boolean
+  /** Hacia dónde está girado (radianes): `yaw` sobre el eje Y y `pitch` sobre el X (flotante). */
+  orbit?: { yaw: number; pitch: number }
   onFail: () => void
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -120,6 +123,7 @@ export default function Skyny3D({
     micro,
     scouter,
     scouterZoom,
+    orbit,
   })
   useEffect(() => {
     fail.current = onFail
@@ -137,6 +141,7 @@ export default function Skyny3D({
       micro,
       scouter,
       scouterZoom,
+      orbit,
     }
   })
   const isLive = live !== undefined
@@ -176,6 +181,7 @@ export default function Skyny3D({
       skyny.setProgress(first.live.progress?.[0] ?? null, first.live.progress?.[1])
       skyny.setState(first.state, { message: first.live.message })
     } else if (first.state !== 'calm') skyny.setState(first.state)
+    if (first.orbit) skyny.setOrbit(first.orbit.yaw, first.orbit.pitch)
     if (first.stage) moveStage(skyny, first.stage)
     if (!first.paused) skyny.play()
 
@@ -292,6 +298,12 @@ export default function Skyny3D({
   useEffect(() => {
     if (boop) scene.current?.poke()
   }, [boop])
+
+  const yaw = orbit?.yaw
+  const pitch = orbit?.pitch
+  useEffect(() => {
+    if (yaw !== undefined) scene.current?.setOrbit(yaw, pitch ?? 0)
+  }, [yaw, pitch])
 
   useEffect(() => {
     scene.current?.setScouterText(scouter ?? '', latest.current.scouterZoom)

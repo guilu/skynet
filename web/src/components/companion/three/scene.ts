@@ -348,15 +348,23 @@ export class SkynyScene {
     return this.raycaster.intersectObjects(this.model.root.children, true).length > 0
   }
 
-  /** Gira la cámara alrededor de Skyny (radianes); si gira deprisa, Skyny se marea. */
-  setOrbit(angle: number) {
+  /**
+   * Gira la cámara alrededor de Skyny (radianes), como el estudio: `angle` en horizontal (eje Y) y
+   * `pitch` en vertical (eje X, limitado para no pasar por encima). Se ve a Skyny girar sobre su
+   * centro sin moverse de su sitio; si gira deprisa, se marea.
+   */
+  setOrbit(angle: number, pitch = 0) {
     this.orbitBase ??= this.camera.position.clone()
     const target = new THREE.Vector3(0, 0.1, 0)
-    const offset = this.orbitBase
-      .clone()
-      .sub(target)
-      .applyAxisAngle(new THREE.Vector3(0, 1, 0), angle)
-    this.camera.position.copy(target).add(offset)
+    const base = this.orbitBase.clone().sub(target)
+    const r = base.length()
+    const yaw = Math.atan2(base.x, base.z) + angle
+    const lift = Math.max(-1.2, Math.min(1.2, Math.asin(base.y / r) + pitch))
+    this.camera.position.set(
+      target.x + r * Math.sin(yaw) * Math.cos(lift),
+      target.y + r * Math.sin(lift),
+      target.z + r * Math.cos(yaw) * Math.cos(lift),
+    )
     this.camera.lookAt(target)
   }
 
