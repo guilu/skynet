@@ -3,15 +3,15 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, type Session } from '../api'
 import { ErrorMessage } from '../components/ErrorMessage'
-import { LoginSkyny } from '../components/companion/LoginSkyny'
+import { LEAVE_MS, LoginSkyny } from '../components/companion/LoginSkyny'
+import { can3D } from '../components/companion/look'
 import { Button } from '../components/ui/Button'
-import { Pill } from '../components/ui/Pill'
 
 /**
- * Entrada a la web con el usuario único del control plane. Casi sin texto: Skyny centrado en su
- * panel con tres estados de muestra, y el formulario. Skyny (en 3D desde TD-A) sigue con los
- * ojos lo que haces, se tapa los ojos mientras escribes la contraseña y mira de reojo si la
- * muestras (SY-C).
+ * Entrada a la web con el usuario único del control plane. Una columna centrada, sin recuadro:
+ * Skyny grande, «Entra en Skynet» y el formulario. Skyny (en 3D desde TD-A) saluda y va contando
+ * cosas en su pantalla, sigue con los ojos lo que haces, se tapa los ojos mientras escribes la
+ * contraseña y mira de reojo si la muestras (SY-C). Se puede tocar y girar.
  */
 export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) {
   const [username, setUsername] = useState('')
@@ -19,9 +19,17 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
   const [secret, setSecret] = useState(false)
   const [reveal, setReveal] = useState(false)
   const heading = useRef<HTMLHeadingElement>(null)
+  const [failures, setFailures] = useState(0)
+  // Bien: Skyny sale volando y la web entra cuando se ha ido (sin 3D, al momento).
+  const [leaving, setLeaving] = useState(false)
   const login = useMutation({
     mutationFn: () => api.login(username.trim(), password),
-    onSuccess: onLogin,
+    onSuccess: (session) => {
+      if (!can3D()) return onLogin(session)
+      setLeaving(true)
+      window.setTimeout(() => onLogin(session), LEAVE_MS)
+    },
+    onError: () => setFailures((n) => n + 1),
   })
 
   useEffect(() => {
@@ -37,24 +45,17 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
     <main className="login">
       <div className="login-card">
         <section className="login-hero" aria-hidden="true">
-          <LoginSkyny pose={reveal ? 'peek' : secret ? 'cover' : undefined} />
-          <ul className="login-states">
-            <li>
-              <Pill tone="active">Pensando</Pill>
-            </li>
-            <li>
-              <Pill tone="ok">Completada</Pill>
-            </li>
-            <li>
-              <Pill tone="warn">Esperando</Pill>
-            </li>
-          </ul>
+          <LoginSkyny
+            pose={reveal ? 'peek' : secret ? 'cover' : undefined}
+            typingPassword={secret && !reveal}
+            failures={failures}
+            leaving={leaving}
+          />
         </section>
         <section className="login-form">
           <h1 ref={heading} tabIndex={-1}>
-            Hola de nuevo
+            Entra en Skynet
           </h1>
-          <p className="muted">Entra para ver en qué andan tus agentes.</p>
           <form className="form" onSubmit={submit}>
             <label>
               Usuario
@@ -92,8 +93,8 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
                 )}
               </button>
             </div>
-            <Button type="submit" disabled={login.isPending}>
-              {login.isPending ? 'Entrando…' : 'Entrar'}
+            <Button type="submit" disabled={login.isPending || leaving}>
+              {login.isPending || leaving ? 'Entrando…' : 'Entrar'}
             </Button>
             <ErrorMessage error={login.error} />
           </form>

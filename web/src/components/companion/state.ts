@@ -1,4 +1,5 @@
 import type { AgentRun, AgentStatus, RunStatus, StageRun } from '../../api'
+import type { IconName } from '../icons/registry'
 
 /** Expresiones de la mascota (plan: `plans/estudio-companion.md`). */
 export type CompanionState =
@@ -37,6 +38,22 @@ export const COMPANION_STATES: { state: CompanionState; label: string; when: str
 
 export const companionLabel = (state: CompanionState) =>
   COMPANION_STATES.find((s) => s.state === state)?.label ?? state
+
+/** El icono de cada estado, para la barra superior (allí va el icono, no Skyny). */
+export const COMPANION_ICON: Record<CompanionState, IconName> = {
+  calm: 'status-ok',
+  sleeping: 'status-pending',
+  ready: 'status-ready',
+  thinking: 'status-thinking',
+  running: 'status-running',
+  reviewing: 'verification',
+  success: 'status-ok',
+  error: 'status-error',
+  waiting: 'status-waiting',
+  paused: 'status-paused',
+  offline: 'status-offline',
+  cancelled: 'status-cancelled',
+}
 
 /**
  * Cuál pesa más cuando hay varias a la vez (una ejecución con fases en paralelo, o varias

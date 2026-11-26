@@ -215,7 +215,8 @@ function Composer({ last }: { last: AgentRun }) {
     mutationFn: () => api.sendMessage(last.id, text),
     onSuccess: (run) => {
       setText('')
-      void navigate(`/runs/${run.id}`)
+      // Sigue en la conversación: la ejecución nueva se abre en su pestaña Detalle.
+      void navigate(`/runs/${run.id}?main=detail`)
     },
   })
   const providers = useProviders()

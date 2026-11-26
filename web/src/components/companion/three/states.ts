@@ -1,32 +1,444 @@
-// Las expresiones de Skyny 3D: qué ojos pone y qué accesorio saca en cada estado del companion.
-// Es la tabla `STATES` del estudio, con las 12 expresiones de `CompanionState`. El color del
-// cuerpo no está aquí: sale de los tokens del 2D (`.companion[data-state]` en index.css).
-import type { CompanionState } from '../state'
-import type { FaceEyes } from './face'
+// Portado del estudio v4.4 (plans/skyny-3d/skyny-v4.4.html).
+// =========================================================================
+// 1. DEFINICIÓN DE ESTADOS, CONFIGURACIÓN VISUAL Y TEXTOS LED
+// =========================================================================
 
-export type Accessory =
-  'bubbles' | 'speed' | 'magnifier' | 'confetti' | 'stress' | 'alert' | 'pause' | 'zzz' | 'offline'
+/** Grupos de estados del estudio v5 (lista del estudio y Ajustes › Companion). */
+export const STATE_CATEGORIES = [
+  { id: 'agentic', label: 'Programación Agéntica', shortLabel: 'Agéntica' },
+  { id: 'sdlc', label: 'Ciclo de Vida (SDLC)', shortLabel: 'SDLC' },
+  { id: 'devops', label: 'DevOps y Sistemas', shortLabel: 'DevOps' },
+  { id: 'security', label: 'Seguridad', shortLabel: 'Seguridad' },
+  { id: 'interaction', label: 'Interacción y Resultados', shortLabel: 'Interacción' },
+] as const
 
-export interface Expression3D {
-  eyes: FaceEyes
-  accessory: Accessory | null
-  /** Hace un gesto de entrada al llegar al estado (si no se pidió reducir el movimiento). */
+export type StateCategory = (typeof STATE_CATEGORIES)[number]['id']
+
+export const STATES_META = [
+  {
+    state: 'degraded',
+    category: 'devops',
+    label: 'Servicio Degradado',
+    when: 'Proveedor principal con latencia o fallos; operando mediante fallback activo.',
+  },
+  {
+    state: 'handover',
+    category: 'agentic',
+    label: 'Relevo',
+    when: 'Pasando el testigo y contexto entre agentes especializados en un flujo secuencial.',
+  },
+  {
+    state: 'throttled',
+    category: 'devops',
+    label: 'Modo Eco',
+    when: 'Throttling preventivo activado para ahorrar tokens y estirar la cuota.',
+  },
+  {
+    state: 'escalating',
+    category: 'agentic',
+    label: 'Escalando',
+    when: 'Subiendo la tarea a un modelo de razonamiento superior por alta complejidad.',
+  },
+  {
+    state: 'streaming',
+    category: 'agentic',
+    label: 'Transmitiendo',
+    when: 'Emitiendo tokens o respuesta progresiva en tiempo real (streaming).',
+  },
+  {
+    state: 'syncing',
+    category: 'sdlc',
+    label: 'Sincronizando',
+    when: 'Actualizando rama local con cambios remotos (git pull / rebase) sin conflictos.',
+  },
+  {
+    state: 'dry-run',
+    category: 'sdlc',
+    label: 'Simulando',
+    when: 'Ejecutando workflow en modo vista previa (dry-run) sin aplicar cambios reales.',
+  },
+  {
+    state: 'pr-open',
+    category: 'sdlc',
+    label: 'Pull Request',
+    when: 'Rama verificada y Pull Request publicada lista para revisión.',
+  },
+  {
+    state: 'compacting',
+    category: 'agentic',
+    label: 'Compactando',
+    when: 'Comprimiendo y resumiendo la ventana de contexto para liberar memoria.',
+  },
+  {
+    state: 'conflict',
+    category: 'sdlc',
+    label: 'Conflicto de Git',
+    when: 'git merge o git rebase detecta un conflicto que requiere resolución.',
+  },
+  {
+    state: 'context-indexing',
+    category: 'agentic',
+    label: 'Indexando Repo',
+    when: 'Construyendo grafo AST o embeddings del repositorio.',
+  },
+  {
+    state: 'guardrail',
+    category: 'security',
+    label: 'Bloqueado por Seguridad',
+    when: 'Comando peligroso o acceso restringido interceptado por el arnés de seguridad.',
+  },
+  {
+    state: 'rate-limited',
+    category: 'devops',
+    label: 'Cooldown',
+    when: 'Esperando reinicio de ventana de uso o cupo de suscripción CLI.',
+  },
+  {
+    state: 'benchmarking',
+    category: 'agentic',
+    label: 'Evaluando',
+    when: 'Comparando dos propuestas de modelos (A/B diff) en evals automáticas.',
+  },
+  {
+    state: 'rolling-back',
+    category: 'sdlc',
+    label: 'Revirtiendo cambios',
+    when: 'Restaurando una versión anterior tras fallar una validación.',
+  },
+  {
+    state: 'delegating',
+    category: 'agentic',
+    label: 'Delegando',
+    when: 'Subtareas paralelas asignadas a varios runners simultáneos.',
+  },
+  {
+    state: 'routing',
+    category: 'agentic',
+    label: 'Enrutando',
+    when: 'Seleccionando el modelo o agente óptimo (Claude, Codex, Gemini).',
+  },
+  {
+    state: 'sandbox',
+    category: 'devops',
+    label: 'Sandbox',
+    when: 'Aprovisionando y verificando entorno aislado o contenedor efímero.',
+  },
+  {
+    state: 'recalling',
+    category: 'agentic',
+    label: 'Recordando',
+    when: 'Recuperando contexto o información de la memoria.',
+  },
+  {
+    state: 'check-result',
+    category: 'interaction',
+    label: 'Revisá esto',
+    when: 'El resultado está disponible, pero conviene comprobar un detalle.',
+  },
+  {
+    state: 'external-wait',
+    category: 'devops',
+    label: 'Esperando respuesta externa',
+    when: 'Una herramienta o servicio está procesando la solicitud.',
+  },
+  {
+    state: 'listening',
+    category: 'interaction',
+    label: 'Escuchando',
+    when: 'Esperando una entrada de voz; demostración visual, sin micrófono activo.',
+  },
+  {
+    state: 'no-results',
+    category: 'interaction',
+    label: 'Sin resultados',
+    when: 'La búsqueda terminó sin coincidencias.',
+  },
+  {
+    state: 'calm',
+    category: 'interaction',
+    label: 'Reposo',
+    when: 'Todo tranquilo: no hay nada que contar.',
+  },
+  {
+    state: 'sleeping',
+    category: 'interaction',
+    label: 'Inactivo',
+    when: 'No hay nada en marcha ni pendiente.',
+  },
+  {
+    state: 'ready',
+    category: 'interaction',
+    label: 'En espera',
+    when: 'En cola o pendiente de empezar.',
+  },
+  {
+    state: 'thinking',
+    category: 'agentic',
+    label: 'Pensando',
+    when: 'El agente arranca o está pensando.',
+  },
+  {
+    state: 'planning',
+    category: 'agentic',
+    label: 'Planificando',
+    when: 'Analizando ADR y diseñando el grafo DAG de fases.',
+  },
+  {
+    state: 'coding',
+    category: 'sdlc',
+    label: 'Programando',
+    when: 'El agente escribe código o edita archivos.',
+  },
+  {
+    state: 'testing',
+    category: 'sdlc',
+    label: 'Probando',
+    when: 'Ejecutando suite de tests unitarios y de integración.',
+  },
+  {
+    state: 'healing',
+    category: 'sdlc',
+    label: 'Autorreparando',
+    when: 'Bucle cerrado de autocorrección tras fallo de linter o test.',
+  },
+  {
+    state: 'running',
+    category: 'agentic',
+    label: 'Ejecutando',
+    when: 'El agente usa una herramienta.',
+  },
+  {
+    state: 'reviewing',
+    category: 'sdlc',
+    label: 'Revisando',
+    when: 'Skynet verifica el trabajo de la fase.',
+  },
+  {
+    state: 'auditing',
+    category: 'security',
+    label: 'Auditando',
+    when: 'Escaneo profundo de seguridad y calidad.',
+  },
+  {
+    state: 'merging',
+    category: 'sdlc',
+    label: 'Fusionando PR',
+    when: 'Aprobado el gate y haciendo merge de la rama a main.',
+  },
+  {
+    state: 'deploying',
+    category: 'devops',
+    label: 'Desplegando',
+    when: 'Lanzando PR o desplegando a entorno.',
+  },
+  {
+    state: 'learning',
+    category: 'agentic',
+    label: 'Aprendiendo',
+    when: 'Indexando repositorio y guardando memoria RAG.',
+  },
+  { state: 'success', category: 'interaction', label: 'Éxito', when: 'Terminó bien.' },
+  {
+    state: 'celebrating',
+    category: 'interaction',
+    label: 'Celebrando',
+    when: 'Hito o release completado con éxito.',
+  },
+  {
+    state: 'error',
+    category: 'interaction',
+    label: 'Error',
+    when: 'Falló (error, timeout, presupuesto…).',
+  },
+  {
+    state: 'overloaded',
+    category: 'devops',
+    label: 'Sobrecarga',
+    when: 'Límite de cuota o consumo alto de tokens.',
+  },
+  {
+    state: 'waiting',
+    category: 'interaction',
+    label: 'Te necesita',
+    when: 'Espera tu aprobación o tu respuesta.',
+  },
+  {
+    state: 'paused',
+    category: 'interaction',
+    label: 'En pausa',
+    when: 'Espera a un reintento programado o a la cuota.',
+  },
+  {
+    state: 'offline',
+    category: 'devops',
+    label: 'Sin conexión',
+    when: 'Sin conexión en vivo, o el agente no responde.',
+  },
+  {
+    state: 'cancelled',
+    category: 'interaction',
+    label: 'Cancelado',
+    when: 'Se canceló o se omitió.',
+  },
+] as const
+
+/** Los estados de Skyny 3D (los 12 del companion y los del estudio). */
+export type SkynyState = (typeof STATES_META)[number]['state']
+
+/** Ojos, accesorio, gesto de entrada y color de ojos de cada estado. */
+export interface StateLook {
+  eyes: string
+  accessory: string
   entry: boolean
-  /** Color propio de los ojos; sin él, los del tema (`--companion-glow` / `--companion-eye`). */
   eyeColor?: string
 }
 
-export const EXPRESSIONS_3D: Record<CompanionState, Expression3D> = {
-  calm: { eyes: 'pills', accessory: null, entry: false },
-  ready: { eyes: 'pills', accessory: null, entry: false },
+export const STATE_CONFIG: Record<SkynyState, StateLook> = {
+  // En el estudio v4.4 se perdió esta línea al añadir los estados nuevos: es la de la v4.3.
+  guardrail: { eyes: 'shield-eyes', accessory: 'hex-shield', entry: true, eyeColor: '#fda4af' },
+  degraded: { eyes: 'effort-eyes', accessory: 'limp-gears', entry: true, eyeColor: '#fde047' },
+  handover: { eyes: 'pills', accessory: 'relay-baton', entry: true, eyeColor: '#c4b5fd' },
+  throttled: { eyes: 'eco-eyes', accessory: 'eco-leaf', entry: true, eyeColor: '#a3e635' },
+  escalating: { eyes: 'stars', accessory: 'upgrade-chevrons', entry: true, eyeColor: '#f0abfc' },
+  streaming: { eyes: 'stream-eyes', accessory: 'token-stream', entry: true, eyeColor: '#22d3ee' },
+  syncing: { eyes: 'pills', accessory: 'sync-arrows', entry: true, eyeColor: '#7dd3fc' },
+  'dry-run': { eyes: 'reticle', accessory: 'holo-wireframe', entry: true, eyeColor: '#93c5fd' },
+  'pr-open': { eyes: 'happy', accessory: 'pr-badge', entry: true, eyeColor: '#4ade80' },
+  compacting: {
+    eyes: 'compact-eyes',
+    accessory: 'context-press',
+    entry: true,
+    eyeColor: '#a5b4fc',
+  },
+  conflict: { eyes: 'conflict-eyes', accessory: 'git-conflict', entry: true, eyeColor: '#fb923c' },
+  'context-indexing': {
+    eyes: 'pills',
+    accessory: 'layer-scanner',
+    entry: true,
+    eyeColor: '#5eead4',
+  },
+  'rate-limited': {
+    eyes: 'sleep',
+    accessory: 'battery-cooldown',
+    entry: true,
+    eyeColor: '#fcd34d',
+  },
+  benchmarking: { eyes: 'nodes', accessory: 'balance-scale', entry: true, eyeColor: '#fde047' },
+  'rolling-back': { eyes: 'pills', accessory: 'rollback-arrow', entry: true, eyeColor: '#fdba74' },
+  delegating: { eyes: 'pills', accessory: 'satellite-drones', entry: true },
+  routing: { eyes: 'pills', accessory: 'model-router', entry: true, eyeColor: '#67e8f9' },
+  sandbox: { eyes: 'reticle', accessory: 'sandbox-cube', entry: true, eyeColor: '#6ee7b7' },
+  recalling: { eyes: 'wink', accessory: 'memory-file', entry: true, eyeColor: '#ddd6fe' },
+  'check-result': { eyes: 'pills', accessory: 'check-document', entry: true, eyeColor: '#fde68a' },
+  'external-wait': { eyes: 'pills', accessory: 'clock', entry: true, eyeColor: '#93c5fd' },
+  listening: { eyes: 'listening', accessory: 'sound-waves', entry: true, eyeColor: '#67e8f9' },
+  'no-results': { eyes: 'empty-search', accessory: 'empty-box', entry: true, eyeColor: '#bae6fd' },
+  calm: { eyes: 'pills', accessory: 'sparks', entry: false },
+  ready: { eyes: 'pills', accessory: 'queue', entry: false },
   thinking: { eyes: 'wink', accessory: 'bubbles', entry: true },
-  running: { eyes: 'happy', accessory: 'speed', entry: true },
+  planning: { eyes: 'nodes', accessory: 'dag', entry: true, eyeColor: '#a5b4fc' },
+  coding: { eyes: 'code-eyes', accessory: 'keyboard', entry: true, eyeColor: '#5eead4' },
+  testing: { eyes: 'check-eyes', accessory: 'test-tubes', entry: true, eyeColor: '#a3e635' },
+  healing: { eyes: 'wink', accessory: 'wrench', entry: true, eyeColor: '#fdba74' },
+  running: { eyes: 'reticle', accessory: 'speed', entry: true, eyeColor: '#38bdf8' },
   reviewing: { eyes: 'pills', accessory: 'magnifier', entry: true },
+  auditing: { eyes: 'reticle', accessory: 'scanner', entry: true, eyeColor: '#6ee7b7' },
+  merging: { eyes: 'merge-eyes', accessory: 'git-merge', entry: true, eyeColor: '#d8b4fe' },
+  deploying: { eyes: 'stars', accessory: 'thruster', entry: true, eyeColor: '#7dd3fc' },
+  learning: { eyes: 'nodes', accessory: 'orbit', entry: true, eyeColor: '#e9d5ff' },
   success: { eyes: 'happy', accessory: 'confetti', entry: true },
+  celebrating: { eyes: 'happy', accessory: 'sparkles', entry: true },
   error: { eyes: 'stress', accessory: 'stress', entry: true, eyeColor: '#ffffff' },
-  waiting: { eyes: 'pills', accessory: 'alert', entry: true },
+  overloaded: { eyes: 'dizzy', accessory: 'sweat', entry: true, eyeColor: '#fde047' },
+  waiting: { eyes: 'pills', accessory: 'alert', entry: true, eyeColor: '#fbbf24' },
   paused: { eyes: 'pause-bars', accessory: 'pause', entry: true, eyeColor: '#64748b' },
   sleeping: { eyes: 'sleep', accessory: 'zzz', entry: true, eyeColor: '#e2e8f0' },
   offline: { eyes: 'circles', accessory: 'offline', entry: true, eyeColor: '#cbd5e1' },
-  cancelled: { eyes: 'bars', accessory: null, entry: false, eyeColor: '#94a3b8' },
+  cancelled: { eyes: 'bars', accessory: 'cancel-x', entry: true, eyeColor: '#94a3b8' },
 }
+
+/** Letrero de cada estado al llegar. */
+export const LED_MESSAGES: Record<SkynyState, string> = {
+  degraded: 'DEGRADADO',
+  handover: 'RELEVO',
+  throttled: 'MODO ECO',
+  escalating: 'ESCALANDO',
+  streaming: 'STREAMING',
+  syncing: 'SINCRONIZANDO',
+  'dry-run': 'SIMULANDO',
+  'pr-open': 'PR LISTA',
+  compacting: 'COMPACTANDO',
+  conflict: 'CONFLICTO',
+  'context-indexing': 'INDEXANDO',
+  guardrail: 'BLOQUEO',
+  'rate-limited': 'COOLDOWN',
+  benchmarking: 'EVALUANDO',
+  'rolling-back': 'ROLLBACK',
+  delegating: 'SUBAGENTES',
+  routing: 'MODELO...',
+  sandbox: 'SANDBOX',
+  recalling: 'RECORDANDO...',
+  'check-result': 'REVISAR',
+  'external-wait': 'ESPERANDO...',
+  listening: 'ESCUCHO',
+  'no-results': 'SIN RESULTADOS',
+  calm: 'HOLA',
+  ready: 'HOLA',
+  thinking: 'PENSANDO...',
+  planning: 'PLAN...',
+  coding: 'CODIGO...',
+  testing: 'TESTS',
+  healing: 'FIXING',
+  running: 'EN MARCHA',
+  reviewing: 'REVISANDO...',
+  auditing: 'AUDITORIA',
+  merging: 'MERGED',
+  deploying: 'DEPLOY',
+  learning: 'MEMORIA',
+  success: 'LISTO',
+  celebrating: 'EXITO',
+  error: 'ERROR',
+  overloaded: 'CUOTA',
+  waiting: 'AYUDA',
+  paused: 'PAUSA',
+  sleeping: 'ZZZ',
+  offline: 'SIN RED',
+  cancelled: 'CANCELADO',
+}
+
+/** Letreros cortos (Skyny pequeño). */
+export const LED_COMPACT: Partial<Record<SkynyState, string>> = {
+  degraded: 'FALLBACK',
+  handover: 'PASE',
+  throttled: 'ECO',
+  escalating: 'UPGRADE',
+  streaming: 'LIVE',
+  syncing: 'SYNC',
+  'dry-run': 'DRY RUN',
+  'pr-open': 'PR OK',
+  compacting: 'RESUMEN',
+  conflict: 'CONFLICT',
+  'context-indexing': 'INDEX',
+  guardrail: 'STOP',
+  'rate-limited': 'CUPO',
+  benchmarking: 'EVAL',
+  'rolling-back': 'REVERT',
+  routing: 'ROUTER',
+  sandbox: 'BOX',
+  recalling: 'MEMORIA',
+  'check-result': 'REVISA',
+  'external-wait': 'ESPERA',
+  listening: 'OYENDO',
+  'no-results': 'VACIO',
+  thinking: 'IDEA',
+  planning: 'PLAN',
+  reviewing: 'REVISA',
+  auditing: 'AUDITA',
+  coding: 'CODE',
+  testing: 'TEST',
+  healing: 'FIX',
+  merging: 'MERGE',
+  learning: 'RAG',
+}
+
+// =========================================================================

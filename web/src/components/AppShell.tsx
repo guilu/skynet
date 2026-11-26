@@ -4,9 +4,12 @@ import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 import { api, SESSION_KEY, type Session } from '../api'
 import { useTheme } from '../theme'
-import { BrandMark } from './brand/Logo'
 import { CompanionMenu } from './companion/CompanionMenu'
 import { CompanionProvider } from './companion/CompanionProvider'
+import { useCurtainSequence } from './chat/curtainSequence'
+import { FloatingSkyny } from './companion/FloatingSkyny'
+import { can3D } from './companion/look'
+import { preloadSkyny3D } from './companion/load3d'
 import { NoticeBell } from './companion/NoticeBell'
 import { SkynyPaused } from './companion/pause'
 import { useCompanionPrefs } from './companion/prefs'
@@ -49,11 +52,23 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useTheme()
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [chatOpen, setChatOpen] = useState(false)
+  // En el móvil, las cuatro acciones de la barra van plegadas tras «…» (se pliegan al cambiar de página).
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const [toolsPath, setToolsPath] = useState(pathname)
+  if (toolsPath !== pathname) {
+    setToolsPath(pathname)
+    setToolsOpen(false)
+  }
+  const companion = useCompanionPrefs()
+  // La cortina, una cosa detrás de otra: sale el Skyny de la web, baja la cortina, entra el suyo
+  // (y al revés al cerrarla).
+  const [three] = useState(can3D)
+  const curtain = useCurtainSequence({ floating: companion.floating && three, curtain3D: three })
+  const chatOpen = curtain.open
+  const toggleCurtain = curtain.toggle
   // Montada desde la primera vez que se abre: al cerrarla conserva el borrador y la conversación.
   const [chatLoaded, setChatLoaded] = useState(false)
   const [noticesOpen, setNoticesOpen] = useState(false)
-  const companion = useCompanionPrefs()
   const queryClient = useQueryClient()
   const session = useQuery<Session | null>({ queryKey: SESSION_KEY, enabled: false })
   const logout = useMutation({
@@ -64,6 +79,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     },
   })
 
+  // three en un rato libre: la cortina del chat y En curso sacan a Skyny ya en 3D.
+  useEffect(preloadSkyny3D, [])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -73,12 +91,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault()
         setChatLoaded(true)
-        setChatOpen((o) => !o)
+        toggleCurtain()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [toggleCurtain])
 
   const toggleCollapsed = () => {
     setCollapsed((c) => {
@@ -107,14 +125,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                   className="brand"
                   onClick={() => {
                     setChatLoaded(true)
-                    setChatOpen(true)
+                    curtain.request(true)
                   }}
                   aria-label="Pregúntale a Skyny"
                   aria-expanded={chatOpen}
                   aria-keyshortcuts="Meta+J Control+J"
                 >
-                  <BrandMark />
-                  <span className="brand-name">Skynet</span>
+                  <span className="brand-name">SKYNET</span>
                 </button>
               </Tooltip.Trigger>
               <Tooltip.Portal>
@@ -124,20 +141,45 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Tooltip.Portal>
             </Tooltip.Root>
             <Breadcrumbs />
-            <button
-              type="button"
-              className="search-btn"
-              onClick={() => setPaletteOpen(true)}
-              aria-label="Buscar o ejecutar una orden"
-              aria-keyshortcuts="Meta+K Control+K"
-            >
-              <Icon name="search" size={20} strokeWidth={2.5} />
-              <span className="search-label">Buscar ejecución, trabajo o runner…</span>
-              <kbd className="kbd">⌘K</kbd>
-            </button>
-            {companion.mascot && <CompanionMenu onOpenNotices={() => setNoticesOpen(true)} />}
-            <NoticeBell open={noticesOpen} onOpenChange={setNoticesOpen} />
-            <ThemeMenu theme={theme} onChange={setTheme} />
+            <div className="topbar-more-wrap">
+              <div
+                id="topbar-tools"
+                className="topbar-tools"
+                data-open={toolsOpen || undefined}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setToolsOpen(false)
+                }}
+              >
+                <button
+                  type="button"
+                  className="search-btn"
+                  onClick={() => setPaletteOpen(true)}
+                  aria-label="Buscar o ejecutar una orden"
+                  aria-keyshortcuts="Meta+K Control+K"
+                >
+                  <Icon name="search" size={20} strokeWidth={2.5} />
+                  <span className="search-label">Buscar ejecución, trabajo o runner…</span>
+                  <kbd className="kbd">⌘K</kbd>
+                </button>
+                {companion.mascot && <CompanionMenu onOpenNotices={() => setNoticesOpen(true)} />}
+                <NoticeBell open={noticesOpen} onOpenChange={setNoticesOpen} />
+                <ThemeMenu theme={theme} onChange={setTheme} />
+              </div>
+              <button
+                type="button"
+                className="icon-btn topbar-more"
+                aria-label={
+                  toolsOpen
+                    ? 'Ocultar las acciones de la barra'
+                    : 'Mostrar las acciones de la barra'
+                }
+                aria-expanded={toolsOpen}
+                aria-controls="topbar-tools"
+                onClick={() => setToolsOpen((open) => !open)}
+              >
+                <Icon name={toolsOpen ? 'close' : 'more'} size={22} strokeWidth={2.25} />
+              </button>
+            </div>
             {session.data && (
               <UserMenu
                 username={session.data.username}
@@ -154,6 +196,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </main>
           <MobileNav />
+          {/* Skyny 3D en su capa, por encima de la página; se va volando al abrir la cortina. */}
+          <FloatingSkyny away={curtain.away} />
           {paletteOpen && (
             <Suspense fallback={null}>
               <CommandPalette open onOpenChange={setPaletteOpen} onTheme={setTheme} />
@@ -161,7 +205,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
           {chatLoaded && (
             <Suspense fallback={null}>
-              <ChatCurtain open={chatOpen} onOpenChange={setChatOpen} />
+              <ChatCurtain
+                open={chatOpen}
+                onOpenChange={curtain.request}
+                skynyLeaving={curtain.leaving}
+              />
             </Suspense>
           )}
           <Toasts />

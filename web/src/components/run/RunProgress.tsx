@@ -74,12 +74,15 @@ export function RunProgress({
   now,
   selectedAgentId,
   onSelectAgent,
+  onOpenStage = onSelectAgent,
 }: {
   run: Run
   spans: Span[]
   now: number
   selectedAgentId: string | undefined
   onSelectAgent: (agentId: string) => void
+  /** Al abrir una fase se elige su último agente: sin salir del resumen. Por defecto, `onSelectAgent`. */
+  onOpenStage?: (agentId: string) => void
 }) {
   // Una fase sin agentes (omitida, pendiente) se abre sin cambiar el agente elegido; en cuanto se
   // elige otro agente, manda la fase de ese agente.
@@ -103,7 +106,7 @@ export function RunProgress({
       return
     }
     setPeek(null)
-    if (!stage.agents.some((a) => a.id === selectedAgentId)) onSelectAgent(stage.agents.at(-1)!.id)
+    if (!stage.agents.some((a) => a.id === selectedAgentId)) onOpenStage(stage.agents.at(-1)!.id)
   }
 
   return (

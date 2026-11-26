@@ -20,12 +20,18 @@ import { RunHeader } from '../components/run/RunHeader'
 import { Celebration } from '../components/companion/Celebration'
 import { useCelebration } from '../components/companion/useCelebration'
 import { RunBand } from '../components/companion/RunBand'
-import { ACTIVITY_VIEWS, useRunSelection, type RunPane } from '../components/run/useRunSelection'
+import {
+  ACTIVITY_VIEWS,
+  useRunSelection,
+  type RunMain,
+  type RunPane,
+} from '../components/run/useRunSelection'
 import { TabList, TabPanel, type TabItem } from '../components/ui/Tabs'
 import { Timeline } from '../components/timeline/Timeline'
 import { aggregateTimeline, indexOfSequence, matchesFilters } from '../components/timeline/timeline'
 import { TimelineFiltersBar } from '../components/timeline/TimelineFiltersBar'
 import { useEventStream } from '../useEventStream'
+import { usePulse } from '../components/companion/usePulse'
 import { useMediaQuery } from '../useMediaQuery'
 import { useNow } from '../useNow'
 import { RunSkeleton } from '../components/ui/Skeleton'
@@ -56,7 +62,10 @@ export function RunPage() {
   }
 
   // Cada evento se aplica a la vista en caché; solo se relee lo que el evento no trae.
+  // Skyny reacciona a lo que llega sin cambiar de estado: herramientas, ficheros, mensajes.
+  const [pulse, pushPulse] = usePulse()
   const { events, state } = useEventStream({ workflowRunId: runId }, (event) => {
+    pushPulse(event)
     // La PR, su CI y su fusión van aparte: se releen con sus eventos.
     if (event.type.includes('.github.') || event.type.startsWith('run.escape')) {
       void queryClient.invalidateQueries({ queryKey: pullRequestKey(runId) })
@@ -118,10 +127,26 @@ export function RunPage() {
   const agent =
     agents.find((a) => a.id === selection.agentId) ?? (run.data && headlineAgent(run.data))
 
+  // Elegir un agente o una herramienta lo enseña en el detalle. Abrir una fase en el progreso del
+  // resumen también elige su agente, pero se sigue en el resumen.
   const selectAgent = (agentId: string) =>
-    select({ agentId, toolUseId: null, sequence: null, ...(narrow && { pane: 'inspector' }) })
+    select({
+      main: 'detail',
+      agentId,
+      toolUseId: null,
+      sequence: null,
+      ...(narrow && { pane: 'inspector' }),
+    })
+  const selectStageAgent = (agentId: string) =>
+    select({ main: 'summary', agentId, toolUseId: null, sequence: null })
   const selectTool = (agentId: string, toolUseId: string) =>
-    select({ agentId, toolUseId, tab: 'tools', ...(narrow && { pane: 'inspector' }) })
+    select({
+      main: 'detail',
+      agentId,
+      toolUseId,
+      tab: 'tools',
+      ...(narrow && { pane: 'inspector' }),
+    })
 
   const activity = (
     <section className="run-pane run-activity" aria-label="Actividad">
@@ -215,48 +240,69 @@ export function RunPage() {
       {run.data && (
         <>
           <RunHeader run={run.data} stream={state} agent={agent} />
-          <RunProgress
-            run={run.data}
-            spans={spans}
-            now={now}
-            selectedAgentId={agent?.id}
-            onSelectAgent={selectAgent}
-          />
-          <RunBand run={run.data} now={now} gesture={celebrating ? 'hop' : null} />
-          {hasPullRequestStages(run.data) && <PullRequestCard run={run.data} />}
-          <AssumptionsCard runId={run.data.id} />
-          {celebrating && <Celebration />}
-          {narrow ? (
-            <div className="run-mobile">
-              <TabList
-                label="Paneles de la ejecución"
-                tabs={PANES}
-                selected={selection.pane}
-                onSelect={(pane) => select({ pane })}
-                idPrefix="pane"
-                panelId="pane-panel"
-              />
-              <TabPanel id="pane-panel" labelledBy={`pane-${selection.pane}`} className="card">
-                {selection.pane === 'activity' && activity}
-                {selection.pane === 'inspector' && inspector}
-              </TabPanel>
-            </div>
-          ) : (
-            <Group
-              className="run-panels"
-              orientation="horizontal"
-              defaultLayout={panels.defaultLayout}
-              onLayoutChanged={panels.onLayoutChanged}
-            >
-              <Panel id="activity" defaultSize="58" minSize="320px" className="run-panel">
-                {activity}
-              </Panel>
-              <Separator className="run-separator" aria-label="Ancho del inspector" />
-              <Panel id="inspector" defaultSize="42" minSize="300px" className="run-panel">
-                {inspector}
-              </Panel>
-            </Group>
-          )}
+          <div className="run-main-tabs">
+            <TabList
+              label="Ejecución"
+              tabs={MAIN_TABS}
+              selected={selection.main}
+              onSelect={(main) => select({ main })}
+              idPrefix="main"
+              panelId="main-panel"
+            />
+          </div>
+          <TabPanel id="main-panel" labelledBy={`main-${selection.main}`}>
+            {selection.main === 'summary' ? (
+              <>
+                <RunProgress
+                  run={run.data}
+                  spans={spans}
+                  now={now}
+                  selectedAgentId={agent?.id}
+                  onSelectAgent={selectAgent}
+                  onOpenStage={selectStageAgent}
+                />
+                <RunBand
+                  run={run.data}
+                  now={now}
+                  gesture={celebrating ? 'hop' : null}
+                  pulse={pulse}
+                />
+                {hasPullRequestStages(run.data) && <PullRequestCard run={run.data} />}
+                <AssumptionsCard runId={run.data.id} />
+                {celebrating && <Celebration />}
+              </>
+            ) : narrow ? (
+              <div className="run-mobile">
+                <TabList
+                  label="Paneles de la ejecución"
+                  tabs={PANES}
+                  selected={selection.pane}
+                  onSelect={(pane) => select({ pane })}
+                  idPrefix="pane"
+                  panelId="pane-panel"
+                />
+                <TabPanel id="pane-panel" labelledBy={`pane-${selection.pane}`} className="card">
+                  {selection.pane === 'activity' && activity}
+                  {selection.pane === 'inspector' && inspector}
+                </TabPanel>
+              </div>
+            ) : (
+              <Group
+                className="run-panels"
+                orientation="horizontal"
+                defaultLayout={panels.defaultLayout}
+                onLayoutChanged={panels.onLayoutChanged}
+              >
+                <Panel id="activity" defaultSize="58" minSize="320px" className="run-panel">
+                  {activity}
+                </Panel>
+                <Separator className="run-separator" aria-label="Ancho del inspector" />
+                <Panel id="inspector" defaultSize="42" minSize="300px" className="run-panel">
+                  {inspector}
+                </Panel>
+              </Group>
+            )}
+          </TabPanel>
         </>
       )}
     </>
@@ -264,6 +310,11 @@ export function RunPage() {
 }
 
 const VIEW_ICONS = { conversation: 'conversation', waterfall: 'timeline', events: 'list' } as const
+
+const MAIN_TABS: TabItem<RunMain>[] = [
+  { id: 'summary', label: 'Resumen', icon: 'dashboard' },
+  { id: 'detail', label: 'Detalle', icon: 'panel-right' },
+]
 
 const PANES: TabItem<RunPane>[] = [
   { id: 'activity', label: 'Actividad', icon: 'conversation' },

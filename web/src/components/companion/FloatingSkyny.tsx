@@ -1,0 +1,272 @@
+import { Suspense, useEffect, useRef, useState, type PointerEvent } from 'react'
+import { useMediaQuery } from '../../useMediaQuery'
+import { Icon } from '../icons/Icon'
+import { useCompanion } from './context'
+import { Skyny3D } from './load3d'
+import { can3D } from './look'
+import { setCompanionPrefs, useCompanionPrefs } from './prefs'
+import { useSettledState } from './settle'
+import { FLOAT_ENTER_MS, FLOAT_EXIT_MS } from '../chat/curtainSequence'
+import { floatBox, floatGesture, floatPos, orbitAfter, type FloatGesture } from './float'
+import { takeQuip } from './gesture'
+import { sayOnScouter, useScouterText } from './scouter'
+import type { MicroType } from './three/Skyny3D'
+
+/** Lo que mide Skyny flotando, y el margen con los bordes de la pantalla. */
+const SIZE = 240
+const SIZE_MOBILE = 168
+/**
+ * Con texto en el scouter, Skyny entero crece hasta este tanto (sin recortarlo) para que se lea.
+ * Se pinta siempre a ese tamaño y se encoge con CSS: así crecer es suave y no se ve borroso.
+ */
+const GROW = 1.75
+/** En el móvil, la barra de navegación de abajo: Skyny no se mete debajo. */
+const MOBILE_NAV = 84
+/** Lo que espera tras irse volando antes de desmontarlo (sin gastar GPU mientras no se ve). */
+const LEAVE_MS = FLOAT_EXIT_MS + 200
+/** Menos que esto (px y ms) es un toque (¡boop!), no un arrastre. */
+const CLICK_PX = 6
+const CLICK_MS = 320
+
+function useViewport() {
+  const read = () => ({ w: window.innerWidth, h: window.innerHeight })
+  const [view, setView] = useState(read)
+  useEffect(() => {
+    const onResize = () => setView(read())
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  return view
+}
+
+/**
+ * Skyny flotando por encima de la web, en su propia capa: entra volando al cargar, cuenta con su
+ * cara el estado global, sigue con los ojos al puntero y al foco, y reacciona cuando lo tocas
+ * (¡boop!). Se arrastra a cualquier sitio dentro de la pantalla para quitarlo de en medio, y
+ * recuerda dónde lo dejaste. Solo él recibe clics: el resto de la capa deja pasar todo a la web.
+ * Lo que dice Skyny (`sayOnScouter`) sale en el cristal del scouter si lo lleva puesto (si no dice
+ * nada, el estado) y, sin él, pasa por su visor de derecha a izquierda, como en el login.
+ *
+ * Con `away` (la cortina del chat abierta) se va volando y se desmonta; al cerrarla vuelve.
+ * Sin WebGL o con movimiento reducido no sale (el 2D de la barra ya cuenta lo mismo).
+ */
+export function FloatingSkyny({ away = false }: { away?: boolean }) {
+  const prefs = useCompanionPrefs()
+  const [three, setThree] = useState(can3D)
+  const { expression } = useCompanion()
+  const state = useSettledState(expression)
+  const mobile = useMediaQuery('(max-width: 720px)')
+  const size = mobile ? SIZE_MOBILE : SIZE
+  const bottom = mobile ? MOBILE_NAV : 0
+  const view = useViewport()
+  const scouter = useScouterText()
+  // Sin el scouter, lo que dice pasa por el visor de derecha a izquierda, como en el login.
+  const [visor, setVisor] = useState({ text: '', key: 0 })
+  if (scouter !== visor.text) setVisor({ text: scouter, key: visor.key + (scouter ? 1 : 0) })
+
+  // Montado mientras se ve o mientras se va volando.
+  const [mounted, setMounted] = useState(!away)
+  const [moves, setMoves] = useState(1)
+  const [shownAway, setShownAway] = useState(away)
+  if (away !== shownAway) {
+    setShownAway(away)
+    setMoves((n) => n + 1)
+    if (!away) setMounted(true)
+  }
+  useEffect(() => {
+    if (!away) return
+    const timer = window.setTimeout(() => setMounted(false), LEAVE_MS)
+    return () => window.clearTimeout(timer)
+  }, [away])
+
+  // Arrastrar para moverlo: mientras dura, la posición va en px; al soltar se guarda en fracciones.
+  // Arrastrar para girarlo: cambia su orientación, que se queda al moverlo después.
+  const [dragBox, setDragBox] = useState<{ left: number; top: number } | null>(null)
+  const [orbit, setOrbit] = useState({ yaw: 0, pitch: 0 })
+  const [rotateMode, setRotateMode] = useState(false)
+  /** El gesto en marcha, cuando ya es un arrastre (para el cursor). */
+  const [active, setActive] = useState<FloatGesture | null>(null)
+  const drag = useRef<{
+    gesture: FloatGesture
+    /** Botón con el que empezó: solo el izquierdo (o un toque) sin arrastrar hace «pop». */
+    button: number
+    dx: number
+    dy: number
+    x: number
+    y: number
+    lastX: number
+    lastY: number
+    at: number
+    moved: boolean
+  }>(null)
+  // Tras arrastrar con el botón derecho, el menú del navegador puede salir al soltar, también si
+  // se suelta fuera de Skyny: se descarta solo el de ese gesto.
+  const blockMenu = useRef<() => void>(null)
+  useEffect(() => () => blockMenu.current?.(), [])
+  const touch = useMediaQuery('(pointer: coarse)')
+  const [boop, setBoop] = useState(0)
+  const [micro, setMicro] = useState<{ type: MicroType; key: number } | null>(null)
+  const react = (type: MicroType) => setMicro((m) => ({ type, key: (m?.key ?? 0) + 1 }))
+
+  if (!prefs.floating || !three || !mounted) return null
+
+  const box = dragBox ?? floatBox(prefs.floatAt, view, size, bottom)
+  // Crece hacia el centro de la pantalla: desde la esquina o el borde donde está.
+  const at = dragBox ? floatPos(box.left, box.top, view, size, bottom) : prefs.floatAt
+  const big = Math.round(size * GROW)
+  const zoomed = scouter !== '' && prefs.face === 'cyber' && !away
+
+  const onDown = (e: PointerEvent<HTMLDivElement>) => {
+    const gesture = floatGesture(e.pointerType, e.button, rotateMode)
+    if (!gesture || drag.current) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    drag.current = {
+      gesture,
+      button: e.button,
+      dx: e.clientX - box.left,
+      dy: e.clientY - box.top,
+      x: e.clientX,
+      y: e.clientY,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      at: performance.now(),
+      moved: false,
+    }
+    if (e.button === 2) {
+      blockMenu.current?.()
+      const stop = (ev: Event) => ev.preventDefault()
+      window.addEventListener('contextmenu', stop, true)
+      blockMenu.current = () => {
+        window.removeEventListener('contextmenu', stop, true)
+        blockMenu.current = null
+      }
+    }
+  }
+  const onMove = (e: PointerEvent<HTMLDivElement>) => {
+    const d = drag.current
+    if (!d) return
+    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < CLICK_PX) return
+    if (!d.moved && d.gesture === 'move') react('startle')
+    if (!d.moved) {
+      // Desde donde empezó el gesto, no desde que pasó el umbral: no da un salto.
+      d.lastX = d.x
+      d.lastY = d.y
+      setActive(d.gesture)
+    }
+    d.moved = true
+    if (d.gesture === 'rotate') {
+      const dx = e.clientX - d.lastX
+      const dy = e.clientY - d.lastY
+      d.lastX = e.clientX
+      d.lastY = e.clientY
+      setOrbit((o) => orbitAfter(o, dx, dy))
+      return
+    }
+    const p = floatPos(e.clientX - d.dx, e.clientY - d.dy, view, size, bottom)
+    setDragBox(floatBox(p, view, size, bottom))
+  }
+  /** Fin del gesto: al soltar (dentro o fuera de Skyny), si se cancela o si pierde el puntero. */
+  const finish = (e: PointerEvent<HTMLDivElement>, cancelled: boolean) => {
+    const d = drag.current
+    drag.current = null
+    if (!d) return
+    setActive(null)
+    if (d.button === 2) {
+      // El menú sale justo después de soltar: se deja un momento y se vuelve a permitir.
+      const release = blockMenu.current
+      window.setTimeout(() => {
+        if (blockMenu.current === release) release?.()
+      }, 400)
+    }
+    if (e.currentTarget.hasPointerCapture(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    if (!d.moved) {
+      if (!cancelled && d.button === 0 && performance.now() - d.at < CLICK_MS) {
+        setBoop((n) => n + 1)
+        // Al tocarlo dice la siguiente frase: en el scouter o, sin él, en el visor.
+        sayOnScouter(takeQuip())
+      }
+      return
+    }
+    if (d.gesture === 'rotate') return
+    if (!cancelled)
+      setCompanionPrefs({
+        floatAt: floatPos(e.clientX - d.dx, e.clientY - d.dy, view, size, bottom),
+      })
+    setDragBox(null)
+    if (!cancelled) react('nod')
+  }
+
+  return (
+    <div
+      className="floating-skyny"
+      data-dragging={dragBox ? true : undefined}
+      data-away={away || undefined}
+      data-gesture={active ?? undefined}
+      style={{ left: box.left, top: box.top, width: size, height: size }}
+    >
+      <div
+        className="floating-skyny-zoom"
+        data-zoom={zoomed || undefined}
+        aria-hidden="true"
+        style={{
+          width: big,
+          height: big,
+          left: -(big - size) * at.x,
+          top: -(big - size) * at.y,
+          transformOrigin: `${at.x * 100}% ${at.y * 100}%`,
+          transform: zoomed ? undefined : `scale(${1 / GROW})`,
+        }}
+      >
+        <Suspense fallback={null}>
+          <Skyny3D
+            state={state}
+            size={big}
+            scouterZoom={false}
+            boop={boop}
+            micro={micro}
+            orbit={orbit}
+            scouter={prefs.face === 'cyber' ? scouter : ''}
+            say={
+              prefs.face !== 'cyber' && visor.text
+                ? { text: visor.text.toUpperCase(), key: visor.key, scroll: true }
+                : null
+            }
+            stage={{
+              mode: away ? 'exit' : 'enter',
+              key: moves,
+              duration: away ? FLOAT_EXIT_MS : FLOAT_ENTER_MS,
+            }}
+            onFail={() => setThree(false)}
+          />
+        </Suspense>
+      </div>
+      {/*
+        Solo su cuerpo se toca y se arrastra: el resto del cuadrado deja pasar los clics. Con ratón,
+        el botón izquierdo lo gira y el derecho lo mueve; con el dedo, lo mueve (o lo gira, con
+        «Girar» activado). Un clic o un toque sin arrastrar hace «pop».
+      */}
+      <div
+        className="floating-skyny-hit"
+        aria-hidden="true"
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={(e) => finish(e, false)}
+        onPointerCancel={(e) => finish(e, true)}
+        onLostPointerCapture={(e) => finish(e, false)}
+        onContextMenu={(e) => e.preventDefault()}
+      />
+      {touch && !away && (
+        <button
+          type="button"
+          className="floating-skyny-rotate"
+          aria-pressed={rotateMode}
+          onClick={() => setRotateMode((on) => !on)}
+        >
+          <Icon name="refresh" size={14} />
+          Girar
+        </button>
+      )}
+    </div>
+  )
+}

@@ -5,6 +5,7 @@ import {
   publishWorkflowViaApi,
   service,
   workItemViaApi,
+  openDetail,
 } from './helpers.ts'
 
 /**
@@ -94,6 +95,7 @@ test('un workflow de tres fases termina igual aunque se reinicie el control plan
     await page.getByRole('button', { name: 'Grafo', exact: true }).click()
     await expect(graph.locator('.graph-node')).toHaveCount(3)
     // Las fases en paralelo ya trabajan: se ven sus herramientas en la cascada.
+    await openDetail(page)
     await page.getByRole('tab', { name: 'Cascada' }).click()
     const waterfall = page.getByRole('tabpanel', { name: 'Cascada' })
     await expect(waterfall.getByRole('button', { name: /^Read / }).first()).toBeVisible({

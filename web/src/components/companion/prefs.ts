@@ -10,6 +10,18 @@ export interface CompanionPrefs {
   browser: boolean
   /** Accesorios de temporada (Halloween, Navidad, verano). */
   seasonal: boolean
+  /** Gorro de Skyny 3D ('' = ninguno; si no hay, el de temporada). */
+  hat: string
+  /** Complemento de cara de Skyny 3D ('' = ninguno). */
+  face: string
+  /** Complemento de espalda de Skyny 3D ('' = ninguno). */
+  back: string
+  /** Skyny 3D flotando por encima de la web. */
+  floating: boolean
+  /** Sonidos de Skyny 3D (al tocarlo, al entrar y salir, en los pulsos y en el scouter). */
+  sound: boolean
+  /** Dónde lo dejaste, en fracciones del sitio libre de la pantalla (1, 1: abajo a la derecha). */
+  floatAt: { x: number; y: number }
   /** Hasta cuándo (ms) no salen avisos flotantes ni del navegador; null si no está silenciado. */
   mutedUntil: number | null
 }
@@ -20,6 +32,12 @@ export const DEFAULT_PREFS: CompanionPrefs = {
   toasts: true,
   browser: false,
   seasonal: true,
+  hat: '',
+  face: '',
+  back: '',
+  floating: true,
+  sound: true,
+  floatAt: { x: 1, y: 1 },
   mutedUntil: null,
 }
 /** «Silenciar 1 h». */

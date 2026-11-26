@@ -69,7 +69,7 @@ Las piezas base están en `web/src/components/ui/`. Las de listas, en `component
 - **Confirmación con coste.** Reintentar, bifurcar o eliminar explican qué harán en un aviso amarillo antes del botón, y el botón dice la acción («Eliminar», no «Aceptar»).
 - **Archivado.** Proyectos, repositorios, trabajos, ejecuciones y runners llevan un menú «⋯» (en la página y en cada fila). Archivar y restaurar se hacen al momento; los runners se «olvidan». Lo archivado sale de las listas salvo con el chip «Archivados» (en runners, «Olvidados»), y su página lleva un aviso de solo lectura con «Restaurar» y esconde lo que crea o lanza. Si lo archivado es el padre, el aviso lo dice y no hay botón.
 - **Eliminar.** Solo sobre lo archivado, desde «Eliminar…», que abre un `Sheet` con lo que se borraría (`deletion-preview`), los avisos y lo que lo impide. Si lo impiden worktrees vivos, el panel ofrece eliminarlos y vuelve a mirar cada 3 s hasta poder seguir. «Eliminar definitivamente» queda desactivado hasta entonces. En la lista de ejecuciones se pueden marcar varias para archivarlas, restaurarlas o eliminarlas de una vez; las que fallan se listan con su motivo.
-- **Ejecución.** Cabecera con la insignia de estado, la clave, el título y chips (workflow, runner, modelo, rama), con las acciones del agente elegido (reintentar, bifurcar, eliminar worktree, cancelar) debajo. Cuatro cifras: duración, tokens, coste y tests (sin verificación, su hueco queda vacío). El progreso pinta las fases como un camino horizontal; al pulsar una fase se ven sus agentes. Debajo, dos paneles redimensionables (actividad e inspector) que en el móvil pasan a pestañas. La actividad tiene conversación, cascada y eventos.
+- **Ejecución.** Cabecera con la insignia de estado, la clave, el título y chips (workflow, runner, modelo, rama), con las acciones del agente elegido (reintentar, bifurcar, eliminar worktree, cancelar) debajo. Debajo, el panel «Cifras»: duración, tokens, coste, cuota y tests (si hay verificación) en píldoras de color con su desglose al lado. Luego dos pestañas (`?main=`): **Resumen**, con el progreso (las fases como un camino horizontal; al pulsar una fase se ven sus agentes, y al elegir uno se abre el detalle), cómo acabó y la PR; y **Detalle**, con los dos paneles redimensionables (actividad e inspector) que en el móvil pasan a pestañas. Un enlace que elige agente, pestaña o evento abre el detalle. La actividad tiene conversación, cascada y eventos.
 
 ## 5. Movimiento
 
@@ -90,7 +90,7 @@ Las piezas base están en `web/src/components/ui/`. Las de listas, en `component
 - Hasta 900 px, la ejecución pasa a pestañas (Pasos, Actividad, Detalle).
 - Hasta 720 px, la barra lateral pasa a una barra inferior con Inicio, Proyectos, Fábrica (las ejecuciones), Aprobar y «Más». «Más» abre una hoja con todas las secciones en baldosas, agrupadas por área. Las migas se reducen a «‹ padre» (por ejemplo, «‹ Proyectos»), o al nombre de la sección si no hay padre.
 - Hasta 640 px, el panel lateral sube desde abajo y las acciones de la cabecera ocupan el ancho.
-- Hasta 520 px, las cifras del dashboard y de la ejecución van de dos en dos.
+- Hasta 520 px, las cifras del dashboard van de dos en dos.
 - En pantallas grandes, el contenido ocupa todo el ancho del navegador, sin máximo.
 - Ninguna página se desplaza en horizontal: las tablas anchas se desplazan dentro de su bloque.
 
@@ -188,7 +188,9 @@ El logo sale del estudio de imagen corporativa de octubre de 2026, variante «Pr
 **Desde SY-B (#183), el icono de la app es Skyny**, la mascota (sección 11), en lugar del isotipo. El isotipo queda en `brand.ts` y en el componente `Logo`, pero ya no sale en la interfaz.
 
 - **Un solo dibujo.** La geometría de Skyny (cuerpo, bandas, nodos y visor) está en `web/src/lib/brand.ts` y la comparten el componente `Companion` y `skynySvg`, que dibuja a Skyny quieto y sin efectos para los iconos.
-- **Marca de la barra lateral.** `BrandMark` es Skyny en Reposo (54 px, quieto, sin destellos ni suelo), sin baldosa. Sigue al acento, al tema y a los accesorios de temporada. Es enlace al Inicio: se ilumina al pasar el ratón, se hunde al pulsar y tiene foco visible. Con la barra plegada solo queda Skyny.
+- **Marca de la barra superior.** El nombre «SKYNET» en texto (Barlow 600, espaciado), sin Skyny ni isotipo: es la única excepción a los textos sin mayúsculas. Abre el chat con Skyny (⌘J), se ilumina al pasar el ratón y tiene foco visible. Siempre visible, también con la barra plegada y en el móvil.
+- **Sin Skyny en 2D en la barra superior.** El botón del companion y la cabecera de su menú llevan el icono del estado (`COMPANION_ICON`), y la campana, el de cada aviso (`NOTICE_ICON`).
+- **Barra superior en el móvil.** Buscar, companion, avisos y tema van plegados tras «…», a la izquierda del usuario. Al pulsarlo salen deslizándose hacia la izquierda y la marca y las migas se apartan con un fundido; la ✕ (o Escape, o cambiar de página) los vuelve a plegar.
 - **Dónde aparece.** En la barra lateral y en el login, donde va Skyny grande con animación, y bajo el nombre va el lema «Agentes · Flujos · Ejecuciones».
 - **Nombre.** «Skynet» en Barlow 600, la tipografía de títulos.
 - **Favicon e iconos.** `public/favicon.svg` es `faviconSvg`: Skyny en reposo, sin fondo, con el azul por defecto, y un test lo comprueba. Con un acento propio, `appearance.ts` lo cambia por uno generado al vuelo con ese color.

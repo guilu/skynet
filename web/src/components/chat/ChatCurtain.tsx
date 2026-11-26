@@ -2,11 +2,13 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useLocation } from 'react-router'
-import { api, ApiError, type ChatAction, type ChatThread } from '../../api'
+import { api, ApiError, type ChatAction, type ChatThread, type StoredEvent } from '../../api'
 import { formatDateTime } from '../../format'
 import { useMediaQuery } from '../../useMediaQuery'
 import { Companion } from '../companion/Companion'
 import { SkynyLive } from '../companion/SkynyLive'
+import { CURTAIN_DOWN_MS, CURTAIN_SKYNY_ENTER_MS, CURTAIN_SKYNY_EXIT_MS } from './curtainSequence'
+import { usePulse } from '../companion/usePulse'
 import { ErrorMessage } from '../ErrorMessage'
 import { Icon } from '../icons/Icon'
 import { ChatMessages } from './ChatMessages'
@@ -57,9 +59,12 @@ const ANSWERING_POLL_MS = 4000
 export function ChatCurtain({
   open,
   onOpenChange,
+  skynyLeaving = false,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Su Skyny se va volando antes de que suba la cortina (`useCurtainSequence`). */
+  skynyLeaving?: boolean
 }) {
   const { pathname } = useLocation()
   const queryClient = useQueryClient()
@@ -108,7 +113,9 @@ export function ChatCurtain({
     enabled: open && view === 'history',
   })
 
-  // Lo que pasa en la conversación llega por el stream de eventos: mensajes y acciones.
+  // Lo que pasa en la conversación llega por el stream de eventos: mensajes y acciones. Skyny
+  // reacciona a cada uno sin cambiar de estado.
+  const [pulse, pushPulse] = usePulse()
   useEffect(() => {
     if (!open || !activeId || typeof EventSource === 'undefined') return
     const params = new URLSearchParams({
@@ -117,12 +124,17 @@ export function ChatCurtain({
       after: 'latest',
     })
     const source = new EventSource(`/api/events/stream?${params}`)
-    source.onmessage = () => {
+    source.onmessage = (message) => {
+      try {
+        pushPulse(JSON.parse(message.data as string) as StoredEvent)
+      } catch {
+        // Un evento que no se entiende no reacciona; la conversación se relee igual.
+      }
       void queryClient.invalidateQueries({ queryKey: ['chat', activeId] })
       void queryClient.invalidateQueries({ queryKey: ['chat-actions', activeId] })
     }
     return () => source.close()
-  }, [open, activeId, queryClient])
+  }, [open, activeId, queryClient, pushPulse])
 
   const send = useMutation({
     mutationFn: async (message: string): Promise<ChatThread> => {
@@ -199,7 +211,17 @@ export function ChatCurtain({
     input.current?.focus()
   }
 
-  const size = mobile ? (talking ? 150 : 180) : 240
+  // Grande en el escritorio; con conversación, más pequeño para dejar sitio a los mensajes.
+  const size = mobile ? (talking ? 150 : 180) : talking ? 240 : 360
+  // Entra cuando la cortina ha bajado del todo y se va antes de que suba.
+  const stage = skynyLeaving
+    ? { mode: 'exit' as const, key: 2, duration: CURTAIN_SKYNY_EXIT_MS }
+    : {
+        mode: 'enter' as const,
+        key: 1,
+        duration: CURTAIN_SKYNY_ENTER_MS,
+        delay: CURTAIN_DOWN_MS,
+      }
   const expression = chatExpression({
     conversation,
     actions: actions.data,
@@ -254,6 +276,9 @@ export function ChatCurtain({
               state={talking ? expression : 'calm'}
               size={size}
               message={talking ? CHAT_LED[expression] : undefined}
+              pulse={talking ? pulse : null}
+              stage={stage}
+              interactive
               fallback={
                 <Companion state={talking ? expression : 'calm'} size={Math.round(size * 0.8)} />
               }

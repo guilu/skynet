@@ -113,15 +113,24 @@ export async function expectAccessible(page: Page, what: string) {
   expect(summary, `${what}: problemas de accesibilidad`).toEqual([])
 }
 
+/** La ejecución abre en su resumen: los paneles (actividad e inspector) van en «Detalle». */
+export async function openDetail(page: Page) {
+  const detail = page.getByRole('tab', { name: 'Detalle', exact: true })
+  if ((await detail.getAttribute('aria-selected')) !== 'true') await detail.click()
+}
+
 /**
  * Abre una pestaña de la ejecución, también si el detalle del agente la tiene en su menú «Más». Lo
  * reintenta: el reparto entre las pestañas y el menú se vuelve a medir cuando cambia el ancho del
  * inspector (p. ej. al cargar su contenido), y una pestaña puede pasar de un sitio al otro a mitad.
  */
 export async function openTab(page: Page, name: string) {
+  await openDetail(page)
   const inspector = page.getByRole('region', { name: 'Inspector del agente' })
   await expect(inspector.getByRole('tab').first()).toBeVisible()
-  const tab = page.getByRole('tab', { name, exact: true })
+  // «Resumen» se busca en el inspector: la pestaña principal de la ejecución se llama igual. El
+  // resto, en toda la página (Conversación, Cascada y Eventos están en el panel de actividad).
+  const tab = (name === 'Resumen' ? inspector : page).getByRole('tab', { name, exact: true })
   await expect(async () => {
     if (await tab.count()) {
       if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click({ timeout: 2_000 })

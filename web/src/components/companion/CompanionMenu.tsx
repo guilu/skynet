@@ -2,18 +2,17 @@ import * as Menu from '@radix-ui/react-dropdown-menu'
 import * as Tooltip from '@radix-ui/react-tooltip'
 import { useNavigate } from 'react-router'
 import { useNow } from '../../useNow'
-import { Companion } from './Companion'
 import { useCompanion } from './context'
 import { MUTE_MS, setCompanionPrefs, useCompanionPrefs } from './prefs'
-import { companionLabel } from './state'
+import { COMPANION_ICON, companionLabel } from './state'
 import { Icon } from '../icons/Icon'
 
 /**
- * La mascota de la barra superior con el estado global. Al pasar el ratón dice qué hay en marcha;
- * al pulsarla abre el menú rápido (plan, §5).
+ * El estado global en la barra superior: el icono del estado (sin Skyny en 2D). Al pasar el ratón
+ * dice qué hay en marcha; al pulsarlo abre el menú rápido (plan, §5).
  */
 export function CompanionMenu({ onOpenNotices }: { onOpenNotices: () => void }) {
-  const { expression, summary, activeRuns, pendingApprovals, gesture, quotaTight } = useCompanion()
+  const { expression, summary, activeRuns, pendingApprovals } = useCompanion()
   const prefs = useCompanionPrefs()
   const navigate = useNavigate()
   const now = useNow(true, 30_000)
@@ -24,8 +23,12 @@ export function CompanionMenu({ onOpenNotices }: { onOpenNotices: () => void }) 
     <Menu.Root modal={false}>
       <Tooltip.Root>
         <Tooltip.Trigger asChild>
-          <Menu.Trigger className="companion-btn" aria-label={name} data-live={live || undefined}>
-            <Companion state={expression} size={34} gesture={gesture} sweat={quotaTight} />
+          <Menu.Trigger
+            className="icon-btn companion-btn"
+            aria-label={name}
+            data-live={live || undefined}
+          >
+            <Icon name={COMPANION_ICON[expression]} size={22} strokeWidth={2.25} />
           </Menu.Trigger>
         </Tooltip.Trigger>
         <Tooltip.Portal>
@@ -37,7 +40,9 @@ export function CompanionMenu({ onOpenNotices }: { onOpenNotices: () => void }) 
       <Menu.Portal>
         <Menu.Content className="menu companion-menu" align="end" sideOffset={8}>
           <div className="companion-menu-head">
-            <Companion state={expression} size={48} sweat={quotaTight} />
+            <span className="companion-menu-icon" data-state={expression}>
+              <Icon name={COMPANION_ICON[expression]} size={22} strokeWidth={2.25} />
+            </span>
             <div>
               <strong>{companionLabel(expression)}</strong>
               <span className="muted">{summary}</span>

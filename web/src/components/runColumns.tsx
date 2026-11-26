@@ -1,7 +1,6 @@
 import { Link } from 'react-router'
 import type { Run } from '../api'
 import { elapsed, formatCost, formatDateTime, formatDuration, formatNumber } from '../format'
-import { runExpression } from './companion/state'
 import type { Column } from './list/DataTable'
 import { headlineAgent } from './run/headlineAgent'
 import { StatusBadge } from './StatusBadge'
@@ -22,7 +21,7 @@ export function runColumns(now: number): Column<Run>[] {
     {
       id: 'status',
       header: 'Estado',
-      cell: (run) => <StatusBadge status={run.status} face={runExpression(run, run.stages, now)} />,
+      cell: (run) => <StatusBadge status={run.status} />,
     },
     {
       id: 'agent',

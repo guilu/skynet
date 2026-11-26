@@ -1,6 +1,12 @@
 import { expect, test, type Page } from '@playwright/test'
 import { TEMPLATES } from '../src/components/workflow/templates.ts'
-import { expectAccessible, login, publishWorkflowViaApi, workItemViaApi } from './helpers.ts'
+import {
+  expectAccessible,
+  login,
+  publishWorkflowViaApi,
+  workItemViaApi,
+  openDetail,
+} from './helpers.ts'
 
 /**
  * Proveedores (PV-D, con Antigravity desde AR-B), criterio de aceptación del hito: la plantilla
@@ -198,6 +204,7 @@ test('un agente suelto con Antigravity y su modelo, lanzado desde la web', async
   await expect(header.getByTitle('Proveedor')).toHaveText(/Antigravity CLI/)
   await expect(header.getByTitle('Modelo')).toHaveText(/gemini-3-flash/)
   // Antigravity continúa la conversación: la caja de mensajes está activa.
+  await openDetail(page)
   await page.getByRole('tab', { name: 'Conversación' }).click()
   await expect(
     page.getByRole('form', { name: 'Continuar la conversación' }).getByLabel('Mensaje'),

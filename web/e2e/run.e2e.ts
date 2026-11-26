@@ -1,6 +1,14 @@
 import { expect, test, type Page } from '@playwright/test'
 import { startCuttableProxy } from './cuttableProxy.ts'
-import { fakeClaudeProcesses, launchViaApi, login, repoPath, service, openTab } from './helpers.ts'
+import {
+  fakeClaudeProcesses,
+  launchViaApi,
+  login,
+  repoPath,
+  service,
+  openTab,
+  openDetail,
+} from './helpers.ts'
 
 /**
  * Recorrido completo (issue #6): crear proyecto, repositorio y trabajo → lanzar un agente → ver
@@ -74,11 +82,13 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
 
   await test.step('herramientas en vivo, en la cascada y en los eventos', async () => {
     await expect(header.getByText('En vivo')).toBeVisible()
+    await openDetail(page)
     await page.getByRole('tab', { name: 'Cascada' }).click()
     const waterfall = page.getByRole('tabpanel', { name: 'Cascada' })
     await expect(waterfall.getByRole('button', { name: /^Read / }).first()).toBeVisible({
       timeout: 45_000,
     })
+    await openDetail(page)
     await page.getByRole('tab', { name: /^Eventos/ }).click()
     await expect(timeline.getByRole('button', { name: /Read: / }).first()).toBeVisible()
   })
@@ -98,6 +108,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
   })
 
   await test.step('mensajes en la conversación y herramientas en el inspector', async () => {
+    await openDetail(page)
     await page.getByRole('tab', { name: 'Conversación' }).click()
     const conversation = page.getByRole('tabpanel', { name: 'Conversación' })
     await expect(conversation.getByText(/Fixed `add\(\)`/)).toBeVisible()
@@ -108,6 +119,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     await expect(inspector.getByText('Hecha')).toHaveCount(3)
 
     // Elegir una herramienta en la cascada la abre en el inspector.
+    await openDetail(page)
     await page.getByRole('tab', { name: 'Cascada' }).click()
     const waterfall = page.getByRole('tabpanel', { name: 'Cascada' })
     await waterfall.getByRole('button', { name: /^Edit / }).click()
@@ -143,7 +155,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     await expect(verified.getByText('Pasa')).toBeVisible({ timeout: 60_000 })
     await expect(verified.getByText('1 tests · 0 fallidos · 0 omitidos')).toBeVisible()
     await expect(verified.getByText('sh check.sh')).toBeVisible()
-    await expect(header.locator('.run-kpis').getByText('1/1', { exact: true })).toBeVisible()
+    await expect(header.locator('.run-stats').getByText('1/1', { exact: true })).toBeVisible()
 
     await panel.getByRole('button', { name: 'Reejecutar verificación' }).click()
     await expect(panel.getByRole('heading', { name: 'Anteriores' })).toBeVisible({
@@ -158,6 +170,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
     const stored = await (
       await page.request.get(`/api/events?workflowRunId=${runId}&limit=1000`)
     ).json()
+    await openDetail(page)
     await page.getByRole('tab', { name: /^Eventos/ }).click()
     await page.getByLabel('Tipo').selectOption('message')
     await expect(timeline.locator('.timeline-item')).toHaveCount(
@@ -169,6 +182,7 @@ test('crear, lanzar, seguir en vivo, reconectar y ver el resultado', async ({ pa
 
   await test.step('enviar un mensaje continúa la conversación en otra invocación', async () => {
     const firstRun = page.url()
+    await openDetail(page)
     await page.getByRole('tab', { name: 'Conversación' }).click()
     const panel = page.getByRole('tabpanel', { name: 'Conversación' })
     await expect(panel.getByText('La función add de calc.py resta: arréglala')).toBeVisible()
