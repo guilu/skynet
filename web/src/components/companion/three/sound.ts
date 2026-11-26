@@ -130,6 +130,17 @@ export const skynySound = {
     } else if (type === 'glance') {
       tone(720, 780, 0.045, 'sine', 0.05)
       tone(780, 720, 0.05, 'sine', 0.05, 0.14)
+    } else if (type === 'celebrate') {
+      tone(523, 659, 0.08, 'triangle', 0.065)
+      tone(659, 784, 0.08, 'triangle', 0.065, 0.08)
+      tone(784, 1046, 0.14, 'sine', 0.07, 0.16)
+    } else if (type === 'shrug') {
+      tone(360, 480, 0.13, 'sine', 0.055)
+    } else if (type === 'salute') {
+      tone(660, 880, 0.075, 'triangle', 0.06)
+      tone(880, 988, 0.09, 'sine', 0.055, 0.08)
+    } else if (type === 'focus') {
+      tone(320, 520, 0.14, 'sine', 0.05)
     }
   },
   thruster(mode: 'enter' | 'exit') {

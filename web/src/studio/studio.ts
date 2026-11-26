@@ -25,6 +25,7 @@ import {
   STATE_CONFIG,
   STATES_META,
   type SkynyState,
+  type StateCategory,
 } from '../components/companion/three/states'
 import { DEMOS, DemoRunner, type DemoKind } from '../components/companion/three/transitions'
 import { onThemeChange, readColors } from '../components/companion/three/tokens'
@@ -115,6 +116,10 @@ document.body.innerHTML = `
           <button type="button" data-micro="startle">Sobresalto</button>
           <button type="button" data-micro="sigh">Suspiro</button>
           <button type="button" data-micro="glance">Vistazo</button>
+          <button type="button" data-micro="celebrate">Celebrar</button>
+          <button type="button" data-micro="shrug">Encogerse</button>
+          <button type="button" data-micro="salute">Saludo</button>
+          <button type="button" data-micro="focus">Enfocar</button>
         </div>
         <form class="st-group st-scouter" data-scouter aria-label="Texto del scouter">
           <textarea name="text" rows="2" maxlength="400" placeholder="Texto para el scouter (Intro envía, Mayús+Intro salto de línea)"></textarea>
@@ -142,6 +147,7 @@ document.body.innerHTML = `
           <button type="button" data-action="cancel" disabled>Cancelar</button>
           <button type="button" data-action="retry" hidden>Reintentar</button>
         </div>
+        <div class="st-filters" role="group" aria-label="Filtrar por categoría"></div>
         <ul></ul>
       </aside>
     </main>
@@ -185,7 +191,22 @@ const fit = () => {
 new ResizeObserver(() => requestAnimationFrame(fit)).observe(stage)
 fit()
 
+const filtersEl = $<HTMLDivElement>('.st-filters')
+let activeFilter: 'all' | StateCategory = 'all'
+const collapsedCats = new Set<StateCategory>()
+
 const colors = () => readColors().body
+function renderFilters() {
+  const btns = [
+    `<button type="button" data-filter="all" aria-pressed="${activeFilter === 'all'}">Todos</button>`,
+    ...STATE_CATEGORIES.map(
+      (cat) =>
+        `<button type="button" data-filter="${cat.id}" aria-pressed="${activeFilter === cat.id}">${cat.shortLabel}</button>`,
+    ),
+  ]
+  filtersEl.innerHTML = btns.join('')
+}
+
 function renderStates() {
   const body = colors()
   // Por grupos (estudio v5): agéntica, ciclo de vida, DevOps, seguridad e interacción.
@@ -196,10 +217,25 @@ function renderStates() {
       <span><b>${label}</b><small>${when}</small><code>${state} · ${e.eyes}${e.accessory ? ` · ${e.accessory}` : ''}</code></span>
     </button></li>`
   }
-  list.innerHTML = STATE_CATEGORIES.map((cat) => {
-    const items = STATES_META.filter((m) => m.category === cat.id)
-    return `<li class="st-cat"><h3>${cat.label} <span>${items.length}</span></h3></li>${items.map(item).join('')}`
-  }).join('')
+  const cats =
+    activeFilter === 'all'
+      ? STATE_CATEGORIES
+      : STATE_CATEGORIES.filter((cat) => cat.id === activeFilter)
+  list.innerHTML = cats
+    .map((cat) => {
+      const items = STATES_META.filter((m) => m.category === cat.id)
+      const collapsed = activeFilter === 'all' && collapsedCats.has(cat.id)
+      return `<li class="st-cat">
+        <button type="button" class="st-cat-toggle" data-cat="${cat.id}" aria-expanded="${!collapsed}">
+          <span class="st-cat-chev" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>
+          <span class="st-cat-name">${cat.label}</span>
+          <span class="st-cat-count">${items.length}</span>
+        </button>
+        ${collapsed ? '' : `<ul class="st-cat-items">${items.map(item).join('')}</ul>`}
+      </li>`
+    })
+    .join('')
+  renderFilters()
   const i = STATES_META.findIndex((s) => s.state === skyny.current)
   $('[data-out="count"]').textContent = `${i + 1} / ${STATES_META.length}`
   $('[data-out="state"]').textContent = STATES_META[i].label
@@ -207,6 +243,8 @@ function renderStates() {
 
 function setState(state: SkynyState) {
   skyny.setState(state)
+  const meta = STATES_META.find((m) => m.state === state)
+  if (meta) collapsedCats.delete(meta.category)
   const url = new URL(location.href)
   url.searchParams.set('state', state)
   history.replaceState(null, '', url)
@@ -248,7 +286,20 @@ function setPose(i: number) {
 document.addEventListener('click', (e) => {
   const button = (e.target as Element).closest('button')
   if (!button) return
-  const { state, view: v, pose: p, action, demo: kind, pulse, micro } = button.dataset
+  const { state, view: v, pose: p, action, demo: kind, pulse, micro, filter, cat } = button.dataset
+  if (filter) {
+    activeFilter = filter as 'all' | StateCategory
+    if (activeFilter !== 'all') collapsedCats.delete(activeFilter)
+    renderStates()
+    return
+  }
+  if (cat) {
+    const id = cat as StateCategory
+    if (collapsedCats.has(id)) collapsedCats.delete(id)
+    else collapsedCats.add(id)
+    renderStates()
+    return
+  }
   if (pulse) skyny.pulseEvent(pulse as PulseType)
   if (micro) skyny.microExpression(micro)
   if (state) {

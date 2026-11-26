@@ -24,7 +24,17 @@ export interface LiveInfo {
 export const ROOM = 1.5
 
 /** Las microexpresiones del estudio v5. */
-export type MicroType = 'nod' | 'shake' | 'curious' | 'startle' | 'sigh' | 'glance'
+export type MicroType =
+  | 'nod'
+  | 'shake'
+  | 'curious'
+  | 'startle'
+  | 'sigh'
+  | 'glance'
+  | 'celebrate'
+  | 'shrug'
+  | 'salute'
+  | 'focus'
 
 /** Entrar o salir de escena volando; se repite cada vez que cambia `key`. */
 export interface StageMove {
