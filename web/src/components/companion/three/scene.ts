@@ -466,6 +466,10 @@ export class SkynyScene {
       startle: 580,
       sigh: 950,
       glance: 820,
+      celebrate: 860,
+      shrug: 900,
+      salute: 800,
+      focus: 880,
     }
     this.microAnim = {
       type,
@@ -1017,6 +1021,22 @@ export class SkynyScene {
           }
         } else if (microType === 'glance') {
           microYaw = Math.sin(microT * Math.PI * 2) * 0.28
+        } else if (microType === 'celebrate') {
+          microBounce = Math.abs(Math.sin(microT * Math.PI * 2.5)) * (1 - microT) * 0.16
+          microSquash = Math.sin(microT * Math.PI * 4) * (1 - microT) * 0.08
+          microPitch = -microEnv * 0.1
+          microRoll = Math.sin(microT * Math.PI * 3) * (1 - microT) * 0.12
+        } else if (microType === 'shrug') {
+          microRoll = -microEnv * 0.18
+          microBounce = -microEnv * 0.04
+          microPitch = -microEnv * 0.08
+        } else if (microType === 'salute') {
+          microBounce = Math.sin(clamp01(microT / 0.3) * Math.PI) * 0.05
+          microPitch = -microEnv * 0.06
+        } else if (microType === 'focus') {
+          microZ = microEnv * 0.16
+          microPitch = microEnv * 0.14
+          microSquash = -microEnv * 0.04
         }
       }
     }
@@ -3027,6 +3047,28 @@ export class SkynyScene {
         const exEnv = Math.sin(((microT - 0.3) / 0.7) * Math.PI)
         targetL.y -= exEnv * 0.12
         targetR.y -= exEnv * 0.12
+      } else if (microType === 'celebrate') {
+        targetL.y += microEnv * 0.34
+        targetR.y += microEnv * 0.34
+        targetL.x -= microEnv * 0.16
+        targetR.x += microEnv * 0.16
+      } else if (microType === 'shrug') {
+        targetL.x -= microEnv * 0.24
+        targetR.x += microEnv * 0.24
+        targetL.y += microEnv * 0.14
+        targetR.y += microEnv * 0.14
+        targetL.z += microEnv * 0.12
+        targetR.z += microEnv * 0.12
+      } else if (microType === 'salute') {
+        targetR.y += microEnv * 0.36
+        targetR.x -= microEnv * 0.14
+        targetR.z += microEnv * 0.22
+        targetL.y -= microEnv * 0.06
+      } else if (microType === 'focus') {
+        targetL.z += microEnv * 0.14
+        targetR.z += microEnv * 0.14
+        targetL.x += microEnv * 0.06
+        targetR.x -= microEnv * 0.06
       }
     }
 
@@ -3526,7 +3568,15 @@ export class SkynyScene {
                 ? 'stars'
                 : microType === 'sigh' && microT > 0.32 && microT < 0.85
                   ? 'bars'
-                  : null
+                  : microType === 'celebrate'
+                    ? 'stars'
+                    : microType === 'shrug'
+                      ? 'empty-search'
+                      : microType === 'salute'
+                        ? 'wink'
+                        : microType === 'focus'
+                          ? 'bars'
+                          : null
         : null
 
     const eyeMode = isDizzy

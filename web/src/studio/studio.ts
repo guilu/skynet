@@ -116,6 +116,10 @@ document.body.innerHTML = `
           <button type="button" data-micro="startle">Sobresalto</button>
           <button type="button" data-micro="sigh">Suspiro</button>
           <button type="button" data-micro="glance">Vistazo</button>
+          <button type="button" data-micro="celebrate">Celebrar</button>
+          <button type="button" data-micro="shrug">Encogerse</button>
+          <button type="button" data-micro="salute">Saludo</button>
+          <button type="button" data-micro="focus">Enfocar</button>
         </div>
         <form class="st-group st-scouter" data-scouter aria-label="Texto del scouter">
           <textarea name="text" rows="2" maxlength="400" placeholder="Texto para el scouter (Intro envía, Mayús+Intro salto de línea)"></textarea>
