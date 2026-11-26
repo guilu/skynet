@@ -5,6 +5,8 @@ import { SkynyPaused } from '../pause'
 import { SkynyScene, type Pose3D } from './scene'
 import type { PulseType } from '../pulse'
 import { attachSpin } from './spin'
+import { setSkynySound } from './sound'
+import { useCompanionPrefs } from '../prefs'
 import type { SkynyState } from './states'
 import { onThemeChange, readColors } from './tokens'
 
@@ -108,6 +110,9 @@ export default function Skyny3D({
   const fail = useRef(onFail)
   const paused = useContext(SkynyPaused)
   const saved = useOutfit()
+  const { sound } = useCompanionPrefs()
+  // Antes que la escena (los efectos van en orden): la entrada ya suena o calla según Ajustes.
+  useEffect(() => setSkynySound(sound), [sound])
   const { hat, face, back } = outfit ?? saved
   const latest = useRef({
     state,

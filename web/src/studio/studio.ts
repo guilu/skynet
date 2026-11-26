@@ -18,6 +18,7 @@ import {
   type HatKind,
 } from '../components/companion/three/extras'
 import { SkynyScene, type Pose3D } from '../components/companion/three/scene'
+import { setSkynySound, skynySound } from '../components/companion/three/sound'
 import type { PulseType } from '../components/companion/pulse'
 import {
   STATE_CATEGORIES,
@@ -97,6 +98,7 @@ document.body.innerHTML = `
           <button type="button" data-action="replay">Repetir gesto</button>
           <button type="button" data-action="theme">Tema</button>
           <button type="button" data-action="png">Captura PNG</button>
+          <button type="button" data-action="sound" aria-pressed="true">Sonido</button>
         </div>
         <div class="st-group" aria-label="Escenario y reacciones al vivo">
           <button type="button" data-action="enter">Entrar</button>
@@ -252,6 +254,7 @@ document.addEventListener('click', (e) => {
   if (state) {
     demo.stop()
     setState(state as SkynyState)
+    skynySound.stateChange(state)
   }
   if (kind) demo.toggle(kind as DemoKind)
   if (v) setView(v as View)
@@ -288,6 +291,9 @@ document.addEventListener('click', (e) => {
       break
     case 'blink':
       skyny.blink()
+      break
+    case 'sound':
+      setSkynySound(toggle())
       break
     case 'enter':
       skyny.enter()

@@ -20,6 +20,7 @@ const SCOUTER_ZOOM = 2.6
 /** Letreros deslizantes: velocidad (px por segundo, en un visor de 512) y tamaño de letra. */
 const SCROLL_SPEED = 460
 const SCROLL_SCALE = 1.1
+import { skynySound } from './sound'
 import { createExtras, type BackKind, type FaceKind, type HatKind } from './extras'
 import type { SkynyState } from './states'
 import type { SkynyColors } from './tokens'
@@ -373,6 +374,7 @@ export class SkynyScene {
     this.pokeAt = now
     this.pokeCount = (this.pokeCount + 1) % 3
     this.drawnKey = ''
+    skynySound.boop()
   }
 
   /** Quita las chispas y el aro del último pulso y libera su memoria. */
@@ -392,6 +394,9 @@ export class SkynyScene {
     this.offstage = false
     this.stageTransition = { mode: 'enter', at: performance.now() + delay, duration }
     this.drawnKey = ''
+    // Los propulsores suenan cuando de verdad arranca (la cortina espera a bajar).
+    if (delay > 0) window.setTimeout(() => skynySound.thruster('enter'), delay)
+    else skynySound.thruster('enter')
   }
 
   /**
@@ -404,6 +409,7 @@ export class SkynyScene {
   }: { autoReenter?: boolean; duration?: number } = {}) {
     this.stageTransition = { mode: 'exit', at: performance.now(), duration, autoReenter }
     this.drawnKey = ''
+    skynySound.thruster('exit')
   }
 
   pulseEvent(type = 'tool_call') {
@@ -449,6 +455,7 @@ export class SkynyScene {
       this.pulseGroup.add(ring)
     }
     this.drawnKey = ''
+    skynySound.pulse(type)
   }
 
   microExpression(type = 'nod') {
@@ -466,6 +473,7 @@ export class SkynyScene {
       duration: durations[type] ?? 700,
     }
     this.drawnKey = ''
+    skynySound.micro(type)
   }
 
   setColors(colors: SkynyColors) {

@@ -87,7 +87,15 @@ export function CompanionGallery() {
             checked={prefs.floating}
             onChange={(e) => setCompanionPrefs({ floating: e.target.checked })}
           />
-          Skyny flotando por encima de la web (se arrastra para apartarlo)
+          Skyny flotando por encima de la web (botón izquierdo para girarlo, derecho para moverlo)
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={prefs.sound}
+            onChange={(e) => setCompanionPrefs({ sound: e.target.checked })}
+          />
+          Sonidos de Skyny (al tocarlo, al entrar y salir, y con lo que hacen los agentes)
         </label>
         <label>
           <input

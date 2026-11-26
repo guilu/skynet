@@ -3,7 +3,8 @@
 // Companion o en el estudio y Skyny los lleva en toda la web. El gorro se mueve con un muelle al
 // moverse Skyny; el jetpack echa llamas mientras trabaja.
 import * as THREE from 'three'
-import { smoothstep } from './math'
+import { clamp01, smoothstep } from './math'
+import { skynySound } from './sound'
 import { createBodyGeometry, projectOnBody } from './model'
 import { STATE_CONFIG, STATES_META } from './states'
 
@@ -433,7 +434,10 @@ export function createExtras(skyny): SkynyExtras {
   const plasma = []
   let scouterHud = null
   let scouterGlassMat = null,
-    scouterEdgesMat = null
+    scouterEdgesMat = null,
+    scouterPivot = null,
+    scouterHudMat = null,
+    scouterDeployAt = 0
   let scouterHudCtx = null,
     scouterHudTex = null,
     scouterCustomText = '',
@@ -660,6 +664,9 @@ export function createExtras(skyny): SkynyExtras {
       scouterHudCtx = null
       scouterHudTex = null
       scouterLastKey = ''
+      scouterPivot = null
+      scouterHudMat = null
+      scouterDeployAt = 0
     }
     const geometries = new Set(),
       materials = new Set()
@@ -913,10 +920,19 @@ export function createExtras(skyny): SkynyExtras {
       const armGeo = new THREE.BufferGeometry()
       armGeo.setAttribute('position', new THREE.Float32BufferAttribute(armPos, 3))
       armGeo.setIndex(armIdx)
+      armGeo.translate(-hingeVisor.x, -hingeVisor.y, -hingeVisor.z)
       armGeo.computeVertexNormals()
+
+      // Pivote en la bisagra: al ponérselo, el scouter se despliega desde el módulo auricular.
+      scouterPivot = new THREE.Group()
+      scouterPivot.position.copy(hingeVisor)
+      scouterPivot.rotation.y = Math.PI * 0.44
+      scouterDeployAt = performance.now()
+      faceExtra.add(scouterPivot)
+
       const armMesh = new THREE.Mesh(armGeo, whiteShellMat)
       armMesh.castShadow = true
-      faceExtra.add(armMesh)
+      scouterPivot.add(armMesh)
 
       // Cristal horizontal: plano por arriba y rebajado solo por abajo (extendido hacia abajo para más texto)
       const lensShape = new THREE.Shape()
@@ -953,9 +969,13 @@ export function createExtras(skyny): SkynyExtras {
       // Cristal, bordes y texto van juntos y se agrandan desde donde los coge el brazo, para que
       // el texto se lea con Skyny pequeño (en el estudio v5 el cristal mide SCOUTER_LENS = 1).
       const lensGroup = new THREE.Group()
-      lensGroup.position.set(lensRightX, crystalMidY, lensZ)
+      lensGroup.position.set(
+        lensRightX - hingeVisor.x,
+        crystalMidY - hingeVisor.y,
+        lensZ - hingeVisor.z,
+      )
       lensGroup.scale.setScalar(SCOUTER_LENS)
-      faceExtra.add(lensGroup)
+      scouterPivot.add(lensGroup)
       const lensMesh = hatPart(
         lensGeo,
         scouterGlassMat,
@@ -986,18 +1006,21 @@ export function createExtras(skyny): SkynyExtras {
       scouterLastKey = initTxt
       scouterHudTex = new THREE.CanvasTexture(hudCanvas)
       scouterHudTex.colorSpace = THREE.SRGBColorSpace
+      // El texto aparece al final del despliegue.
+      scouterHudMat = new THREE.MeshBasicMaterial({
+        map: scouterHudTex,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
       const hudPlane = (scouterHud = new THREE.Mesh(
         new THREE.PlaneGeometry(0.38, 0.265),
-        new THREE.MeshBasicMaterial({
-          map: scouterHudTex,
-          transparent: true,
-          opacity: 0.96,
-          depthWrite: false,
-          side: THREE.DoubleSide,
-        }),
+        scouterHudMat,
       ))
       hudPlane.position.set(0.188 - lensRightX, lensY - 0.033 - crystalMidY, 0.012)
       lensGroup.add(hudPlane)
+      skynySound.scouterBeep()
       return
     }
     const frame = hatMaterial(0x162032)
@@ -1084,6 +1107,18 @@ export function createExtras(skyny): SkynyExtras {
       flame.visible = on
       flame.scale.y = reduced ? 1 : 0.86 + 0.14 * Math.sin(now / 65 + i)
     })
+    if (scouterPivot && scouterDeployAt > 0) {
+      const dt = reduced ? 1 : clamp01((now - scouterDeployAt) / 480)
+      // easeOutBack suave al desplegar desde el módulo auricular
+      const c1 = 1.45,
+        c3 = c1 + 1
+      const ease = dt >= 1 ? 1 : 1 + c3 * Math.pow(dt - 1, 3) + c1 * Math.pow(dt - 1, 2)
+      scouterPivot.rotation.y = Math.PI * 0.44 * (1 - ease)
+      if (scouterHudMat) scouterHudMat.opacity = clamp01((dt - 0.58) / 0.32) * 0.96
+      if (dt >= 1) scouterDeployAt = 0
+    } else if (scouterHudMat && scouterHudMat.opacity < 0.96) {
+      scouterHudMat.opacity = 0.96
+    }
     if (scouterGlassMat) {
       const stCol =
         STATE_CONFIG[skyny.state]?.eyeColor || skyny.colors.body[skyny.state] || '#22c55e'
@@ -1203,6 +1238,8 @@ export function createExtras(skyny): SkynyExtras {
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       scouterAnimAt = msg && !reduced ? performance.now() : 0
       scouterLastKey = ''
+      // Pita al recibir texto si ya lo lleva puesto (al ponérselo ya pitó al desplegarse).
+      if (msg && scouterHud) skynySound.scouterBeep()
     },
     setBack: (kind) => {
       if (kind !== backKind) {

@@ -18,6 +18,8 @@ export interface CompanionPrefs {
   back: string
   /** Skyny 3D flotando por encima de la web. */
   floating: boolean
+  /** Sonidos de Skyny 3D (al tocarlo, al entrar y salir, en los pulsos y en el scouter). */
+  sound: boolean
   /** Dónde lo dejaste, en fracciones del sitio libre de la pantalla (1, 1: abajo a la derecha). */
   floatAt: { x: number; y: number }
   /** Hasta cuándo (ms) no salen avisos flotantes ni del navegador; null si no está silenciado. */
@@ -34,6 +36,7 @@ export const DEFAULT_PREFS: CompanionPrefs = {
   face: '',
   back: '',
   floating: true,
+  sound: true,
   floatAt: { x: 1, y: 1 },
   mutedUntil: null,
 }
