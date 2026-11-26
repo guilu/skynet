@@ -109,6 +109,14 @@ export const skynySound = {
       tone(660, 880, 0.08, 'triangle', 0.06)
     } else if (type === 'token_tick') {
       tone(1420, 1280, 0.028, 'sine', 0.03)
+    } else if (type === 'test_failed') {
+      tone(320, 200, 0.09, 'triangle', 0.065)
+      tone(240, 160, 0.11, 'triangle', 0.06, 0.09)
+    } else if (type === 'branch_created') {
+      tone(587, 880, 0.085, 'triangle', 0.06)
+    } else if (type === 'context_warning') {
+      tone(620, 540, 0.07, 'sine', 0.045)
+      tone(620, 540, 0.07, 'sine', 0.04, 0.11)
     } else {
       tone(880, 1140, 0.055, 'triangle', 0.06)
     }
@@ -130,6 +138,17 @@ export const skynySound = {
     } else if (type === 'glance') {
       tone(720, 780, 0.045, 'sine', 0.05)
       tone(780, 720, 0.05, 'sine', 0.05, 0.14)
+    } else if (type === 'celebrate') {
+      tone(523, 659, 0.08, 'triangle', 0.065)
+      tone(659, 784, 0.08, 'triangle', 0.065, 0.08)
+      tone(784, 1046, 0.14, 'sine', 0.07, 0.16)
+    } else if (type === 'shrug') {
+      tone(360, 480, 0.13, 'sine', 0.055)
+    } else if (type === 'salute') {
+      tone(660, 880, 0.075, 'triangle', 0.06)
+      tone(880, 988, 0.09, 'sine', 0.055, 0.08)
+    } else if (type === 'focus') {
+      tone(320, 520, 0.14, 'sine', 0.05)
     }
   },
   thruster(mode: 'enter' | 'exit') {

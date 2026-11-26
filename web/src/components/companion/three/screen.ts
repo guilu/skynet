@@ -27,6 +27,7 @@ export const LED_GLYPHS: Record<string, string> = {
   G: 'M46 10 C32 -8 0 0 0 30 C0 60 36 66 46 46 V30 H24',
   H: 'M0 0 V60 M46 0 V60 M0 30 H46',
   I: 'M24 0 V60',
+  J: 'M14 0 H40 V38 C40 65 4 65 4 42',
   L: 'M0 0 V60 H43',
   M: 'M0 60 V0 L24 33 L48 0 V60',
   N: 'M0 60 V0 L48 60 V0',

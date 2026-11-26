@@ -78,6 +78,9 @@
   --skyny-3d-conflict: #fed7aa;
   --skyny-3d-context-indexing: #99f6e4;
   --skyny-3d-guardrail: #fecdd3;
+  --skyny-3d-waiting-review: #fef08a;
+  --skyny-3d-pair-coding: #99f6e4;
+  --skyny-3d-readonly: #cbd5e1;
   --skyny-3d-degraded: #fef08a;
   --skyny-3d-rate-limited: #fcd34d;
   --skyny-3d-benchmarking: #fef08a;
@@ -222,6 +225,9 @@
     --skyny-3d-conflict: #fb923c;
     --skyny-3d-context-indexing: #5eead4;
     --skyny-3d-guardrail: #fda4af;
+    --skyny-3d-waiting-review: #fde047;
+    --skyny-3d-pair-coding: #5eead4;
+    --skyny-3d-readonly: #94a3b8;
     --skyny-3d-degraded: #fde047;
     --skyny-3d-rate-limited: #fcd34d;
     --skyny-3d-benchmarking: #fde047;
@@ -333,6 +339,9 @@
   --skyny-3d-conflict: #fb923c;
   --skyny-3d-context-indexing: #5eead4;
   --skyny-3d-guardrail: #fda4af;
+  --skyny-3d-waiting-review: #fde047;
+  --skyny-3d-pair-coding: #5eead4;
+  --skyny-3d-readonly: #94a3b8;
   --skyny-3d-degraded: #fde047;
   --skyny-3d-rate-limited: #fcd34d;
   --skyny-3d-benchmarking: #fde047;

@@ -422,11 +422,14 @@ export class SkynyScene {
       file_edited: 0x34d399,
       token_tick: 0xfbbf24,
       gate_passed: 0x4ade80,
+      test_failed: 0xf87171,
+      branch_created: 0x38bdf8,
+      context_warning: 0xf59e0b,
     }
     const colHex = colMap[type] ?? 0x38bdf8
 
-    if (type === 'file_edited' || type === 'gate_passed') {
-      const count = type === 'gate_passed' ? 5 : 3
+    if (type === 'file_edited' || type === 'gate_passed' || type === 'branch_created') {
+      const count = type === 'gate_passed' ? 5 : type === 'branch_created' ? 4 : 3
       for (let i = 0; i < count; i++) {
         const p = new THREE.Mesh(
           new THREE.OctahedronGeometry(0.055, 0),
@@ -466,6 +469,10 @@ export class SkynyScene {
       startle: 580,
       sigh: 950,
       glance: 820,
+      celebrate: 860,
+      shrug: 900,
+      salute: 800,
+      focus: 880,
     }
     this.microAnim = {
       type,
@@ -1017,6 +1024,22 @@ export class SkynyScene {
           }
         } else if (microType === 'glance') {
           microYaw = Math.sin(microT * Math.PI * 2) * 0.28
+        } else if (microType === 'celebrate') {
+          microBounce = Math.abs(Math.sin(microT * Math.PI * 2.5)) * (1 - microT) * 0.16
+          microSquash = Math.sin(microT * Math.PI * 4) * (1 - microT) * 0.08
+          microPitch = -microEnv * 0.1
+          microRoll = Math.sin(microT * Math.PI * 3) * (1 - microT) * 0.12
+        } else if (microType === 'shrug') {
+          microRoll = -microEnv * 0.18
+          microBounce = -microEnv * 0.04
+          microPitch = -microEnv * 0.08
+        } else if (microType === 'salute') {
+          microBounce = Math.sin(clamp01(microT / 0.3) * Math.PI) * 0.05
+          microPitch = -microEnv * 0.06
+        } else if (microType === 'focus') {
+          microZ = microEnv * 0.16
+          microPitch = microEnv * 0.14
+          microSquash = -microEnv * 0.04
         }
       }
     }
@@ -2538,7 +2561,12 @@ export class SkynyScene {
       (pulseType === 'tool_call' ? pulseEnv * 0.14 : 0) +
       microPitch
     const targetBodyRotY =
-      reviewEnv * 0.14 + extraYaw + this.gaze[0] * 0.24 + ptrNormX * 0.18 + microYaw
+      reviewEnv * 0.14 +
+      extraYaw +
+      this.gaze[0] * 0.24 +
+      ptrNormX * 0.18 +
+      (pulseType === 'test_failed' ? Math.sin(pulseT * Math.PI * 5) * (1 - pulseT) * 0.22 : 0) +
+      microYaw
 
     if (pokeSpinYaw === 0) {
       const twoPi = Math.PI * 2
@@ -3010,7 +3038,9 @@ export class SkynyScene {
       stretchEnv * 0.08 +
       microBounce +
       pokeEnv * (this.pokeCount === 0 ? 0.44 : 0.22) +
-      (pulseType === 'file_edited' || pulseType === 'gate_passed' ? pulseEnv * 0.09 : 0) +
+      (pulseType === 'file_edited' || pulseType === 'gate_passed' || pulseType === 'branch_created'
+        ? pulseEnv * 0.09
+        : 0) +
       (state === 'escalating' && animate ? (0.14 + Math.sin(elapsed * 4.5) * 0.03) * activeFade : 0)
     root.position.z += microZ
 
@@ -3027,6 +3057,28 @@ export class SkynyScene {
         const exEnv = Math.sin(((microT - 0.3) / 0.7) * Math.PI)
         targetL.y -= exEnv * 0.12
         targetR.y -= exEnv * 0.12
+      } else if (microType === 'celebrate') {
+        targetL.y += microEnv * 0.34
+        targetR.y += microEnv * 0.34
+        targetL.x -= microEnv * 0.16
+        targetR.x += microEnv * 0.16
+      } else if (microType === 'shrug') {
+        targetL.x -= microEnv * 0.24
+        targetR.x += microEnv * 0.24
+        targetL.y += microEnv * 0.14
+        targetR.y += microEnv * 0.14
+        targetL.z += microEnv * 0.12
+        targetR.z += microEnv * 0.12
+      } else if (microType === 'salute') {
+        targetR.y += microEnv * 0.36
+        targetR.x -= microEnv * 0.14
+        targetR.z += microEnv * 0.22
+        targetL.y -= microEnv * 0.06
+      } else if (microType === 'focus') {
+        targetL.z += microEnv * 0.14
+        targetR.z += microEnv * 0.14
+        targetL.x += microEnv * 0.06
+        targetR.x -= microEnv * 0.06
       }
     }
 
@@ -3259,11 +3311,15 @@ export class SkynyScene {
       ? '#fde047'
       : pulseEnv > 0.15 && pulseType === 'gate_passed'
         ? '#4ade80'
-        : pulseEnv > 0.15 && pulseType === 'tool_call'
-          ? '#38bdf8'
-          : state === 'rate-limited' && cooldownReadyPop > 0.2
-            ? '#4ade80'
-            : (cfg.eyeColor ?? (state === 'error' ? '#ff453a' : this.colors.glow))
+        : pulseEnv > 0.15 && pulseType === 'test_failed'
+          ? '#f87171'
+          : pulseEnv > 0.15 && pulseType === 'context_warning'
+            ? '#f59e0b'
+            : pulseEnv > 0.15 && (pulseType === 'tool_call' || pulseType === 'branch_created')
+              ? '#38bdf8'
+              : state === 'rate-limited' && cooldownReadyPop > 0.2
+                ? '#4ade80'
+                : (cfg.eyeColor ?? (state === 'error' ? '#ff453a' : this.colors.glow))
     this.visorLight.color.set(eyeHex)
     const visorWorld = visor.getWorldPosition(new THREE.Vector3())
     let minHandDist = 99
@@ -3526,7 +3582,15 @@ export class SkynyScene {
                 ? 'stars'
                 : microType === 'sigh' && microT > 0.32 && microT < 0.85
                   ? 'bars'
-                  : null
+                  : microType === 'celebrate'
+                    ? 'stars'
+                    : microType === 'shrug'
+                      ? 'empty-search'
+                      : microType === 'salute'
+                        ? 'wink'
+                        : microType === 'focus'
+                          ? 'bars'
+                          : null
         : null
 
     const eyeMode = isDizzy

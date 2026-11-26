@@ -1,7 +1,14 @@
 import type { StoredEvent } from '../../api'
 
 /** Las reacciones al vivo de Skyny 3D: no cambian su estado, solo lo adornan un momento. */
-export type PulseType = 'tool_call' | 'file_edited' | 'token_tick' | 'gate_passed'
+export type PulseType =
+  | 'tool_call'
+  | 'file_edited'
+  | 'token_tick'
+  | 'gate_passed'
+  | 'test_failed'
+  | 'branch_created'
+  | 'context_warning'
 
 /** Como mucho una reacción cada tanto: con ráfagas de eventos, Skyny no parece nervioso. */
 export const PULSE_GAP_MS = 300
@@ -27,7 +34,7 @@ export function pulseFor(event: Pick<StoredEvent, 'type' | 'payload'>): PulseTyp
       const p = event.payload
       const tests = p.tests as { failed?: number; errors?: number } | undefined
       const failed = (tests?.failed ?? 0) + (tests?.errors ?? 0) > 0
-      return p.error == null && (p.exitCode ?? 0) === 0 && !failed ? 'gate_passed' : null
+      return p.error == null && (p.exitCode ?? 0) === 0 && !failed ? 'gate_passed' : 'test_failed'
     }
     default:
       return null
