@@ -17,10 +17,10 @@ describe('Ajustes › Companion', () => {
     resetCompanionPrefsCache()
   })
 
-  it('enseña los 45 estados en dos grupos y cambia la vista previa al tocar uno', () => {
+  it('enseña los 48 estados en dos grupos y cambia la vista previa al tocar uno', () => {
     view()
     const lists = screen.getAllByRole('list').filter((l) => l.className === 'companion-states')
-    expect(lists.map((l) => within(l).getAllByRole('button').length)).toEqual([12, 33])
+    expect(lists.map((l) => within(l).getAllByRole('button').length)).toEqual([12, 36])
     fireEvent.click(screen.getByRole('button', { name: 'Delegando' }))
     expect(screen.getByRole('button', { name: 'Delegando' })).toHaveAttribute(
       'aria-pressed',

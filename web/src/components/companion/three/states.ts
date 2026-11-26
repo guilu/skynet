@@ -88,6 +88,24 @@ export const STATES_META = [
     when: 'Comando peligroso o acceso restringido interceptado por el arnés de seguridad.',
   },
   {
+    state: 'waiting-review',
+    category: 'sdlc',
+    label: 'Esperando Revisión',
+    when: 'PR o cambios listos esperando revisión humana o comentarios.',
+  },
+  {
+    state: 'pair-coding',
+    category: 'agentic',
+    label: 'En Pareja',
+    when: 'Trabajando codo con codo con otro agente o con el usuario.',
+  },
+  {
+    state: 'readonly',
+    category: 'security',
+    label: 'Solo Lectura',
+    when: 'Modo solo lectura o sin escritura permitida en el entorno.',
+  },
+  {
     state: 'rate-limited',
     category: 'devops',
     label: 'Cooldown',
@@ -355,6 +373,14 @@ export const STATE_CONFIG: Record<SkynyState, StateLook> = {
   sleeping: { eyes: 'sleep', accessory: 'zzz', entry: true, eyeColor: '#e2e8f0' },
   offline: { eyes: 'circles', accessory: 'offline', entry: true, eyeColor: '#cbd5e1' },
   cancelled: { eyes: 'bars', accessory: 'cancel-x', entry: true, eyeColor: '#94a3b8' },
+  'waiting-review': {
+    eyes: 'pills',
+    accessory: 'magnifier',
+    entry: true,
+    eyeColor: '#fde047',
+  },
+  'pair-coding': { eyes: 'code-eyes', accessory: 'orbit', entry: true, eyeColor: '#5eead4' },
+  readonly: { eyes: 'shield-eyes', accessory: 'pause', entry: true, eyeColor: '#94a3b8' },
 }
 
 /** Letrero de cada estado al llegar. */
@@ -404,6 +430,9 @@ export const LED_MESSAGES: Record<SkynyState, string> = {
   sleeping: 'ZZZ',
   offline: 'SIN RED',
   cancelled: 'CANCELADO',
+  'waiting-review': 'EN REVISION',
+  'pair-coding': 'EN PAREJA',
+  readonly: 'SOLO LECTURA',
 }
 
 /** Letreros cortos (Skyny pequeño). */
@@ -439,6 +468,9 @@ export const LED_COMPACT: Partial<Record<SkynyState, string>> = {
   healing: 'FIX',
   merging: 'MERGE',
   learning: 'RAG',
+  'waiting-review': 'REV',
+  'pair-coding': 'PAIR',
+  readonly: 'LECTURA',
 }
 
 // =========================================================================

@@ -14,12 +14,12 @@ describe('reacciones al vivo de Skyny', () => {
     expect(pulseFor(ev('agent.status.changed'))).toBeNull()
   })
 
-  it('la verificación solo celebra si pasa', () => {
+  it('la verificación distingue si pasa o falla', () => {
     expect(pulseFor(ev('agent.verification.completed', { exitCode: 0 }))).toBe('gate_passed')
-    expect(pulseFor(ev('agent.verification.completed', { exitCode: 1 }))).toBeNull()
+    expect(pulseFor(ev('agent.verification.completed', { exitCode: 1 }))).toBe('test_failed')
     expect(
       pulseFor(ev('agent.verification.completed', { exitCode: 0, tests: { failed: 2 } })),
-    ).toBeNull()
+    ).toBe('test_failed')
   })
 
   it('recorta las ráfagas', () => {

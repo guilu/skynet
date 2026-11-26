@@ -109,6 +109,14 @@ export const skynySound = {
       tone(660, 880, 0.08, 'triangle', 0.06)
     } else if (type === 'token_tick') {
       tone(1420, 1280, 0.028, 'sine', 0.03)
+    } else if (type === 'test_failed') {
+      tone(320, 200, 0.09, 'triangle', 0.065)
+      tone(240, 160, 0.11, 'triangle', 0.06, 0.09)
+    } else if (type === 'branch_created') {
+      tone(587, 880, 0.085, 'triangle', 0.06)
+    } else if (type === 'context_warning') {
+      tone(620, 540, 0.07, 'sine', 0.045)
+      tone(620, 540, 0.07, 'sine', 0.04, 0.11)
     } else {
       tone(880, 1140, 0.055, 'triangle', 0.06)
     }

@@ -108,6 +108,9 @@ document.body.innerHTML = `
           <button type="button" data-pulse="file_edited">Fichero</button>
           <button type="button" data-pulse="token_tick">Tokens</button>
           <button type="button" data-pulse="gate_passed">Verificación</button>
+          <button type="button" data-pulse="test_failed">Fallo test</button>
+          <button type="button" data-pulse="branch_created">Rama</button>
+          <button type="button" data-pulse="context_warning">Contexto</button>
         </div>
         <div class="st-group" aria-label="Microexpresiones">
           <button type="button" data-micro="nod">Asentir</button>

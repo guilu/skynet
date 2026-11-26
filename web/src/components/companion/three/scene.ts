@@ -422,11 +422,14 @@ export class SkynyScene {
       file_edited: 0x34d399,
       token_tick: 0xfbbf24,
       gate_passed: 0x4ade80,
+      test_failed: 0xf87171,
+      branch_created: 0x38bdf8,
+      context_warning: 0xf59e0b,
     }
     const colHex = colMap[type] ?? 0x38bdf8
 
-    if (type === 'file_edited' || type === 'gate_passed') {
-      const count = type === 'gate_passed' ? 5 : 3
+    if (type === 'file_edited' || type === 'gate_passed' || type === 'branch_created') {
+      const count = type === 'gate_passed' ? 5 : type === 'branch_created' ? 4 : 3
       for (let i = 0; i < count; i++) {
         const p = new THREE.Mesh(
           new THREE.OctahedronGeometry(0.055, 0),
@@ -2558,7 +2561,12 @@ export class SkynyScene {
       (pulseType === 'tool_call' ? pulseEnv * 0.14 : 0) +
       microPitch
     const targetBodyRotY =
-      reviewEnv * 0.14 + extraYaw + this.gaze[0] * 0.24 + ptrNormX * 0.18 + microYaw
+      reviewEnv * 0.14 +
+      extraYaw +
+      this.gaze[0] * 0.24 +
+      ptrNormX * 0.18 +
+      (pulseType === 'test_failed' ? Math.sin(pulseT * Math.PI * 5) * (1 - pulseT) * 0.22 : 0) +
+      microYaw
 
     if (pokeSpinYaw === 0) {
       const twoPi = Math.PI * 2
@@ -3030,7 +3038,9 @@ export class SkynyScene {
       stretchEnv * 0.08 +
       microBounce +
       pokeEnv * (this.pokeCount === 0 ? 0.44 : 0.22) +
-      (pulseType === 'file_edited' || pulseType === 'gate_passed' ? pulseEnv * 0.09 : 0) +
+      (pulseType === 'file_edited' || pulseType === 'gate_passed' || pulseType === 'branch_created'
+        ? pulseEnv * 0.09
+        : 0) +
       (state === 'escalating' && animate ? (0.14 + Math.sin(elapsed * 4.5) * 0.03) * activeFade : 0)
     root.position.z += microZ
 
@@ -3301,11 +3311,15 @@ export class SkynyScene {
       ? '#fde047'
       : pulseEnv > 0.15 && pulseType === 'gate_passed'
         ? '#4ade80'
-        : pulseEnv > 0.15 && pulseType === 'tool_call'
-          ? '#38bdf8'
-          : state === 'rate-limited' && cooldownReadyPop > 0.2
-            ? '#4ade80'
-            : (cfg.eyeColor ?? (state === 'error' ? '#ff453a' : this.colors.glow))
+        : pulseEnv > 0.15 && pulseType === 'test_failed'
+          ? '#f87171'
+          : pulseEnv > 0.15 && pulseType === 'context_warning'
+            ? '#f59e0b'
+            : pulseEnv > 0.15 && (pulseType === 'tool_call' || pulseType === 'branch_created')
+              ? '#38bdf8'
+              : state === 'rate-limited' && cooldownReadyPop > 0.2
+                ? '#4ade80'
+                : (cfg.eyeColor ?? (state === 'error' ? '#ff453a' : this.colors.glow))
     this.visorLight.color.set(eyeHex)
     const visorWorld = visor.getWorldPosition(new THREE.Vector3())
     let minHandDist = 99
